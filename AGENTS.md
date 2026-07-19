@@ -39,4 +39,4 @@ Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agent
 
 ### Effect development
 
-Effect 4 source vendored read-only under `.repos/effect`; the `effect` skill lives at `.claude/skills/effect`. See `docs/agents/effect.md`.
+Effect 4 source vendored read-only under `.repos/effect`; the `effect` skill lives in the canonical store at `.agents/skills/effect`, which agent directories symlink into. See `docs/agents/effect.md`.
