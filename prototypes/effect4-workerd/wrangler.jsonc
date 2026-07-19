@@ -1,0 +1,20 @@
+{
+  // Throwaway spike Worker (ticket #17). Never deployed for real — exercised via
+  // `wrangler dev` + `bun drive.ts`. Hand-written wrangler config on purpose:
+  // the spike gates implementation, the Alchemy program (ADR 0003) is not built yet.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "effect4-workerd-spike",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "GREETING": "hello-from-env"
+  },
+  "workflows": [
+    {
+      "name": "spike-workflow",
+      "binding": "SPIKE_WORKFLOW",
+      "class_name": "SpikeWorkflow"
+    }
+  ]
+}
