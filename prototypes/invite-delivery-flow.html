@@ -283,8 +283,15 @@
   .toast {
     position: absolute; left: 50%; transform: translateX(-50%); bottom: 90px; z-index: 8;
     background: rgba(40,40,40,.92); color: #fff; font-size: 13.5px; padding: 9px 16px; border-radius: 20px;
-    white-space: nowrap;
+    white-space: nowrap; pointer-events: none;
   }
+
+  .nextbtn {
+    border: none; border-radius: 10px; background: var(--accent); color: #fff;
+    font-size: 14px; font-weight: 600; font-family: inherit; padding: 11px 22px; cursor: pointer;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .nextbtn:hover { background: var(--tg-blue-dark); filter: brightness(.95); }
 
   /* tap target */
   .tap { cursor: pointer !important; position: relative; animation: pulse 1.6s ease-in-out infinite; }
@@ -945,6 +952,19 @@ function render() {
 
   const chat = content.querySelector('.chat');
   if (chat) chat.scrollTop = chat.scrollHeight;
+
+  // Шаг без тап-цели на экране (например, «тренер видит результат») —
+  // даём явную кнопку перехода под телефоном, иначе сценарий тупиковый.
+  if (!last && !content.querySelector('.tap')) {
+    const next = steps[cur.i + 1];
+    const btn = document.createElement('button');
+    btn.className = 'nextbtn';
+    btn.textContent = next.role === step.role
+      ? 'Дальше →'
+      : (next.role === 'client' ? 'Дальше: телефон клиента →' : 'Дальше: телефон тренера →');
+    btn.onclick = advance;
+    content.querySelector('.phone-col').appendChild(btn);
+  }
 }
 
 render();
