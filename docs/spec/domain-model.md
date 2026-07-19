@@ -31,8 +31,8 @@ A person inside a workspace, with a role.
 
 A coached person, scoped to one workspace. No account, no credentials.
 
-- `workspace_id`, `name`
-- `language`: `en | uk | ru` — set during onboarding; the language the bot uses to message the client, and the STT fallback hint
+- `workspace_id`, `name` (the coach sets only the name at creation)
+- `language`: `en | uk | ru` — chosen by the **client** during invite acceptance (pre-selected from Telegram's `language_code`); the language the bot uses to message the client, and the STT fallback hint
 
 ### Channel
 
@@ -40,15 +40,17 @@ How a client is reached.
 
 - `client_id`, `kind`: `telegram` (MVP) — open set (`email`, … later)
 - kind-specific address (Telegram user/chat id)
+- Telegram profile snapshot captured at acceptance: name, username, avatar (R2 object)
 - exactly one primary channel per client; reminders and join links are delivered to it
 
 ### Invite
 
 The onboarding entry point, uniform across current and future channel kinds.
 
-- `workspace_id`, `client_id`, `token`
+- `workspace_id`, `client_id`, `token` — single-use, TTL 7 days; re-issuing creates a new Invite and expires the old one
 - `status`: `pending → accepted`, or `expired`
-- In MVP delivered as a deep link into the workspace's bot; accepting creates the client's Telegram channel and captures the Consent Grant.
+- optional `expected_telegram_user_id` — set when the coach picked the client via Telegram's user picker; enables recognition on a bare `/start`
+- In MVP delivered as a deep link into the workspace's bot; accepting is atomic — creates the client's Telegram channel (with profile snapshot), appends the Consent Grant, sets the client's language. Flow details: [client-onboarding-auth.md](client-onboarding-auth.md).
 
 ### Consent Grant
 
@@ -62,8 +64,9 @@ Append-only consent record; "does the client have consent" is derived from the l
 A scheduled 1:1 conversation, coach ↔ one client.
 
 - `workspace_id`, `client_id`, `scheduled_at`, duration
+- `kind`: `intake | regular` — open set, chosen by the coach at creation; defaults to `intake` for a client's first session. Kind selects the debrief prompt (intake: goals, coaching contract, agreements); the mentor review prompt is the same for all kinds.
 - `state`: see [Session states](#session-states)
-- Join Link token (client's only credential for the web room)
+- Join Link tokens, one per (session, role) — coach and client each have their own; multi-use, valid while the session is `scheduled`/`in_progress`, dead in terminal states, stable across rescheduling ([client-onboarding-auth.md](client-onboarding-auth.md))
 - Rescheduling mutates `scheduled_at` in place; no reschedule history in MVP.
 - No language attribute: STT auto-detects, with `client.language` as the fallback hint; the detected language is recorded on the Transcript.
 
@@ -98,7 +101,7 @@ An LLM-generated analysis document.
 - `version`: append-only; the current artifact per `(session, kind)` is the latest version
 - generation status, model/prompt metadata
 - Written in the **coach's** language; delivered as bot messages
-- Brief is generated *before* its session, from the client's prior sessions' artifacts; Debrief and Mentor Review *after*, from the Transcript. Same entity, different generation moment.
+- Brief is generated *before* its session, from the client's prior sessions' artifacts; when no prior artifacts exist (typically an intake session), the Brief is skipped. Debrief and Mentor Review are generated *after*, from the Transcript. Same entity, different generation moment.
 - No manual editing in MVP.
 
 ## Session states
@@ -141,7 +144,6 @@ Supported: `en`, `uk`, `ru`.
 
 ## Open edges (deferred, with owners)
 
-- **Client onboarding & auth flow** — invite issuance/acceptance mechanics, Better-Auth integration, non-Telegram path: its own map ticket, after research #5 and privacy #6.
 - **Join-flow session states** (`ready_to_join`, no-show detection) — web-room implementation prep.
 - **Processing-status shape and retries** — pipeline platform ADR (ticket #10).
 - **Artifact content storage** (DB text vs R2 object) — implementation detail, no domain impact; decide with the pipeline.

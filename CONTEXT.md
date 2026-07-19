@@ -42,8 +42,12 @@ _Avoid_: consent flag
 ### Sessions
 
 **Session**:
-A scheduled 1:1 coaching conversation between the coach and one client.
+A scheduled 1:1 coaching conversation between the coach and one client. Has a kind — `intake` or `regular` (open set).
 _Avoid_: meeting, call, appointment
+
+**Intake**:
+The session kind for a client's first session — clarifying goals and the coaching contract; drives its own debrief prompt.
+_Avoid_: first session (as a term), discovery call
 
 **Web Room**:
 The browser page where the coach and client meet for a session's call.
