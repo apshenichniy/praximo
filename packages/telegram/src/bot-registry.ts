@@ -50,7 +50,7 @@ export class TestService extends Context.Service<TestService, TestInterface>()(
   "@praximo/telegram/BotRegistry/Test",
 ) {}
 
-export const layerTest = Layer.effectContext(
+export const testLayer = Layer.effectContext(
   Effect.gen(function* () {
     const messages = yield* Ref.make<ReadonlyArray<SentMessage>>([])
 

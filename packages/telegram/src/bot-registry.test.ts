@@ -15,7 +15,7 @@ describe("BotRegistry", () => {
       const sent = yield* stub.sent()
 
       expect(sent).toEqual([{ workspace, text: "hello" }])
-    }).pipe(Effect.provide(BotRegistry.layerTest)),
+    }).pipe(Effect.provide(BotRegistry.testLayer)),
   )
 
   it.effect("the live layer fails rather than pretending it delivered", () =>

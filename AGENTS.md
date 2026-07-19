@@ -15,7 +15,7 @@ Conventions worth knowing before writing code here:
 - **Packages are consumed as TypeScript source.** Every `@praximo/*` package points `exports` at `./src/index.ts`; nothing builds to `dist`. Only apps have a `build`, and it is the Worker bundle.
 - **Import specifiers carry the `.ts` extension** (`import { Workspace } from "./workspace.ts"`), matching the Effect v4 source. The `effect` skill's examples still show `.js` — the pinned source wins, per the skill's own Source Rule.
 - **Service modules follow the module-namespace style**: file-local `Interface` / `Service` / `layer`, errors next to the owning service, operations wrapped in `Effect.fn`, and `export * as Name from "./file.ts"` at the bottom. `packages/telegram/src/bot-registry.ts` is the reference implementation. Plain domain data (`packages/domain`) uses ordinary named exports.
-- **Test layers are named `layerTest`**, following ADR 0002's export contract. The `effect` skill calls it `testLayer`; the ADR is the source of truth here.
+- **The `effect` skill's names win** where a doc paraphrases it loosely — the skill is maintained by an Effect maintainer and tracks the library. Test layers are `testLayer`, not `layerTest`.
 - **Placeholder layers fail loudly.** Every adapter in the skeleton is unwired and returns a typed error rather than pretending to work; they use `Layer.sync` because they acquire nothing yet.
 - **Toolchain pins live in the root `catalog`.** `effect` and `@effect/vitest` track the same beta and move together.
 
