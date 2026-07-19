@@ -1,0 +1,23 @@
+{
+  "name": "@praximo/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit && oxlint -c ../../.oxlintrc.json src",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@praximo/domain": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@praximo/tooling": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

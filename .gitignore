@@ -3,3 +3,12 @@
 
 # Claude Code agent worktrees
 .claude/worktrees/
+
+# Dependencies and build output
+node_modules/
+dist/
+
+# Tooling caches
+.turbo/
+.wrangler/
+*.tsbuildinfo

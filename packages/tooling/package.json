@@ -1,0 +1,10 @@
+{
+  "name": "@praximo/tooling",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tsconfig/*": "./tsconfig/*",
+    "./oxlint/*": "./oxlint/*"
+  }
+}

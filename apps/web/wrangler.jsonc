@@ -1,0 +1,9 @@
+{
+  // Hand-written until the Alchemy IaC ADR (#18) lands; that program becomes the
+  // single source of truth for all three Workers, their bindings, and secrets.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "praximo-web",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-19",
+  "compatibility_flags": ["nodejs_compat"],
+}

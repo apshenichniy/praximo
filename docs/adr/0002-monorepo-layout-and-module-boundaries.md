@@ -48,7 +48,7 @@ npm scope **`@praximo/*`**, all private:
 ### Effect conventions
 
 - The **module-namespace style from the `effect` skill is the project convention**: file-local `Interface` / `Service` / `layer` roles, `export * as UserRepo from "./user-repo.js"` self-export, errors as `Schema.TaggedErrorClass` next to the owning service, operations wrapped in `Effect.fn("UserRepo.get")`.
-- **Packages export service tags and layers only** (`layer`, `layerTest`) — never runtimes. Each app composes its own `AppLive` and builds exactly one runtime per Worker entrypoint.
+- **Packages export service tags and layers only** (`layer`, `testLayer` — the skill's names) — never runtimes. Each app composes its own `AppLive` and builds exactly one runtime per Worker entrypoint.
 - In `apps/web`, Effect runs **server-side only** (server functions / route handlers); client React stays Effect-free.
 - **Errors**: domain errors in `@praximo/domain`; infrastructure errors in the owning package (`db`, `transcription`, `telegram`); apps map errors at their boundaries into HTTP responses or the workflow retry classes of ADR 0001. No shared `errors` package.
 - **Config**: each app owns its environment schema via Effect `Config` with a ConfigProvider over the Worker `env`. Packages declare the config they need but never read the environment themselves.
