@@ -1,19 +1,50 @@
 #!/bin/sh
-# Block direct pushes to main; main advances only through a squash-merged PR.
-# Override for the rare intentional case: git push --no-verify
+# Guard direct pushes to main: code goes through a PR; planning docs may land directly.
 #
+# A push to main is allowed only when every changed file in the pushed commits is a
+# planning artifact (see is_doc() below). If any code file is touched, the push is
+# blocked and must go through a branch + squash-merged PR with green CI.
+#
+# Override for the rare intentional case: git push --no-verify
 # Enabled per-clone via: git config core.hooksPath .githooks
 
 protected="main"
+z40="0000000000000000000000000000000000000000"
 
-while read -r _local_ref _local_sha remote_ref _remote_sha; do
-	case "$remote_ref" in
-	"refs/heads/$protected")
-		echo "pre-push: direct push to '$protected' is blocked — open a PR from a branch." >&2
-		echo "          branch: issue-{number}-{slug}; see docs/agents/git-workflow.md" >&2
-		exit 1
-		;;
+# A path counts as a planning artifact (docs-only pushes to main are allowed).
+is_doc() {
+	case "$1" in
+	docs/* | *.md | AGENTS.md | CONTEXT.md) return 0 ;;
+	*) return 1 ;;
 	esac
+}
+
+block() {
+	echo "pre-push: '$protected' takes code only through a PR — open one from a branch." >&2
+	echo "          offending file: $1" >&2
+	echo "          branch: issue-{number}-{slug}; see docs/agents/git-workflow.md" >&2
+	echo "          (planning docs may land on $protected directly; override: --no-verify)" >&2
+	exit 1
+}
+
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+	[ "$remote_ref" = "refs/heads/$protected" ] || continue
+
+	# Deleting the branch — let the server decide.
+	[ "$local_sha" = "$z40" ] && continue
+
+	if git rev-parse --verify --quiet "origin/$protected" >/dev/null 2>&1; then
+		range="origin/$protected..$local_sha"
+	else
+		# No known remote tip; inspect the full pushed history.
+		range="$local_sha"
+	fi
+
+	# Every file changed by the pushed commits must be a planning artifact.
+	changed=$(git diff --name-only "$range" 2>/dev/null)
+	for f in $changed; do
+		is_doc "$f" || block "$f"
+	done
 done
 
 exit 0

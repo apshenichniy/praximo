@@ -1,6 +1,8 @@
 # Git workflow: branches, CI, and PRs
 
-`main` is always green. All work happens on branches and lands via a squash-merged PR with green CI. Direct pushes to `main` are blocked locally by the `pre-push` hook (`git config core.hooksPath .githooks`); the server-side gate is branch protection.
+`main` is always green. **Code** happens on branches and lands via a squash-merged PR with green CI. **Planning artifacts** (ADRs, specs, wayfinder maps and tickets, agent docs) may land on `main` directly — there is no CI to gate prose, and the wayfinder map is edited by many short sessions.
+
+The `pre-push` hook enforces the split: a push to `main` is allowed only when every changed file matches `docs/**`, `*.md`, `AGENTS.md`, or `CONTEXT.md`; touching anything else is blocked and must go through a PR. Enable per clone with `git config core.hooksPath .githooks`. Changing the hook itself is deliberately gated too. The server-side gate is branch protection; `--no-verify` is the escape hatch.
 
 ## Branches
 

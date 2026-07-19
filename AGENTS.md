@@ -8,7 +8,7 @@ Agents write all documents, commit titles, and commit messages in English by def
 
 ### Git workflow
 
-`main` is always green; work on `issue-{number}-{slug}` branches and land via squash-merged PRs with green CI. A `pre-push` hook blocks direct pushes to `main`. See `docs/agents/git-workflow.md`.
+`main` is always green: code lands via squash-merged PRs from `issue-{number}-{slug}` branches; planning docs may land on `main` directly. A `pre-push` hook enforces the split. See `docs/agents/git-workflow.md`.
 
 ### Issue tracker
 
