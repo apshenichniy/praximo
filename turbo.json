@@ -9,7 +9,7 @@
     },
     "test": {
       "dependsOn": ["^check"],
-      "inputs": ["src/**", "tsconfig.json", "package.json", "vitest.config.ts"],
+      "inputs": ["src/**", "tsconfig.json", "package.json"],
       "outputs": []
     },
     "build": {

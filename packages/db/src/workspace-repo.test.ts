@@ -1,22 +1,19 @@
 import { describe, expect, it } from "@effect/vitest"
+import { WorkspaceId } from "@praximo/domain"
 import { Effect } from "effect"
 import { WorkspaceRepo } from "./workspace-repo.ts"
 
-describe("WorkspaceRepo.decodeRow", () => {
-  it.effect("decodes a persisted row into the domain entity", () =>
+describe("WorkspaceRepo", () => {
+  it.effect("reports that the database is unwired instead of inventing a workspace", () =>
     Effect.gen(function* () {
-      const workspace = yield* WorkspaceRepo.decodeRow({ id: "ws_1", name: "Ada's practice" })
+      const repo = yield* WorkspaceRepo.Service
+      const error = yield* Effect.flip(repo.findById(WorkspaceId.make("ws_1")))
 
-      expect(workspace.id).toBe("ws_1")
-      expect(workspace.name).toBe("Ada's practice")
-    }),
-  )
+      if (error._tag !== "WorkspaceRepo.QueryFailed") {
+        throw new Error(`expected a QueryFailed, got ${error._tag}`)
+      }
 
-  it.effect("rejects a row the domain would not accept", () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(WorkspaceRepo.decodeRow({ id: "", name: "Ada's practice" }))
-
-      expect(error._tag).toBe("SchemaError")
-    }),
+      expect(error.operation).toBe("findById")
+    }).pipe(Effect.provide(WorkspaceRepo.layer)),
   )
 })

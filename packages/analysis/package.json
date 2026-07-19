@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && oxlint -c ../../.oxlintrc.json src",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

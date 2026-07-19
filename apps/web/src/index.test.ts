@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest"
-import { handleRequest } from "./index.ts"
+import worker, { handleRequest } from "./index.ts"
 
 describe("web worker", () => {
   it("boots its runtime and answers a request", async () => {
-    const response = await handleRequest()
+    const response = await handleRequest(new Request("https://web.praximo.test/"))
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ app: "web", status: "ok" })
+  })
+
+  it("exposes the handler as the Worker's fetch entrypoint", () => {
+    expect(worker.fetch).toBe(handleRequest)
   })
 })

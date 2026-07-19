@@ -37,27 +37,28 @@ export const layer = Layer.sync(Service, () => {
   return Service.of({ send })
 })
 
+export interface SentMessage {
+  readonly workspace: WorkspaceId
+  readonly text: string
+}
+
 export interface TestInterface extends Interface {
-  readonly sent: Effect.Effect<
-    ReadonlyArray<{ readonly workspace: WorkspaceId; readonly text: string }>
-  >
+  readonly sent: () => Effect.Effect<ReadonlyArray<SentMessage>>
 }
 
 export class TestService extends Context.Service<TestService, TestInterface>()(
   "@praximo/telegram/BotRegistry/Test",
 ) {}
 
-export const testLayer = Layer.effectContext(
+export const layerTest = Layer.effectContext(
   Effect.gen(function* () {
-    const messages = yield* Ref.make<
-      ReadonlyArray<{ readonly workspace: WorkspaceId; readonly text: string }>
-    >([])
+    const messages = yield* Ref.make<ReadonlyArray<SentMessage>>([])
 
     const send = Effect.fn("BotRegistry.send")(function* (workspace: WorkspaceId, text: string) {
       yield* Ref.update(messages, (sent) => [...sent, { workspace, text }])
     })
 
-    const impl: TestInterface = { send, sent: Ref.get(messages) }
+    const impl = TestService.of({ send, sent: () => Ref.get(messages) })
 
     return Context.make(Service, impl).pipe(Context.add(TestService, impl))
   }),

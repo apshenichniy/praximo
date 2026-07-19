@@ -28,7 +28,7 @@ export interface GenerateRequest extends Schema.Schema.Type<typeof GenerateReque
 export class GenerationFailed extends Schema.TaggedErrorClass<GenerationFailed>()(
   "ArtifactGenerator.GenerationFailed",
   {
-    kind: Schema.String,
+    kind: ArtifactKind,
     reason: Schema.String,
   },
 ) {}

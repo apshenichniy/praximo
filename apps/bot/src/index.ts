@@ -20,7 +20,7 @@ const health = Effect.gen(function* () {
   return { app: "bot", status: "ok" } as const
 })
 
-export const handleRequest = async (): Promise<Response> =>
+export const handleRequest = async (_request: Request): Promise<Response> =>
   Response.json(await runtime.runPromise(health))
 
 export default { fetch: handleRequest } satisfies ExportedHandler

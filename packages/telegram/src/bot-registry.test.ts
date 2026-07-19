@@ -12,10 +12,10 @@ describe("BotRegistry", () => {
       yield* registry.send(workspace, "hello")
 
       const stub = yield* BotRegistry.TestService
-      const sent = yield* stub.sent
+      const sent = yield* stub.sent()
 
       expect(sent).toEqual([{ workspace, text: "hello" }])
-    }).pipe(Effect.provide(BotRegistry.testLayer)),
+    }).pipe(Effect.provide(BotRegistry.layerTest)),
   )
 
   it.effect("the live layer fails rather than pretending it delivered", () =>

@@ -20,12 +20,6 @@ export class QueryFailed extends Schema.TaggedErrorClass<QueryFailed>()(
 ) {}
 
 /**
- * The row decoder is exported so the boundary between "what Postgres returned"
- * and "what the domain accepts" stays testable before Drizzle is wired in.
- */
-export const decodeRow = Schema.decodeUnknownEffect(Workspace)
-
-/**
  * Unwired until the Drizzle schema and the Neon connection arrive with their
  * own ticket; resolving the service must not imply a working database.
  */
