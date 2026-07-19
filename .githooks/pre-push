@@ -1,0 +1,19 @@
+#!/bin/sh
+# Block direct pushes to main; main advances only through a squash-merged PR.
+# Override for the rare intentional case: git push --no-verify
+#
+# Enabled per-clone via: git config core.hooksPath .githooks
+
+protected="main"
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+	case "$remote_ref" in
+	"refs/heads/$protected")
+		echo "pre-push: direct push to '$protected' is blocked — open a PR from a branch." >&2
+		echo "          branch: issue-{number}-{slug}; see docs/agents/git-workflow.md" >&2
+		exit 1
+		;;
+	esac
+done
+
+exit 0

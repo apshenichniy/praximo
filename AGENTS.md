@@ -2,27 +2,13 @@
 
 ## Conventions
 
-Agents write all documents, commit titles, and commit messages in English by default.
-
-The package manager is **bun**. Use `bun` / `bunx` for all installs, scripts, and tooling.
-
-## Vendored reference repositories
-
-External source code lives under `.repos/` as read-only reference material (added via `git subtree --squash`):
-
-- `.repos/effect` — Effect 4 source, vendored from the `main` branch of `Effect-TS/effect` (since 2026-07 the canonical home of Effect 4; the former `effect-smol` repo is deprecated, v3 lives on the `v3` branch). Includes `ai-docs/`, `LLMS.md`, and `MIGRATION.md`.
-
-Rules:
-
-- Treat `.repos/**` as **read-only reference**: grep it to answer API questions from ground truth instead of guessing.
-- **Never import from `.repos/`** in application code; depend on published packages instead.
-- Update with `git subtree pull --prefix=.repos/effect https://github.com/Effect-TS/effect.git main --squash`.
-
-## Effect skill
-
-The `effect` skill (Effect v4 production patterns, from `kitlangton/skills`) is installed at project scope for Claude Code (`.claude/skills/effect`; managed by `bunx skills`, pinned in `skills-lock.json`). Consult it when writing any Effect code. To add another agent target: `bunx skills add kitlangton/skills --skill effect --agent <name>`.
+Agents write all documents, commit titles, and commit messages in English by default. The package manager is **bun** — use `bun` / `bunx` for all installs, scripts, and tooling.
 
 ## Agent skills
+
+### Git workflow
+
+`main` is always green; work on `issue-{number}-{slug}` branches and land via squash-merged PRs with green CI. A `pre-push` hook blocks direct pushes to `main`. See `docs/agents/git-workflow.md`.
 
 ### Issue tracker
 
@@ -35,3 +21,7 @@ Default canonical triage vocabulary (`needs-triage`, `needs-info`, `ready-for-ag
 ### Domain docs
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+### Effect development
+
+Effect 4 source vendored read-only under `.repos/effect`; the `effect` skill lives at `.claude/skills/effect`. See `docs/agents/effect.md`.
