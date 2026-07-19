@@ -1,0 +1,32 @@
+{
+  "name": "praximo",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.13",
+  "workspaces": {
+    "packages": ["apps/*", "packages/*"],
+    "catalog": {
+      "@cloudflare/workers-types": "5.20260719.1",
+      "@effect/vitest": "4.0.0-beta.99",
+      "effect": "4.0.0-beta.99",
+      "oxlint": "1.74.0",
+      "typescript": "7.0.2",
+      "vitest": "4.1.10",
+      "wrangler": "4.112.0"
+    }
+  },
+  "scripts": {
+    "build": "turbo build",
+    "check": "turbo check && bun run lint",
+    "lint": "oxlint -c .oxlintrc.json apps packages",
+    "test": "turbo test",
+    "format": "oxfmt apps packages",
+    "format:check": "oxfmt --check apps packages"
+  },
+  "devDependencies": {
+    "oxfmt": "0.59.0",
+    "oxlint": "catalog:",
+    "turbo": "2.10.5",
+    "typescript": "catalog:"
+  }
+}

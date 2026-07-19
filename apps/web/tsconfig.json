@@ -1,0 +1,4 @@
+{
+  "extends": "@praximo/tooling/tsconfig/worker.json",
+  "include": ["src/**/*.ts"]
+}

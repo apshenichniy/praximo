@@ -1,0 +1,21 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  "tasks": {
+    "check": {
+      "dependsOn": ["^check"],
+      "inputs": ["src/**", "tsconfig.json", "package.json"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^check"],
+      "inputs": ["src/**", "tsconfig.json", "package.json", "vitest.config.ts"],
+      "outputs": []
+    },
+    "build": {
+      "dependsOn": ["^check"],
+      "inputs": ["src/**", "tsconfig.json", "package.json", "wrangler.jsonc"],
+      "outputs": ["dist/**"]
+    }
+  }
+}

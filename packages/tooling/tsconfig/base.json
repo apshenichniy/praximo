@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    // Internal packages are consumed as TypeScript source and bundled by the
+    // app toolchain; tsc only ever typechecks, it never emits.
+    "noEmit": true,
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "allowJs": false,
+    "isolatedModules": true,
+
+    // Strictness. See ADR 0002 — one contract for every workspace.
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+
+    "skipLibCheck": true,
+    "noErrorTruncation": true,
+    "types": []
+  }
+}
