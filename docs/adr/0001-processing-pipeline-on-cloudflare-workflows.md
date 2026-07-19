@@ -60,7 +60,7 @@ Proceed on `effect@beta` behind a thin adapter: per-request `ManagedRuntime` bui
 
 ### Retention deletion
 
-Audio deletion (30 days after transcription, per [privacy-retention.md](../spec/privacy-retention.md)) is executed by a **cron-triggered sweeper Worker** that scans Postgres for due audio, deletes the R2 objects, and records the deleted-by-retention fact. Not an in-workflow `step.sleep(30d)`: pipeline instances finish fast, retention rules stay in one place, and no instances dangle for a month.
+Audio deletion (30 days after transcription, per [privacy-retention.md](../spec/privacy-retention.md)) is executed by a **cron-triggered sweeper** — a cron trigger on the pipeline Worker, not a fourth deploy unit ([ADR 0002](0002-monorepo-layout-and-module-boundaries.md)) — that scans Postgres for due audio, deletes the R2 objects, and records the deleted-by-retention fact. Not an in-workflow `step.sleep(30d)`: pipeline instances finish fast, retention rules stay in one place, and no instances dangle for a month.
 
 ## Consequences
 
