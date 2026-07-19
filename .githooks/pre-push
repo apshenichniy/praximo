@@ -12,9 +12,15 @@ protected="main"
 z40="0000000000000000000000000000000000000000"
 
 # A path counts as a planning artifact (docs-only pushes to main are allowed).
+#
+# Agent tooling counts too: skills are prose plus the symlinks that wire them
+# into each agent's directory, they are managed by `bunx skills` rather than
+# hand-edited, and CI has nothing to say about them. Note that a skill symlink
+# such as .claude/skills/effect has no extension, so *.md does not cover it.
 is_doc() {
 	case "$1" in
 	docs/* | *.md | AGENTS.md | CONTEXT.md) return 0 ;;
+	.agents/skills/* | .claude/skills/* | skills-lock.json) return 0 ;;
 	*) return 1 ;;
 	esac
 }
