@@ -18,6 +18,7 @@ Conventions worth knowing before writing code here:
 - **The `effect` skill's names win** where a doc paraphrases it loosely — the skill is maintained by an Effect maintainer and tracks the library. Test layers are `testLayer`, not `layerTest`.
 - **Placeholder layers fail loudly.** Every adapter in the skeleton is unwired and returns a typed error rather than pretending to work; they use `Layer.sync` because they acquire nothing yet.
 - **Toolchain pins live in the root `catalog`.** `effect` and `@effect/vitest` track the same beta and move together.
+- **This repository owns LiveKit maintenance.** `deploy/livekit/README.md` is the canonical rebuild, upgrade, rollback, rotation, and diagnostics runbook. The local root `.env.livekit` is the mode-`0600`, gitignored five-key recovery source; never print or commit its values. Run `bun run livekit:check` before maintenance and `bun run livekit:status` for read-only live verification.
 
 ## Agent skills
 

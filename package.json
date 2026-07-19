@@ -19,6 +19,8 @@
     "build": "turbo build",
     "check": "turbo check && bun run lint",
     "lint": "oxlint -c .oxlintrc.json apps packages",
+    "livekit:check": "bash deploy/livekit/check.sh",
+    "livekit:status": "bash deploy/livekit/status.sh",
     "test": "turbo test",
     "format": "oxfmt apps packages",
     "format:check": "oxfmt --check apps packages"
