@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Прототип · Доставка и принятие инвайта (тикет #19)</title>
+<style>
+  :root {
+    --tg-blue: #2AABEE;
+    --tg-blue-dark: #229ED9;
+    --ios-blue: #007AFF;
+    --out-bubble: #E3FEE0;
+    --in-bubble: #FFFFFF;
+    --chat-bg: #DDE5D8;
+    --ink: #1a1a1a;
+    --muted: #6b7280;
+    --accent: #229ED9;
+    --panel: #ffffff;
+    --page: #f3f4f1;
+    --ok: #16a34a;
+    --warn: #b45309;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--page); color: var(--ink);
+    padding: 28px 24px 60px;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+
+  /* ---------- header ---------- */
+  .proto-tag {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: #b45309; background: #fef3c7;
+    border: 1px solid #fcd34d; border-radius: 6px; padding: 3px 8px; margin-bottom: 10px;
+  }
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .lede { color: var(--muted); font-size: 14px; max-width: 860px; line-height: 1.55; margin-bottom: 4px; }
+  .lede b { color: var(--ink); }
+
+  /* ---------- tabs ---------- */
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 22px; }
+  .tab {
+    border: 1px solid #d7dbd2; background: #fff; border-radius: 10px;
+    padding: 9px 14px; font-size: 13.5px; font-weight: 600; cursor: pointer; color: #374151;
+    transition: all .12s;
+  }
+  .tab:hover { border-color: var(--accent); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tab small { display: block; font-weight: 400; font-size: 11px; opacity: .75; margin-top: 1px; }
+
+  /* ---------- layout ---------- */
+  .stage { display: grid; grid-template-columns: 300px 400px 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 1080px) { .stage { grid-template-columns: 1fr; justify-items: center; } .rail, .statepanel { max-width: 400px; width: 100%; } }
+
+  /* ---------- rail ---------- */
+  .rail { background: var(--panel); border: 1px solid #e2e5dd; border-radius: 14px; padding: 18px; }
+  .rail h2 { font-size: 15px; margin-bottom: 6px; }
+  .rail .desc { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 14px; }
+  .steps { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  .steps li {
+    display: flex; gap: 9px; padding: 7px 9px; border-radius: 8px;
+    font-size: 12.5px; line-height: 1.4; color: #9ca3af; align-items: baseline;
+  }
+  .steps li .n {
+    flex: 0 0 18px; height: 18px; border-radius: 50%; background: #e5e7eb; color: #9ca3af;
+    font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+    position: relative; top: 2px;
+  }
+  .steps li.done { color: #6b7280; }
+  .steps li.done .n { background: #d1fae5; color: var(--ok); }
+  .steps li.cur { background: #eaf6fd; color: var(--ink); font-weight: 600; }
+  .steps li.cur .n { background: var(--accent); color: #fff; }
+  .rail .hint {
+    margin-top: 14px; font-size: 12.5px; background: #eaf6fd; border: 1px solid #bfe3f7;
+    border-radius: 8px; padding: 9px 11px; color: #0c4a6e; line-height: 1.45;
+  }
+  .rail .restart {
+    margin-top: 12px; width: 100%; border: 1px solid #d7dbd2; background: #fff; color: #374151;
+    border-radius: 8px; padding: 7px; font-size: 12.5px; cursor: pointer; font-weight: 600;
+  }
+  .rail .restart:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- phone ---------- */
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .role-badge {
+    font-size: 12px; font-weight: 700; padding: 5px 14px; border-radius: 20px; letter-spacing: .02em;
+  }
+  .role-badge.coach { background: #ede9fe; color: #6d28d9; }
+  .role-badge.client { background: #dcfce7; color: #15803d; }
+  .phone {
+    width: 375px; height: 720px; background: #000; border-radius: 40px; padding: 10px;
+    box-shadow: 0 18px 50px rgba(0,0,0,.22);
+  }
+  .screen {
+    width: 100%; height: 100%; border-radius: 31px; overflow: hidden; background: #fff;
+    display: flex; flex-direction: column; position: relative;
+  }
+  .statusbar {
+    height: 34px; flex: 0 0 34px; display: flex; justify-content: space-between; align-items: center;
+    padding: 0 22px; font-size: 12.5px; font-weight: 600; background: inherit; z-index: 2;
+  }
+
+  /* telegram chat chrome */
+  .tg-header {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 6px 12px 8px;
+    background: #fff; border-bottom: .5px solid #d9d9d9;
+  }
+  .tg-header .back { color: var(--ios-blue); font-size: 22px; line-height: 1; padding-right: 2px; }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 15px; flex: 0 0 36px;
+  }
+  .av-coach { background: linear-gradient(135deg, #a855f7, #7c3aed); }
+  .av-client { background: linear-gradient(135deg, #34d399, #059669); }
+  .av-bot { background: linear-gradient(135deg, #38bdf8, #2563eb); }
+  .tg-header .who { flex: 1; min-width: 0; }
+  .tg-header .who .name { font-size: 15.5px; font-weight: 600; display: flex; align-items: center; gap: 5px; }
+  .tg-header .who .status { font-size: 12.5px; color: #8e8e93; }
+  .tg-header .who .status.online { color: var(--ios-blue); }
+
+  .chat {
+    flex: 1; overflow-y: auto; padding: 12px 10px 14px;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(255,255,255,.35) 1.5px, transparent 1.5px),
+      radial-gradient(circle at 70% 65%, rgba(255,255,255,.3) 1.5px, transparent 1.5px),
+      radial-gradient(circle at 45% 85%, rgba(96,125,80,.12) 2px, transparent 2px),
+      linear-gradient(160deg, #d8e3d0, #cfdcc8 55%, #d5e0cd);
+    background-size: 90px 90px, 110px 110px, 130px 130px, 100% 100%;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .day-chip {
+    align-self: center; background: rgba(74,88,66,.28); color: #fff; font-size: 12px; font-weight: 600;
+    padding: 3px 10px; border-radius: 12px; margin: 2px 0 4px;
+  }
+  .msg { max-width: 82%; display: flex; flex-direction: column; }
+  .msg .bubble {
+    border-radius: 15px; padding: 7px 11px 6px; font-size: 14.5px; line-height: 1.35;
+    box-shadow: 0 1px 1px rgba(0,0,0,.08); position: relative; word-wrap: break-word;
+  }
+  .msg.in { align-self: flex-start; } .msg.in .bubble { background: var(--in-bubble); border-bottom-left-radius: 5px; }
+  .msg.out { align-self: flex-end; } .msg.out .bubble { background: var(--out-bubble); border-bottom-right-radius: 5px; }
+  .msg .meta {
+    float: right; margin: 6px -3px -2px 8px; font-size: 11px; color: #8aa17b; display: inline-flex; gap: 3px; align-items: center;
+  }
+  .msg.in .meta { color: #a0a5ab; }
+  .via { font-size: 12.5px; color: var(--ios-blue); font-weight: 500; margin-bottom: 2px; }
+  .link { color: var(--ios-blue); text-decoration: none; word-break: break-all; }
+
+  /* link preview inside bubble */
+  .preview {
+    border-left: 2.5px solid var(--ios-blue); margin-top: 5px; padding: 3px 8px 4px; border-radius: 3px;
+    background: rgba(0,122,255,.05);
+  }
+  .preview .p-site { color: var(--ios-blue); font-size: 12.5px; font-weight: 600; }
+  .preview .p-title { font-size: 13px; font-weight: 600; }
+  .preview .p-desc { font-size: 12.5px; color: #55606a; line-height: 1.3; }
+  .preview .p-row { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+  .preview .p-row .avatar { width: 34px; height: 34px; flex-basis: 34px; font-size: 13px; }
+
+  /* branded card (inline message) */
+  .card-photo {
+    border-radius: 10px; overflow: hidden; margin: 2px 0 6px; position: relative;
+    background: linear-gradient(120deg, #6d28d9, #a855f7 60%, #c084fc);
+    height: 128px; display: flex; flex-direction: column; justify-content: flex-end; padding: 12px;
+  }
+  .card-photo .c-ava {
+    width: 46px; height: 46px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.85);
+    background: linear-gradient(135deg, #f0abfc, #a855f7); display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 18px; margin-bottom: 8px;
+  }
+  .card-photo .c-name { color: #fff; font-weight: 700; font-size: 16px; }
+  .card-photo .c-sub { color: rgba(255,255,255,.85); font-size: 12.5px; }
+
+  /* inline keyboard under a bubble */
+  .ikb { display: flex; flex-direction: column; gap: 3px; margin-top: 3px; }
+  .ikb .row { display: flex; gap: 3px; }
+  .ikb button {
+    flex: 1; border: none; background: rgba(255,255,255,.92); color: var(--ios-blue);
+    font-size: 13.5px; font-weight: 600; border-radius: 9px; padding: 9px 6px; cursor: default;
+    box-shadow: 0 1px 1px rgba(0,0,0,.06); font-family: inherit;
+  }
+
+  .inputbar {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 9px; padding: 7px 10px;
+    background: #f6f6f6; border-top: .5px solid #d9d9d9;
+  }
+  .inputbar .icon { font-size: 21px; color: #8e8e93; }
+  .inputbar .field {
+    flex: 1; background: #fff; border: .5px solid #d9d9d9; border-radius: 17px;
+    padding: 7px 13px; font-size: 14.5px; color: #8e8e93; min-height: 34px; display: flex; align-items: center;
+  }
+  .inputbar .field .typed { color: var(--ink); }
+  .inputbar .field .selected { background: #b3d7ff; color: var(--ink); }
+  .inputbar .send {
+    width: 34px; height: 34px; border-radius: 50%; background: var(--ios-blue); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 16px; flex: 0 0 34px;
+  }
+  .startbar {
+    flex: 0 0 auto; padding: 8px 10px calc(8px + 6px); background: #f6f6f6; border-top: .5px solid #d9d9d9;
+  }
+  .startbar .startbtn {
+    width: 100%; background: none; border: none; color: var(--ios-blue); font-size: 16.5px; font-weight: 600;
+    padding: 10px; font-family: inherit; cursor: default;
+  }
+  .replykb { flex: 0 0 auto; background: #f0f1f2; border-top: .5px solid #d9d9d9; padding: 8px 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .replykb button {
+    width: 100%; background: #fff; border: .5px solid #d5d7da; border-radius: 8px; padding: 11px;
+    font-size: 14.5px; font-family: inherit; color: var(--ink); box-shadow: 0 1px 1px rgba(0,0,0,.05); cursor: default;
+  }
+
+  /* bot empty-chat description */
+  .bot-intro { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px;
+    background: linear-gradient(160deg, #d8e3d0, #cfdcc8); }
+  .bot-intro .box {
+    background: #fff; border-radius: 14px; padding: 20px 18px; text-align: center; max-width: 280px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+  }
+  .bot-intro .avatar { width: 68px; height: 68px; flex-basis: 68px; margin: 0 auto 12px; font-size: 26px; }
+  .bot-intro h3 { font-size: 15px; margin-bottom: 8px; }
+  .bot-intro p { font-size: 13.5px; color: #55606a; line-height: 1.45; }
+
+  /* mini app */
+  .ma-header {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+    background: #fff; border-bottom: .5px solid #e2e2e2;
+  }
+  .ma-header .x { font-size: 17px; color: #8e8e93; }
+  .ma-header .t { flex: 1; text-align: center; font-weight: 600; font-size: 15px; }
+  .ma-header .t small { display: block; font-weight: 400; font-size: 11px; color: #8e8e93; }
+  .ma-body { flex: 1; overflow-y: auto; background: #f2f2f7; padding: 14px; }
+  .ma-card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .ma-card h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8e8e93; margin-bottom: 10px; font-weight: 600; }
+  .ma-client { display: flex; gap: 11px; align-items: center; }
+  .ma-client .cinfo .cname { font-weight: 600; font-size: 16px; }
+  .ma-client .cinfo .cstat { font-size: 12.5px; color: var(--warn); }
+  .ma-session { display: flex; gap: 10px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: .5px solid #ececf0; }
+  .ma-session .ico { font-size: 22px; }
+  .ma-session .sname { font-weight: 600; font-size: 14px; }
+  .ma-session .swhen { font-size: 12.5px; color: #8e8e93; }
+  .ma-actions { display: flex; flex-direction: column; gap: 8px; }
+  .ma-btn {
+    width: 100%; border: none; border-radius: 10px; padding: 13px; font-size: 15px; font-weight: 600;
+    font-family: inherit; cursor: default; background: #fff; color: var(--ios-blue);
+  }
+  .ma-btn.primary { background: var(--tg-blue); color: #fff; }
+  .ma-note { font-size: 11.5px; color: #8e8e93; line-height: 1.4; padding: 0 4px; }
+
+  /* sheets */
+  .sheet-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,.4); z-index: 5;
+    display: flex; flex-direction: column; justify-content: flex-end;
+  }
+  .sheet {
+    background: #f6f6f6; border-radius: 16px 16px 0 0; padding: 14px 14px 24px; max-height: 78%;
+    overflow-y: auto;
+  }
+  .sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: #d1d1d6; margin: 0 auto 12px; }
+  .sheet h3 { font-size: 16px; text-align: center; margin-bottom: 12px; }
+  .sheet .search {
+    background: #e4e4e9; border-radius: 10px; padding: 8px 12px; font-size: 14px; color: #8e8e93; margin-bottom: 12px;
+  }
+  .sheet .chats { background: #fff; border-radius: 12px; overflow: hidden; }
+  .sheet .chatrow { display: flex; gap: 11px; align-items: center; padding: 10px 12px; border-bottom: .5px solid #ececf0; }
+  .sheet .chatrow:last-child { border-bottom: none; }
+  .sheet .chatrow .rname { font-weight: 600; font-size: 14.5px; }
+  .sheet .chatrow .rsub { font-size: 12.5px; color: #8e8e93; }
+
+  /* inline results popup */
+  .inline-pop {
+    position: absolute; left: 8px; right: 8px; bottom: 58px; background: #fff; border-radius: 12px;
+    box-shadow: 0 -2px 18px rgba(0,0,0,.18); overflow: hidden; z-index: 4;
+  }
+  .inline-pop .res { display: flex; gap: 11px; padding: 10px 12px; align-items: center; }
+  .inline-pop .thumb {
+    width: 44px; height: 44px; border-radius: 8px; flex: 0 0 44px;
+    background: linear-gradient(120deg, #6d28d9, #a855f7); display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 16px;
+  }
+  .inline-pop .rtitle { font-weight: 600; font-size: 14px; }
+  .inline-pop .rdesc { font-size: 12.5px; color: #8e8e93; line-height: 1.3; }
+
+  .toast {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: 90px; z-index: 8;
+    background: rgba(40,40,40,.92); color: #fff; font-size: 13.5px; padding: 9px 16px; border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  /* tap target */
+  .tap { cursor: pointer !important; position: relative; animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(34,158,217,.55); }
+    50% { box-shadow: 0 0 0 7px rgba(34,158,217,0); }
+  }
+  .tap:hover { filter: brightness(.96); }
+
+  /* ---------- state panel ---------- */
+  .statepanel { background: var(--panel); border: 1px solid #e2e5dd; border-radius: 14px; padding: 18px; }
+  .statepanel h2 { font-size: 15px; margin-bottom: 4px; }
+  .statepanel .sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height: 1.4; }
+  .ent { border: 1px solid #e8eae3; border-radius: 10px; padding: 10px 12px; margin-bottom: 9px; transition: background .3s; }
+  .ent.changed { background: #fefce8; border-color: #fde047; }
+  .ent .ename { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; font-weight: 700; margin-bottom: 5px; }
+  .ent .f { display: flex; justify-content: space-between; font-size: 13px; padding: 2px 0; gap: 10px; }
+  .ent .f .k { color: var(--muted); flex: 0 0 auto; }
+  .ent .f .v { font-weight: 600; text-align: right; word-break: break-all; }
+  .ent .f .v.ok { color: var(--ok); }
+  .ent .f .v.warn { color: var(--warn); }
+  .ent .f .v.none { color: #c2c7ce; font-weight: 400; }
+  .atomic-note { font-size: 12px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 8px 10px; line-height: 1.45; margin-top: 4px; }
+
+  /* ---------- comparison / facts tab ---------- */
+  .cmp { background: var(--panel); border: 1px solid #e2e5dd; border-radius: 14px; padding: 24px; }
+  .cmp h2 { font-size: 17px; margin: 0 0 4px; }
+  .cmp .csub { color: var(--muted); font-size: 13px; margin-bottom: 16px; line-height: 1.5; }
+  .cmp h2 + h2, .cmp table + h2 { margin-top: 30px; }
+  .tblwrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #e5e7eb; padding: 9px 11px; text-align: left; vertical-align: top; line-height: 1.45; }
+  th { background: #f8f9f6; font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; }
+  td b.flow { white-space: nowrap; }
+  .verdict { font-weight: 700; white-space: nowrap; }
+  .verdict.ok { color: var(--ok); } .verdict.part { color: var(--warn); } .verdict.no { color: #dc2626; }
+  .cmp .foot { margin-top: 18px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="proto-tag">Прототип — выбрасываемый артефакт · wayfinder #19</div>
+  <h1>Доставка и принятие инвайта клиента через Telegram</h1>
+  <p class="lede">
+    <b>Вопрос:</b> в какой форме тренер доставляет клиенту приглашение и как выглядит принятие,
+    чтобы клиент воспринимал онбординг как <b>продолжение разговора с тренером</b>, а не «регистрацию на платформе».
+    Политика уже решена (тикет #14): последовательность язык → согласие → подтверждение, атомарное принятие, токен-инвайт каноничен.
+    Здесь сравнивается только <b>форма доставки</b>. Кликайте по подсвеченным элементам на телефоне, чтобы пройти сценарий.
+    Все флоу проверены по официальной документации Bot API — детали во вкладке «Сравнение и факты».
+  </p>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="content"></div>
+</div>
+
+<script>
+/* ============================================================
+   Доменная модель (чистый модуль — без DOM).
+   Демонстрирует атомарность принятия: до нажатия «Согласен»
+   не существует ни Channel, ни Consent Grant.
+   ============================================================ */
+const InviteModel = (() => {
+  const initial = () => ({
+    invite:  { status: 'pending', token: 'inv_k3J9tR2w', expected_tg_id: null, ttl: '7 дней' },
+    client:  { name: 'Андрей', language: null },
+    channel: null,
+    consent: null,
+    session: { kind: 'intake', when: 'вт 22 июля, 18:00' },
+  });
+  const actions = {
+    bind:        (s) => ({ ...s, invite: { ...s.invite, expected_tg_id: '628114932' } }),
+    start:       (s) => s, // узнавание по токену или id — состояние не меняет
+    setLanguage: (s, lang) => ({ ...s, client: { ...s.client, language: lang } }),
+    accept:      (s) => ({ // атомарно: Channel + Consent Grant + Invite → accepted
+      ...s,
+      invite:  { ...s.invite, status: 'accepted' },
+      channel: { kind: 'telegram', handle: '@andrey_kv', snapshot: 'имя + фото сохранены' },
+      consent: { version: 'v1', language: s.client.language ?? 'ru', at: 'сейчас' },
+    }),
+  };
+  return { initial, actions };
+})();
+
+/* ============================================================
+   Рендер экранов (Telegram-мок)
+   ============================================================ */
+const esc = (s) => s;
+const statusbar = () => `<div class="statusbar"><span>14:30</span><span>🔋 87%</span></div>`;
+
+function phone(role, inner) {
+  return `
+    <div class="phone-col">
+      <div class="role-badge ${role}">${role === 'coach' ? '📱 Телефон тренера (Мария)' : '📱 Телефон клиента (Андрей)'}</div>
+      <div class="phone"><div class="screen">${inner}</div></div>
+    </div>`;
+}
+
+function tgHeader({ av, name, sub, online, verified }) {
+  return `
+    <div class="tg-header">
+      <span class="back">‹</span>
+      <span class="avatar ${av}">${av === 'av-bot' ? '🤖' : (name[0])}</span>
+      <div class="who">
+        <div class="name">${name}${verified ? ' <span style="color:var(--tg-blue)">✓</span>' : ''}</div>
+        <div class="status ${online ? 'online' : ''}">${sub}</div>
+      </div>
+    </div>`;
+}
+
+const dmHistory = (view) => {
+  // view: 'coach' → Мария смотрит на диалог (её сообщения out); 'client' → наоборот
+  const m = (mine, text, time) =>
+    `<div class="msg ${mine ? 'out' : 'in'}"><div class="bubble">${text}<span class="meta">${time}${mine ? ' ✓✓' : ''}</span></div></div>`;
+  const coachSide = view === 'coach';
+  return `
+    <div class="day-chip">Сегодня</div>
+    ${m(!coachSide, 'Мария, добрый день! Подумал над нашим разговором — давайте начнём. Когда удобно?', '14:02')}
+    ${m(coachSide, 'Андрей, отлично! Предлагаю вторник, 18:00 — первая установочная сессия, час.', '14:11')}
+    ${m(!coachSide, 'Вторник подходит 👍', '14:14')}`;
+};
+
+function inviteCard({ view, tapAdvance }) {
+  const mine = view === 'coach';
+  return `
+    <div class="msg ${mine ? 'out' : 'in'}">
+      <div class="bubble" style="padding:7px 8px 6px; max-width:270px;">
+        <div class="via">via @maria_coach_bot</div>
+        <div class="card-photo">
+          <div class="c-ava">М</div>
+          <div class="c-name">Мария Коваленко</div>
+          <div class="c-sub">Коучинг · рабочее пространство</div>
+        </div>
+        <div style="font-size:14px; line-height:1.35; padding:0 3px;">
+          Я настроила для нас пространство: напоминания о сессиях, ссылки на подключение и материалы будут приходить сюда, в Telegram.
+        </div>
+        <span class="meta">14:29${mine ? ' ✓✓' : ''}</span>
+        <div class="ikb"><div class="row">
+          <button ${!mine && tapAdvance ? 'class="tap" onclick="advance()"' : ''}>Принять приглашение</button>
+        </div></div>
+      </div>
+    </div>`;
+}
+
+function linkMessage({ view, tapAdvance }) {
+  const mine = view === 'coach';
+  return `
+    <div class="msg ${mine ? 'out' : 'in'}">
+      <div class="bubble" style="max-width:280px;">
+        Андрей, вот ссылка для подключения — по ней придут напоминания и ссылка на видеовстречу:<br>
+        <a class="link ${!mine && tapAdvance ? 'tap' : ''}" ${!mine && tapAdvance ? 'onclick="advance()"' : ''}>https://t.me/maria_coach_bot?start=inv_k3J9tR2w</a>
+        <div class="preview">
+          <div class="p-row">
+            <span class="avatar av-bot">🤖</span>
+            <div>
+              <div class="p-title">Мария Коваленко · ассистент</div>
+              <div class="p-desc">Напоминания о сессиях и материалы от Марии</div>
+            </div>
+          </div>
+        </div>
+        <span class="meta">14:29${mine ? ' ✓✓' : ''}</span>
+      </div>
+    </div>`;
+}
+
+function dmScreen({ view, extra = '', inputHTML = '', popup = '', toast = '' }) {
+  const other = view === 'coach' ? { av: 'av-client', name: 'Андрей', sub: 'в сети', online: true }
+                                 : { av: 'av-coach', name: 'Мария Коваленко', sub: 'была недавно' };
+  return `${statusbar()}${tgHeader(other)}
+    <div class="chat">${dmHistory(view)}${extra}</div>
+    ${popup}
+    ${inputHTML || `<div class="inputbar"><span class="icon">📎</span><div class="field">Сообщение</div><span class="icon">🎤</span></div>`}
+    ${toast ? `<div class="toast">${toast}</div>` : ''}`;
+}
+
+function miniAppScreen({ highlight, toast = '' }) {
+  const btn = (id, label, primary) => {
+    const isTap = highlight === id;
+    return `<button class="ma-btn ${primary ? 'primary' : ''} ${isTap ? 'tap' : ''}" ${isTap ? 'onclick="advance()"' : ''}>${label}</button>`;
+  };
+  return `${statusbar()}
+    <div class="ma-header"><span class="x">✕</span><div class="t">Мария Коваленко · ассистент<small>мини-приложение</small></div><span class="x">⋮</span></div>
+    <div class="ma-body">
+      <div class="ma-card">
+        <h4>Новый клиент</h4>
+        <div class="ma-client">
+          <span class="avatar av-client">А</span>
+          <div class="cinfo">
+            <div class="cname">Андрей</div>
+            <div class="cstat">⏳ приглашение не принято</div>
+          </div>
+        </div>
+        <div class="ma-session">
+          <span class="ico">📅</span>
+          <div><div class="sname">Установочная сессия</div><div class="swhen">вторник, 22 июля · 18:00–19:00</div></div>
+        </div>
+      </div>
+      <div class="ma-card">
+        <h4>Пригласить в Telegram</h4>
+        <div class="ma-actions">
+          ${btn('share', 'Отправить карточку-приглашение', true)}
+          ${btn('shareurl', 'Отправить ссылку сообщением')}
+          ${btn('copy', 'Скопировать ссылку')}
+        </div>
+      </div>
+      <div class="ma-note">Ссылка одноразовая, действует 7 дней. Если клиент не примет — выпустите новую.</div>
+    </div>
+    ${toast ? `<div class="toast">${toast}</div>` : ''}`;
+}
+
+function chatPickerSheet(underneath) {
+  return `${underneath}
+    <div class="sheet-overlay"><div class="sheet">
+      <div class="grab"></div><h3>Кому отправить?</h3>
+      <div class="search">🔍 Поиск</div>
+      <div class="chats">
+        <div class="chatrow tap" onclick="advance()">
+          <span class="avatar av-client">А</span>
+          <div><div class="rname">Андрей</div><div class="rsub">был(а) недавно</div></div>
+        </div>
+        <div class="chatrow"><span class="avatar" style="background:#60a5fa">💾</span><div><div class="rname">Избранное</div></div></div>
+        <div class="chatrow"><span class="avatar" style="background:#f59e0b">О</span><div><div class="rname">Ольга П.</div><div class="rsub">была вчера</div></div></div>
+        <div class="chatrow"><span class="avatar" style="background:#ef4444">К</span><div><div class="rname">Книжный клуб</div><div class="rsub">34 участника</div></div></div>
+      </div>
+    </div></div>`;
+}
+
+function userPickerSheet(underneath) {
+  return `${underneath}
+    <div class="sheet-overlay"><div class="sheet">
+      <div class="grab"></div><h3>Выберите пользователя</h3>
+      <div class="search">🔍 Поиск</div>
+      <div class="chats">
+        <div class="chatrow tap" onclick="advance()">
+          <span class="avatar av-client">А</span>
+          <div><div class="rname">Андрей</div><div class="rsub">+7 ••• ••• 41 27</div></div>
+        </div>
+        <div class="chatrow"><span class="avatar" style="background:#f59e0b">О</span><div><div class="rname">Ольга П.</div><div class="rsub">+7 ••• ••• 88 03</div></div></div>
+        <div class="chatrow"><span class="avatar" style="background:#10b981">С</span><div><div class="rname">Сергей М.</div><div class="rsub">+380 •• ••• 12 55</div></div></div>
+      </div>
+    </div></div>`;
+}
+
+function botIntroScreen({ tapStart, sub = 'бот' }) {
+  return `${statusbar()}
+    ${tgHeader({ av: 'av-bot', name: 'Мария Коваленко · ассистент', sub })}
+    <div class="bot-intro"><div class="box">
+      <span class="avatar av-bot">🤖</span>
+      <h3>Что умеет этот бот?</h3>
+      <p>Ассистент Марии Коваленко: напоминания о сессиях, ссылки на подключение и материалы. Не для переписки — писать Марии лучше напрямую.</p>
+    </div></div>
+    <div class="startbar"><button class="startbtn ${tapStart ? 'tap' : ''}" ${tapStart ? 'onclick="advance()"' : ''}>Начать</button></div>`;
+}
+
+/* Сообщения бота в сценарии принятия */
+const botMsg = (html, kb = '') => `
+  <div class="msg in"><div class="bubble">${html}<span class="meta">14:30</span>${kb}</div></div>`;
+const myMsg = (text) => `
+  <div class="msg out"><div class="bubble">${text}<span class="meta">14:30 ✓✓</span></div></div>`;
+
+const kbRow = (btns) => `<div class="ikb">${btns.map(r => `<div class="row">${r}</div>`).join('')}</div>`;
+const ikBtn = (label, tap) => `<button ${tap ? 'class="tap" onclick="advance()"' : ''}>${label}</button>`;
+
+function langAskMsg({ tap }) {
+  return botMsg(
+    `🌐 Choose your language · Оберіть мову · Выберите язык`,
+    kbRow([
+      [ikBtn('English', false)],
+      [ikBtn('Українська', false)],
+      [ikBtn('Русский · предложено', tap)],
+    ])
+  );
+}
+const langPickedMsg = () => botMsg(`🌐 Язык: <b>Русский</b>`);
+function consentMsg({ tap }) {
+  return botMsg(
+    `Прежде чем начать, важное:<br><br>
+     Сессии с Марией проходят с <b>аудиозаписью</b>. Записи расшифровываются и анализируются, чтобы помогать Марии готовиться к вашим встречам. Результаты видит <b>только Мария</b>. Аудио удаляется автоматически после расшифровки.<br><br>
+     Подробности: <a class="link">Политика конфиденциальности</a><br>
+     <i style="font-size:12px;color:#8e8e93">(финальный текст согласия — тикет #16)</i>`,
+    kbRow([[ikBtn('✅ Согласен(на)', tap)]])
+  );
+}
+const confirmMsg = () => botMsg(
+  `Готово, Андрей! Мария настроила ваше пространство.<br><br>
+   📅 Ближайшая сессия: <b>вторник, 22 июля, 18:00</b> — установочная.<br>
+   Напоминание и ссылка на подключение придут сюда, в этот чат.`
+);
+
+function botChatScreen({ msgs, replyKb = '', showInput = true }) {
+  return `${statusbar()}
+    ${tgHeader({ av: 'av-bot', name: 'Мария Коваленко · ассистент', sub: 'бот' })}
+    <div class="chat"><div class="day-chip">Сегодня</div>${msgs}</div>
+    ${replyKb}
+    ${showInput && !replyKb ? `<div class="inputbar"><span class="icon">📎</span><div class="field">Сообщение</div><span class="icon">🎤</span></div>` : ''}`;
+}
+
+/* Общий хвост принятия — используется всеми флоу после входа клиента в чат бота.
+   startText: как выглядит /start-сообщение клиента */
+function acceptanceTail(startText) {
+  return [
+    {
+      role: 'client', note: 'Бот получает /start с токеном и спрашивает язык — компактно, на трёх языках. Порядок кнопок подсказан language_code клиента. Нажмите «Русский».',
+      screen: () => botChatScreen({ msgs: myMsg(startText) + langAskMsg({ tap: true }) }),
+    },
+    {
+      role: 'client', note: 'Бот редактирует сообщение с выбором (editMessageText — для своих сообщений без ограничения по времени) и показывает согласие на выбранном языке. До нажатия кнопки в системе НИЧЕГО не создано. Нажмите «Согласен(на)».',
+      enter: (m) => InviteModel.actions.setLanguage(m, 'ru'),
+      screen: () => botChatScreen({ msgs: myMsg(startText) + langPickedMsg() + consentMsg({ tap: true }) }),
+    },
+    {
+      role: 'client', note: 'Атомарное принятие: Channel (со снапшотом профиля) + Consent Grant + Invite → accepted — одной транзакцией. Клиент видит подтверждение и детали сессии. Сценарий завершён — смотрите панель состояния.',
+      enter: (m) => InviteModel.actions.accept(m),
+      screen: () => botChatScreen({ msgs: myMsg(startText) + langPickedMsg() + confirmMsg() }),
+    },
+  ];
+}
+
+/* ============================================================
+   Сценарии
+   ============================================================ */
+const SCENARIOS = {
+  A: {
+    tab: 'A · Карточка из Mini App', tabSub: 'shareMessage · рекомендуемый кандидат',
+    title: 'Флоу A — карточка-приглашение через shareMessage',
+    desc: 'Bot API 8.0: бэкенд сохраняет заготовку (savePreparedInlineMessage), Mini App вызывает shareMessage — открывается нативный выбор чата, и брендированная карточка уходит в диалог с клиентом от имени тренера (с меткой «via @бота»). Кнопка на карточке — только url-диплинк: web_app-кнопки в инлайн-сообщениях запрещены.',
+    steps: () => [
+      {
+        role: 'coach', note: 'Мария создала клиента и сессию в Mini App своего бота. Нажмите «Отправить карточку-приглашение» — под капотом: бэкенд вызывает savePreparedInlineMessage, Mini App вызывает shareMessage(id).',
+        screen: () => miniAppScreen({ highlight: 'share' }),
+      },
+      {
+        role: 'coach', note: 'Telegram открывает НАТИВНЫЙ выбор чата (allow_user_chats: true — только личные). Если Мария закроет диалог, придёт событие USER_DECLINED. Выберите Андрея.',
+        screen: () => chatPickerSheet(miniAppScreen({ highlight: null })),
+      },
+      {
+        role: 'coach', note: 'Карточка отправлена в существующий диалог Мария↔Андрей от имени Марии — с меткой «via @maria_coach_bot». Событие shareMessageSent подтверждает доставку, Mini App может показать статус.',
+        screen: () => dmScreen({ view: 'coach', extra: inviteCard({ view: 'coach' }), toast: '✓ Приглашение отправлено' }),
+      },
+      {
+        role: 'client', note: 'Взгляд Андрея: карточка пришла ПРЯМО В ДИАЛОГ с Марией, поверх их переписки — максимум непрерывности. Единственная кнопка — url-диплинк t.me/maria_coach_bot?start=inv_… Нажмите её.',
+        screen: () => dmScreen({ view: 'client', extra: inviteCard({ view: 'client', tapAdvance: true }) }),
+      },
+      {
+        role: 'client', note: 'Диплинк открывает чат бота: описание «Что умеет этот бот?» (задаётся через setMyDescription, до 512 символов + можно медиа) и кнопка «Начать». С параметром start кнопка показывается даже тем, кто уже запускал бота. Нажмите «Начать».',
+        screen: () => botIntroScreen({ tapStart: true }),
+      },
+      ...acceptanceTail('/start inv_k3J9tR2w'),
+    ],
+  },
+
+  B: {
+    tab: 'B · Инлайн-режим', tabSub: '@бот в поле ввода',
+    title: 'Флоу B — карточка через инлайн-режим',
+    desc: 'Мария вручную набирает @maria_coach_bot в диалоге с Андреем и выбирает результат — та же карточка. Требует включения инлайн-режима через BotFather (/setinline). Результат идентичен флоу A, но путь заметно «техничнее»: нужно знать username бота и сам приём.',
+    steps: () => [
+      {
+        role: 'coach', note: 'Мария в диалоге с Андреем набирает «@maria_coach_bot» — бот получает inline query и отвечает результатом-карточкой. Всплывает панель результатов. Нажмите на результат.',
+        screen: () => dmScreen({
+          view: 'coach',
+          inputHTML: `<div class="inputbar"><span class="icon">📎</span><div class="field"><span class="typed">@maria_coach_bot&nbsp;</span></div><span class="send">➤</span></div>`,
+          popup: `<div class="inline-pop"><div class="res tap" onclick="advance()">
+                    <div class="thumb">М</div>
+                    <div><div class="rtitle">Пригласить в пространство</div><div class="rdesc">Карточка-приглашение для нового клиента</div></div>
+                  </div></div>`,
+        }),
+      },
+      {
+        role: 'coach', note: 'Та же карточка отправлена — дальше всё идентично флоу A. Минус: тренер должен помнить username бота и владеть приёмом инлайн-режима; плюс — работает из любого чата без захода в Mini App.',
+        screen: () => dmScreen({ view: 'coach', extra: inviteCard({ view: 'coach' }) }),
+      },
+      {
+        role: 'client', note: 'Для Андрея разницы с флоу A нет вообще: та же карточка в диалоге с Марией. Нажмите кнопку.',
+        screen: () => dmScreen({ view: 'client', extra: inviteCard({ view: 'client', tapAdvance: true }) }),
+      },
+      { role: 'client', note: 'Чат бота, описание, «Начать» — как в A.', screen: () => botIntroScreen({ tapStart: true }) },
+      ...acceptanceTail('/start inv_k3J9tR2w'),
+    ],
+  },
+
+  CU: {
+    tab: 'C+ · Ссылка через share-диалог', tabSub: 't.me/share/url · личное сообщение',
+    title: 'Флоу C+ — ссылка через нативный share-диалог',
+    desc: 'Mini App вызывает openTelegramLink("https://t.me/share/url?url=…&text=…") — открывается нативный выбор чата, и ссылка с текстом ПОДСТАВЛЯЕТСЯ В ПОЛЕ ВВОДА выбранного чата (текст выделен — легко заменить своим). Тренер жмёт «отправить» — уходит полностью ЛИЧНОЕ сообщение, без метки «via @бота». Документировано в core.telegram.org/api/links.',
+    steps: () => [
+      {
+        role: 'coach', note: 'Нажмите «Отправить ссылку сообщением» — Mini App откроет share-диалог Telegram (сам Mini App при этом не закрывается, Bot API 7.0+).',
+        screen: () => miniAppScreen({ highlight: 'shareurl' }),
+      },
+      {
+        role: 'coach', note: 'Нативный выбор чата — как в флоу A. Выберите Андрея.',
+        screen: () => chatPickerSheet(miniAppScreen({ highlight: null })),
+      },
+      {
+        role: 'coach', note: 'Открылся диалог с Андреем: ссылка + текст уже В ПОЛЕ ВВОДА, текст выделен — Мария может заменить его своими словами. Сообщение ещё НЕ отправлено. Нажмите «отправить».',
+        screen: () => dmScreen({
+          view: 'coach',
+          inputHTML: `<div class="inputbar"><span class="icon">📎</span>
+            <div class="field" style="display:block; font-size:13px; line-height:1.35; padding:6px 13px;">
+              <span class="typed">https://t.me/maria_coach_bot?start=inv_k3J9tR2w<br></span>
+              <span class="selected">Подключайтесь к моему пространству — напоминания и ссылки на сессии будут приходить в Telegram</span>
+            </div>
+            <span class="send tap" onclick="advance()">➤</span></div>`,
+        }),
+      },
+      {
+        role: 'coach', note: 'Ушло обычное ЛИЧНОЕ сообщение Марии — никакого «via @бота». Ссылка развернулась в превью бота.',
+        screen: () => dmScreen({ view: 'coach', extra: linkMessage({ view: 'coach' }) }),
+      },
+      {
+        role: 'client', note: 'Для Андрея это просто сообщение от Марии со ссылкой — максимально «человеческий» вид, но без брендированной карточки и крупной кнопки. Нажмите на ссылку.',
+        screen: () => dmScreen({ view: 'client', extra: linkMessage({ view: 'client', tapAdvance: true }) }),
+      },
+      { role: 'client', note: 'Дальше идентично: чат бота, «Начать», принятие.', screen: () => botIntroScreen({ tapStart: true }) },
+      ...acceptanceTail('/start inv_k3J9tR2w'),
+    ],
+  },
+
+  C: {
+    tab: 'C · Ссылка вручную', tabSub: 'копировать → вставить · канонический fallback',
+    title: 'Флоу C — тренер копирует ссылку и отправляет сам',
+    desc: 'Канонический, канало-независимый путь — уже решено (тикет #14), что он есть в MVP в любом случае: работает, даже если клиент не в списке чатов, если ссылку передают вне Telegram и т.д. Нюанс: метода copyTextToClipboard в Mini App API НЕТ — копирование делается через navigator.clipboard по жесту пользователя (на практике работает в webview) с fallback на выделение текста.',
+    steps: () => [
+      {
+        role: 'coach', note: 'Нажмите «Скопировать ссылку». Под капотом navigator.clipboard.writeText() по тапу; официального метода в Mini App API нет — предусмотреть fallback (показ ссылки с выделением).',
+        screen: () => miniAppScreen({ highlight: 'copy' }),
+      },
+      {
+        role: 'coach', note: 'Ссылка в буфере. Мария сама открывает диалог с Андреем и вставляет её — сколькими словами сопроводить, решает она. Нажмите «отправить».',
+        screen: () => dmScreen({
+          view: 'coach',
+          inputHTML: `<div class="inputbar"><span class="icon">📎</span>
+            <div class="field" style="display:block; font-size:13px; line-height:1.35; padding:6px 13px;">
+              <span class="typed">Андрей, вот ссылка для подключения — по ней придут напоминания и ссылка на видеовстречу:<br>https://t.me/maria_coach_bot?start=inv_k3J9tR2w</span>
+            </div>
+            <span class="send tap" onclick="advance()">➤</span></div>`,
+          toast: '✓ Ссылка скопирована',
+        }),
+      },
+      {
+        role: 'client', note: 'Взгляд Андрея: личное сообщение Марии со ссылкой и превью бота. Как C+, но тренер всё делал руками (2 приложения-перехода, вставка). Нажмите на ссылку.',
+        screen: () => dmScreen({ view: 'client', extra: linkMessage({ view: 'client', tapAdvance: true }) }),
+      },
+      { role: 'client', note: 'Чат бота, «Начать», принятие — общий хвост.', screen: () => botIntroScreen({ tapStart: true }) },
+      ...acceptanceTail('/start inv_k3J9tR2w'),
+    ],
+  },
+
+  D: {
+    tab: 'D · Привязка по аккаунту', tabSub: 'пикер пользователя · вопрос MVP-скоупа',
+    title: 'Флоу D — id-привязка инвайта через пикер пользователя',
+    desc: 'KeyboardButtonRequestUsers — reply-кнопка, доступная ТОЛЬКО в личном чате тренера с ботом (из Mini App пикер не открыть). Тренер выбирает клиента из контактов → бот получает users_shared (id + имя/фото, Bot API 7.2) и привязывает инвайт к аккаунту. Клиента это НЕ уведомляет и писать ему бот не может — доставку ссылки это не заменяет. Что даёт: голый /start без токена узнаёт клиента, а чужой токен-клик не пройдёт (защита от перехвата). Вопрос: стоит ли это места в MVP, если карточка A уже целится в нужный чат?',
+    steps: () => [
+      {
+        role: 'coach', note: 'Этот флоу живёт в чате бота (не в Mini App!). Бот показал reply-клавиатуру. Нажмите «Выбрать клиента в Telegram».',
+        screen: () => botChatScreen({
+          msgs: botMsg('Кого пригласить? Выберите клиента из контактов — я привяжу приглашение к его аккаунту Telegram.'),
+          replyKb: `<div class="replykb"><button class="tap" onclick="advance()">👤 Выбрать клиента в Telegram</button></div>`,
+        }),
+      },
+      {
+        role: 'coach', note: 'Нативный пикер пользователей. Выбор НИКАК не уведомляет Андрея. Выберите его.',
+        screen: () => userPickerSheet(botChatScreen({ msgs: botMsg('Кого пригласить? Выберите клиента из контактов — я привяжу приглашение к его аккаунту Telegram.'), showInput: false })),
+      },
+      {
+        role: 'coach', note: 'Бот получил users_shared: id + имя + фото (request_name/request_photo, Bot API 7.2). Инвайт привязан к аккаунту — смотрите панель состояния. Но написать Андрею бот НЕ может: ссылку всё равно доставляет Мария (карточкой A или ссылкой C). Бонус: теперь сработает даже голая ссылка t.me/maria_coach_bot без токена. Кнопка с копированием — это CopyTextButton (документирован). Нажмите «скопировать».',
+        enter: (m) => InviteModel.actions.bind(m),
+        screen: () => botChatScreen({
+          msgs: botMsg('Кого пригласить? Выберите клиента из контактов — я привяжу приглашение к его аккаунту Telegram.')
+            + myMsg('👤 Андрей')
+            + botMsg(`Приглашение привязано к аккаунту <b>Андрей</b>. Отправьте ему любую из ссылок — он будет узнан автоматически:<br><br><a class="link">t.me/maria_coach_bot</a>`,
+                kbRow([[ikBtn('📋 Скопировать ссылку', true)]])),
+        }),
+      },
+      {
+        role: 'client', note: 'Андрей получил от Марии ГОЛУЮ ссылку на бота — без токена (например, переслал знакомый или ссылка из профиля). Открыл чат бота. Нажмите «Начать».',
+        screen: () => botIntroScreen({ tapStart: true }),
+      },
+      ...acceptanceTail('/start'),
+    ],
+  },
+};
+
+/* ============================================================
+   Вкладка «Сравнение и факты»
+   ============================================================ */
+const CMP_HTML = `
+<div class="cmp">
+  <h2>Сравнение флоу</h2>
+  <p class="csub">Критерий из тикета: <b>непрерывность глазами клиента</b> — онбординг как продолжение разговора с тренером. Путь клиента после клика везде одинаков: Начать → язык → согласие → подтверждение.</p>
+  <div class="tblwrap"><table>
+    <tr><th>Флоу</th><th>Что видит клиент</th><th>Действия тренера</th><th>Технические требования</th><th>Ограничения и риски</th></tr>
+    <tr>
+      <td><b class="flow">A · Карточка (shareMessage)</b></td>
+      <td>Брендированная карточка с кнопкой прямо в диалоге с тренером. Метка «via @бота» — единственный намёк на механику. 1 тап до чата бота.</td>
+      <td>2 тапа: кнопка в Mini App → выбор чата. Ошибиться некуда.</td>
+      <td>Bot API 8.0: savePreparedInlineMessage + shareMessage. Инлайн-режим включать не требуется (в доках прямо не оговорено, но метод от него не зависит). grammY поддерживает.</td>
+      <td>Кнопка карточки — только url-диплинк (web_app в инлайн-сообщениях запрещён — подтверждено). У заготовки есть expiration_date — читать из ответа, не хардкодить. USER_DECLINED, если тренер закрыл пикер.</td>
+    </tr>
+    <tr>
+      <td><b class="flow">B · Инлайн-режим</b></td>
+      <td>Идентично A — та же карточка.</td>
+      <td>Набрать @username бота в диалоге, выбрать результат. Нужно знать приём; «техничный» путь.</td>
+      <td>Инлайн-режим через BotFather (/setinline) обязателен. Тот же InlineQueryResult, что и в A.</td>
+      <td>Дублирует A с худшей эргономикой для нецелевой аудитории. Осмыслен только как побочный бонус, если инлайн-режим и так включён.</td>
+    </tr>
+    <tr>
+      <td><b class="flow">C+ · Ссылка через share-диалог</b></td>
+      <td>Полностью личное сообщение тренера со ссылкой (превью бота). Ноль механики — но и без карточки/кнопки; тап по ссылке вместо кнопки.</td>
+      <td>2 тапа + «отправить»; текст подставлен и выделен — можно заменить своим. Самый «человечный» результат.</td>
+      <td>t.me/share/url?url=…&text=… + openTelegramLink — документировано (api/links). Bot API не нужен вовсе.</td>
+      <td>Текст лишь предзаполняется — тренер может случайно отправить «шаблонно» или всё стереть. Сообщение не отслеживается (нет событий об отправке).</td>
+    </tr>
+    <tr>
+      <td><b class="flow">C · Ссылка вручную</b></td>
+      <td>Как C+ — личное сообщение со ссылкой.</td>
+      <td>Скопировать в Mini App, самому открыть чат, вставить, отправить. Больше всего ручных шагов.</td>
+      <td>Диплинк t.me/bot?start=токен (до 64 символов, A-Z a-z 0-9 _ -). Копирование: navigator.clipboard по жесту + fallback (copyTextToClipboard в Mini App API НЕ существует).</td>
+      <td>Работает всегда и вне Telegram — канонический fallback, уже закреплён в #14. Ships regardless.</td>
+    </tr>
+    <tr>
+      <td><b class="flow">D · id-привязка (пикер)</b></td>
+      <td>Ничего не меняет в доставке; даёт узнавание по голому /start и иммунитет к перехвату токена.</td>
+      <td>Отдельный заход в ЧАТ бота (reply-клавиатура недоступна из Mini App), пикер, затем всё равно доставка ссылки/карточки.</td>
+      <td>KeyboardButtonRequestUsers (имя/фото — Bot API 7.2), users_shared. Клиент не уведомляется; бот писать ему не может.</td>
+      <td>Не заменяет доставку — только дополняет. Ценность в MVP сомнительна: карточка A и так целится в конкретный чат. Модель Invite поддерживает id-binding без миграции — можно добавить позже.</td>
+    </tr>
+  </table></div>
+
+  <h2>Проверенные факты Bot API</h2>
+  <p class="csub">Проверено 19.07.2026 по core.telegram.org: /bots/api, /bots/webapps, /bots/features, /api/links. Всё в прототипе опирается только на подтверждённое.</p>
+  <div class="tblwrap"><table>
+    <tr><th>Факт</th><th>Статус</th><th>Нюанс</th></tr>
+    <tr><td>savePreparedInlineMessage(user_id, result, allow_user_chats…) возвращает id + expiration_date</td><td class="verdict ok">Подтверждено</td><td>Фиксированный TTL заготовки в доках не назван — expiration_date читать из ответа.</td></tr>
+    <tr><td>shareMessage(msg_id, callback) открывает нативный выбор чата; отправка от имени пользователя</td><td class="verdict ok">Подтверждено</td><td>События shareMessageSent / shareMessageFailed (UNSUPPORTED, MESSAGE_EXPIRED, USER_DECLINED…).</td></tr>
+    <tr><td>Карточка = любой InlineQueryResult (фото + подпись + inline-клавиатура)</td><td class="verdict ok">Подтверждено</td><td>Все URL в инлайн-результатах считаются публичными.</td></tr>
+    <tr><td>В инлайн-сообщениях: url-кнопки — да, web_app-кнопки — нет</td><td class="verdict ok">Подтверждено</td><td>web_app: «only in private chats between a user and the bot». callback-кнопки в инлайн-сообщениях работают (inline_message_id).</td></tr>
+    <tr><td>?start= до 64 символов (A-Z a-z 0-9 _ -); бот не может писать первым</td><td class="verdict ok">Подтверждено</td><td>С параметром start кнопка «Начать» показывается даже уже запускавшим бота.</td></tr>
+    <tr><td>Пересылка срезает inline-клавиатуру</td><td class="verdict part">Не документировано</td><td>В официальных доках не описано (поведение клиентов). Дизайн от этого не зависит: пересылка исключена ещё в тикете; критическое действие — url-диплинк.</td></tr>
+    <tr><td>KeyboardButtonRequestUsers: пикер → users_shared (id, имя, фото)</td><td class="verdict ok">Подтверждено</td><td>Флаги request_name/username/photo — Bot API 7.2 (не 7.0). Только личный чат с ботом; выбранный не уведомляется.</td></tr>
+    <tr><td>Инлайн-режим требует /setinline; обязателен ли он для shareMessage</td><td class="verdict part">Частично</td><td>Для инлайн-режима — да. Для savePreparedInlineMessage/shareMessage доки прерогативу не оговаривают (зависимости не заявлено).</td></tr>
+    <tr><td>editMessageText для своих сообщений бота — без лимита 48 ч</td><td class="verdict ok">Подтверждено</td><td>48 ч — только про Business-сообщения (и про удаление). На callback обязателен answerCallbackQuery.</td></tr>
+    <tr><td>switchInlineQuery(query, choose_chat_types) как альтернатива</td><td class="verdict ok">Подтверждено</td><td>Только предзаполняет поле ввода «@бот query» — пользователь ещё должен выбрать результат. Требует инлайн-режим. Хуже A по числу шагов — в прототип не включён.</td></tr>
+    <tr><td>copyTextToClipboard в Mini App API</td><td class="verdict no">Не существует</td><td>Есть readTextFromClipboard (только attachment-меню) и CopyTextButton (кнопка на сообщении бота, до 256 симв.). Копирование в Mini App — navigator.clipboard + fallback.</td></tr>
+    <tr><td>t.me/share/url?url=…&text=… + openTelegramLink → нативный share с предзаполнением</td><td class="verdict ok">Подтверждено</td><td>URL в начало поля ввода, перенос строки, затем текст — выделенным. Отправляет пользователь; Mini App не закрывается (7.0+).</td></tr>
+    <tr><td>Пустой чат бота показывает описание («Что умеет этот бот?») + кнопку «Начать»</td><td class="verdict ok">Подтверждено</td><td>setMyDescription до 512 символов, можно с картинкой/видео через BotFather.</td></tr>
+  </table></div>
+
+  <p class="foot">
+    Наблюдения для решения (не решение): <b>C ships regardless</b> — закреплено в #14 как канонический fallback.
+    <b>A</b> даёт максимум непрерывности при минимуме действий тренера и опирается только на подтверждённые API.
+    <b>C+</b> — неожиданно сильная альтернатива: единственный флоу вообще без метки «via @бота», и без единого вызова Bot API.
+    <b>B</b> дублирует A с худшей эргономикой. <b>D</b> доставку не решает и требует отдельного захода в чат бота;
+    модель поддерживает id-binding без миграции, так что его можно безболезненно отложить.
+  </p>
+</div>`;
+
+/* ============================================================
+   Движок
+   ============================================================ */
+let cur = { key: 'A', i: 0, model: InviteModel.initial(), prevModel: null };
+
+function switchTab(key) {
+  cur = { key, i: 0, model: InviteModel.initial(), prevModel: null };
+  if (key !== 'cmp') {
+    const step = SCENARIOS[key].steps()[0];
+    if (step.enter) cur.model = step.enter(cur.model);
+  }
+  render();
+}
+
+function advance() {
+  const steps = SCENARIOS[cur.key].steps();
+  if (cur.i >= steps.length - 1) return;
+  cur.prevModel = cur.model;
+  cur.i += 1;
+  const step = steps[cur.i];
+  if (step.enter) cur.model = step.enter(cur.model);
+  render();
+}
+
+function restart() { switchTab(cur.key); }
+
+function renderState() {
+  const m = cur.model, p = cur.prevModel;
+  const changed = (sel) => p && JSON.stringify(sel(m)) !== JSON.stringify(sel(p)) ? 'changed' : '';
+  const f = (k, v, cls = '') => `<div class="f"><span class="k">${k}</span><span class="v ${cls}">${v}</span></div>`;
+  const none = '<i>—</i>';
+  return `
+    <div class="statepanel">
+      <h2>Состояние домена</h2>
+      <div class="sub">Что реально существует в системе на текущем шаге. Жёлтым — изменения на этом шаге.</div>
+      <div class="ent ${changed(x => x.invite)}">
+        <div class="ename">Invite</div>
+        ${f('статус', m.invite.status === 'accepted' ? 'accepted ✓' : 'pending ⏳', m.invite.status === 'accepted' ? 'ok' : 'warn')}
+        ${f('токен', m.invite.token)}
+        ${f('TTL', m.invite.ttl)}
+        ${f('привязка к аккаунту', m.invite.expected_tg_id ? 'id ' + m.invite.expected_tg_id : none, m.invite.expected_tg_id ? 'ok' : 'none')}
+      </div>
+      <div class="ent ${changed(x => x.client)}">
+        <div class="ename">Client</div>
+        ${f('имя', m.client.name)}
+        ${f('язык', m.client.language ? m.client.language + ' (выбран клиентом)' : none, m.client.language ? 'ok' : 'none')}
+      </div>
+      <div class="ent ${changed(x => x.channel)}">
+        <div class="ename">Channel</div>
+        ${m.channel
+          ? f('telegram', m.channel.handle, 'ok') + f('снапшот профиля', m.channel.snapshot)
+          : f('', 'не создан', 'none')}
+      </div>
+      <div class="ent ${changed(x => x.consent)}">
+        <div class="ename">Consent Grant</div>
+        ${m.consent
+          ? f('записан', m.consent.version + ' · ' + m.consent.language, 'ok') + f('когда', m.consent.at)
+          : f('', 'не записан', 'none')}
+      </div>
+      <div class="ent">
+        <div class="ename">Session</div>
+        ${f('вид', m.session.kind)}
+        ${f('когда', m.session.when)}
+      </div>
+      ${!m.channel ? `<div class="atomic-note">Принятие атомарно: пока клиент не нажал «Согласен(на)», не существует ни Channel, ни Consent Grant. Бросил на полпути — ничего чистить не надо.</div>` : ''}
+    </div>`;
+}
+
+function render() {
+  const tabsEl = document.getElementById('tabs');
+  const keys = ['A', 'B', 'CU', 'C', 'D'];
+  tabsEl.innerHTML = keys.map(k =>
+    `<button class="tab ${cur.key === k ? 'active' : ''}" onclick="switchTab('${k}')">${SCENARIOS[k].tab}<small>${SCENARIOS[k].tabSub}</small></button>`
+  ).join('') + `<button class="tab ${cur.key === 'cmp' ? 'active' : ''}" onclick="switchTab('cmp')">Сравнение и факты<small>таблицы · проверка по докам</small></button>`;
+
+  const content = document.getElementById('content');
+  if (cur.key === 'cmp') { content.innerHTML = CMP_HTML; return; }
+
+  const sc = SCENARIOS[cur.key];
+  const steps = sc.steps();
+  const step = steps[cur.i];
+  const last = cur.i === steps.length - 1;
+
+  content.innerHTML = `
+    <div class="stage">
+      <div class="rail">
+        <h2>${sc.title}</h2>
+        <div class="desc">${sc.desc}</div>
+        <ol class="steps">
+          ${steps.map((s, idx) => `
+            <li class="${idx < cur.i ? 'done' : idx === cur.i ? 'cur' : ''}">
+              <span class="n">${idx < cur.i ? '✓' : idx + 1}</span>
+              <span>${s.role === 'coach' ? '🟣 Тренер' : '🟢 Клиент'}: ${s.note.split('.')[0]}.</span>
+            </li>`).join('')}
+        </ol>
+        <div class="hint">${last ? '🏁 ' : '👆 '}${step.note}</div>
+        <button class="restart" onclick="restart()">↺ Начать сценарий заново</button>
+      </div>
+      ${phone(step.role, step.screen())}
+      ${renderState()}
+    </div>`;
+
+  const chat = content.querySelector('.chat');
+  if (chat) chat.scrollTop = chat.scrollHeight;
+}
+
+render();
+</script>
+</body>
+</html>
