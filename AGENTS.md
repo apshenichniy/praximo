@@ -20,7 +20,7 @@ Rules:
 
 ## Effect skill
 
-The `effect` skill (Effect v4 production patterns, from `kitlangton/skills`) is installed at project scope for all agents (`.agents/skills/effect`, symlinked into per-agent dirs; managed by `bunx skills`). Consult it when writing any Effect code.
+The `effect` skill (Effect v4 production patterns, from `kitlangton/skills`) is installed at project scope for Claude Code (`.claude/skills/effect`; managed by `bunx skills`, pinned in `skills-lock.json`). Consult it when writing any Effect code. To add another agent target: `bunx skills add kitlangton/skills --skill effect --agent <name>`.
 
 ## Agent skills
 
