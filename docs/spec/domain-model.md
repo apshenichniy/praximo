@@ -55,7 +55,7 @@ The onboarding entry point, uniform across current and future channel kinds.
 Append-only consent record; "does the client have consent" is derived from the latest grant.
 
 - `client_id`, scope (recording + processing), consent-text version, channel it was given through, `granted_at`
-- Captured once at onboarding, minimum friction; texts, revocation, and retention policy are decided in the privacy ticket (#6).
+- Captured once at onboarding, minimum friction; revocation is a coach action that appends a revocation grant. Without active consent, new sessions cannot be scheduled. Texts, retention, and deletion semantics: [privacy-retention.md](privacy-retention.md) (decided in ticket #6).
 
 ### Session
 
@@ -73,6 +73,7 @@ A scheduled 1:1 conversation, coach ↔ one client.
 
 - `session_id`, egress metadata, processing status
 - **Track** (child): one per participant — `participant` (`coach | client`), R2 object reference, duration. Per-track capture gives deterministic speaker attribution.
+- Recording is unconditional — no per-session opt-out. Audio is auto-deleted 30 days after the Transcript is generated; rows keep metadata plus a deleted-by-retention fact ([privacy-retention.md](privacy-retention.md)).
 
 ### Track Transcript
 
@@ -142,6 +143,5 @@ Supported: `en`, `uk`, `ru`.
 
 - **Client onboarding & auth flow** — invite issuance/acceptance mechanics, Better-Auth integration, non-Telegram path: its own map ticket, after research #5 and privacy #6.
 - **Join-flow session states** (`ready_to_join`, no-show detection) — web-room implementation prep.
-- **Consent revocation, retention, deletion; client archival** — privacy ticket #6.
 - **Processing-status shape and retries** — pipeline platform ADR (ticket #10).
 - **Artifact content storage** (DB text vs R2 object) — implementation detail, no domain impact; decide with the pipeline.
