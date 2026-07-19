@@ -1,0 +1,147 @@
+# Domain Model — MVP Entity Outline
+
+Outline of entities, relationships, and state machines for the MVP spec. Vocabulary follows [CONTEXT.md](../../CONTEXT.md); this document adds structure and lifecycle, not new terms. Decided in wayfinder ticket [#7](https://github.com/apshenichniy/praximo/issues/7).
+
+## Principles
+
+- **Workspace is the tenancy boundary.** Every row that isn't the workspace itself carries a `workspace_id` (directly or through its parent). No cross-workspace identity: the same human coached by two coaches is two independent Clients.
+- **Session lifecycle and processing status are separate dimensions.** The session state machine tracks the human-facing lifecycle; each derived entity (recording, transcripts, artifacts) tracks its own processing status. There is no god-status on Session.
+- **Content lives in object storage (R2), metadata in Postgres.** Track transcripts and the combined Transcript are R2 objects; the database holds references, statuses, and metadata. Utterance-level DB queries are not an MVP need.
+- **Channel-agnostic client model, Telegram-only implementation.** The model supports clients without Telegram (future channel kinds); MVP implements only the Telegram channel.
+
+## Entities
+
+### Workspace
+
+The tenant. One coach's practice.
+
+- `id`, `name`, timestamps
+- **Bot** (1:1, may be embedded or a child table): the workspace's Telegram bot — token/identity, username, connection status. Provisioning mechanism is decided in the bot-per-coach ADR (ticket #9).
+
+### Member
+
+A person inside a workspace, with a role.
+
+- `workspace_id`, auth identity (coach authenticates via Telegram — see Better-Auth research, ticket #5)
+- `role`: `owner` only in MVP; open set (`assistant`, `co_coach` reserved for group coaching)
+- `language`: `en | uk | ru` — chosen at coach onboarding; the language of the coach's UI and of all artifacts delivered to them
+- One coach = one workspace in MVP; the membership table is the extension point, not a promise of multi-workspace support.
+
+### Client
+
+A coached person, scoped to one workspace. No account, no credentials.
+
+- `workspace_id`, `name`
+- `language`: `en | uk | ru` — set during onboarding; the language the bot uses to message the client, and the STT fallback hint
+
+### Channel
+
+How a client is reached.
+
+- `client_id`, `kind`: `telegram` (MVP) — open set (`email`, … later)
+- kind-specific address (Telegram user/chat id)
+- exactly one primary channel per client; reminders and join links are delivered to it
+
+### Invite
+
+The onboarding entry point, uniform across current and future channel kinds.
+
+- `workspace_id`, `client_id`, `token`
+- `status`: `pending → accepted`, or `expired`
+- In MVP delivered as a deep link into the workspace's bot; accepting creates the client's Telegram channel and captures the Consent Grant.
+
+### Consent Grant
+
+Append-only consent record; "does the client have consent" is derived from the latest grant.
+
+- `client_id`, scope (recording + processing), consent-text version, channel it was given through, `granted_at`
+- Captured once at onboarding, minimum friction; texts, revocation, and retention policy are decided in the privacy ticket (#6).
+
+### Session
+
+A scheduled 1:1 conversation, coach ↔ one client.
+
+- `workspace_id`, `client_id`, `scheduled_at`, duration
+- `state`: see [Session states](#session-states)
+- Join Link token (client's only credential for the web room)
+- Rescheduling mutates `scheduled_at` in place; no reschedule history in MVP.
+- No language attribute: STT auto-detects, with `client.language` as the fallback hint; the detected language is recorded on the Transcript.
+
+### Recording
+
+1:1 with a completed session. Audio only.
+
+- `session_id`, egress metadata, processing status
+- **Track** (child): one per participant — `participant` (`coach | client`), R2 object reference, duration. Per-track capture gives deterministic speaker attribution.
+
+### Track Transcript
+
+1:1 with a track. The raw STT output.
+
+- `track_id`, provider (`deepgram` first; provider-agnostic), provider metadata, processing status
+- Content: provider-format JSON with timecodes, stored in R2.
+
+### Transcript
+
+1:1 with a session. Derived by a deterministic merge of the track transcripts.
+
+- `session_id`, `detected_language`, processing status
+- Content: compact speaker-attributed utterance format in R2 — this exact rendering is what LLM prompts consume.
+- Regeneration replaces it wholesale; no versioning (versions exist only on artifacts).
+
+### Artifact
+
+An LLM-generated analysis document.
+
+- `session_id`, `kind`: `brief | debrief | mentor_review` — open set, new kinds must be addable without migration
+- `version`: append-only; the current artifact per `(session, kind)` is the latest version
+- generation status, model/prompt metadata
+- Written in the **coach's** language; delivered as bot messages
+- Brief is generated *before* its session, from the client's prior sessions' artifacts; Debrief and Mentor Review *after*, from the Transcript. Same entity, different generation moment.
+- No manual editing in MVP.
+
+## Session states
+
+```
+scheduled ──→ in_progress ──→ completed
+    │
+    ├──→ cancelled
+    └──→ no_show
+```
+
+- `cancelled` and `no_show` are terminal.
+- The join flow (web-room implementation prep) is expected to add states (e.g. `ready_to_join`); the machine is deliberately minimal now and open to extension.
+- "Processed" is **not** a session state — processing progress lives on Recording / Track Transcript / Transcript / Artifact statuses.
+
+## Relationships at a glance
+
+```
+Workspace 1─1 Bot
+Workspace 1─* Member (owner in MVP)
+Workspace 1─* Client 1─* Channel (one primary)
+Client    1─* Invite
+Client    1─* Consent Grant (append-only)
+Workspace 1─* Session *─1 Client
+Session   1─1 Recording 1─* Track
+Track     1─1 Track Transcript
+Session   1─1 Transcript
+Session   1─* Artifact (versioned; one current per kind)
+```
+
+## Language rules
+
+| Attribute | Set when | Drives |
+|---|---|---|
+| `Member.language` (coach) | coach onboarding | UI language; language of all artifacts |
+| `Client.language` | client onboarding | bot messages to the client; STT fallback hint |
+| `Transcript.detected_language` | transcription | record of what was actually spoken |
+
+Supported: `en`, `uk`, `ru`.
+
+## Open edges (deferred, with owners)
+
+- **Client onboarding & auth flow** — invite issuance/acceptance mechanics, Better-Auth integration, non-Telegram path: its own map ticket, after research #5 and privacy #6.
+- **Join-flow session states** (`ready_to_join`, no-show detection) — web-room implementation prep.
+- **Consent revocation, retention, deletion; client archival** — privacy ticket #6.
+- **Processing-status shape and retries** — pipeline platform ADR (ticket #10).
+- **Artifact content storage** (DB text vs R2 object) — implementation detail, no domain impact; decide with the pipeline.
