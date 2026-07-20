@@ -93,19 +93,31 @@ export function Md({ text, className }: { text: string; className?: string }) {
       if (part.startsWith("*")) return <em key={i}>{part.slice(1, -1)}</em>;
       return <span key={i}>{part}</span>;
     });
+  // a block may mix a lead line and "- " bullet lines — split it into runs
+  const render = (b: string, i: number) => {
+    const lines = b.split("\n");
+    const runs: Array<{ list: boolean; lines: Array<string> }> = [];
+    for (const line of lines) {
+      const isLi = line.trimStart().startsWith("- ");
+      const last = runs[runs.length - 1];
+      if (last && last.list === isLi) last.lines.push(line);
+      else runs.push({ list: isLi, lines: [line] });
+    }
+    return runs.map((run, j) =>
+      run.list ? (
+        <ul key={`${i}-${j}`} className="list-disc space-y-1 pl-4">
+          {run.lines.map((li, k) => (
+            <li key={k}>{inline(li.trimStart().replace(/^- /, ""))}</li>
+          ))}
+        </ul>
+      ) : (
+        <p key={`${i}-${j}`}>{inline(run.lines.join(" "))}</p>
+      ),
+    );
+  };
   return (
     <div className={cn("space-y-2.5 text-[13px] leading-relaxed", className)}>
-      {blocks.map((b, i) =>
-        b.trimStart().startsWith("- ") ? (
-          <ul key={i} className="list-disc space-y-1 pl-4">
-            {b.split("\n").map((li, j) => (
-              <li key={j}>{inline(li.replace(/^- /, ""))}</li>
-            ))}
-          </ul>
-        ) : (
-          <p key={i}>{inline(b)}</p>
-        ),
-      )}
+      {blocks.map(render)}
     </div>
   );
 }
