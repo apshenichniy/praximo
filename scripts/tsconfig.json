@@ -1,0 +1,9 @@
+{
+  "extends": "../packages/tooling/tsconfig/library.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "types": ["node"]
+  },
+  "include": ["db-reset.ts"]
+}

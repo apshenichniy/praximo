@@ -1,4 +1,11 @@
 {
   "extends": "@praximo/tooling/tsconfig/library.json",
+  "compilerOptions": {
+    // This package runs in Node too: the repository integration tests and the
+    // db:reset library (`reset.ts`) read the environment and the filesystem. The
+    // worker-facing source (client, repos, schema) uses no Node globals, and the
+    // Workers all run with `nodejs_compat`, so this widens nothing at runtime.
+    "types": ["node"]
+  },
   "include": ["src/**/*.ts"]
 }

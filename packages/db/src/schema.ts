@@ -1,0 +1,366 @@
+import { sql } from "drizzle-orm"
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core"
+
+/**
+ * The full Drizzle schema for the MVP domain model (docs/spec/domain-model.md).
+ *
+ * Tenancy invariant: every row reaches its `workspace_id` directly (workspace,
+ * member, client, invite, session) or through its parent chain — channel and
+ * consent_grant via client; recording via session; track via recording;
+ * track_transcript via track; transcript and artifact via session. The FK
+ * columns below *are* that chain.
+ *
+ * Two dimensions stay separate (no god-status on session): `session.state` is
+ * the human-facing lifecycle, while each derived entity (recording, track
+ * transcript, transcript, artifact) carries its own `processing_status`. The
+ * processing-status *shape* is deliberately a plain text column — its retry
+ * semantics are owned by the pipeline ADR (#10), not this schema.
+ *
+ * Content lives in R2, metadata in Postgres: track transcripts, the combined
+ * transcript, and artifact bodies are referenced by `r2_key`, never inlined.
+ *
+ * Open sets (channel kind, session kind, artifact kind, member role) are `text`
+ * on purpose — new kinds must be addable without a migration. Closed, lifecycle-
+ * critical sets (session state, close/cancel reasons, invite status, track
+ * participant, language) are enums.
+ */
+
+// ── Enums (closed sets only) ──
+
+export const languageEnum = pgEnum("language", ["en", "uk", "ru"])
+
+export const sessionStateEnum = pgEnum("session_state", [
+  "scheduled",
+  "in_progress",
+  "completed",
+  "cancelled",
+])
+
+export const closeReasonEnum = pgEnum("close_reason", [
+  "coach_end",
+  "empty_room_idle",
+  "grace_due",
+  "room_cap",
+  "next_session_start",
+])
+
+export const cancelReasonEnum = pgEnum("cancel_reason", [
+  "coach_cancelled",
+  "no_show",
+  "room_unavailable",
+])
+
+export const noShowDetailEnum = pgEnum("no_show_detail", [
+  "both_absent",
+  "coach_absent",
+  "client_absent",
+  "no_overlap",
+])
+
+export const inviteStatusEnum = pgEnum("invite_status", ["pending", "accepted", "expired"])
+
+export const trackParticipantEnum = pgEnum("track_participant", ["coach", "client"])
+
+// ── Platform level (above tenancy) ──
+
+/**
+ * The platform operator, keyed by Telegram id. Deliberately outside the tenancy
+ * graph — it has no `workspace_id`. Seeded by db:reset from the root `.env`; the
+ * same shape a future assignable admin role reuses (admin-surface.md).
+ */
+export const admin = pgTable("admin", {
+  id: text("id").primaryKey(),
+  telegramId: text("telegram_id").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+})
+
+// ── Tenancy root ──
+
+export const workspace = pgTable("workspace", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+})
+
+/**
+ * The workspace's Telegram bot (1:1). Modeled as a child table keyed by
+ * `workspace_id` as its own primary key. Provisioning mechanics arrive with the
+ * bot-per-coach ticket (#9); here it is metadata only.
+ */
+export const bot = pgTable("bot", {
+  workspaceId: text("workspace_id")
+    .primaryKey()
+    .references(() => workspace.id, { onDelete: "cascade" }),
+  token: text("token"),
+  username: text("username"),
+  connectionStatus: text("connection_status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+})
+
+export const member = pgTable(
+  "member",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    // Open set: `owner` only in MVP.
+    role: text("role").notNull().default("owner"),
+    language: languageEnum("language").notNull(),
+    // Auth identity — the coach authenticates via Telegram (ticket #5).
+    telegramUserId: text("telegram_user_id"),
+    avatarR2Key: text("avatar_r2_key"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("member_workspace_id_idx").on(t.workspaceId)],
+)
+
+export const client = pgTable(
+  "client",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Chosen by the client at invite acceptance.
+    language: languageEnum("language"),
+    avatarR2Key: text("avatar_r2_key"),
+    // Captured only when the client used Continue with Google; no token stored.
+    googleSub: text("google_sub"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("client_workspace_id_idx").on(t.workspaceId)],
+)
+
+export const channel = pgTable(
+  "channel",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => client.id, { onDelete: "cascade" }),
+    // Open set: telegram | email | manual in MVP.
+    kind: text("kind").notNull(),
+    // Telegram user/chat id or email address; null for `manual`.
+    address: text("address"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    // Telegram profile snapshot captured at acceptance: { name, username, avatarR2Key }.
+    telegramSnapshot: jsonb("telegram_snapshot"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("channel_client_id_idx").on(t.clientId),
+    // Exactly one primary channel per client.
+    uniqueIndex("channel_one_primary_per_client_idx")
+      .on(t.clientId)
+      .where(sql`${t.isPrimary}`),
+  ],
+)
+
+export const invite = pgTable(
+  "invite",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => client.id, { onDelete: "cascade" }),
+    // Single-use, TTL 7 days; re-issuing creates a new invite and expires the old.
+    token: text("token").notNull().unique(),
+    status: inviteStatusEnum("status").notNull().default("pending"),
+    // { kind: telegram | email | link, address? } — how the invite reaches the client.
+    delivery: jsonb("delivery").notNull(),
+    // Enables recognition on a bare /start; the picker that sets it is deferred (#27).
+    expectedTelegramUserId: text("expected_telegram_user_id"),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("invite_workspace_id_idx").on(t.workspaceId),
+    index("invite_client_id_idx").on(t.clientId),
+  ],
+)
+
+/**
+ * Append-only consent record. "Does the client have consent" is derived from the
+ * latest grant: a revocation is a later row with `revoked = true`.
+ */
+export const consentGrant = pgTable(
+  "consent_grant",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => client.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull().default("recording_and_processing"),
+    revoked: boolean("revoked").notNull().default(false),
+    // Consent-text version the client agreed to.
+    textVersion: text("text_version").notNull(),
+    // The channel kind the grant was given through.
+    channelKind: text("channel_kind"),
+    grantedAt: timestamp("granted_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("consent_grant_client_id_idx").on(t.clientId)],
+)
+
+export const session = pgTable(
+  "session",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => client.id, { onDelete: "cascade" }),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true, mode: "date" }).notNull(),
+    durationMinutes: integer("duration_minutes").notNull(),
+    // Open set: intake | regular; defaults to intake for a client's first session.
+    kind: text("kind").notNull().default("intake"),
+    // Human-facing lifecycle — the ONLY status column on session (no god-status).
+    state: sessionStateEnum("state").notNull().default("scheduled"),
+    closeReason: closeReasonEnum("close_reason"),
+    cancelReason: cancelReasonEnum("cancel_reason"),
+    noShowDetail: noShowDetailEnum("no_show_detail"),
+    // Set exactly once at joint join (scheduled → in_progress).
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("session_workspace_id_idx").on(t.workspaceId),
+    index("session_client_id_idx").on(t.clientId),
+  ],
+)
+
+/**
+ * One Join Link token per (session, role) — coach and client each have their own,
+ * multi-use, stable across rescheduling.
+ */
+export const joinLink = pgTable(
+  "join_link",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "cascade" }),
+    role: trackParticipantEnum("role").notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("join_link_session_role_idx").on(t.sessionId, t.role)],
+)
+
+/** 1:1 with a completed session. Audio only; auto-deleted 30 days after the Transcript. */
+export const recording = pgTable("recording", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .unique()
+    .references(() => session.id, { onDelete: "cascade" }),
+  egressMetadata: jsonb("egress_metadata"),
+  processingStatus: text("processing_status").notNull().default("pending"),
+  // Drives the 30-day audio-retention sweep.
+  transcriptGeneratedAt: timestamp("transcript_generated_at", { withTimezone: true, mode: "date" }),
+  audioDeletedByRetention: boolean("audio_deleted_by_retention").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+})
+
+/**
+ * One track per participant. A track may span multiple R2 segments (a reconnect
+ * starts a new egress job); segments are an ordered array here — utterance/segment
+ * level DB queries are not an MVP need, so they live as jsonb, not a child table.
+ */
+export const track = pgTable(
+  "track",
+  {
+    id: text("id").primaryKey(),
+    recordingId: text("recording_id")
+      .notNull()
+      .references(() => recording.id, { onDelete: "cascade" }),
+    participant: trackParticipantEnum("participant").notNull(),
+    durationSeconds: integer("duration_seconds"),
+    // Ordered [{ r2Key, startedAt, order }] — merged downstream.
+    segments: jsonb("segments").notNull().default([]),
+  },
+  (t) => [uniqueIndex("track_recording_participant_idx").on(t.recordingId, t.participant)],
+)
+
+/** 1:1 with a track. The raw STT output; provider-format JSON in R2. */
+export const trackTranscript = pgTable("track_transcript", {
+  id: text("id").primaryKey(),
+  trackId: text("track_id")
+    .notNull()
+    .unique()
+    .references(() => track.id, { onDelete: "cascade" }),
+  // Provider-agnostic; deepgram first.
+  provider: text("provider").notNull().default("deepgram"),
+  providerMetadata: jsonb("provider_metadata"),
+  r2Key: text("r2_key"),
+  processingStatus: text("processing_status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+})
+
+/**
+ * 1:1 with a session. The deterministic merge of track transcripts, stored in R2.
+ * Regeneration replaces it wholesale; no versioning (versions live on artifacts).
+ */
+export const transcript = pgTable("transcript", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id")
+    .notNull()
+    .unique()
+    .references(() => session.id, { onDelete: "cascade" }),
+  detectedLanguage: text("detected_language"),
+  r2Key: text("r2_key"),
+  processingStatus: text("processing_status").notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+})
+
+/**
+ * An LLM-generated analysis document. Append-only versions; the current artifact
+ * per (session, kind) is the latest version. Kind is an open set.
+ */
+export const artifact = pgTable(
+  "artifact",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => session.id, { onDelete: "cascade" }),
+    // Open set: brief | debrief | mentor_review.
+    kind: text("kind").notNull(),
+    version: integer("version").notNull().default(1),
+    generationStatus: text("generation_status").notNull().default("pending"),
+    model: text("model"),
+    promptMetadata: jsonb("prompt_metadata"),
+    // Markdown body in R2 (DB-text vs R2 is a pipeline decision, #10); reference here.
+    r2Key: text("r2_key"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("artifact_session_id_idx").on(t.sessionId),
+    uniqueIndex("artifact_session_kind_version_idx").on(t.sessionId, t.kind, t.version),
+  ],
+)
