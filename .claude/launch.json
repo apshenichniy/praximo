@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client-web-flow-prototype",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "prototypes/client-web-flow",
+      "port": 3000
+    }
+  ]
+}
