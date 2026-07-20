@@ -56,6 +56,7 @@ Domains: `app.praximo.io` (web), `api.praximo.io` (path-routed webhooks/API), `m
 | [web-room-sessions.md](web-room-sessions.md) | Session lifecycle: join eligibility, presence, grace/extension, reconciliation, no-show, recording control — with acceptance criteria |
 | [analysis-artifacts.md](analysis-artifacts.md) | Brief / Debrief / Mentor Review: shape, section structure, delivery, prompt layout |
 | [mini-app.md](mini-app.md) | Coach Mini App: navigation, screens, lifecycle actions |
+| [admin-surface.md](admin-surface.md) | Operator surface (manager-bot admin mode): workspace create/list/rename/edit/delete, deep-link lifecycle, onboarding notifications |
 | [privacy-retention.md](privacy-retention.md) | Consent policy, retention, deletion, residency, roles |
 | [privacy-copy.md](privacy-copy.md) | The four texts: client consent, pre-join notice, privacy policy, coach ToS (with embedded DPA) |
 
@@ -98,7 +99,6 @@ Decisions the map consciously did **not** make; each has a named owner-moment.
 
 - **Reminder and scheduling mechanics** — timing, cadence, timezones, and when the pre-session Brief is delivered. The routing branch is already fixed (`telegram → bot, email → email, manual → coach`, [client-onboarding-auth.md](client-onboarding-auth.md)); the rest is decided when reminders are implemented (flagged in [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md)).
 - **Default model per analysis task** — sharpens once real prompts exist; multi-model via Vercel AI SDK is fixed, prompts are model-agnostic.
-- **Admin surface for workspace management** — how the operator creates and manages workspaces (runbook / CLI / mini-admin UI) is an **open map ticket**: [Admin surface: workspace creation and coach on/offboarding](https://github.com/apshenichniy/praximo/issues/34); bot release ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)) and hard-cascade deletion ([privacy-retention.md](privacy-retention.md)) semantics stay fixed.
 - **Observability and evals for LLM outputs** — AI Gateway logging is on; anything more is post-MVP unless implementation demands it.
 - **Legal placeholders** — operator entity, jurisdiction, liability cap, pricing, contact, named LLM providers ([privacy-copy.md](privacy-copy.md)); a launch prerequisite outside this spec's scope.
 - **Implementation-time details flagged in their documents:** which Worker hosts the reconciler DO class ([ADR 0005](../adr/0005-session-reconciler-on-durable-objects.md)); wrangler stub removal and the first prod `--adopt` deploy ([ADR 0003](../adr/0003-alchemy-iac-structure.md)); Cyrillic artifact filenames across Telegram clients ([analysis-artifacts.md](analysis-artifacts.md)); on-device Telegram webview cookie behavior ([#5](https://github.com/apshenichniy/praximo/issues/5)); UK/RU translation of the privacy policy and coach terms ([privacy-copy.md](privacy-copy.md)); final wording of all four privacy texts; two-microphone Track Egress acceptance check on the live LiveKit appliance ([#8](https://github.com/apshenichniy/praximo/issues/8)); unverified Managed Bots API details ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)).
