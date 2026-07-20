@@ -8,6 +8,12 @@
 node_modules/
 dist/
 
+# Local recovery secrets
+.env
+.env.*
+!.env.example
+deploy/livekit/runtime/
+
 # Tooling caches
 .turbo/
 .wrangler/

@@ -1,0 +1,59 @@
+services:
+  caddy:
+    image: livekit/caddyl4:latest@sha256:9dd090159a6042a907dbff0ce9dda27a21d2a559dc7b03b60a8e6b1b60b8348e
+    command: run --config /etc/caddy.yaml --adapter yaml
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ${LIVEKIT_RUNTIME_DIRECTORY:-./runtime}/caddy.yaml:/etc/caddy.yaml:ro
+      - /var/lib/livekit/caddy:/data
+
+  redis:
+    image: redis:8.8.0-alpine@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005
+    command: redis-server /etc/redis.conf
+    restart: unless-stopped
+    network_mode: host
+    user: "999:2000"
+    group_add:
+      - "2000"
+    volumes:
+      - ${LIVEKIT_RUNTIME_DIRECTORY:-./runtime}/redis.conf:/etc/redis.conf:ro
+      - /var/lib/livekit/redis:/data
+
+  livekit:
+    image: livekit/livekit-server:v1.13.3@sha256:483b8b7b5b0654f91f1e8bdc7b46fcd37fd9911612ecf627f97e3185a89825bd
+    command: --config /etc/livekit.yaml
+    restart: unless-stopped
+    network_mode: host
+    group_add:
+      - "2000"
+    depends_on:
+      - redis
+    volumes:
+      - ${LIVEKIT_RUNTIME_DIRECTORY:-./runtime}/livekit.yaml:/etc/livekit.yaml:ro
+
+  room-composite-renderer:
+    image: ghcr.io/apshenichniy/praximo-livekit-template@sha256:b3d9b5c8fa01299c6de65a48a51f533df0e188d67a066280fa617e680f9831fd
+    restart: unless-stopped
+    network_mode: host
+
+  egress:
+    image: livekit/egress:v1.13.0@sha256:980ff439431df2c773573721ab6da19e15bdc1f049ab7cb80e87470bf174c12f
+    restart: unless-stopped
+    network_mode: host
+    group_add:
+      - "2000"
+    depends_on:
+      - redis
+      - livekit
+      - room-composite-renderer
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes:
+      - ${LIVEKIT_RUNTIME_DIRECTORY:-./runtime}/egress.yaml:/etc/egress.yaml:ro
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        limits:
+          memory: 14G

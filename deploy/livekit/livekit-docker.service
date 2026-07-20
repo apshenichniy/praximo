@@ -1,0 +1,19 @@
+[Unit]
+Description=Praximo LiveKit media stack
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+LimitNOFILE=500000
+Restart=always
+RestartSec=5
+TimeoutStartSec=0
+WorkingDirectory=/opt/livekit
+ExecStartPre=/usr/bin/docker compose -f docker-compose.yaml down --remove-orphans
+ExecStart=/usr/bin/docker compose -f docker-compose.yaml up --remove-orphans
+ExecStop=/usr/bin/docker compose -f docker-compose.yaml down
+
+[Install]
+WantedBy=multi-user.target

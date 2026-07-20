@@ -1,0 +1,48 @@
+logging:
+  logs:
+    default:
+      level: INFO
+storage:
+  module: file_system
+  root: /data
+apps:
+  http:
+    servers:
+      cleartext:
+        listen: [":80"]
+        routes:
+          - match:
+              - host: ["room.praximo.io", "turn.praximo.io"]
+            handle:
+              - handler: static_response
+                headers:
+                  Location: ["https://{http.request.host}{http.request.uri}"]
+                status_code: 308
+  tls:
+    certificates:
+      automate:
+        - room.praximo.io
+        - turn.praximo.io
+  layer4:
+    servers:
+      main:
+        listen: [":443"]
+        routes:
+          - match:
+              - tls:
+                  sni: ["turn.praximo.io"]
+            handle:
+              - handler: tls
+              - handler: proxy
+                upstreams:
+                  - dial: ["127.0.0.1:5349"]
+          - match:
+              - tls:
+                  sni: ["room.praximo.io"]
+            handle:
+              - handler: tls
+                connection_policies:
+                  - alpn: ["http/1.1"]
+              - handler: proxy
+                upstreams:
+                  - dial: ["127.0.0.1:7880"]

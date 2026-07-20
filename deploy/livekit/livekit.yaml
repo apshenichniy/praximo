@@ -1,0 +1,33 @@
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  use_external_ip: true
+  node_ip: 135.125.175.57
+  interfaces:
+    includes: [ens3]
+  ips:
+    includes: [135.125.175.57/32]
+
+redis:
+  address: 127.0.0.1:6379
+  password: __REDIS_PASSWORD__
+
+turn:
+  enabled: true
+  domain: turn.praximo.io
+  udp_port: 3478
+  tls_port: 5349
+  external_tls: true
+
+keys:
+  __LIVEKIT_API_KEY__: __LIVEKIT_API_SECRET__
+
+prometheus:
+  port: 6789
+
+logging:
+  level: info
+  json: true
