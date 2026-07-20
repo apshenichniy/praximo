@@ -135,6 +135,71 @@
       th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
       th { background: var(--quote); font-weight: 600; }
       .scroll { overflow-x: auto; }
+
+      /* Telegram-ish message mock */
+      .mock {
+        background: #cfe3f2;
+        border-radius: 14px;
+        padding: 16px 14px;
+        margin-bottom: 22px;
+      }
+      @media (prefers-color-scheme: dark) {
+        .mock { background: #1f2b33; }
+      }
+      .mock-head {
+        font-size: 12px;
+        color: #4a6b80;
+        text-align: center;
+        margin-bottom: 12px;
+      }
+      .bubble {
+        background: #fff;
+        color: #1b1b19;
+        border-radius: 14px;
+        padding: 12px 14px;
+        max-width: 480px;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      @media (prefers-color-scheme: dark) {
+        .bubble { background: #2b3942; color: #ecebe4; }
+      }
+      .bubble p { margin: 0 0 10px; }
+      .file {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+      .file-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #4d9ee0;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        flex: none;
+      }
+      .file-name { font-size: 15px; }
+      .file-size { font-size: 13px; opacity: 0.6; }
+      .kb {
+        margin: 12px -14px -12px;
+        padding: 10px;
+        text-align: center;
+        border-top: 1px solid rgba(128, 128, 128, 0.25);
+        color: #4d9ee0;
+        font-size: 15px;
+      }
+      .stamp {
+        font-size: 12px;
+        opacity: 0.55;
+        text-align: right;
+        margin-top: 10px;
+      }
     </style>
   </head>
   <body>
@@ -144,6 +209,7 @@
         <button data-tab="brief" aria-pressed="true">Бриф</button>
         <button data-tab="debrief" aria-pressed="false">Дебриф</button>
         <button data-tab="mentor" aria-pressed="false">Менторский разбор</button>
+        <button data-tab="delivery" aria-pressed="false">Доставка</button>
         <button data-tab="design" aria-pressed="false">Как это устроено</button>
         <button data-tab="prompts" aria-pressed="false">Промпты</button>
       </div>
@@ -476,6 +542,200 @@
             сертификации. Официальные тексты:
             coachingfederation.org
           </p>
+        </div>
+      </section>
+
+      <!-- ==================== DELIVERY ==================== -->
+      <section id="delivery" hidden>
+        <h1>Доставка</h1>
+        <p class="lede">
+          Одно сообщение на документ: файл <code>.md</code>, под ним выжимка,
+          под ней кнопка в Mini App. Тап по файлу открывает встроенный
+          просмотрщик Telegram, который рендерит markdown — заголовки, жирный,
+          ссылки, моноширинный код.
+        </p>
+
+        <div class="mock">
+          <div class="mock-head">Разработка · бот воркспейса</div>
+          <div class="bubble">
+            <div class="file">
+              <div class="file-icon">MD</div>
+              <div>
+                <div class="file-name">Дебриф — Андре…, сессия 4.md</div>
+                <div class="file-size">6,1 KB</div>
+              </div>
+            </div>
+            <p>
+              <strong>Дебриф — Андрей К., сессия 4</strong>
+            </p>
+            <p>
+              Пришёл с ситуацией: забрал у Кати задачу, которую сам же передал.
+              К середине сессии дошёл до того, что защищает не проект, а свой
+              образ надёжного руководителя — назвал это сам. В конце придумал
+              деление решений по цене ошибки, а не по сложности.
+            </p>
+            <p>
+              Три договорённости, включая разговор с руководителем — он
+              откладывается третью сессию подряд.
+            </p>
+            <p>
+              Открытым осталось: цена вечерней работы лично для него; контракт
+              цикла не пересматривался.
+            </p>
+            <div class="stamp">14:58 · 612 из 1024 символов</div>
+            <div class="kb">Открыть в приложении</div>
+          </div>
+        </div>
+
+        <div class="note">
+          <strong>Жёсткое ограничение — 1024 символа</strong>
+          Подпись к файлу вдвое короче лимита обычного сообщения (4096). Это и
+          есть настоящая граница выжимки — примерно 130–150 слов по-русски. Она
+          скорее полезна: заставляет писать выжимку, а не начало документа.
+        </div>
+
+        <div class="card">
+          <h2>Что подтверждено</h2>
+          <div class="scroll">
+            <table>
+              <tr><th>Факт</th><th>Значение</th><th>Источник</th></tr>
+              <tr>
+                <td>Подпись к документу</td>
+                <td>0–1024 символа после разбора сущностей</td>
+                <td><code>sendDocument.caption</code></td>
+              </tr>
+              <tr>
+                <td>Обычное сообщение</td>
+                <td>1–4096 символов</td>
+                <td><code>sendMessage.text</code></td>
+              </tr>
+              <tr>
+                <td>Инлайн-клавиатура под файлом</td>
+                <td>Да, <code>reply_markup</code> принимается</td>
+                <td><code>sendDocument</code></td>
+              </tr>
+              <tr>
+                <td>Кнопка запуска Mini App</td>
+                <td>
+                  Только в личных чатах пользователя с ботом — наш случай
+                </td>
+                <td><code>InlineKeyboardButton.web_app</code></td>
+              </tr>
+              <tr>
+                <td>Размер файла при загрузке</td>
+                <td>До 50 МБ — документ на 6 КБ вне обсуждения</td>
+                <td>Sending files</td>
+              </tr>
+              <tr>
+                <td>Отправка из памяти</td>
+                <td>
+                  <code>InputFile</code> принимает <code>Uint8Array</code> /
+                  <code>Blob</code> — файловая система не нужна
+                </td>
+                <td>grammY, guide/files</td>
+              </tr>
+              <tr>
+                <td>Правка подписи задним числом</td>
+                <td>
+                  <code>editMessageCaption</code>, те же 1024; сам файл
+                  заменяется через <code>editMessageMedia</code>
+                </td>
+                <td>Bot API</td>
+              </tr>
+              <tr>
+                <td>Версия Bot API</td>
+                <td>10.2 от 14 июля 2026</td>
+                <td>Recent changes</td>
+              </tr>
+            </table>
+          </div>
+
+          <h2>Что даёт просмотрщик</h2>
+          <p>
+            Проверено на записи экрана с iOS: markdown рендерится — серифные
+            заголовки, жирный, кликабельные ссылки, моноширинный код,
+            нумерованные списки. Внизу просмотрщика — «Поделиться» и «Сохранить
+            в файлы», то есть документ можно унести из системы: переслать
+            живому ментору, положить в заметки.
+          </p>
+          <p>
+            Заголовок просмотрщика берётся не из имени файла, а из первого
+            заголовка документа — на записи это видно: файл называется
+            <code>0001-processing-pipeline-…md</code>, а сверху показано «ADR
+            0001: Processing pipeline…». Значит H1 документа — часть интерфейса,
+            и он должен сам себя объяснять: «Дебриф: Андрей К., сессия 4,
+            18 июля».
+          </p>
+          <p>
+            На десктопе перед открытием показывается предупреждение о
+            небезопасности предпросмотра, потом тот же рендер. Убрать его мы не
+            можем; это довод в пользу того, чтобы кнопка в Mini App была всегда,
+            а не только как запасной путь.
+          </p>
+
+          <h2>Как это собирается</h2>
+          <pre>await api.sendDocument(
+  coachTelegramId,
+  new InputFile(bytes, "Дебриф — Андрей К., сессия 4.md"),
+  {
+    caption: summary,              // ≤ 1024, из того же прогона LLM
+    parse_mode: "MarkdownV2",
+    reply_markup: {
+      inline_keyboard: [[{
+        text: "Открыть в приложении",
+        web_app: { url: readerUrl } // app.praximo.io/a/&lt;artifact&gt;
+      }]],
+    },
+  },
+);</pre>
+          <p>
+            Выжимка — не отдельный вызов модели: она возвращается тем же
+            запросом, что и документ, отдельным полем. Один прогон, одна цена,
+            и выжимка гарантированно про то же, что в тексте.
+          </p>
+
+          <h2>Что решается этим</h2>
+          <ul>
+            <li>
+              <strong>Лимит 4096 больше не мешает.</strong> Менторский разбор
+              упирался в него как сообщение; как файл он не ограничен ничем
+              практическим.
+            </li>
+            <li>
+              <strong>Экспорт получается сам собой.</strong> Отдельной функции
+              «выгрузить» в MVP не нужно — «Поделиться» есть в просмотрщике.
+            </li>
+            <li>
+              <strong>Mini App остаётся читалкой и архивом,</strong> как и
+              решено в #15, но перестаёт быть единственным способом прочитать
+              документ целиком.
+            </li>
+          </ul>
+
+          <h2>Открытые вопросы</h2>
+          <ul>
+            <li>
+              <strong>Имя файла обрезается по центру</strong> — на карточке
+              видно начало и хвост. Значит вид документа ставим в начало, дату
+              в конец: <code>Дебриф — Андрей К. — 18.07.md</code>.
+            </li>
+            <li>
+              <strong>Кириллица в имени файла</strong> на разных клиентах не
+              проверена. Запасной вариант — латиница с транслитерацией даты и
+              вида.
+            </li>
+            <li>
+              <strong>Новая версия брифа.</strong> Заменять файл в старом
+              сообщении через <code>editMessageMedia</code> или слать новое?
+              Новое сообщение честнее — видно, что бриф пересобран, — но
+              оставляет в чате устаревший файл.
+            </li>
+            <li>
+              <strong>Три документа — три сообщения подряд.</strong> Дебриф и
+              разбор приходят одним прогоном; стоит ли разносить их по времени,
+              чтобы разбор не читался на эмоциях сразу после сессии.
+            </li>
+          </ul>
         </div>
       </section>
 
