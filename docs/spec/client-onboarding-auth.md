@@ -49,11 +49,25 @@ Coach sign-in, client invites, consent capture, and web-room access. Vocabulary 
 
 ## Web-room access
 
-- **Symmetric join links:** per-(session, role) tokens for the coach and the client; the web room is fully outside Better-Auth. The coach's Mini App session never has to reach the external browser.
-- Join links are **multi-use** (reconnects after a drop), valid while the session is `scheduled` / `in_progress`, dead in terminal states.
+Decided in wayfinder ticket [#25](https://github.com/apshenichniy/praximo/issues/25). Session lifecycle and join eligibility live in [web-room-sessions.md](web-room-sessions.md); this section owns the credential and token mechanics.
+
+- **Symmetric join links:** per-(session, role) tokens for the coach and the client. In MVP the web room runs entirely on join links — the coach's Mini App session never has to reach the external browser. The gates are specified as an OR so the Better-Auth branch can light up post-MVP without migration:
+
+  ```
+  coachGate  = valid coach join link                                        -- MVP
+            OR (Better-Auth session AND member of the session's workspace)  -- post-MVP: desktop web-app
+  clientGate = valid client join link                                       -- the client's only credential, always
+  ```
+
+- **Token mechanics:** opaque random token, ≥128 bits of entropy, base64url; the DB stores a SHA-256 hash per (session, role); validation is a DB lookup in the `web` Worker. Not signed (no HMAC/JWT): revocation and rotation must be instant and stateful, and the join endpoint is not a hot path.
+- Join links are **multi-use** (reconnects after a drop), valid while the session is `scheduled` / `in_progress`, dead in terminal states — revocation is implicit in the session lifecycle (this is the "access not revoked" mechanism referenced by the web-room spec).
 - **Stable across rescheduling** — a reschedule mutates the time in place, the link keeps working, nothing is resent.
-- Delivered through the bot in reminder messages. No early-join window in MVP; join-flow states (`ready_to_join`, no-show detection) are deferred to web-room implementation prep.
+- **Rotation on compromise:** a coach command — "reissue links", on the session card in the Mini App and in the bot — rotates both (session, role) tokens and re-delivers them through the usual channels; old links die instantly (one UPDATE on the hashed rows).
+- **Coach link is a bearer capability — accepted residual risk (MVP):** the coach link authenticates the coach role, including the in-room commands (`extend`, `end_session`, `cancel`). Mitigations: delivery only into the coach's private bot chat; validity bounded by the session lifecycle; `extend`/`end_session` additionally require a server-confirmed live connection in the room; rotation above. Residual: a holder of a leaked coach link can enter the room as the coach — visible to the other participant.
+- **URL-leakage mitigations:** `Referrer-Policy: no-referrer` on all room pages; the pre-join page reads the token into memory and strips it from the URL via `history.replaceState` (`sessionStorage` covers same-tab reconnects). No token→cookie exchange in MVP.
+- **Delivery — coach:** bot reminder messages plus a Join button on the session card in the Mini App, both via the web_app trampoline (webview constraint in [web-room-sessions.md](web-room-sessions.md) §14). Cross-device in MVP rides Telegram multi-device: the same bot chat in Telegram Desktop opens the system browser; copy-link is the fallback. PIN sign-in for a browser without Telegram (Better-Auth `device-authorization` plugin) is post-MVP, on the Better-Auth branch of the gate.
+- **Delivery — client:** bot reminder messages via the trampoline. Join links are **channel-agnostic**: for non-Telegram clients the same token URL is delivered over their channel or forwarded manually by the coach — no trampoline needed outside Telegram webviews ([#27](https://github.com/apshenichniy/praximo/issues/27)).
 
-## Future channels
+## Other channels
 
-A future email channel delivers the same invite token as a link to a web acceptance page carrying the same language + consent steps; reminders and join links go to that channel instead. Nothing in the Invite / Channel / Consent Grant model changes.
+Scope redrawn in [#25](https://github.com/apshenichniy/praximo/issues/25): non-Telegram clients are **in MVP** — a web acceptance page (same invite token, same language + consent steps), manual link-forwarding by the coach for messenger clients, and a first-class email channel. Nothing in the Invite / Channel / Consent Grant model changes. Specified in wayfinder ticket [#27](https://github.com/apshenichniy/praximo/issues/27) (provider research: [#26](https://github.com/apshenichniy/praximo/issues/26)); this document gains the flow once that ticket resolves.

@@ -58,13 +58,14 @@ All intervals are **half-open `[start, end)`**: an instant belongs to the interv
 
 Two layers, deliberately distinct:
 
-- **Authentication into the browser experience** — resolving who this browser is: the coach via their authenticated app session, the client via the join-link token (their only credential, per [client-onboarding-auth.md](client-onboarding-auth.md)). Sufficient for the pre-join page at any time.
+- **Authentication into the browser experience** — resolving who this browser is: **both roles via their per-(session, role) join-link token** (wayfinder [#25](https://github.com/apshenichniy/praximo/issues/25); token mechanics in [client-onboarding-auth.md](client-onboarding-auth.md) §Web-room access). A post-MVP desktop web-app adds an authenticated Better-Auth session with workspace membership as an alternative coach gate; in MVP that branch is dormant. Sufficient for the pre-join page at any time.
 - **Authorization to connect to the physical room** — minting a LiveKit access token. Granted only when `ready_to_join` derives to true.
 
 ```
 ready_to_join(participant, session, now) =
       session.state ∈ {scheduled, in_progress}
-  AND participantGatePassed            -- coach: authenticated workspace member
+  AND participantGatePassed            -- coach: valid coach join link (post-MVP alternative:
+                                       --   Better-Auth session + workspace membership)
                                        -- client: valid join-link token (implies accepted invite + consent)
   AND plannedStartAt − JOIN_OPEN_BEFORE_START <= now < effectiveEndAt
   AND roomNotClosed                    -- no close requested/executed, access not revoked
@@ -239,13 +240,15 @@ Classification: joint presence never reached AND ≥ 1 incident in the join wind
 | Terminal transition | conditional UPDATE on state | first writer wins |
 | Completion event → pipeline | workflow instance id = session id | provider dedupe, exactly one run |
 
+**Command authentication.** Coach commands are authorized by the coach join-link role claim — a bearer capability, accepted with mitigations in [client-onboarding-auth.md](client-onboarding-auth.md) §Web-room access — plus the server-confirmed live-connection preconditions below.
+
 **Coach end-session contract.** Preconditions: `in_progress` (never reached joint presence → unavailable; a waiting coach just leaves) AND coach has a server-confirmed connection; client presence not required. Processing, in order: (1) commit point — record `closeRequested(coach_end, commandId)` and revoke room access atomically (eligibility derives to false); (2) delete the provider room (idempotent, retried; recording stop follows physical closure as always); (3) run `reconcile` immediately → `completed(coach_end)`, `completedAt` = command acceptance time. Irreversible; no-op success on an already-terminal session; provider failure after the commit point cannot reopen access — retries drive steps 2–3 to completion.
 
 **Extension contract:** §7.
 
 ## 14. Delivery and in-room UI (MVP scope)
 
-**Webview constraint.** WebRTC calls inside Telegram's in-app browser / Mini App webview are **not supported** — verified unreliable (iOS in-app browser: camera permission loop, [livekit#2846](https://github.com/livekit/livekit/issues/2846); iOS Mini App: black `getUserMedia` stream, [tma#748](https://github.com/Telegram-Mini-Apps/telegram-apps/issues/748); Android: repeated permission prompts, [DrKLO/Telegram#1947](https://github.com/DrKLO/Telegram/pull/1947)). Join links are delivered as a **web_app button → trampoline page → `Telegram.WebApp.openLink(roomUrl)`** — documented to always open the system browser. The pre-join page additionally detects in-app webviews by user agent and shows an "open in your browser" screen instead of Join.
+**Webview constraint.** WebRTC calls inside Telegram's in-app browser / Mini App webview are **not supported** — verified unreliable (iOS in-app browser: camera permission loop, [livekit#2846](https://github.com/livekit/livekit/issues/2846); iOS Mini App: black `getUserMedia` stream, [tma#748](https://github.com/Telegram-Mini-Apps/telegram-apps/issues/748); Android: repeated permission prompts, [DrKLO/Telegram#1947](https://github.com/DrKLO/Telegram/pull/1947)). Join links are delivered as a **web_app button → trampoline page → `Telegram.WebApp.openLink(roomUrl)`** — documented to always open the system browser. The coach additionally gets a Join button on the session card in the Mini App (same trampoline); in Telegram Desktop the same buttons open the desktop's system browser, which is the MVP cross-device path. The trampoline is a Telegram-webview workaround only: join links opened outside Telegram (email, forwarded URLs) go straight to the pre-join page. The pre-join page additionally detects in-app webviews by user agent and shows an "open in your browser" screen instead of Join.
 
 **Pre-join** (reachable whenever the link authenticates, any time before terminal): local camera preview, mic/camera selection, permission diagnostics, Join countdown until the window opens, schedule-change notice, and the informational recording notice ([privacy-retention.md](privacy-retention.md)). Creates no presence, starts nothing, records nothing.
 
