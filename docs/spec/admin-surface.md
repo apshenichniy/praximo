@@ -4,7 +4,24 @@ The operator's surface for creating and managing coach workspaces in MVP. Vocabu
 
 ## Principle
 
-**The management surface is an admin section in the Mini App, modeled on the BotFather Mini App; the manager bot keeps only what a Mini App cannot do.** The Mini App already exists (the coach app, TanStack Start on the `web` Worker), so the admin surface is an incremental route + role gate, not a new surface or Worker. BotFather's Mini App gives a proven structure to copy — a list of bots, tap into one, edit its fields as a form — which maps almost one-to-one onto workspaces. Forms beat a linear bot conversation for the create/edit operations: every field is visible at once, any field is editable, and the avatar is a native upload.
+**The management surface is an admin section in the Mini App, modeled on the BotFather Mini App; the manager bot keeps only what a Mini App cannot do.** The Mini App already exists (the coach app, TanStack Start on the `web` Worker), so the admin surface is a **self-contained `/admin` route tree in that same app and Worker** — not a separate app, not a fourth Worker (ADR 0002 fixes three). "Self-contained" means the `/admin` tree has its **own root layout**, its **own Tailwind theme** (which may diverge freely from the coach app's — a different design system is expected), is **English-only** (see [Language](#language)), is **code-split** so no admin JS/CSS ships to coaches, and is **server-gated** on the admin flag. BotFather's Mini App gives a proven structure to copy — a list of bots, tap into one, edit its fields as a form — which maps almost one-to-one onto workspaces. Forms beat a linear bot conversation for the create/edit operations: every field is visible at once, any field is editable, and the avatar is a native upload.
+
+## Separation model (coach vs admin)
+
+The coach surface and the admin surface are **deliberately separated where it matters to a person, and deliberately unified where it only matters to the codebase.** This is the shape a dual-role person needs — the operator dogfooding as a coach, or a coach who also onboards other coaches (e.g. a coach-spouse running onboarding). For such a person the two roles must never bleed together **in Telegram**, but there is no reason to pay for two codebases to achieve that.
+
+Separated at the layers a human perceives:
+
+- **Bot account / chat.** Coach-facing notifications (sessions, artifacts, service notices) are delivered by the coach's **own branded bot** ([ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md), [ADR 0004](../adr/0004-bot-per-coach-provisioning.md)). Admin-facing notifications (onboarding loop, deep links) are delivered by the **manager bot** (below). For a dual-role person these are **two distinct bot chats** — a session notification never arrives from the same account that reports "a coach onboarded."
+- **Mini App entry point.** The coach opens the coach Mini App from **their coach bot's** menu button; the admin opens the admin Mini App from the **manager bot's** menu button. Different bots, different `initData`, different auth, different `.admin`-themed experience. A coach never sees an admin entry inside the coach app.
+
+Unified where only the codebase is affected:
+
+- **One TanStack Start app, one `web` Worker.** The `/admin` route tree shares the deploy, the build, and reusable primitives with the coach app, but nothing a coach sees. The wins of a separate app (independent deploy cadence, zero admin bytes in the coach bundle) are marginal for a solo dev and the second is already covered by code-splitting; they do not justify a fourth Worker plus the ADR 0002 / IaC cost. Refinement of ticket [#34](https://github.com/apshenichniy/praximo/issues/34): the "one app, not a new Worker" decision stands; this section makes the intended isolation (own route tree, own theme, English-only) explicit.
+
+## Language
+
+**The admin surface is English-only.** The admin is the solo operator; the trilingual (`en | uk | ru`) machinery that serves coaches and clients does not apply to admin routes. Admin routes never touch the i18n layer, and admin copy is authored in English only. (Coach-language selection *within* the Create form is data about the coach being provisioned — [domain-model.md](domain-model.md) `Member.language` — not the language of the admin UI.)
 
 The manager bot is **not** the management surface. It retains exactly two jobs it is uniquely good at, and no admin commands:
 
