@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PROTOTYPE — Praximo privacy copy (wayfinder #16)</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fbfbfa;
+        --panel: #fff;
+        --ink: #1b1b19;
+        --muted: #6b6b63;
+        --line: #e4e3dd;
+        --accent: #2f6f5e;
+        --mark: #fff2b8;
+        --mark-ink: #6b4d00;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14140f;
+          --panel: #1c1c17;
+          --ink: #ecebe4;
+          --muted: #9a998e;
+          --line: #32322a;
+          --accent: #6fbfa4;
+          --mark: #4a3c05;
+          --mark-ink: #ffe89a;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+        padding: 12px 20px;
+      }
+      .banner {
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+      .bar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+      .tabs, .langs { display: flex; flex-wrap: wrap; gap: 6px; }
+      button {
+        font: inherit;
+        font-size: 14px;
+        padding: 6px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--panel);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button[disabled] { opacity: 0.35; cursor: not-allowed; }
+      .langs { margin-left: auto; }
+      main { max-width: 760px; margin: 0 auto; padding: 28px 20px 120px; }
+      section[hidden] { display: none; }
+      h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; }
+      h2 { font-size: 17px; margin: 30px 0 8px; }
+      h3 { font-size: 15px; margin: 20px 0 6px; color: var(--muted); font-weight: 600; }
+      p, li { margin: 0 0 10px; }
+      ul, ol { padding-left: 22px; }
+      .lede { color: var(--muted); margin-bottom: 22px; }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 22px 24px;
+        margin: 18px 0;
+      }
+      .card--screen { max-width: 460px; }
+      .note {
+        border-left: 3px solid var(--accent);
+        padding: 2px 0 2px 14px;
+        color: var(--muted);
+        font-size: 14px;
+        margin: 16px 0;
+      }
+      mark { background: var(--mark); color: var(--mark-ink); padding: 0 4px; border-radius: 4px; }
+      .var { color: var(--accent); font-weight: 600; }
+      .cta {
+        display: block;
+        width: 100%;
+        margin-top: 14px;
+        padding: 12px;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: default;
+      }
+      .fine { font-size: 13px; color: var(--muted); }
+      a { color: var(--accent); }
+      .variant { border-top: 1px dashed var(--line); padding-top: 14px; margin-top: 14px; }
+      .variant:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+      .tag {
+        display: inline-block;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 1px 6px;
+        margin-bottom: 8px;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0 16px; }
+      th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--muted); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="banner">Prototype — throwaway copy deck · wayfinder #16 · not production</div>
+      <div class="bar">
+        <div class="tabs" id="tabs">
+          <button data-doc="consent" aria-pressed="true">1 · Client consent</button>
+          <button data-doc="prejoin" aria-pressed="false">2 · Pre-join notice</button>
+          <button data-doc="policy" aria-pressed="false">3 · Privacy policy</button>
+          <button data-doc="tos" aria-pressed="false">4 · Coach terms</button>
+        </div>
+        <div class="langs" id="langs">
+          <button data-lang="en" aria-pressed="true">EN</button>
+          <button data-lang="uk" aria-pressed="false">UK</button>
+          <button data-lang="ru" aria-pressed="false">RU</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- ============================== 1 · CONSENT ============================== -->
+      <section data-doc="consent" data-lang="en">
+        <h1>Client consent</h1>
+        <p class="lede">
+          Shown at onboarding — in the Telegram bot conversation and on the web acceptance page,
+          identical text on both. Captured as a Consent Grant; the text version is stored on the grant.
+        </p>
+
+        <div class="card card--screen">
+          <h2 style="margin-top: 0">One thing to agree to</h2>
+          <p>
+            To help <span class="var">{coach}</span> prepare for your sessions, Praximo records and
+            analyses them. Here is exactly what that means:
+          </p>
+          <ol>
+            <li>Your session audio is recorded.</li>
+            <li>
+              The recordings are analysed by AI. The results go only to
+              <span class="var">{coach}</span> — nobody else sees them.
+            </li>
+            <li>
+              Audio is deleted 30 days after it is transcribed. Transcripts and analysis results are
+              kept until <span class="var">{coach}</span> deletes them.
+            </li>
+            <li>
+              Everything is processed in the EU, except the AI analysis, which runs in the US. Those
+              requests pass through Cloudflare AI Gateway, which keeps a log of them.
+            </li>
+            <li>
+              You can withdraw this consent, or ask for your data to be deleted, at any time — just
+              tell <span class="var">{coach}</span>.
+            </li>
+          </ol>
+          <p class="fine"><a href="#">Privacy policy</a></p>
+          <button class="cta">I agree</button>
+          <p class="fine" style="text-align: center; margin-top: 10px">
+            Nothing is saved until you agree.
+          </p>
+        </div>
+
+        <div class="note">
+          Covers all five required elements from
+          <code>docs/spec/privacy-retention.md</code> § “Consent text — required elements”, in order.
+          Element 4 now names the AI Gateway logging, which the earlier draft in
+          <code>prototypes/client-web-flow</code> dropped.
+        </div>
+      </section>
+
+      <section data-doc="consent" data-lang="uk" hidden>
+        <h1>Згода клієнта</h1>
+        <p class="lede">
+          Показується під час онбордингу — у розмові з Telegram-ботом і на вебсторінці прийняття
+          запрошення, той самий текст в обох місцях.
+        </p>
+
+        <div class="card card--screen">
+          <h2 style="margin-top: 0">Одна річ, на яку потрібна ваша згода</h2>
+          <p>
+            Щоб допомогти <span class="var">{coach}</span> готуватися до ваших сесій, Praximo
+            записує та аналізує їх. Ось що саме це означає:
+          </p>
+          <ol>
+            <li>Аудіо ваших сесій записується.</li>
+            <li>
+              Записи аналізує штучний інтелект. Результати отримує лише
+              <span class="var">{coach}</span> — більше ніхто їх не бачить.
+            </li>
+            <li>
+              Аудіо видаляється через 30 днів після розшифрування. Транскрипти та результати аналізу
+              зберігаються, доки <span class="var">{coach}</span> їх не видалить.
+            </li>
+            <li>
+              Уся обробка відбувається в ЄС, окрім аналізу штучним інтелектом — він виконується у
+              США. Ці запити проходять через Cloudflare AI Gateway, який зберігає їх журнал.
+            </li>
+            <li>
+              Ви можете відкликати цю згоду або попросити видалити ваші дані будь-коли — просто
+              скажіть про це <span class="var">{coach}</span>.
+            </li>
+          </ol>
+          <p class="fine"><a href="#">Політика конфіденційності</a></p>
+          <button class="cta">Даю згоду</button>
+          <p class="fine" style="text-align: center; margin-top: 10px">
+            Нічого не зберігається, доки ви не погодитесь.
+          </p>
+        </div>
+
+        <div class="note">
+          Формулювання навмисно уникають дієслів, що узгоджуються з родом коуча
+          («допомогти {coach} готуватися», а не «щоб {coach} могла») — стать коуча системі невідома.
+          Кнопка «Даю згоду» замість «Погоджуюсь(-лася)».
+        </div>
+      </section>
+
+      <section data-doc="consent" data-lang="ru" hidden>
+        <h1>Согласие клиента</h1>
+        <p class="lede">
+          Показывается при онбординге — в разговоре с Telegram-ботом и на веб-странице принятия
+          приглашения, один и тот же текст в обоих местах.
+        </p>
+
+        <div class="card card--screen">
+          <h2 style="margin-top: 0">Одна вещь, на которую нужно ваше согласие</h2>
+          <p>
+            Чтобы помочь <span class="var">{coach}</span> готовиться к вашим сессиям, Praximo
+            записывает и анализирует их. Вот что именно это значит:
+          </p>
+          <ol>
+            <li>Аудио ваших сессий записывается.</li>
+            <li>
+              Записи анализирует искусственный интеллект. Результаты получает только
+              <span class="var">{coach}</span> — больше их никто не видит.
+            </li>
+            <li>
+              Аудио удаляется через 30 дней после расшифровки. Транскрипты и результаты анализа
+              хранятся, пока <span class="var">{coach}</span> их не удалит.
+            </li>
+            <li>
+              Вся обработка происходит в ЕС, кроме анализа искусственным интеллектом — он
+              выполняется в США. Эти запросы проходят через Cloudflare AI Gateway, который ведёт их
+              журнал.
+            </li>
+            <li>
+              Вы можете отозвать это согласие или попросить удалить ваши данные в любой момент —
+              просто скажите об этом <span class="var">{coach}</span>.
+            </li>
+          </ol>
+          <p class="fine"><a href="#">Политика конфиденциальности</a></p>
+          <button class="cta">Даю согласие</button>
+          <p class="fine" style="text-align: center; margin-top: 10px">
+            Ничего не сохраняется, пока вы не согласитесь.
+          </p>
+        </div>
+
+        <div class="note">
+          Формулировки намеренно избегают глаголов, согласующихся с родом коуча, — пол коуча системе
+          неизвестен. Кнопка «Даю согласие» вместо «Согласен(-на)».
+        </div>
+      </section>
+
+      <!-- ============================== 2 · PRE-JOIN ============================== -->
+      <section data-doc="prejoin" data-lang="en">
+        <h1>Pre-join notice</h1>
+        <p class="lede">
+          Web room pre-join screen. Informational only — the join click is logged, no new Consent
+          Grant is created. Three one-liner variants to pick from.
+        </p>
+
+        <div class="card card--screen">
+          <h2 style="margin-top: 0">Ready to join?</h2>
+          <p class="fine">Session with <span class="var">{coach}</span> · 60 min</p>
+          <p style="border-left: 3px solid var(--accent); padding-left: 12px" id="prejoin-line-en">
+            This session is recorded and analysed by AI for <span class="var">{coach}</span>.
+          </p>
+          <button class="cta">Join session</button>
+          <p class="fine" style="text-align: center; margin-top: 10px">
+            Check your camera and microphone
+          </p>
+        </div>
+
+        <h2>Variants</h2>
+        <div class="card">
+          <div class="variant">
+            <span class="tag">A · factual (recommended)</span>
+            <p>This session is recorded and analysed by AI for <span class="var">{coach}</span>.</p>
+          </div>
+          <div class="variant">
+            <span class="tag">B · refers back to consent</span>
+            <p>
+              As you agreed earlier: this session is recorded and analysed by AI for
+              <span class="var">{coach}</span>.
+            </p>
+          </div>
+          <div class="variant">
+            <span class="tag">C · benefit-framed</span>
+            <p>
+              This session is recorded so <span class="var">{coach}</span> gets an AI summary
+              afterwards.
+            </p>
+          </div>
+        </div>
+
+        <div class="note">
+          A is the plainest and matches the recording indicator shown in-room. B risks reading as a
+          second consent ask. C softens by leading with the benefit but under-states the analysis.
+        </div>
+      </section>
+
+      <section data-doc="prejoin" data-lang="uk" hidden>
+        <h1>Повідомлення перед приєднанням</h1>
+        <p class="lede">
+          Екран перед входом у вебкімнату. Лише інформаційне — клік «Приєднатися» логується, нова
+          згода не створюється.
+        </p>
+
+        <div class="card card--screen">
+          <h2 style="margin-top: 0">Готові приєднатися?</h2>
+          <p class="fine">Сесія з <span class="var">{coach}</span> · 60 хв</p>
+          <p style="border-left: 3px solid var(--accent); padding-left: 12px">
+            Ця сесія записується та аналізується ШІ для <span class="var">{coach}</span>.
+          </p>
+          <button class="cta">Приєднатися</button>
+          <p class="fine" style="text-align: center; margin-top: 10px">
+            Перевірте камеру та мікрофон
+          </p>
+        </div>
+
+        <h2>Варіанти</h2>
+        <div class="card">
+          <div class="variant">
+            <span class="tag">A · фактичний (рекомендовано)</span>
+            <p>Ця сесія записується та аналізується ШІ для <span class="var">{coach}</span>.</p>
+          </div>
+          <div class="variant">
+            <span class="tag">B · відсилає до згоди</span>
+            <p>
+              Як ви й погодились раніше: ця сесія записується та аналізується ШІ для
+              <span class="var">{coach}</span>.
+            </p>
+          </div>
+          <div class="variant">
+            <span class="tag">C · через користь</span>
+            <p>
+              Ця сесія записується, щоб <span class="var">{coach}</span> потім отримав(-ла) підсумок
+              від ШІ.
+            </p>
+          </div>
+        </div>
+
+        <div class="note">
+          Варіант C українською вимагає узгодження з родом коуча («отримав(-ла)») — ще один аргумент
+          на користь A.
+        </div>
+      </section>
+
+      <section data-doc="prejoin" data-lang="ru" hidden>
+        <h1>Уведомление перед подключением</h1>
+        <p class="lede">
+          Экран перед входом в веб-комнату. Только информационное — клик «Подключиться» логируется,
+          новое согласие не создаётся.
+        </p>
+
+        <div class="card card--screen">
+          <h2 style="margin-top: 0">Готовы подключиться?</h2>
+          <p class="fine">Сессия с <span class="var">{coach}</span> · 60 мин</p>
+          <p style="border-left: 3px solid var(--accent); padding-left: 12px">
+            Эта сессия записывается и анализируется ИИ для <span class="var">{coach}</span>.
+          </p>
+          <button class="cta">Подключиться</button>
+          <p class="fine" style="text-align: center; margin-top: 10px">
+            Проверьте камеру и микрофон
+          </p>
+        </div>
+
+        <h2>Варианты</h2>
+        <div class="card">
+          <div class="variant">
+            <span class="tag">A · фактический (рекомендуется)</span>
+            <p>Эта сессия записывается и анализируется ИИ для <span class="var">{coach}</span>.</p>
+          </div>
+          <div class="variant">
+            <span class="tag">B · отсылает к согласию</span>
+            <p>
+              Как вы и согласились ранее: эта сессия записывается и анализируется ИИ для
+              <span class="var">{coach}</span>.
+            </p>
+          </div>
+          <div class="variant">
+            <span class="tag">C · через пользу</span>
+            <p>
+              Эта сессия записывается, чтобы <span class="var">{coach}</span> потом получил(-а)
+              итоги от ИИ.
+            </p>
+          </div>
+        </div>
+
+        <div class="note">
+          Вариант C по-русски требует согласования с родом коуча («получил(-а)») — ещё один аргумент
+          в пользу A.
+        </div>
+      </section>
+
+      <!-- ============================== 3 · PRIVACY POLICY ============================== -->
+      <section data-doc="policy" data-lang="en">
+        <h1>Privacy policy</h1>
+        <p class="lede">
+          Static page on praximo.io, linked from the client consent and the coach terms. Short
+          one-pager register, per the ticket decision. <mark>Highlighted</mark> spans are
+          placeholders to fill before launch.
+        </p>
+
+        <div class="card">
+          <h2 style="margin-top: 0">Privacy policy</h2>
+          <p class="fine">Version 1.0 · <mark>[EFFECTIVE DATE]</mark></p>
+
+          <p>
+            Praximo is a tool that coaches use to schedule sessions, run them as video calls, and get
+            AI-written notes afterwards. This page explains what happens to your data.
+          </p>
+
+          <h3>Who is responsible for what</h3>
+          <p>
+            <strong>Your coach decides</strong> what data is collected about you and what happens to
+            it — they are the data controller. <strong>We run the software</strong> on their
+            instructions — we are the processor. If you want your data changed or deleted, ask your
+            coach; we give them the tools to do it.
+          </p>
+          <p>Praximo is operated by <mark>[OPERATOR LEGAL NAME, ADDRESS]</mark>.</p>
+
+          <h3>What we hold</h3>
+          <ul>
+            <li>
+              <strong>Your profile</strong> — the name you gave, and optionally a photo, an email
+              address, and your Telegram account id.
+            </li>
+            <li><strong>Session audio</strong> — recorded during the call, one track per person.</li>
+            <li>
+              <strong>Transcripts and AI notes</strong> — the written record of the session and the
+              summaries produced from it.
+            </li>
+            <li>
+              <strong>Consent and technical records</strong> — the consent you gave, its text
+              version, and when you joined sessions.
+            </li>
+          </ul>
+          <p>
+            If you use <strong>Continue with Google</strong> on the invitation page, we read your
+            name, photo, email address, and Google account id from your Google profile — only when
+            you click it, and we do not keep the Google access token.
+          </p>
+
+          <h3>What it is used for</h3>
+          <p>
+            To run the sessions and to produce written notes for your coach: a summary of the
+            session, and a professional self-review addressed to the coach about their own coaching.
+            Nobody but your coach sees these. We do not sell your data, we do not advertise to you,
+            and your recordings and transcripts are not used to train AI models.
+          </p>
+
+          <h3>Where it is processed</h3>
+          <p>
+            Everything stays in the European Union — hosting, database, video calls, and
+            transcription — <strong>except the AI analysis</strong>, which runs on providers in the
+            United States. Those requests pass through Cloudflare AI Gateway, which keeps a log of
+            them. The providers are under contracts that forbid training on the data we send.
+          </p>
+          <table>
+            <tr><th>Who</th><th>What they do</th><th>Where</th></tr>
+            <tr><td>Cloudflare</td><td>Hosting, file storage, email delivery, AI gateway</td><td>EU (AI gateway logs: US)</td></tr>
+            <tr><td>Neon</td><td>Database</td><td>EU (Frankfurt)</td></tr>
+            <tr><td>Deepgram</td><td>Turning audio into text</td><td>EU · keeps nothing</td></tr>
+            <tr><td>LiveKit</td><td>Video calls · our own servers</td><td>EU</td></tr>
+            <tr><td><mark>[LLM PROVIDERS]</mark></td><td>AI analysis</td><td>US</td></tr>
+            <tr><td>Telegram</td><td>Messages, if that is your channel</td><td>Telegram's own</td></tr>
+            <tr><td>Google</td><td>Only if you use Continue with Google</td><td>Google's own</td></tr>
+          </table>
+
+          <h3>How long it is kept</h3>
+          <ul>
+            <li><strong>Session audio</strong> — deleted 30 days after it is transcribed.</li>
+            <li>
+              <strong>Transcripts and AI notes</strong> — until your coach deletes them. They can
+              delete a single session's data or your record entirely.
+            </li>
+            <li>
+              <strong>Backups</strong> — deleted data can survive in database backups for up to 7
+              more days, after which it is gone.
+            </li>
+          </ul>
+          <p>Deletion is permanent. There is no undo and no archive.</p>
+
+          <h3>Your rights</h3>
+          <p>
+            You can ask to see your data, correct it, have it deleted, or withdraw your consent —
+            at any time, and without giving a reason. <strong>Ask your coach</strong>; they act on
+            it. If your coach cannot help, write to <mark>[CONTACT EMAIL]</mark> and we will.
+            Withdrawing consent stops new sessions being scheduled; it does not by itself delete what
+            already exists — ask for deletion too if that is what you want.
+          </p>
+          <p>
+            You also have the right to complain to a data protection authority in
+            <mark>[JURISDICTION]</mark>.
+          </p>
+
+          <h3>Security</h3>
+          <p>
+            Data is encrypted in transit and at rest. Access is limited to what is needed to operate
+            the service. If a breach affects you, we tell your coach without undue delay, and they
+            tell you.
+          </p>
+
+          <h3>Changes</h3>
+          <p>
+            If this policy changes in a way that affects you, your coach is notified and the version
+            at the top of this page changes. The version you agreed to is recorded with your consent.
+          </p>
+        </div>
+
+        <div class="note">
+          UK / RU translations deferred until this English text is accepted — per the ticket
+          decision. The same applies to the coach terms.
+        </div>
+      </section>
+
+      <section data-doc="policy" data-lang="uk" hidden>
+        <h1>Політика конфіденційності</h1>
+        <div class="note">
+          Переклад відкладено до затвердження англійського тексту — рішення цього тікета. Перемкніть
+          на EN.
+        </div>
+      </section>
+
+      <section data-doc="policy" data-lang="ru" hidden>
+        <h1>Политика конфиденциальности</h1>
+        <div class="note">
+          Перевод отложен до утверждения английского текста — решение этого тикета. Переключитесь на
+          EN.
+        </div>
+      </section>
+
+      <!-- ============================== 4 · COACH TERMS ============================== -->
+      <section data-doc="tos" data-lang="en">
+        <h1>Coach terms of service</h1>
+        <p class="lede">
+          Accepted at first Mini App login; the acceptance fact and text version are recorded on
+          Member. Section 6 is the data-processing agreement, kept inside the terms per the ticket
+          decision.
+        </p>
+
+        <div class="card">
+          <h2 style="margin-top: 0">Terms of service</h2>
+          <p class="fine">Version 1.0 · <mark>[EFFECTIVE DATE]</mark></p>
+
+          <h3>1. What Praximo is</h3>
+          <p>
+            Praximo is software for coaches: it schedules sessions, hosts them as video calls,
+            records and transcribes them, and produces AI-written notes — a session summary and a
+            self-review of your coaching against a professional competency framework. It is a tool
+            for you. It never coaches your clients and never speaks to them on your behalf beyond
+            scheduling and reminders.
+          </p>
+          <p>Praximo is operated by <mark>[OPERATOR LEGAL NAME, ADDRESS]</mark> (“we”).</p>
+
+          <h3>2. Your account</h3>
+          <p>
+            Accounts are created by us on request — there is no self-registration. You sign in
+            through Telegram, and your workspace gets its own Telegram bot. Keep your Telegram
+            account secure: anyone with it can reach your workspace. Your account is yours alone and
+            not to be shared.
+          </p>
+
+          <h3>3. Your responsibilities</h3>
+          <ul>
+            <li>
+              You must have a lawful basis for the client data you put into Praximo, and you must not
+              add clients who have not accepted the consent Praximo presents to them.
+            </li>
+            <li>
+              You handle your clients' requests — access, correction, deletion, withdrawal of consent
+              — and you use the tools we give you to act on them. Withdrawal blocks new scheduling;
+              deletion is a separate, explicit action.
+            </li>
+            <li>
+              You review AI output before relying on it. It can be wrong, incomplete, or
+              misleading. It is not medical, psychological, legal, or financial advice, and it must
+              not be used as such.
+            </li>
+            <li>
+              You do not use Praximo unlawfully, or to record people who have not consented to being
+              recorded.
+            </li>
+          </ul>
+
+          <h3>4. AI output</h3>
+          <p>
+            The notes are generated by large language models and are assistive, not authoritative.
+            They may contain errors. You are responsible for how you use them with your clients. The
+            competency framework the self-review draws on is described in our own words; we are not
+            affiliated with, endorsed by, or certified by any coaching federation.
+          </p>
+
+          <h3>5. Availability and fees</h3>
+          <p>
+            Praximo is early-access software. There is no uptime guarantee, features may change, and
+            we may have to interrupt the service for maintenance. It is currently provided
+            <mark>[free of charge / PRICING TERMS]</mark>.
+          </p>
+
+          <h3>6. Processing your clients' data</h3>
+          <p>
+            <strong>You are the controller, we are the processor.</strong> You decide what client
+            data enters Praximo and what happens to it; we process it only to run the service for
+            you and only on your instructions. Using the product is how you give those instructions.
+          </p>
+          <ul>
+            <li>
+              <strong>What we process:</strong> client profiles, session audio, transcripts, AI
+              notes, consent records — for as long as the retention rules in the privacy policy
+              allow.
+            </li>
+            <li>
+              <strong>Subprocessors:</strong> the providers listed in the
+              <a href="#">privacy policy</a>. We may change them; we notify you before a new one
+              starts processing, and you may object by closing your workspace.
+            </li>
+            <li>
+              <strong>No training:</strong> your clients' recordings, transcripts, and notes are
+              never used to train AI models, by us or our providers.
+            </li>
+            <li>
+              <strong>Confidentiality and security:</strong> everyone with access is bound to
+              confidentiality; data is encrypted in transit and at rest; access is limited to what
+              operating the service requires.
+            </li>
+            <li>
+              <strong>Transfers:</strong> processing is in the EU, except AI analysis in the US, as
+              set out in the privacy policy. You accept that transfer by using the service.
+            </li>
+            <li>
+              <strong>Helping you:</strong> we give you tools to answer client requests and to delete
+              data yourself. If a personal data breach affects your clients, we tell you without
+              undue delay and give you what you need to notify them.
+            </li>
+            <li>
+              <strong>Deletion:</strong> deletion through the product is permanent, subject only to
+              the 7-day backup window. When your workspace closes, we delete its data.
+            </li>
+          </ul>
+
+          <h3>7. Your data and ours</h3>
+          <p>
+            The practice data is yours. The software is ours. Nothing here transfers ownership either
+            way.
+          </p>
+
+          <h3>8. Ending it</h3>
+          <p>
+            You can close your workspace at any time by asking us — offboarding is handled by hand.
+            Your bot is released back to you; your workspace data is deleted. We may suspend or close
+            a workspace that breaches these terms.
+          </p>
+
+          <h3>9. Liability</h3>
+          <p>
+            The service is provided as-is. To the extent the law allows, our liability is limited to
+            <mark>[LIABILITY CAP]</mark>. Nothing here limits liability that cannot lawfully be
+            limited.
+          </p>
+
+          <h3>10. Changes and law</h3>
+          <p>
+            We will notify you of material changes to these terms; continuing to use Praximo means
+            accepting them. These terms are governed by the law of
+            <mark>[JURISDICTION]</mark>. Questions: <mark>[CONTACT EMAIL]</mark>.
+          </p>
+        </div>
+
+        <div class="note">
+          Placeholders left open on purpose: operator legal name, jurisdiction, liability cap,
+          pricing, contact address, and the concrete list of LLM providers. All of them wait on the
+          legal-entity decision deferred in #6.
+        </div>
+      </section>
+
+      <section data-doc="tos" data-lang="uk" hidden>
+        <h1>Умови користування для коуча</h1>
+        <div class="note">
+          Переклад відкладено до затвердження англійського тексту — рішення цього тікета. Перемкніть
+          на EN.
+        </div>
+      </section>
+
+      <section data-doc="tos" data-lang="ru" hidden>
+        <h1>Условия использования для коуча</h1>
+        <div class="note">
+          Перевод отложен до утверждения английского текста — решение этого тикета. Переключитесь на
+          EN.
+        </div>
+      </section>
+    </main>
+
+    <script>
+      let doc = "consent"
+      let lang = "en"
+
+      const render = () => {
+        for (const s of document.querySelectorAll("main section")) {
+          s.hidden = !(s.dataset.doc === doc && s.dataset.lang === lang)
+        }
+        for (const b of document.querySelectorAll("#tabs button")) {
+          b.setAttribute("aria-pressed", String(b.dataset.doc === doc))
+        }
+        for (const b of document.querySelectorAll("#langs button")) {
+          b.setAttribute("aria-pressed", String(b.dataset.lang === lang))
+        }
+        document.title = `PROTOTYPE — ${doc} / ${lang} — Praximo privacy copy (#16)`
+      }
+
+      document.getElementById("tabs").addEventListener("click", (e) => {
+        const b = e.target.closest("button")
+        if (!b) return
+        doc = b.dataset.doc
+        render()
+      })
+
+      document.getElementById("langs").addEventListener("click", (e) => {
+        const b = e.target.closest("button")
+        if (!b) return
+        lang = b.dataset.lang
+        render()
+      })
+
+      render()
+    </script>
+  </body>
+</html>
