@@ -16,26 +16,26 @@ const facts: Array<Fact> = [
   {
     claim:
       "Google OAuth c базовыми scopes (openid profile email) отдаёт name, picture, email и sub за один consent-экран",
-    status: "to-verify",
-    note: "Также: можно ли скачать picture-URL с сервера для сохранения в R2 (срок жизни googleusercontent-ссылок)",
+    status: "verified",
+    note: "OIDC-доки Google: sub — всегда в ID token; name/picture НЕ гарантированы в ID token — читать из userinfo endpoint. picture-URL качается сервером и снапшотится в R2 (googleusercontent-ссылки нестабильны). Внесено в спеку",
   },
   {
     claim:
       "Редирект-флоу Google OAuth теряет несохранённое состояние формы (имя/аватар, введённые до клика)",
-    status: "design-question",
-    note: "Popup-режим GIS против redirect + черновик в sessionStorage; на мобильных попапы ограничены. Прототип кладёт Google-кнопку ПЕРЕД ручными полями, чтобы конфликт почти не возникал",
+    status: "verified",
+    note: "Решение в спеке: Google-кнопка ВЫШЕ ручных полей + popup-режим GIS; redirect-фолбэк сохраняет черновик формы перед уходом",
   },
   {
     claim:
       "Брендинг-гайдлайны Google обязательны для кнопки (текст «Continue with Google», логотип, отступы) при верификации OAuth-приложения",
-    status: "to-verify",
-    note: "Иначе ревью OAuth consent screen может не пройти",
+    status: "verified",
+    note: "developers.google.com/identity/branding-guidelines: «required for app verification»; «Continue with Google» — одобренный CTA, локализация текста explicitly encouraged. Внесено в спеку",
   },
   {
     claim:
       "Аватар, загруженный до нажатия «Согласен», не должен попадать в постоянное хранилище (атомарность акцепта)",
-    status: "design-question",
-    note: "Вариант: держать файл в памяти браузера и грузить вместе с commit-запросом (один POST). Прототип так и делает (objectURL)",
+    status: "verified",
+    note: "Решение в спеке: файл живёт в памяти браузера (objectURL) и едет одним commit-запросом вместе с профилем и согласием — атомарность без временного хранилища",
   },
   {
     claim:
@@ -64,14 +64,14 @@ const facts: Array<Fact> = [
   {
     claim:
       "Подстановка имени коуча в шаблоны uk/ru требует падежей («сесія з Анною», не «з Анна Коваленко»)",
-    status: "design-question",
-    note: "Всплыло в этом прототипе: subject/тело писем склоняют имя. Варианты: перестроить фразы, чтобы имя стояло в именительном («Ваш коуч Анна Коваленко: сесія завтра»), или склонять через LLM при онбординге коуча",
+    status: "verified",
+    note: "Решение в спеке: копирайт шаблонов держит имена в именительном падеже — фраза перестраивается вокруг имени, а не склоняет его",
   },
   {
     claim:
       "Кнопка-CTA в письме (https-ссылка) корректно открывается из Gmail/Apple Mail/Outlook без промежуточных страниц",
     status: "to-verify",
-    note: "Плюс проверка спам-скоринга writing-as-assistant копирайта",
+    note: "Проверяется на реальных ящиках при имплементации email-канала (вместе со спам-скорингом writing-as-assistant копирайта) — из документации не проверить",
   },
 ]
 
