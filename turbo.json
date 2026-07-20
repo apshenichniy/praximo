@@ -14,7 +14,7 @@
     },
     "build": {
       "dependsOn": ["^check"],
-      "inputs": ["src/**", "tsconfig.json", "package.json", "wrangler.jsonc"],
+      "inputs": ["src/**", "tsconfig.json", "package.json"],
       "outputs": ["dist/**"]
     }
   }

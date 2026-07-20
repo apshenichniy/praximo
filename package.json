@@ -19,8 +19,9 @@
   "type": "module",
   "scripts": {
     "build": "turbo build",
-    "check": "turbo check && bun run lint && bun run livekit:ops:check",
-    "lint": "oxlint -c .oxlintrc.json apps packages",
+    "check": "turbo check && bun run lint && bun run livekit:ops:check && bun run alchemy:check",
+    "lint": "oxlint -c .oxlintrc.json apps packages alchemy.run.ts",
+    "alchemy:check": "tsc --noEmit -p tsconfig.alchemy.json",
     "livekit:canary": "bash deploy/livekit/ops.sh track-canary",
     "livekit:check": "bash deploy/livekit/check.sh && bun run livekit:ops:check",
     "livekit:control-plane": "bash deploy/livekit/control-plane.sh verify",
@@ -31,21 +32,28 @@
     "livekit:status": "bash deploy/livekit/status.sh && bash deploy/livekit/ops.sh verify",
     "livekit:test": "vitest run deploy/livekit/cleanup.test.ts deploy/livekit/ops.test.ts deploy/livekit/control-plane.test.ts",
     "test": "turbo test && bun run livekit:test",
-    "format": "oxfmt apps packages deploy/livekit/*.ts",
-    "format:check": "oxfmt --check apps packages deploy/livekit/*.ts"
+    "format": "oxfmt apps packages deploy/livekit/*.ts alchemy.run.ts",
+    "format:check": "oxfmt --check apps packages deploy/livekit/*.ts alchemy.run.ts"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "3.1090.0",
+    "@effect/platform-bun": "4.0.0-beta.99",
+    "@effect/platform-node": "4.0.0-beta.99",
+    "@effect/sql-pg": "4.0.0-beta.99",
     "@effect/vitest": "catalog:",
     "@livekit/rtc-node": "0.13.31",
     "@types/node": "24.10.9",
+    "alchemy": "2.0.0-beta.63",
+    "drizzle-kit": "1.0.0-rc.4",
+    "drizzle-orm": "1.0.0-rc.4",
     "effect": "catalog:",
     "livekit-server-sdk": "2.17.0",
     "oxfmt": "0.59.0",
     "oxlint": "catalog:",
     "turbo": "2.10.5",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "ws": "8.21.1"
   },
   "packageManager": "bun@1.3.13"
 }

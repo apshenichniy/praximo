@@ -17,4 +17,5 @@ deploy/livekit/runtime/
 # Tooling caches
 .turbo/
 .wrangler/
+.alchemy/
 *.tsbuildinfo
