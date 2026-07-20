@@ -77,6 +77,10 @@ function BotChat() {
               </>
             )}
           </button>
+          <p className="mt-1.5 text-[11px] text-[#708499]">
+            нативная кнопка Bot API: InlineKeyboardButton.copy_text (≤256
+            символов; это сообщение — 196)
+          </p>
         </Bubble>
 
         {/* the coach's own join reminder */}

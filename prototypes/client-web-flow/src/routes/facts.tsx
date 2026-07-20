@@ -45,6 +45,12 @@ const facts: Array<Fact> = [
   },
   {
     claim:
+      "Кнопка «Скопировать текст» под forward-сообщением в боте — нативная: InlineKeyboardButton.copy_text (CopyTextButton), лимит 1–256 символов",
+    status: "verified",
+    note: "Bot API 8.0; проверено по core.telegram.org/bots/api. Наш forward-текст — 196 символов, влезает; при длинных именах/URL держать ≤256 (иначе кнопка не создастся)",
+  },
+  {
+    claim:
       "navigator.share доступен только в iOS-вебвью Telegram; гейт по Telegram.WebApp.platform === 'ios'",
     status: "verified",
     note: "Fact-check в #27",
