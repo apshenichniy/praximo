@@ -1,6 +1,6 @@
 import { MiniAppSession } from "@praximo/auth"
-import { WorkspaceRepo } from "@praximo/db"
-import { Effect, Layer, ManagedRuntime } from "effect"
+import { Database, WorkspaceRepo } from "@praximo/db"
+import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 
 /**
  * The coach UI, the Telegram Mini App, and the web room (ADR 0002). TanStack
@@ -9,10 +9,23 @@ import { Effect, Layer, ManagedRuntime } from "effect"
  *
  * Effect runs server-side only here — client React stays Effect-free (ADR 0002).
  */
-const AppLive = Layer.mergeAll(WorkspaceRepo.layer, MiniAppSession.layer)
+interface Env {
+  readonly DATABASE_URL: string
+}
 
-/** Exactly one runtime per Worker entrypoint (ADR 0002). */
-const runtime = ManagedRuntime.make(AppLive)
+// WorkspaceRepo now reads through the real Neon connection (#47); Database
+// resolves its `DATABASE_URL` from the app's own ConfigProvider over the Worker
+// env (ADR 0002), not the ambient environment.
+const AppLive = Layer.mergeAll(
+  WorkspaceRepo.layer.pipe(Layer.provide(Database.layer)),
+  MiniAppSession.layer,
+)
+
+const runtimeFromEnv = (env: Env) =>
+  ManagedRuntime.make(Layer.provide(AppLive, ConfigProvider.layer(ConfigProvider.fromUnknown(env))))
+
+/** Exactly one runtime per Worker entrypoint (ADR 0002), built from `env` once. */
+let runtime: ReturnType<typeof runtimeFromEnv> | undefined
 
 const health = Effect.gen(function* () {
   yield* WorkspaceRepo.Service
@@ -26,10 +39,11 @@ const health = Effect.gen(function* () {
  * runtime and the layer graph resolved on real infrastructure. Every other path
  * 404s until the real routing arrives with the Mini App ticket.
  */
-export const handleRequest = async (request: Request): Promise<Response> => {
+export const handleRequest = async (request: Request, env: Env): Promise<Response> => {
   if (new URL(request.url).pathname !== "/health") return new Response(null, { status: 404 })
 
+  runtime ??= runtimeFromEnv(env)
   return Response.json(await runtime.runPromise(health))
 }
 
-export default { fetch: handleRequest } satisfies ExportedHandler
+export default { fetch: handleRequest } satisfies ExportedHandler<Env>

@@ -5,11 +5,11 @@
 //
 // This ticket (#46) brings up the **dev stage**: the three skeleton Workers with
 // their Neon/R2 bindings and typed service bindings, each answering `/health` on
-// its `workers.dev` URL. The pieces the full stack still needs — the migrations
-// dir (#47, once the schema exists), the AI Gateway, the Email Sending
-// subdomain, the pipeline Workflow + cron, and the prod custom domain / zone
-// routes / `--adopt` of the existing `praximo-prod` stack — arrive with the
-// slices that first use them. Their shapes are proven in
+// its `workers.dev` URL. #47 wired the Drizzle migrations dir onto the Neon
+// branch below. The pieces the full stack still needs — the AI Gateway, the
+// Email Sending subdomain, the pipeline Workflow + cron, and the prod custom
+// domain / zone routes / `--adopt` of the existing `praximo-prod` stack — arrive
+// with the slices that first use them. Their shapes are proven in
 // `prototypes/infra-bootstrap` (#32).
 //
 // Workers are declared inline here with string `main` paths, not via the
@@ -51,7 +51,13 @@ export default Alchemy.Stack(
       region: "aws-eu-central-1",
       pgVersion: 17,
     })
-    const branch = yield* Neon.Branch("Branch", { project })
+    // Drizzle migrations auto-apply at deploy over the branch's connectionUri,
+    // tracked in `neon_migrations` and re-applied only when file hashes change
+    // (ADR 0003). db:reset replays the same dir locally against the dev branch.
+    const branch = yield* Neon.Branch("Branch", {
+      project,
+      migrationsDir: "./packages/db/migrations",
+    })
 
     // ── R2: the single shared bucket, EU jurisdiction ──
     const bucket = yield* Cloudflare.R2.Bucket("Uploads", {

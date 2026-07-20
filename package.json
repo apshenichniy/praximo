@@ -19,9 +19,12 @@
   "type": "module",
   "scripts": {
     "build": "turbo build",
-    "check": "turbo check && bun run lint && bun run livekit:ops:check && bun run alchemy:check",
+    "check": "turbo check && bun run lint && bun run livekit:ops:check && bun run alchemy:check && bun run db:reset:check",
     "lint": "oxlint -c .oxlintrc.json apps packages alchemy.run.ts",
     "alchemy:check": "tsc --noEmit -p tsconfig.alchemy.json",
+    "db:generate": "bun run --filter @praximo/db generate",
+    "db:reset": "bun scripts/db-reset.ts",
+    "db:reset:check": "tsc --noEmit -p scripts/tsconfig.json",
     "livekit:canary": "bash deploy/livekit/ops.sh track-canary",
     "livekit:check": "bash deploy/livekit/check.sh && bun run livekit:ops:check",
     "livekit:control-plane": "bash deploy/livekit/control-plane.sh verify",
@@ -32,8 +35,8 @@
     "livekit:status": "bash deploy/livekit/status.sh && bash deploy/livekit/ops.sh verify",
     "livekit:test": "vitest run deploy/livekit/cleanup.test.ts deploy/livekit/ops.test.ts deploy/livekit/control-plane.test.ts",
     "test": "turbo test && bun run livekit:test",
-    "format": "oxfmt apps packages deploy/livekit/*.ts alchemy.run.ts",
-    "format:check": "oxfmt --check apps packages deploy/livekit/*.ts alchemy.run.ts"
+    "format": "oxfmt apps packages deploy/livekit/*.ts scripts/*.ts alchemy.run.ts",
+    "format:check": "oxfmt --check apps packages deploy/livekit/*.ts scripts/*.ts alchemy.run.ts"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "3.1090.0",
