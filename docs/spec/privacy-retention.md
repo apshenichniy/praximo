@@ -18,7 +18,7 @@ MVP privacy posture: consent, retention, deletion, ownership, and data residency
 
 ### Consent text — required elements
 
-The copy itself is a separate ticket; texts are written in the **client's language** (en/uk/ru), and the text version is recorded on the Consent Grant. The text must state:
+The copy itself lives in [privacy-copy.md](privacy-copy.md); texts are written in the **client's language** (en/uk/ru), and the text version is recorded on the Consent Grant. The text must state:
 
 1. Session audio is recorded.
 2. Recordings are analyzed by AI; the results go only to the client's coach.
@@ -65,4 +65,4 @@ The **only US transfer** is LLM analysis: LLM providers under no-training API te
 
 ## Documents
 
-Two static pages on praximo.io — the privacy policy and the coach terms — linked from the client consent and the coach ToS acceptance. The operator / legal-entity name is a **placeholder** until the copy is written.
+Two static pages on praximo.io — the privacy policy and the coach terms — linked from the client consent and the coach ToS acceptance. Copy for both, plus the client consent and the pre-join notice, is in [privacy-copy.md](privacy-copy.md); the coach terms carry the data-processing agreement as a section rather than as a separate document. The operator / legal-entity name and the other legal placeholders stay open until the entity is decided.
