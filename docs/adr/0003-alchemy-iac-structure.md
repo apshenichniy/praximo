@@ -1,14 +1,14 @@
 # ADR 0003: Alchemy IaC structure
 
 - **Status**: accepted
-- **Date**: 2026-07-19
-- **Ticket**: [#18](https://github.com/apshenichniy/praximo/issues/18)
+- **Date**: 2026-07-19 (verified by execution 2026-07-20, [#32](https://github.com/apshenichniy/praximo/issues/32))
+- **Ticket**: [#18](https://github.com/apshenichniy/praximo/issues/18) — bootstrap proven by [#32](https://github.com/apshenichniy/praximo/issues/32)
 
 ## Context
 
 ADR 0002 fixed a **single root Alchemy 2 program** describing all three Workers (`web`, `bot`, `pipeline`), the shared R2 bucket, service bindings, and secrets, parameterized by stage. This ADR details that program: stages and naming, file layout, secrets and configuration flow, how non-Cloudflare pieces (Neon, self-hosted LiveKit) are represented, and the deploy path.
 
-Alchemy 2 (`2.0.0-beta.x`, npm tag `next`) is a ground-up rewrite **on Effect**: the program is an `Alchemy.Stack` running an `Effect.gen` body, Workers are declared as Effect classes next to their runtime code, and cross-worker RPC, Workflows, cron, R2, AI Gateway, and Neon are first-class resources. This matches the project's Effect 4 commitment ideologically — and adds a third deliberate beta to the stack (after TS 7.0 and Effect 4). Facts below were verified against the v2 source (`alchemy-run/alchemy@main`), since beta docs lag.
+Alchemy 2 (`2.0.0-beta.x`, npm tag `next`) is a ground-up rewrite **on Effect**: the program is an `Alchemy.Stack` running an `Effect.gen` body, Workers are declared as Effect classes next to their runtime code, and cross-worker RPC, Workflows, cron, R2, AI Gateway, and Neon are first-class resources. This matches the project's Effect 4 commitment ideologically — and adds a third deliberate beta to the stack (after TS 7.0 and Effect 4). Facts below were first verified against the v2 source (`alchemy-run/alchemy@main`), since beta docs lag, and then **proven by execution against the real Cloudflare + Neon accounts** in [#32](https://github.com/apshenichniy/praximo/issues/32) (`alchemy@2.0.0-beta.63`, deploy → verify → destroy). See [Verification and adoption](#verification-and-adoption-32) for the corrections that surfaced.
 
 Guiding principle for every choice here: **the agent does all devops; the human only supplies a secrets file.**
 
@@ -35,8 +35,8 @@ Guiding principle for every choice here: **the agent does all devops; the human 
 
 ### Deploy and state
 
-- **Dev** deploys from the developer's machine: `alchemy dev` (local workerd + real cloud resources in the personal stage) and `alchemy deploy`.
-- **Prod** deploys from **GitHub Actions on merge to `main`**: `bun alchemy deploy --stage prod --yes`. PRs run `check`/`test` only — no `alchemy plan`, no deploys. **`alchemy destroy` is forbidden in CI.**
+- **Dev** deploys from the developer's machine: `alchemy dev` (local workerd + real cloud resources in the personal stage) and `alchemy deploy`. **Non-interactive runs must set `CI=1`** (e.g. `CI=1 alchemy deploy --stage dev_<user> --yes`) — without it Alchemy expects an interactive `alchemy login` and fails with `AuthError` even when the `.env` creds are present ([#32](https://github.com/apshenichniy/praximo/issues/32)).
+- **Prod** deploys from **GitHub Actions on merge to `main`**: `CI=1 bun alchemy deploy --stage prod --yes`. PRs run `check`/`test` only — no `alchemy plan`, no deploys. **`alchemy destroy` is forbidden in CI.**
 - State store: **`Cloudflare.state()`** (Durable Object + SQLite in our account) — required for CI, survives machine changes; no local state files as source of truth.
 
 ### Secrets and configuration
@@ -63,10 +63,20 @@ Guiding principle for every choice here: **the agent does all devops; the human 
 
 - The self-hosted LiveKit deployment stays an **external system represented only by secrets** (`LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`); Alchemy neither creates nor manages it.
 
+### Verification and adoption (#32)
+
+The whole decision above was **run end-to-end** from the three-variable root `.env` against the real accounts (`alchemy@2.0.0-beta.63`, isolated `dev_probe32` stage, deploy → verify against live APIs → destroy). A reference scaffold and full run log live at [`prototypes/infra-bootstrap`](../../prototypes/infra-bootstrap). What held, and the corrections that surfaced:
+
+- **Everything provisioned unaided**: Neon project (`aws-eu-central-1` ✓) + branch + Drizzle migration; R2 `jurisdiction: eu`; `Cloudflare.state()`; AI Gateway with a cost cap; three Workers + service bindings + a Workflow + a cron trigger; and the `mail.praximo.io` Email Sending subdomain — **no dashboard touched**. `workers.dev` subdomains auto-claim.
+- **Email Sending needs no extra scope and no hidden dashboard step**: the account-scoped Email Sending permission authorized the *zone-scoped* subdomain endpoint (no 403), and the REST call alone provisions and enables a *subdomain* (SPF/DKIM/DMARC/cf-bounce auto-created). #31's two flagged email unknowns are resolved.
+- **`alchemy@2.0.0-beta.63` runtime peer deps** beyond the three creds: `@effect/platform-node`, `@effect/platform-bun`, `@effect/sql-pg` (all `4.0.0-beta.99`), and `drizzle-orm` / `drizzle-kit` (`1.0.0-rc.4`). The platform-agnostic `@effect/platform` has no 4.x line and is not needed on Effect 4. Pin `alchemy` at **exactly `2.0.0-beta.63`**.
+- **A live `praximo-prod` stack already exists** (a prior bootstrap): workers `praximo-prod-{web,api,pipeline}`, the `alchemy-state-store` Worker, the `app.praximo.io` **custom domain** (bound to `praximo-prod-web`), and the `app`/`api` `AAAA 100::` records. The first real root-stack deploy must therefore **`--adopt` the existing state**, not create from zero, or the custom-domain and DNS resources collide (Alchemy refuses to re-attach `app.praximo.io` with a clean error).
+- **`alchemy destroy` is not quite clean for Email Sending**: it removes the subdomain and its SPF/DKIM/cf-bounce records but **leaves `_dmarc.mail.praximo.io`** — delete it manually.
+
 ## Consequences
 
 - The hand-written `wrangler.jsonc` stubs in `apps/*` are deleted; v2 neither generates nor needs wrangler config (typed env is inferred from the stack). `turbo.json` build inputs drop `wrangler.jsonc`; local development runs through `alchemy dev`. Executing this is an implementation ticket, not part of this ADR.
-- `alchemy` is **pinned to an exact beta version** and upgraded deliberately — the third beta in the stack is an accepted, monitored risk.
-- A fresh Neon project means no data migration concerns; the first prod deploy creates the database, branch, and schema in one pass.
+- `alchemy` is **pinned to an exact beta version** (`2.0.0-beta.63`, the version exercised by [#32](https://github.com/apshenichniy/praximo/issues/32)) and upgraded deliberately — the third beta in the stack is an accepted, monitored risk.
+- A fresh Neon project means no data migration concerns; the first prod deploy creates the database, branch, and schema in one pass. **Caveat**: prod was already partially bootstrapped (see [Verification and adoption](#verification-and-adoption-32)), so the first root-stack deploy runs with `--adopt` against the existing `praximo-prod` state rather than creating from zero.
 - One merge to `main` is a full prod release: Workers, routes, DNS, gateway, DB migrations. Rollback is a revert commit plus redeploy.
 - The guiding principle — *the agent does all devops; the human only supplies a secrets file* — **survives contact with the real APIs, with a bounded carve-out**. Every steady-state operation this ADR describes is API-drivable. The exceptions are the acts that mint credentials or attach money, and they are all once-ever: the R2 subscription checkout (a **separate entitlement from Workers Paid**, and a hard blocker on bucket creation), the Workers Paid subscription, the dashboard-minted bootstrap token, Neon organization creation and plan choice, and the first personal Neon key. The only recurring exception is Cloudflare's Email Sending quota-increase form, which should never bind at MVP volume. The authoritative list lives in [#31](https://github.com/apshenichniy/praximo/issues/31) and is amended by whatever [#32](https://github.com/apshenichniy/praximo/issues/32) discovers in execution.
