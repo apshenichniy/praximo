@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "wrangler deploy --dry-run --outdir dist",
+    "build": "wrangler deploy --dry-run --outdir dist src/index.ts --name praximo-bot --compatibility-date 2026-07-19 --compatibility-flags nodejs_compat",
     "check": "tsc --noEmit && oxlint -c ../../.oxlintrc.json src",
     "test": "vitest run --passWithNoTests"
   },

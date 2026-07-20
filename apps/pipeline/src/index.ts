@@ -32,7 +32,15 @@ const health = Effect.gen(function* () {
   return { app: "pipeline", status: "ok" } as const
 })
 
-export const handleRequest = async (_request: Request): Promise<Response> =>
-  Response.json(await runtime.runPromise(health))
+/**
+ * The dev-stack health route (#46): proves the deployed Worker booted its
+ * runtime and the layer graph resolved on real infrastructure. Every other path
+ * 404s until the real LiveKit-webhook routing arrives with the pipeline ticket.
+ */
+export const handleRequest = async (request: Request): Promise<Response> => {
+  if (new URL(request.url).pathname !== "/health") return new Response(null, { status: 404 })
+
+  return Response.json(await runtime.runPromise(health))
+}
 
 export default { fetch: handleRequest } satisfies ExportedHandler
