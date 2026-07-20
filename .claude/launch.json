@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "prototypes/client-web-flow",
       "port": 3000
+    },
+    {
+      "name": "mini-app-screens-prototype",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "prototypes/mini-app-screens",
+      "port": 3001
     }
   ]
 }
