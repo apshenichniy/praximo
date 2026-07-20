@@ -4,64 +4,18 @@ set -euo pipefail
 bundle_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repository_root=$(cd -- "$bundle_directory/../.." && pwd)
 secret_file=${1:-"$repository_root/.env.livekit"}
+control_plane_file=${LIVEKIT_CONTROL_PLANE_FILE:-"$repository_root/.env.livekit-control-plane"}
 
-required_keys=$(
-  printf '%s\n' \
-    LIVEKIT_API_KEY \
-    LIVEKIT_API_SECRET \
-    R2_ACCESS_KEY_ID \
-    R2_SECRET_ACCESS_KEY \
-    REDIS_PASSWORD \
-    | LC_ALL=C sort
-)
+"$bundle_directory/check-secret-file.sh" \
+  "$secret_file" \
+  "$bundle_directory/livekit.env.example" \
+  "LiveKit runtime recovery source"
+"$bundle_directory/check-secret-file.sh" \
+  "$control_plane_file" \
+  "$bundle_directory/control-plane.env.example" \
+  "LiveKit control-plane recovery source"
 
-if [[ ! -r "$secret_file" ]]; then
-  echo "LiveKit recovery source is not readable: $secret_file" >&2
-  exit 66
-fi
-
-if mode=$(stat -f '%Lp' "$secret_file" 2>/dev/null); then
-  :
-else
-  mode=$(stat -c '%a' "$secret_file")
-fi
-
-if [[ "$mode" != 600 ]]; then
-  echo "LiveKit recovery source must have mode 0600: $secret_file" >&2
-  exit 65
-fi
-
-actual_keys=$(
-  awk -F= '
-    /^[[:space:]]*($|#)/ { next }
-    !/^[A-Za-z_][A-Za-z0-9_]*=/ {
-      printf "invalid dotenv entry on line %d\n", NR > "/dev/stderr"
-      invalid = 1
-      next
-    }
-    {
-      key = $1
-      value = substr($0, index($0, "=") + 1)
-      if (length(value) == 0) {
-        printf "empty required value: %s\n", key > "/dev/stderr"
-        invalid = 1
-      }
-      print key
-    }
-    END { if (invalid) exit 1 }
-  ' "$secret_file" | LC_ALL=C sort
-)
-
-if [[ "$actual_keys" != "$required_keys" ]]; then
-  echo "LiveKit recovery source must contain the exact five-key inventory" >&2
-  echo "Expected names:" >&2
-  printf '%s\n' "$required_keys" >&2
-  echo "Actual names:" >&2
-  printf '%s\n' "$actual_keys" >&2
-  exit 65
-fi
-
-for script in bootstrap-host.sh check.sh install.sh render-configs.sh status.sh; do
+for script in bootstrap-host.sh check-secret-file.sh check.sh control-plane.sh install.sh ops.sh render-configs.sh status.sh; do
   bash -n "$bundle_directory/$script"
 done
 
@@ -112,4 +66,4 @@ done < <(
     docker compose -f "$bundle_directory/docker-compose.yaml" config --images
 )
 
-echo "LiveKit owner handoff is valid: five secret names, mode 0600, checksums, rendering, and pinned Compose"
+echo "LiveKit owner handoff is valid: exact runtime/control-plane secrets, mode 0600, checksums, rendering, and pinned Compose"

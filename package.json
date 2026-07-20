@@ -1,10 +1,11 @@
 {
   "name": "praximo",
   "private": true,
-  "type": "module",
-  "packageManager": "bun@1.3.13",
   "workspaces": {
-    "packages": ["apps/*", "packages/*"],
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
     "catalog": {
       "@cloudflare/workers-types": "5.20260719.1",
       "@effect/vitest": "4.0.0-beta.99",
@@ -15,20 +16,36 @@
       "wrangler": "4.112.0"
     }
   },
+  "type": "module",
   "scripts": {
     "build": "turbo build",
-    "check": "turbo check && bun run lint",
+    "check": "turbo check && bun run lint && bun run livekit:ops:check",
     "lint": "oxlint -c .oxlintrc.json apps packages",
-    "livekit:check": "bash deploy/livekit/check.sh",
-    "livekit:status": "bash deploy/livekit/status.sh",
-    "test": "turbo test",
-    "format": "oxfmt apps packages",
-    "format:check": "oxfmt --check apps packages"
+    "livekit:canary": "bash deploy/livekit/ops.sh track-canary",
+    "livekit:check": "bash deploy/livekit/check.sh && bun run livekit:ops:check",
+    "livekit:control-plane": "bash deploy/livekit/control-plane.sh verify",
+    "livekit:rebuild:preflight": "bash deploy/livekit/control-plane.sh rebuild-preflight",
+    "livekit:ovh:firewall": "bash deploy/livekit/control-plane.sh ovh-firewall",
+    "livekit:ovh:images": "bash deploy/livekit/control-plane.sh ovh-images",
+    "livekit:ops:check": "tsc --noEmit -p deploy/livekit/tsconfig.json",
+    "livekit:status": "bash deploy/livekit/status.sh && bash deploy/livekit/ops.sh verify",
+    "livekit:test": "vitest run deploy/livekit/cleanup.test.ts deploy/livekit/ops.test.ts deploy/livekit/control-plane.test.ts",
+    "test": "turbo test && bun run livekit:test",
+    "format": "oxfmt apps packages deploy/livekit/*.ts",
+    "format:check": "oxfmt --check apps packages deploy/livekit/*.ts"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1090.0",
+    "@effect/vitest": "catalog:",
+    "@livekit/rtc-node": "0.13.31",
+    "@types/node": "24.10.9",
+    "effect": "catalog:",
+    "livekit-server-sdk": "2.17.0",
     "oxfmt": "0.59.0",
     "oxlint": "catalog:",
     "turbo": "2.10.5",
-    "typescript": "catalog:"
-  }
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "packageManager": "bun@1.3.13"
 }

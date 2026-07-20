@@ -101,6 +101,7 @@ sed -i 's/^IPV6=.*/IPV6=yes/' /etc/default/ufw
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
+ufw default deny routed
 ufw allow in on tailscale0 to any port 22 proto tcp comment 'SSH over Tailscale only'
 ufw allow proto tcp from 0.0.0.0/0 to any port 80 comment 'ACME HTTP IPv4'
 ufw allow proto tcp from 0.0.0.0/0 to any port 443 comment 'LiveKit HTTPS and TURN TLS IPv4'

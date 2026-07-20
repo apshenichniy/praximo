@@ -1,0 +1,16 @@
+{
+  "extends": "../../packages/tooling/tsconfig/library.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "cleanup.ts",
+    "cleanup.test.ts",
+    "control-plane.ts",
+    "control-plane.test.ts",
+    "ops.ts",
+    "ops.test.ts"
+  ]
+}
