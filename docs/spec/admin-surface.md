@@ -1,61 +1,71 @@
 # Admin Surface — Workspace Creation and Coach On/Offboarding
 
-The operator's surface for creating and managing coach workspaces in MVP. Vocabulary follows [CONTEXT.md](../../CONTEXT.md); it composes with the manual-onboarding provisioning flow in [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) and the deletion semantics in [privacy-retention.md](privacy-retention.md). Decided in wayfinder ticket [#34](https://github.com/apshenichniy/praximo/issues/34).
+The operator's surface for creating and managing coach workspaces in MVP. Vocabulary follows [CONTEXT.md](../../CONTEXT.md); it composes with the manual-onboarding provisioning flow in [ADR 0004](../adr/0004-bot-per-coach-provisioning.md), the coach Mini App auth in [client-onboarding-auth.md](client-onboarding-auth.md), and the deletion semantics in [privacy-retention.md](privacy-retention.md). Decided in wayfinder ticket [#34](https://github.com/apshenichniy/praximo/issues/34).
 
 ## Principle
 
-**The simplest surface that ships MVP, built to grow.** No admin web-app and no separate admin bot in MVP: the operator surface is an **admin mode inside the existing manager bot** ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)) — that bot already exists, is already platform-owned (provisioning + service notices), and needs no new auth surface or Worker. The richer surfaces (an admin section in the Mini App or a web-app) arrive post-MVP, when an assignable admin role exists.
+**The management surface is an admin section in the Mini App, modeled on the BotFather Mini App; the manager bot keeps only what a Mini App cannot do.** The Mini App already exists (the coach app, TanStack Start on the `web` Worker), so the admin surface is an incremental route + role gate, not a new surface or Worker. BotFather's Mini App gives a proven structure to copy — a list of bots, tap into one, edit its fields as a form — which maps almost one-to-one onto workspaces. Forms beat a linear bot conversation for the create/edit operations: every field is visible at once, any field is editable, and the avatar is a native upload.
 
-## The surface: manager bot, admin mode
+The manager bot is **not** the management surface. It retains exactly two jobs it is uniquely good at, and no admin commands:
 
-- The manager bot exposes admin commands **only to the operator's Telegram id** (the admin). Any non-admin update to the manager bot gets the existing provisioning/coach behavior; admin commands are invisible to non-admins.
-- Two entry points, and no others:
-  - `/new` — a step-by-step conversation (grammY conversations) to create a workspace.
-  - `/workspaces` — the workspace list, rendered as one inline-keyboard card per workspace, plus a trailing count line.
-- Loading avatars is a native Telegram photo upload; no web form is involved.
+- **Proactive notifications** that close the onboarding loop (a Mini App cannot push).
+- **Delivering the deep link** as a forwardable message the admin passes to the coach.
+
+## The surface: admin section in the Mini App
+
+Structure follows the BotFather Mini App:
+
+- **Workspace list** — every workspace as a row with its name and bot status; the equivalent of BotFather's bot list.
+- **Workspace page** (tap a row) — the profile as an editable form (name, avatar, description, short description), the status panel (bot connection, dates, terms-accepted), and actions (re-issue deep link, delete). The equivalent of BotFather's per-bot "Edit Bot" page.
+- **Create** — a form that collects the workspace profile and yields a deep link.
+
+Concrete screen layouts are worked out at implementation; this spec fixes the surface, the operation set, and the semantics, not the pixels.
 
 ## Admin identity and auth
 
 - The admin is the **solo operator** (the repo owner) in MVP. There is no admin-role model and no list of admins in the product.
 - **Who is admin lives in the database**, not in config: an admin flag / record keyed by Telegram id, **seeded by the reset/seed script** (below) from a value in the root `.env`. This is deliberately the same shape a future assignable role will use — seeding is simply the only way to grant it in MVP, so no migration is needed when the role graduates.
-- A coach **may also be an admin** (dogfooding): role is resolved per incoming Telegram id, exactly as [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) routes coach vs client inside a coach bot. Being an admin is orthogonal to owning a workspace.
+- **Auth is the simplest case in the whole system.** The admin opens the Mini App from the **manager bot's chat menu button** (`setChatMenuButton` → the admin route of the same TanStack Start app). The manager bot is platform-owned and its token is a stack secret we hold ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)), so its `initData` is validated by **standard HMAC against our own token** — not the third-party Ed25519 scheme the coach path needs to avoid touching per-coach bot tokens ([client-onboarding-auth.md](client-onboarding-auth.md), [#5](https://github.com/apshenichniy/praximo/issues/5)). The validated Telegram id is then gated on the admin flag; a non-admin opening the route gets nothing.
+- A coach **may also be an admin** (dogfooding): the admin section is orthogonal to owning a workspace and is entered from the manager bot, not a coach bot.
 
 ## Operations (MVP set)
 
 | Operation | Surface | Notes |
 |---|---|---|
-| **Create** | `/new` conversation | Collects the workspace profile, provisions nothing itself — hands back a deep link. |
-| **List + status** | `/workspaces` cards | Each card shows bot status, coach language, bot username, terms-accepted, and the four dates below. |
-| **Re-issue deep link** | inline button | Mints a fresh single-use token (TTL 7 days), **annuls the previous one**, updates `invited` date. |
-| **Rename** | inline button → text reply | Renames the workspace only. The bot's Telegram name is **not** changed automatically — it is the coach's property. |
-| **Edit profile** | inline button → conversation | Edit avatar / description / short description; on save, **re-applies branding** to the coach's bot if it is already `connected` (this is the "rebranding on request" of [ADR 0004](../adr/0004-bot-per-coach-provisioning.md)), otherwise branding applies at provisioning. |
-| **Delete** | inline button → typed-name confirmation | Irreversible hard cascade; see below. |
+| **Create** | Mini App create form | Collects the workspace profile; on submit the workspace is `provisioning` and the manager bot delivers the deep link (below). |
+| **List + status** | Mini App workspace list / page | Bot status (`provisioning`→`connected`→`needs re-link`), coach language, bot username, terms-accepted, and the four dates below. |
+| **Re-issue deep link** | Mini App action | Mints a fresh single-use token (TTL 7 days), **annuls the previous one**, updates the `invited` date; the manager bot re-delivers it as a forwardable message. |
+| **Rename** | Mini App profile form | Renames the workspace only. The bot's Telegram name is **not** changed automatically — it is the coach's property. |
+| **Edit profile** | Mini App profile form | Edit avatar / description / short description; on save, **re-applies branding** to the coach's bot if it is already `connected` (the "rebranding on request" of [ADR 0004](../adr/0004-bot-per-coach-provisioning.md)), otherwise branding applies at provisioning. |
+| **Delete** | Mini App action → typed-name confirmation | Irreversible hard cascade; see below. |
 
 **Block / unblock is not a distinct MVP state.** "A coach stops working in the system" is expressed as **delete** in MVP. A richer block semantics (kill-switch that suspends without deleting) is post-MVP — see the map's Out of scope.
 
-### Create flow (`/new`)
+### Create
+
+The create form collects:
 
 1. **Workspace name** (required) — the practice name; the basis for the bot's suggested username and branding.
-2. **Coach language** (required) — chosen from reply-keyboard buttons `English / Українська / Русский` (not free text); sets the coach's UI and artifact language ([domain-model.md](domain-model.md) `Member.language`).
-3. **Avatar** (skippable) — a photo upload for the coach bot's picture.
-4. **Description** (skippable) — the bot's `description`.
-5. **Short description** (skippable) — the bot's `short_description`.
+2. **Coach language** (required) — `en | uk | ru`; sets the coach's UI and artifact language ([domain-model.md](domain-model.md) `Member.language`).
+3. **Avatar** (optional) — the coach bot's picture.
+4. **Description** (optional) — the bot's `description`.
+5. **Short description** (optional) — the bot's `short_description`.
 
-On completion the bot creates the workspace in status `provisioning` and returns a **single-use deep link** (TTL 7 days) to the manager bot, formatted ready to forward to the coach. Everything downstream of the coach opening that link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) (Managed Bots one-tap, or the paste fallback). Skipped profile fields are simply absent at provisioning and can be filled later via **Edit profile**.
+On submit the workspace is created in status `provisioning`. The **manager bot then sends the admin the single-use deep link** (TTL 7 days) as a message, formatted ready to forward to the coach; the Mini App also surfaces the link to copy. Everything downstream of the coach opening that link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) (Managed Bots one-tap, or the paste fallback). Omitted profile fields are simply absent at provisioning and can be filled later via **Edit profile**.
 
 ### Deep link lifecycle
 
-Single-use, **TTL 7 days** — the same constant as the client invite ([client-onboarding-auth.md](client-onboarding-auth.md)), one fewer number to reason about. Re-issue creates a new token and expires the old one. The workspace owner (coach) is fixed by whoever first opens the link and completes provisioning; the admin does not need the coach's Telegram id in advance.
+Single-use, **TTL 7 days** — the same constant as the client invite ([client-onboarding-auth.md](client-onboarding-auth.md)), one fewer number to reason about. Re-issue creates a new token and expires the old one. The workspace owner (coach) is fixed by whoever first opens the link and completes provisioning; the admin does not need the coach's Telegram id in advance. The link always reaches the coach as a **forwardable manager-bot message** — the one delivery job the bot keeps.
 
 ### Delete flow
 
-- Triggered from the card's **Delete** button; the bot asks the admin to reply with the **exact workspace name** to confirm (inline yes/no is too easy to hit by accident for an irreversible hard cascade). A wrong name is rejected; an explicit **Cancel** button aborts.
+- Triggered from the workspace page's **Delete** action; the Mini App requires the admin to type the **exact workspace name** to confirm (a plain button is too easy to hit by accident for an irreversible hard cascade).
 - On confirmation: hard cascade per [privacy-retention.md](privacy-retention.md) (clients, sessions, recordings, artifacts physically removed; R2 objects removed by the async cleanup job; any in-flight pipeline run cancelled first) **and** bot release per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) (`deleteWebhook`, wipe token + bot record; the bot itself stays the coach's property).
 - The manager bot sends the coach a **farewell message**; clients are notified of nothing — the coach's bot simply stops responding (it is now the coach's own bot). No pre-delete block is required.
 
-## Status fields on the list card
+## Status fields on the workspace page
 
-Per workspace, `/workspaces` shows the bot connection status (`provisioning` → `connected` → `needs re-link`), coach language, bot username, terms-accepted, and four dates:
+Per workspace: the bot connection status (`provisioning` → `connected` → `needs re-link`), coach language, bot username, terms-accepted, and four dates:
 
 - **`invited`** — when the current deep link was issued (updated on re-issue).
 - **`created`** — workspace creation.
@@ -64,7 +74,7 @@ Per workspace, `/workspaces` shows the bot connection status (`provisioning` →
 
 ## Notifications — closing the onboarding loop
 
-The manager bot proactively notifies the admin of the events that a solo operator would otherwise have to poll `/workspaces` for:
+The manager bot proactively notifies the admin of the events that the Mini App cannot push and that a solo operator would otherwise have to poll for:
 
 - **Coach opened the link → bot provisioned** (`connected`) — or the coach chose the paste fallback.
 - **Coach's first Mini App login → terms accepted** — onboarding complete, workspace fully active.
@@ -78,5 +88,8 @@ A repo-level script (e.g. `bun run db:reset`) supports MVP development: it **ref
 
 - **Block/unblock as a suspend-without-delete state** and any richer stop-working semantics — post-MVP.
 - **Assignable admin role** (granting admin to another person through the product) — the DB shape is present; only seed-time grant ships.
-- **Admin web-app or Mini App admin section** — the surface graduates here post-MVP.
 - **Post-onboarding self-service rebranding by the coach** — [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) already defers this; admin Edit profile covers the "on request" path.
+
+## Prototype note
+
+The prototype on branch `prototype/admin-surface` (`prototypes/admin-surface-bot.html`) modeled the operation set, the notification loop, and the delete-by-typed-name confirmation as a **manager-bot conversation**. The surface decision moved to a BotFather-style Mini App, so that prototype is **superseded as a UI reference** but kept as a primary source for the operation set and semantics it validated. Concrete Mini App screens are worked out at implementation.

@@ -56,7 +56,7 @@ Domains: `app.praximo.io` (web), `api.praximo.io` (path-routed webhooks/API), `m
 | [web-room-sessions.md](web-room-sessions.md) | Session lifecycle: join eligibility, presence, grace/extension, reconciliation, no-show, recording control — with acceptance criteria |
 | [analysis-artifacts.md](analysis-artifacts.md) | Brief / Debrief / Mentor Review: shape, section structure, delivery, prompt layout |
 | [mini-app.md](mini-app.md) | Coach Mini App: navigation, screens, lifecycle actions |
-| [admin-surface.md](admin-surface.md) | Operator surface (manager-bot admin mode): workspace create/list/rename/edit/delete, deep-link lifecycle, onboarding notifications |
+| [admin-surface.md](admin-surface.md) | Operator surface (BotFather-style Mini App admin section): workspace create/list/rename/edit/delete, deep-link lifecycle, manager-bot notifications |
 | [privacy-retention.md](privacy-retention.md) | Consent policy, retention, deletion, residency, roles |
 | [privacy-copy.md](privacy-copy.md) | The four texts: client consent, pre-join notice, privacy policy, coach ToS (with embedded DPA) |
 
