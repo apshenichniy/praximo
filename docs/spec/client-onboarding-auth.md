@@ -48,7 +48,7 @@ Coach sign-in, client invites, consent capture, and web-room access. Vocabulary 
 4. **Confirmation** — "your coach N set up your profile", plus session details when one is already scheduled.
 
 - **Acceptance is atomic:** Channel created — with a Telegram profile snapshot (name, username, avatar stored in R2) — + Consent Grant appended + Invite → `accepted`. If the client never presses "I agree", nothing is created and the Invite stays `pending` until TTL.
-- A bare `/start` from a stranger (no token, no id match) → polite "this is coach N's assistant bot; ask them for an invite link". The coach's own `/start` opens the coach menu.
+- A bare `/start` from a stranger (no token, no id match) → polite "this is coach N's assistant bot; ask them for an invite". The coach's own `/start` opens the coach menu.
 
 ### Acceptance sequence — web page
 
@@ -65,7 +65,7 @@ For invites delivered outside Telegram, the same token opens `app.praximo.io/inv
 - **Acceptance is atomic**, mirroring the bot: one transaction creates the Channel — kind `email` when an address is present (from the invite or the form), else `manual` — stores the profile (name, avatar, email, `google_sub` when given), appends the Consent Grant, and sets the Invite → `accepted`.
 - A client without an avatar renders as initials in the web room.
 - Token hygiene: `Referrer-Policy: no-referrer` on the page; the invite token is single-use with a 7-day TTL, so it needs no further URL scrubbing.
-- The full flow (invite → acceptance → reminder → join) was validated in prototype [#28](https://github.com/apshenichniy/praximo/issues/28) (`prototypes/client-web-flow`, branch `issue-28-client-web-flow-prototype`) and judged to read as a familiar sign-up.
+- The full flow (invite → acceptance → reminder → join) was validated in prototype [#28](https://github.com/apshenichniy/praximo/issues/28) (`prototypes/client-web-flow`, merged in PR [#29](https://github.com/apshenichniy/praximo/pull/29)) and judged to read as a familiar sign-up.
 
 ## Web-room access
 

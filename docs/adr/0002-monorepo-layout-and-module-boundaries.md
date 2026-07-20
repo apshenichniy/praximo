@@ -41,7 +41,7 @@ npm scope **`@praximo/*`**, all private:
 | `@praximo/db` | Drizzle schema + repository services (Neon). Depends on `domain`; decodes rows into domain types. Apps never touch Drizzle directly. |
 | `@praximo/transcription` | Provider-agnostic STT: `Transcription.Service` interface plus the Deepgram implementation under a `./deepgram` subpath. The provider is chosen by layer at pipeline wiring time. `domain` holds only Track Transcript / Transcript types, no provider knowledge. |
 | `@praximo/analysis` | Prompts + Vercel AI SDK for Brief / Debrief / Mentor Review. |
-| `@praximo/telegram` | Shared grammY client, bot registry, message sending (used by `bot` and `pipeline`). |
+| `@praximo/telegram` | Shared grammY client, bot registry, message sending (used by `bot`; `pipeline` delivers through the `pipeline → bot` service binding and shares only the types). |
 | `@praximo/auth` | First-party Better-Auth `telegram-mini-app` plugin (per the client onboarding spec). |
 | `@praximo/tooling` | tsconfig and oxlint presets. |
 

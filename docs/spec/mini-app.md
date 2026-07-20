@@ -8,6 +8,9 @@ hub-and-spoke "Today" variant won. Vocabulary follows
 [CONTEXT.md](../../CONTEXT.md); entity semantics follow
 [domain-model.md](domain-model.md).
 
+The Mini App opens **fullscreen** (Bot API 8.0 `Telegram.WebApp.requestFullscreen()`, with `fullscreenChanged` handling and safe-area insets in the layout) — decided in
+[#14](https://github.com/apshenichniy/praximo/issues/14).
+
 ## Navigation model
 
 Hub-and-spoke, no tab bar. One home dashboard; every other screen is a

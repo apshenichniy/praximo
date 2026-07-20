@@ -13,7 +13,7 @@ Outline of entities, relationships, and state machines for the MVP spec. Vocabul
 
 ### Workspace
 
-The tenant. One coach's practice.
+The unit of tenancy. One coach's practice.
 
 - `id`, `name`, timestamps
 - **Bot** (1:1, may be embedded or a child table): the workspace's Telegram bot — token/identity, username, connection status. Provisioning mechanism is decided in the bot-per-coach ADR (ticket #9).
@@ -54,7 +54,7 @@ The onboarding entry point, uniform across current and future channel kinds.
 - `workspace_id`, `client_id`, `token` — single-use, TTL 7 days; re-issuing creates a new Invite and expires the old one, copying the delivery target
 - `status`: `pending → accepted`, or `expired`
 - `delivery`: `{ kind: telegram | email | link, address? }` — how the invite reaches the client: Telegram deep link, an invite email the service sends itself, or a web URL the coach forwards manually
-- optional `expected_telegram_user_id` — set when the coach picked the client via Telegram's user picker; enables recognition on a bare `/start`
+- optional `expected_telegram_user_id` — enables recognition on a bare `/start`; the UI that sets it (Telegram user picker) is deferred post-MVP, the field ships so it can be added without migration ([client-onboarding-auth.md](client-onboarding-auth.md))
 - The same token has two forms: the bot deep link and the web URL `app.praximo.io/invite/<token>` (web acceptance page). Accepting is atomic on either door — creates the client's channel (`telegram` with profile snapshot; `email` when an address is known; else `manual`), appends the Consent Grant, sets the client's language and profile. Flow details: [client-onboarding-auth.md](client-onboarding-auth.md).
 
 ### Consent Grant
@@ -62,7 +62,7 @@ The onboarding entry point, uniform across current and future channel kinds.
 Append-only consent record; "does the client have consent" is derived from the latest grant.
 
 - `client_id`, scope (recording + processing), consent-text version, channel it was given through, `granted_at`
-- Captured once at onboarding, minimum friction; revocation is a coach action that appends a revocation grant. Without active consent, new sessions cannot be scheduled. Texts, retention, and deletion semantics: [privacy-retention.md](privacy-retention.md) (decided in ticket #6).
+- Captured once at onboarding, minimum friction; revocation is a coach action that appends a revocation grant. Scheduling is blocked only **after revocation**; while consent is pending (invite outstanding) scheduling is allowed — the client cannot join before accepting. Texts, retention, and deletion semantics: [privacy-retention.md](privacy-retention.md) (decided in ticket #6).
 
 ### Session
 

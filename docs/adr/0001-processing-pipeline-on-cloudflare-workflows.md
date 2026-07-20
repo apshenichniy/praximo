@@ -2,7 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-07-19
-- **Decided in:** wayfinder ticket [#10](https://github.com/apshenichniy/praximo/issues/10), grounded in research [#3](https://github.com/apshenichniy/praximo/issues/3) ([full write-up](../../docs/research/cf-workflows-pipeline.md) on branch `research/cf-workflows-pipeline`)
+- **Decided in:** wayfinder ticket [#10](https://github.com/apshenichniy/praximo/issues/10), grounded in research [#3](https://github.com/apshenichniy/praximo/issues/3) (full write-up in `docs/research/cf-workflows-pipeline.md` on branch `research/cf-workflows-pipeline`)
 
 ## Context
 
@@ -28,11 +28,11 @@ The post-session workflow is triggered by the **session completion event emitted
 
 ### Stages of the post-session workflow
 
-1. **STT, per track, in parallel.** For each track: presign an R2 GET URL → submit to Deepgram (`transcribeUrl`) with a callback URL carrying an unguessable token path segment → `step.waitForEvent` for that track. The callback handler authenticates via the URL token + `dg-token` header, correlates `request_id`, writes the raw transcript JSON to R2, and delivers `{request_id, r2Key}` as the event. Wait timeout: 30 minutes per track; Deepgram has no polling endpoint for async jobs, so the timeout fallback is **bounded re-submission**, not polling.
+1. **STT, per track, in parallel.** For each track: presign an R2 GET URL → submit to Deepgram (`transcribeUrl`) with a callback URL carrying an unguessable token path segment → `step.waitForEvent` for that track. The callback handler authenticates via the URL token + `dg-token` header, correlates `request_id`, writes the track transcript JSON to R2, and delivers `{request_id, r2Key}` as the event. Wait timeout: 30 minutes per track; Deepgram has no polling endpoint for async jobs, so the timeout fallback is **bounded re-submission**, not polling.
 2. **Merge.** Deterministic merge of track transcripts into the Transcript (compact speaker-attributed rendering) in R2; `detected_language` recorded.
 3. **Debrief ∥ Mentor Review.** Generated in parallel, independent failure — one failing does not block the other.
 4. **Brief for the next scheduled session.** Runs strictly after step 3 (the brief consumes the client's prior artifacts *including the two just generated*). Target: the client's next scheduled session. If it already has a brief (scheduled before this session completed), a new version supersedes it. If no next session is scheduled, the step is skipped — the same generator runs via a second, lightweight trigger when that session is created. A client's first session has no brief (no prior artifacts).
-5. **Delivery.** A workflow step sends artifacts as bot messages via grammY directly — no delivery queue.
+5. **Delivery.** A workflow step delivers artifacts as bot messages through the `bot` Worker's service binding — no delivery queue. *(Amended at spec assembly, ticket [#13](https://github.com/apshenichniy/praximo/issues/13): originally "via grammY directly"; [ADR 0002](0002-monorepo-layout-and-module-boundaries.md) fixed the `pipeline → bot` binding for artifact delivery, and [ADR 0004](0004-bot-per-coach-provisioning.md) confines per-coach bot-token decryption to the `bot` Worker, so the pipeline cannot send directly.)*
 
 Each stage boundary updates the owning entity's processing status in Postgres (Recording, Track Transcript, Transcript, Artifact) — statuses live on derived entities per the domain model.
 
@@ -56,7 +56,7 @@ A design-for-cacheability principle, not a cost dependency: prompts are structur
 
 ### Effect 4
 
-Proceed on `effect@beta` behind a thin adapter: per-request `ManagedRuntime` built from `env`, no cross-request fibers (Workflows owns long-running orchestration), Web-API platform code only. A **1-day spike** — v4-beta on workerd via `wrangler dev`, an Effect program inside a workflow step, `WebhookReceiver` on workerd — is tracked as its own map ticket and gates implementation start, not this ADR: if the spike fails, we adapt the Effect patterns (down to v3 if needed); the platform choice stands.
+Proceed on `effect@beta` behind a thin adapter: per-request `ManagedRuntime` built from `env`, no cross-request fibers (Workflows owns long-running orchestration), Web-API platform code only. A **1-day spike** — v4-beta on workerd via `wrangler dev`, an Effect program inside a workflow step, `WebhookReceiver` on workerd — is tracked as its own map ticket and gates implementation start, not this ADR: if the spike fails, we adapt the Effect patterns (down to v3 if needed); the platform choice stands. *(The spike has since passed on all four checks — ticket [#17](https://github.com/apshenichniy/praximo/issues/17), reference code in `prototypes/effect4-workerd`; implementation is unblocked with no v3 fallback.)*
 
 ### Retention deletion
 

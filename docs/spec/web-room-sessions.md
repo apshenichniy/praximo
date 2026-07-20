@@ -1,6 +1,6 @@
 # Web Room Sessions — Entry, Timing, Grace, Reconciliation, No-Show
 
-Executable specification for the meeting lifecycle of a scheduled 1:1 Session: pre-join, join eligibility, presence, timing, grace and extension, room closure, reconciliation, and terminal classification. Vocabulary follows [CONTEXT.md](../../CONTEXT.md); entity structure in [domain-model.md](domain-model.md); consent posture in [privacy-retention.md](privacy-retention.md). Decided in wayfinder ticket [#24](https://github.com/apshenichniy/praximo/issues/24), refining the pre-existing handoff baseline.
+Executable specification for the lifecycle of a scheduled 1:1 Session: pre-join, join eligibility, presence, timing, grace and extension, room closure, reconciliation, and terminal classification. Vocabulary follows [CONTEXT.md](../../CONTEXT.md); entity structure in [domain-model.md](domain-model.md); consent posture in [privacy-retention.md](privacy-retention.md). Decided in wayfinder ticket [#24](https://github.com/apshenichniy/praximo/issues/24), refining the pre-existing handoff baseline.
 
 Out of MVP scope: group sessions, booking/RSVP/rescheduling mechanics, media processing, AI processing, and session **video** recording (video shareable to an external mentor is post-MVP backlog; MVP records audio only).
 
@@ -222,7 +222,7 @@ Timing (per pseudocode §9): room empty at `effectiveEndAt` → cancelled on the
 - Canonical recording = **two audio Track Egress jobs** (one per seat), started by the reconciler actor at joint join (`scheduled → in_progress`). Nothing is recorded during waiting, whatever tracks are published.
 - A reconnect publishes a new track → the actor starts a new egress job for the new publication; a Track may therefore consist of **multiple R2 segments**, ordered by start time and merged downstream (media processing, out of scope here).
 - Recording stops with physical room closure (room deletion terminates egress). Solo tails after one participant leaves are recorded — trimming to joint intervals is deliberately not done (§3).
-- **Egress failure mid-call never touches the meeting lifecycle** (provider failure after `startedAt` never yields `room_unavailable`): the actor attempts a bounded restart of a replacement job for a still-published track; the failure and any coverage gap are recorded on the Recording's processing status (separate lifecycle, [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md)).
+- **Egress failure mid-call never touches the session lifecycle** (provider failure after `startedAt` never yields `room_unavailable`): the actor attempts a bounded restart of a replacement job for a still-published track; the failure and any coverage gap are recorded on the Recording's processing status (separate lifecycle, [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md)).
 - A recording indicator is always visible in the web room (recording is unconditional, [privacy-retention.md](privacy-retention.md)).
 
 ## 12. Room-unavailable evidence
