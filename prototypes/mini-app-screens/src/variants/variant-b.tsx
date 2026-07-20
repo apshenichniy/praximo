@@ -2,6 +2,7 @@
 // Hub-and-spoke: главный экран — дашборд дня (ближайшая сессия, «требует
 // внимания», лента свежих артефактов); всё остальное — drill-in со стеком.
 // Артефакты — первоклассная лента, Mini App как архив того, что доставил бот.
+import { useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
@@ -46,7 +47,8 @@ type Screen =
   | { t: "clients" }
   | { t: "session"; id: string }
   | { t: "client"; id: string }
-  | { t: "artifact"; sessionId: string; kind: ArtifactKind };
+  | { t: "artifact"; sessionId: string; kind: ArtifactKind }
+  | { t: "new" };
 
 export function VariantB() {
   const nav = useStack<Screen>({ t: "home" });
@@ -67,6 +69,7 @@ export function VariantB() {
       {s.t === "artifact" && (
         <ArtifactReader sessionId={s.sessionId} kind={s.kind} back={nav.pop} />
       )}
+      {s.t === "new" && <NewSessionScreen back={nav.pop} />}
     </TgShell>
   );
 }
@@ -253,25 +256,33 @@ function Home({ open }: { open: (s: Screen) => void }) {
         </div>
       </div>
 
-      {/* quick links */}
-      <div className="grid grid-cols-3 gap-2">
-        {(
-          [
-            [{ t: "sessions" } as Screen, "Все сессии", CalendarDays],
-            [{ t: "clients" } as Screen, "Клиенты", Users],
-            [null, "Новая сессия", Plus],
-          ] as const
-        ).map(([screen, label, Icon]) => (
-          <button
-            key={label}
-            type="button"
-            onClick={() => screen && open(screen)}
-            className="flex flex-col items-center gap-1.5 rounded-2xl bg-white py-3.5 text-xs font-medium text-zinc-600 shadow-sm active:bg-zinc-50"
-          >
-            <Icon className="size-5 text-blue-600" />
-            {label}
-          </button>
-        ))}
+      {/* bottom actions: primary «Новая сессия», secondary navigation */}
+      <div className="flex flex-col gap-2">
+        <Button
+          size="lg"
+          className="bg-blue-600 hover:bg-blue-700"
+          onClick={() => open({ t: "new" })}
+        >
+          <Plus /> Новая сессия
+        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              [{ t: "sessions" } as Screen, "Все сессии", CalendarDays],
+              [{ t: "clients" } as Screen, "Клиенты", Users],
+            ] as const
+          ).map(([screen, label, Icon]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => open(screen)}
+              className="flex items-center justify-center gap-2 rounded-2xl bg-white py-3 text-xs font-medium text-zinc-600 shadow-sm active:bg-zinc-50"
+            >
+              <Icon className="size-4.5 text-blue-600" />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -604,15 +615,87 @@ function ArtifactReader({
         {artifact.content && (
           <Md text={artifact.content} className="text-zinc-700" />
         )}
-        <div className="mt-4 flex gap-2 border-t border-zinc-100 pt-3">
-          <Button variant="outline" size="sm" className="flex-1">
+        <div className="mt-4 border-t border-zinc-100 pt-3">
+          <Button variant="outline" size="sm" className="w-full">
             <Send className="size-3.5" /> Открыть в чате
-          </Button>
-          <Button variant="outline" size="sm" className="flex-1">
-            <RefreshCw className="size-3.5" /> Перегенерировать
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- new session (stub) ---------------------------------------------------
+
+function NewSessionScreen({ back }: { back: () => void }) {
+  const [selected, setSelected] = useState("");
+  const [done, setDone] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <BackBar back={back} title="Новая сессия" />
+      {done ? (
+        <div className="rounded-2xl bg-green-50 p-4 text-sm text-green-700">
+          Сессия запланирована (заглушка — ничего не сохраняется). Клиент
+          получит напоминание и ссылку в свой канал.
+          <Button variant="outline" className="mt-3 w-full" onClick={back}>
+            Готово
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Клиент
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {clients.map((client) => (
+              <button
+                key={client.id}
+                type="button"
+                onClick={() => setSelected(client.id)}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-sm",
+                  selected === client.id
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-zinc-200",
+                )}
+              >
+                <Avatar className="size-7">
+                  <AvatarFallback className={avatarColors[client.color]}>
+                    {client.initials}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="flex-1">{client.name}</span>
+                {client.invitePending && (
+                  <span className="text-[10px] text-amber-600">
+                    инвайт не принят
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Дата и время
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="date"
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+              defaultValue={new Date(Date.now() + 86400000)
+                .toISOString()
+                .slice(0, 10)}
+            />
+            <input
+              type="time"
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm"
+              defaultValue="10:00"
+            />
+          </div>
+          <Button size="lg" disabled={!selected} onClick={() => setDone(true)}>
+            Запланировать
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
