@@ -57,6 +57,22 @@ _Avoid_: room (the underlying video room is infrastructure, not a domain concept
 The tokenized URL through which a client enters a session's web room — the client's only credential.
 _Avoid_: room link, invite link
 
+**Pre-Join**:
+The browser preparation phase before entering the web room — camera preview, device checks, countdown. Not presence: nothing starts here.
+_Avoid_: lobby, waiting room (waiting happens inside the room)
+
+**Joint Join**:
+The first moment the coach and client are present in the room simultaneously — the instant the session starts and recording begins.
+_Avoid_: session start (ambiguous with the scheduled time)
+
+**Grace Period**:
+The unplanned overtime after a session's effective end during which those already inside may continue but nobody may enter or rejoin.
+_Avoid_: overtime, buffer
+
+**Extension**:
+The coach-only command that adds 15 minutes to a session's effective end, available only during a grace period.
+_Avoid_: prolongation, overtime request
+
 ### Recording and transcription
 
 **Recording**:

@@ -24,7 +24,7 @@ The alternative considered was a separate always-on container worker (Fly/Railwa
 
 ### Trigger and identity
 
-The LiveKit webhook handler verifies the signed JWT against the raw body, records egress events, and — once the session's recording is complete — creates the post-session workflow instance with **instance id = session id**. Duplicate webhook deliveries and re-triggers dedupe for free; exactly one instance per session. The precise "recording complete" condition (track egress per participant, reconnects producing multiple tracks, `room_finished`) is deferred to web-room/egress implementation prep.
+The post-session workflow is triggered by the **session completion event emitted by the reconciler** — the sole writer of terminal session transitions ([web-room-sessions.md](../spec/web-room-sessions.md), [ADR 0005](0005-session-reconciler-on-durable-objects.md)): the terminal transaction writes an outbox row, and its processing creates the workflow instance with **instance id = session id** for completed sessions that have a recording. Duplicate deliveries and re-triggers dedupe for free; exactly one instance per session. The LiveKit webhook handler still verifies the signed JWT against the raw body and records room/egress events, but routes them to the session's reconciler and to `waitForEvent` steps — it never creates workflow instances directly. *(Amended by ticket [#24](https://github.com/apshenichniy/praximo/issues/24): originally the webhook handler triggered the instance on a "recording complete" condition; single-writer terminalization moved the trigger to the reconciler.)*
 
 ### Stages of the post-session workflow
 

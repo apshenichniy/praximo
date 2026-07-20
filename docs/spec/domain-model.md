@@ -25,6 +25,7 @@ A person inside a workspace, with a role.
 - `workspace_id`, auth identity (coach authenticates via Telegram — see Better-Auth research, ticket #5)
 - `role`: `owner` only in MVP; open set (`assistant`, `co_coach` reserved for group coaching)
 - `language`: `en | uk | ru` — chosen at coach onboarding; the language of the coach's UI and of all artifacts delivered to them
+- `avatar`: R2 object — Telegram profile photo, captured/refreshed at each Mini App login; shown in the web room
 - One coach = one workspace in MVP; the membership table is the extension point, not a promise of multi-workspace support.
 
 ### Client
@@ -33,6 +34,7 @@ A coached person, scoped to one workspace. No account, no credentials.
 
 - `workspace_id`, `name` (the coach sets only the name at creation)
 - `language`: `en | uk | ru` — chosen by the **client** during invite acceptance (pre-selected from Telegram's `language_code`); the language the bot uses to message the client, and the STT fallback hint
+- `avatar`: R2 object — Telegram profile photo, captured at invite acceptance (the channel snapshot is the capture mechanism; the displayed avatar lives on the person); shown in the web room
 
 ### Channel
 
@@ -75,7 +77,7 @@ A scheduled 1:1 conversation, coach ↔ one client.
 1:1 with a completed session. Audio only.
 
 - `session_id`, egress metadata, processing status
-- **Track** (child): one per participant — `participant` (`coach | client`), R2 object reference, duration. Per-track capture gives deterministic speaker attribution.
+- **Track** (child): one per participant — `participant` (`coach | client`), duration. Per-track capture gives deterministic speaker attribution. A track may consist of **multiple R2 segments** (a reconnect starts a new egress job for the new publication); segments are ordered by start time and merged downstream. Egress starts at joint join and stops at physical room closure ([web-room-sessions.md](web-room-sessions.md)).
 - Recording is unconditional — no per-session opt-out. Audio is auto-deleted 30 days after the Transcript is generated; rows keep metadata plus a deleted-by-retention fact ([privacy-retention.md](privacy-retention.md)).
 
 ### Track Transcript
@@ -107,14 +109,13 @@ An LLM-generated analysis document.
 ## Session states
 
 ```
-scheduled ──→ in_progress ──→ completed
-    │
-    ├──→ cancelled
-    └──→ no_show
+scheduled ──→ in_progress ──→ completed(closeReason)
+    └───────────────────────→ cancelled(cancelReason)
 ```
 
-- `cancelled` and `no_show` are terminal.
-- The join flow (web-room implementation prep) is expected to add states (e.g. `ready_to_join`); the machine is deliberately minimal now and open to extension.
+- `completed` and `cancelled` are terminal and irreversible. `closeReason` ∈ `coach_end | empty_room_idle | grace_due | room_cap | next_session_start`; `cancelReason` ∈ `coach_cancelled | no_show(detail) | room_unavailable`, with no-show detail `both_absent | coach_absent | client_absent | no_overlap`. Full semantics, timing model, and reconciliation: [web-room-sessions.md](web-room-sessions.md) (decided in ticket [#24](https://github.com/apshenichniy/praximo/issues/24)).
+- `ready_to_join` is **derived, never persisted**; there are no other states — waiting alone is `scheduled` plus presence.
+- The transition `scheduled → in_progress` happens exactly once at joint join (`startedAt`); terminal transitions are written only by the per-session reconciler ([ADR 0005](../adr/0005-session-reconciler-on-durable-objects.md)).
 - "Processed" is **not** a session state — processing progress lives on Recording / Track Transcript / Transcript / Artifact statuses.
 
 ## Relationships at a glance
@@ -144,6 +145,5 @@ Supported: `en`, `uk`, `ru`.
 
 ## Open edges (deferred, with owners)
 
-- **Join-flow session states** (`ready_to_join`, no-show detection) — web-room implementation prep.
 - **Processing-status shape and retries** — pipeline platform ADR (ticket #10).
 - **Artifact content storage** (DB text vs R2 object) — implementation detail, no domain impact; decide with the pipeline.
