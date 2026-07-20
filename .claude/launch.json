@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "web",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "apps/web",
+      "port": 3000
+    },
+    {
       "name": "client-web-flow-prototype",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "dev"],
