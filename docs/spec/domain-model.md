@@ -7,7 +7,7 @@ Outline of entities, relationships, and state machines for the MVP spec. Vocabul
 - **Workspace is the tenancy boundary.** Every row that isn't the workspace itself carries a `workspace_id` (directly or through its parent). No cross-workspace identity: the same human coached by two coaches is two independent Clients.
 - **Session lifecycle and processing status are separate dimensions.** The session state machine tracks the human-facing lifecycle; each derived entity (recording, transcripts, artifacts) tracks its own processing status. There is no god-status on Session.
 - **Content lives in object storage (R2), metadata in Postgres.** Track transcripts and the combined Transcript are R2 objects; the database holds references, statuses, and metadata. Utterance-level DB queries are not an MVP need.
-- **Channel-agnostic client model, Telegram-only implementation.** The model supports clients without Telegram (future channel kinds); MVP implements only the Telegram channel.
+- **Channel-agnostic client model, three kinds in MVP.** `telegram`, `email`, and `manual` (coach-forwarded links) ship in MVP; the kind set stays open. One Invite/acceptance model covers all paths ([#27](https://github.com/apshenichniy/praximo/issues/27)).
 
 ## Entities
 
@@ -32,27 +32,30 @@ A person inside a workspace, with a role.
 
 A coached person, scoped to one workspace. No account, no credentials.
 
-- `workspace_id`, `name` (the coach sets only the name at creation)
-- `language`: `en | uk | ru` — chosen by the **client** during invite acceptance (pre-selected from Telegram's `language_code`); the language the bot uses to message the client, and the STT fallback hint
-- `avatar`: R2 object — Telegram profile photo, captured at invite acceptance (the channel snapshot is the capture mechanism; the displayed avatar lives on the person); shown in the web room
+- `workspace_id`, `name` (the coach sets only the name at creation; the client may edit it on the web acceptance page)
+- `language`: `en | uk | ru` — chosen by the **client** during invite acceptance (pre-selected from Telegram's `language_code`, or from the invite's language on the web page); the language of messages to the client, and the STT fallback hint
+- `avatar`: R2 object — Telegram profile photo captured at invite acceptance, or uploaded / imported from Google on the web acceptance page (the displayed avatar lives on the person); shown in the web room, initials when absent
+- `google_sub`: optional — captured when the client used **Continue with Google** on the web acceptance page; no OAuth token is stored
+- **Identity keys, dormant:** the Telegram channel's user id, the email channel's address, and `google_sub` are the durable keys a post-MVP client portal matches against to attach Better-Auth accounts additively ([client-onboarding-auth.md](client-onboarding-auth.md) §Principles)
 
 ### Channel
 
 How a client is reached.
 
-- `client_id`, `kind`: `telegram` (MVP) — open set (`email`, … later)
-- kind-specific address (Telegram user/chat id)
-- Telegram profile snapshot captured at acceptance: name, username, avatar (R2 object)
-- exactly one primary channel per client; reminders and join links are delivered to it
+- `client_id`, `kind`: `telegram | email | manual` (MVP) — open set
+- kind-specific address: Telegram user/chat id, or email address; `manual` carries none
+- `telegram` carries the profile snapshot captured at acceptance: name, username, avatar (R2 object)
+- exactly one primary channel per client; reminders and join links are delivered to it — for `manual`, they route to the **coach** as a ready-to-forward message ([client-onboarding-auth.md](client-onboarding-auth.md))
 
 ### Invite
 
 The onboarding entry point, uniform across current and future channel kinds.
 
-- `workspace_id`, `client_id`, `token` — single-use, TTL 7 days; re-issuing creates a new Invite and expires the old one
+- `workspace_id`, `client_id`, `token` — single-use, TTL 7 days; re-issuing creates a new Invite and expires the old one, copying the delivery target
 - `status`: `pending → accepted`, or `expired`
+- `delivery`: `{ kind: telegram | email | link, address? }` — how the invite reaches the client: Telegram deep link, an invite email the service sends itself, or a web URL the coach forwards manually
 - optional `expected_telegram_user_id` — set when the coach picked the client via Telegram's user picker; enables recognition on a bare `/start`
-- In MVP delivered as a deep link into the workspace's bot; accepting is atomic — creates the client's Telegram channel (with profile snapshot), appends the Consent Grant, sets the client's language. Flow details: [client-onboarding-auth.md](client-onboarding-auth.md).
+- The same token has two forms: the bot deep link and the web URL `app.praximo.io/invite/<token>` (web acceptance page). Accepting is atomic on either door — creates the client's channel (`telegram` with profile snapshot; `email` when an address is known; else `manual`), appends the Consent Grant, sets the client's language and profile. Flow details: [client-onboarding-auth.md](client-onboarding-auth.md).
 
 ### Consent Grant
 

@@ -1,12 +1,13 @@
 # Client Onboarding and Authentication — MVP Flow
 
-Coach sign-in, client invites, consent capture, and web-room access. Vocabulary follows [CONTEXT.md](../../CONTEXT.md); entity structure in [domain-model.md](domain-model.md); consent policy in [privacy-retention.md](privacy-retention.md). Decided in wayfinder ticket [#14](https://github.com/apshenichniy/praximo/issues/14).
+Coach sign-in, client invites, consent capture, and web-room access. Vocabulary follows [CONTEXT.md](../../CONTEXT.md); entity structure in [domain-model.md](domain-model.md); consent policy in [privacy-retention.md](privacy-retention.md). Decided in wayfinder tickets [#14](https://github.com/apshenichniy/praximo/issues/14) (core flow), [#25](https://github.com/apshenichniy/praximo/issues/25) (web-room access), and [#27](https://github.com/apshenichniy/praximo/issues/27) (non-Telegram clients).
 
 ## Principles
 
 - **The client experiences onboarding as a continuation of the conversation with their coach.** The bot is the coach's assistant, never "a platform"; every message the client sees is branded as the coach's.
 - **One auth mechanism per actor.** Coach: Better-Auth session established from Telegram Mini App initData. Client: no account, no credentials — tokenized links only (invite token, then join link).
-- **Channel-agnostic model, Telegram-only implementation.** The Invite (token, statuses, TTL) is channel-agnostic; only delivery and the acceptance surface are channel-specific.
+- **Channel-agnostic model, three delivery paths in MVP.** The Invite (token, statuses, TTL) is channel-agnostic; only delivery and the acceptance surface are channel-specific. MVP implements Telegram (the ideal path), **email** (first-class — the service delivers itself), and **manual link-forwarding** by the coach for clients on other messengers. Coach surfaces stay Telegram-only; the telegram-first asymmetry is deliberate ([#25](https://github.com/apshenichniy/praximo/issues/25)).
+- **Identity attestations now, accounts later.** Every acceptance path captures a durable identity key — Telegram user id, Google `sub`, or email address. Client Better-Auth accounts are a dormant post-MVP branch (client portal: session list, booking, questionnaires) that lights up by matching these keys — an additive migration, nothing to redo. No OAuth tokens are stored: portal sign-in will always be a fresh OAuth/initData flow.
 
 ## Coach authentication
 
@@ -23,7 +24,9 @@ Coach sign-in, client invites, consent capture, and web-room access. Vocabulary 
 
 ### Invite
 
-- The Invite always carries a **single-use token, TTL 7 days**. Re-issuing creates a new Invite and expires the old one. A click on an expired or used token → the bot politely asks the client to request a fresh link from the coach.
+- The Invite always carries a **single-use token, TTL 7 days**. Re-issuing creates a new Invite and expires the old one. A click on an expired or used token → a polite "ask your coach for a fresh link" (from the bot or on the web page, depending on the door).
+- **Delivery target:** `Invite.delivery = { kind: telegram | email | link, address? }`, chosen by the coach at client creation — `telegram` (default), `email` with the client's address, or `link` (the coach forwards manually). Re-issue copies the delivery target. The Channel is still created only at acceptance — for email invites, from the invite's address — so the "channel exists only after acceptance" invariant holds on every path.
+- **Two forms of the same token:** the deep link `t.me/<workspace_bot>?start=inv_<token>` for Telegram delivery, and the web URL `https://app.praximo.io/invite/<token>` for everything else — it opens the web acceptance page. Which form to hand out is a delivery-time choice; there is no universal routing page (a deep-link click from a Telegram chat must open the bot instantly).
 - **Optional identity binding:** an Invite may carry an `expected_telegram_user_id`. The bot has two entry doors: `/start inv_<token>`, and a bare `/start` matched by Telegram user id against pending id-bound invites. The same acceptance flow follows either door. **The binding UI (Telegram user picker) is deferred post-MVP** — decided in prototype [#19](https://github.com/apshenichniy/praximo/issues/19); the model field ships so it can be added without migration.
 - **MVP delivery forms** (decided in prototype [#19](https://github.com/apshenichniy/praximo/issues/19)) — three Mini App actions over the same tokenized deep link (`t.me/<workspace_bot>?start=inv_<token>`); the bot cannot message first, so the coach always delivers:
   1. **Share-card (primary):** `savePreparedInlineMessage` + Mini App `shareMessage` (Bot API 8.0) — native chat picker, branded card lands in the coach–client DM "via @bot". The card's button must be a `url` deep link (`web_app` buttons are not allowed in inline messages); read the prepared message's `expiration_date` from the response; handle `USER_DECLINED`.
@@ -35,9 +38,9 @@ Coach sign-in, client invites, consent capture, and web-room access. Vocabulary 
 ### Session-first flow
 
 - Creating a client (**name only** — language is chosen by the client at acceptance) and scheduling the first session happen in one Mini App flow. The first session defaults to kind `intake` ([domain-model.md](domain-model.md)).
-- **Scheduling while consent is pending is allowed.** The client physically cannot join before accepting: the join link is delivered through the bot, and the channel exists only after acceptance (which includes consent). Scheduling is blocked only after **revocation** ([privacy-retention.md](privacy-retention.md)). The client's join link is not exposed to the coach until consent is granted.
+- **Scheduling while consent is pending is allowed.** The client physically cannot join before accepting: the join link is delivered over the client's channel, and the channel exists only after acceptance (which includes consent). Scheduling is blocked only after **revocation** ([privacy-retention.md](privacy-retention.md)). The client's join link is not exposed to the coach until consent is granted — for manual clients, the coach receives the forwardable join link only once the client has accepted.
 
-### Acceptance sequence
+### Acceptance sequence — Telegram bot
 
 1. **`/start`** — the client is recognized by token or by id binding.
 2. **Language ask** — a compact trilingual message with inline buttons EN / UK / RU, pre-selected from Telegram's `language_code`. Sets `client.language`.
@@ -46,6 +49,20 @@ Coach sign-in, client invites, consent capture, and web-room access. Vocabulary 
 
 - **Acceptance is atomic:** Channel created — with a Telegram profile snapshot (name, username, avatar stored in R2) — + Consent Grant appended + Invite → `accepted`. If the client never presses "I agree", nothing is created and the Invite stays `pending` until TTL.
 - A bare `/start` from a stranger (no token, no id match) → polite "this is coach N's assistant bot; ask them for an invite link". The coach's own `/start` opens the coach menu.
+
+### Acceptance sequence — web page
+
+For invites delivered outside Telegram, the same token opens `app.praximo.io/invite/<token>` (the `web` Worker). Deliberately shaped like a familiar sign-up — the client meets standard UX patterns, not a bespoke consent wall:
+
+1. **Language** — EN / UK / RU pick; pre-selected from the invite's language (coach-chosen for email invites), falling back to `Accept-Language`. Sets `client.language`.
+2. **Profile** — name pre-filled from the coach's entry, editable; optional avatar upload (stored in R2); optional email field, hidden when the invite was delivered to an email address (it is already known). A **Continue with Google** button one-tap fills name, avatar, and email from the Google profile and captures the Google `sub`; basic profile scopes only, the OAuth token is discarded, **no account is created**.
+3. **Consent** — the same consent text in the chosen language + privacy policy link; the single "I agree" button is the commit. Until it is pressed, nothing is persisted.
+4. **Confirmation** — "your coach N set up your profile", plus session details when one is already scheduled. On-page only; no confirmation email.
+
+- **Acceptance is atomic**, mirroring the bot: one transaction creates the Channel — kind `email` when an address is present (from the invite or the form), else `manual` — stores the profile (name, avatar, email, `google_sub` when given), appends the Consent Grant, and sets the Invite → `accepted`.
+- A client without an avatar renders as initials in the web room.
+- Token hygiene: `Referrer-Policy: no-referrer` on the page; the invite token is single-use with a 7-day TTL, so it needs no further URL scrubbing.
+- The full flow (invite → acceptance → reminder → join) is validated by its own prototype ticket.
 
 ## Web-room access
 
@@ -66,8 +83,22 @@ Decided in wayfinder ticket [#25](https://github.com/apshenichniy/praximo/issues
 - **Coach link is a bearer capability — accepted residual risk (MVP):** the coach link authenticates the coach role, including the in-room commands (`extend`, `end_session`, `cancel`). Mitigations: delivery only into the coach's private bot chat; validity bounded by the session lifecycle; `extend`/`end_session` additionally require a server-confirmed live connection in the room; rotation above. Residual: a holder of a leaked coach link can enter the room as the coach — visible to the other participant.
 - **URL-leakage mitigations:** `Referrer-Policy: no-referrer` on all room pages; the pre-join page reads the token into memory and strips it from the URL via `history.replaceState` (`sessionStorage` covers same-tab reconnects). No token→cookie exchange in MVP.
 - **Delivery — coach:** bot reminder messages plus a Join button on the session card in the Mini App, both via the web_app trampoline (webview constraint in [web-room-sessions.md](web-room-sessions.md) §14). Cross-device in MVP rides Telegram multi-device: the same bot chat in Telegram Desktop opens the system browser; copy-link is the fallback. PIN sign-in for a browser without Telegram (Better-Auth `device-authorization` plugin) is post-MVP, on the Better-Auth branch of the gate.
-- **Delivery — client:** bot reminder messages via the trampoline. Join links are **channel-agnostic**: for non-Telegram clients the same token URL is delivered over their channel or forwarded manually by the coach — no trampoline needed outside Telegram webviews ([#27](https://github.com/apshenichniy/praximo/issues/27)).
+- **Delivery — client:** over the client's primary channel. Telegram: bot reminder messages via the web_app trampoline. Email: reminder emails carrying the plain https join link — no trampoline needed outside Telegram webviews. Manual: the coach forwards the link from their reminder message (below). Join links are **channel-agnostic** ([#27](https://github.com/apshenichniy/praximo/issues/27)).
 
-## Other channels
+## Email channel
 
-Scope redrawn in [#25](https://github.com/apshenichniy/praximo/issues/25): non-Telegram clients are **in MVP** — a web acceptance page (same invite token, same language + consent steps), manual link-forwarding by the coach for messenger clients, and a first-class email channel. Nothing in the Invite / Channel / Consent Grant model changes. Specified in wayfinder ticket [#27](https://github.com/apshenichniy/praximo/issues/27) (provider research: [#26](https://github.com/apshenichniy/praximo/issues/26)); this document gains the flow once that ticket resolves.
+First-class: the service delivers itself — unlike Telegram, where the bot cannot message first and the coach always delivers the invite. Decided in [#27](https://github.com/apshenichniy/praximo/issues/27); provider research in [#26](https://github.com/apshenichniy/praximo/issues/26).
+
+- **Invite email** — sent by the service on invite creation to `Invite.delivery.address`, from `no-reply@mail.praximo.io`, written as the coach's assistant (the coach's name in the content, consistent with the bot's branding principle). Language: chosen by the coach at client creation, defaulting to the coach's language; the acceptance page pre-selects it and the client may change it. The coach can always copy the web invite URL as a manual fallback.
+- **Reminder emails** — the same reminder events the bot sends to Telegram clients, with the join link. Timing and cadence belong to the reminder-mechanics ticket (map fog); this spec fixes only the routing branch: `telegram → bot, email → email, manual → coach`.
+- **The MVP email set is exactly these two.** No acceptance-confirmation email (the confirmation is the page); no artifact delivery over email (artifacts are coach-only, via the bot).
+- **Provider: Cloudflare Email Service** (public beta) — `send_email` binding, sending subdomain `mail.praximo.io` provisioned from the Alchemy stack, automatic bounce/complaint suppression (nothing else built for bounces in MVP). Templates: React Email components with a `locale` prop, rendered in-Worker. Resend stays the documented drop-in fallback behind the `EmailChannel` service interface. Details: `docs/research/email-provider.md` (branch `research/email-provider`).
+
+## Manual clients (link-forwarding)
+
+For clients on WhatsApp, Viber, or anything else: the coach forwards the links; the platform's job is to make forwarding effortless. Decided in [#27](https://github.com/apshenichniy/praximo/issues/27).
+
+- **Channel kind `manual`, no address** — created when the client accepts via the web page without leaving an email. Preserves the "exactly one primary channel" invariant and makes reminder routing an explicit branch.
+- **Reminders route to the coach:** the coach's bot chat receives the ready-to-forward client-facing message — in the client's language, join link included — marked "forward this to N". No delivery tracking in MVP.
+- **Sharing UX from the Mini App:** copy-link is canonical (clipboard + textarea fallback, per [#19](https://github.com/apshenichniy/praximo/issues/19)). On iOS only, an additional Share button opens the OS share sheet via `navigator.share` — gated by `Telegram.WebApp.platform === 'ios'`, not feature-detection: Android WebView lacks the API entirely, both Telegram Web clients block it via Permissions Policy, and Desktop's WebView2 fails silently (fact-checked in [#27](https://github.com/apshenichniy/praximo/issues/27)). Per-messenger deep-link buttons (`wa.me`, `viber://`) are not shipped.
+- **Self-upgrade:** if the client provides an email on the acceptance page, the channel is `email`, not `manual` — reminders then go direct, and the manual path remains only for clients who skip the field.

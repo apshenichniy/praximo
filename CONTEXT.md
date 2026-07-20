@@ -28,12 +28,16 @@ A person being coached, scoped to one workspace; has no account of their own. Th
 _Avoid_: coachee, customer, user
 
 **Channel**:
-A client's way of being reached (Telegram in MVP; other kinds later). Reminders and join links go to the client's primary channel.
+A client's way of being reached — `telegram`, `email`, or `manual` in MVP (open set). Reminders and join links go to the client's primary channel; a manual client's go to the coach, ready to forward.
 _Avoid_: contact, messenger
 
 **Invite**:
-A tokenized invitation from coach to client. Accepting it creates the client's channel and captures their consent.
+A tokenized invitation from coach to client. Accepting it — in the bot or on the Acceptance Page — creates the client's channel and captures their consent.
 _Avoid_: invite link (that's a Join Link)
+
+**Acceptance Page**:
+The web page where a non-Telegram client accepts an invite: language, profile (name, optional avatar and email, optional Google import), consent. The bot conversation is its Telegram equivalent.
+_Avoid_: sign-up page, registration (no account is created)
 
 **Consent Grant**:
 An append-only record that a client agreed to session recording and processing, captured during onboarding.

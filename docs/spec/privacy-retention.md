@@ -9,10 +9,11 @@ MVP privacy posture: consent, retention, deletion, ownership, and data residency
 
 ## Consent
 
-- **One standing Consent Grant**, captured at client onboarding (append-only, as modeled). Minimum friction: consent is asked once and never re-pushed.
+- **One standing Consent Grant**, captured at client onboarding (append-only, as modeled). Minimum friction: consent is asked once and never re-pushed. Two equal capture surfaces: the Telegram bot conversation and the **web acceptance page** ([#27](https://github.com/apshenichniy/praximo/issues/27)) — same text, same five elements, same atomic commit; the grant records which surface it was given through.
+- **Google profile import** (optional, web acceptance page): with the client's explicit click, name, avatar, email, and the Google `sub` are captured from the Google profile; basic scopes only, the OAuth token is not stored. Disclosed in the privacy policy.
 - **Pre-join notice, not a second consent.** The web room's pre-join screen shows a short notice ("this session is recorded and analyzed by AI for your coach"). Informational only — the join click is logged, no new grant is created.
 - **Recording is unconditional.** No per-session opt-out, no in-room off switch — "session without recording" is out of MVP scope. A recording indicator is always visible in the web room. A client who declines recording is met off-platform (Zoom, Meet, …).
-- **Revocation goes through the coach.** A "client revoked consent" action appends a revocation grant. Scheduling is blocked only **after revocation** (form disabled with a hint); the client remains as a contact. While consent is still *pending* (invite outstanding), scheduling is allowed — the client cannot join before accepting, because the join link is delivered through the bot and the channel exists only after acceptance; the client's join link is not exposed to the coach until consent is granted ([client-onboarding-auth.md](client-onboarding-auth.md)). Existing data is untouched — deletion is a separate, explicit action. Self-service revocation (e.g. a bot command) is post-MVP.
+- **Revocation goes through the coach.** A "client revoked consent" action appends a revocation grant. Scheduling is blocked only **after revocation** (form disabled with a hint); the client remains as a contact. While consent is still *pending* (invite outstanding), scheduling is allowed — the client cannot join before accepting, because the join link is delivered over the client's channel, which exists only after acceptance; the client's join link is not exposed to the coach until consent is granted ([client-onboarding-auth.md](client-onboarding-auth.md)). Existing data is untouched — deletion is a separate, explicit action. Self-service revocation (e.g. a bot command) is post-MVP.
 - **Coach side:** the coach accepts the terms of service and data processing at first Mini App login; the acceptance fact and text version are recorded on Member. No Consent Grant for coaches — it's part of the ToS.
 
 ### Consent text — required elements
@@ -58,6 +59,7 @@ All first-party data stays in the EU:
 - **R2**: `jurisdiction=EU`
 - **LiveKit**: self-hosted in the EU
 - **Deepgram**: EU endpoint `api.eu.deepgram.com` (GA since Dec 2025, no surcharge) with `mip_opt_out=true` — full STT processing inside the EU, zero retention (forgoes the MIP discount; negligible at MVP volumes)
+- **Email (invites and reminders)**: Cloudflare Email Service — **no new subprocessor** (Cloudflare already processes Workers traffic, R2, and AI Gateway logs); no documented region guarantee for email metadata, accepted per research [#26](https://github.com/apshenichniy/praximo/issues/26)
 
 The **only US transfer** is LLM analysis: LLM providers under no-training API terms, via Cloudflare AI Gateway (request logs retained for observability). Disclosed in the consent text and privacy policy.
 
