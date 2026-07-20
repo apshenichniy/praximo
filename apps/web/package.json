@@ -4,22 +4,37 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "wrangler deploy --dry-run --outdir dist src/index.ts --name praximo-web --compatibility-date 2026-07-19 --compatibility-flags nodejs_compat",
+    "dev": "vite dev --port 3000",
+    "build": "vite build",
     "check": "tsc --noEmit && oxlint -c ../../.oxlintrc.json src",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
+    "@fontsource-variable/geist": "catalog:",
     "@praximo/auth": "workspace:*",
     "@praximo/db": "workspace:*",
     "@praximo/domain": "workspace:*",
-    "effect": "catalog:"
+    "@tanstack/react-router": "catalog:",
+    "@tanstack/react-start": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "shadcn": "catalog:",
+    "tailwind-merge": "catalog:",
+    "tailwindcss": "catalog:",
+    "tw-animate-css": "catalog:"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "catalog:",
-    "@effect/vitest": "catalog:",
     "@praximo/tooling": "workspace:*",
+    "@tailwindcss/vite": "catalog:",
+    "@tanstack/router-plugin": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "wrangler": "catalog:"
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

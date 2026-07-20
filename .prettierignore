@@ -1,0 +1,5 @@
+# oxfmt reads .gitignore and .prettierignore by default (there is no
+# .oxfmtignore). This file carves out generated sources that are committed —
+# so tsc has them without a build — but must never be hand-formatted, since the
+# generator overwrites them on every build.
+**/routeTree.gen.ts

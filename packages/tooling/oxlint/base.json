@@ -13,5 +13,5 @@
     // `_tag` is the Effect idiom for tagged errors and unions.
     "no-underscore-dangle": "off"
   },
-  "ignorePatterns": [".repos/**", "prototypes/**", "dist/**"]
+  "ignorePatterns": [".repos/**", "prototypes/**", "dist/**", "**/routeTree.gen.ts"]
 }

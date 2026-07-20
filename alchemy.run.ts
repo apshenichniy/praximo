@@ -84,8 +84,14 @@ export default Alchemy.Stack(
       },
     })
 
-    const web = yield* Cloudflare.Worker("Web", {
-      main: "./apps/web/src/index.ts",
+    // The `web` app is a TanStack Start project (#77): Alchemy builds it with
+    // its own injected Cloudflare Vite plugin (single `vite build`, server
+    // bundle + client assets), so `rootDir` points at the app and there is no
+    // `main`. `memo` is left at its default — hashing the full non-gitignored
+    // tree over-rebuilds but never skips a needed rebuild; scoping it is a
+    // later efficiency tweak. The binding graph is unchanged (ADR 0002/0003).
+    const web = yield* Cloudflare.Website.Vite("Web", {
+      rootDir: "./apps/web",
       compatibility,
       env: {
         PIPELINE: pipeline,
