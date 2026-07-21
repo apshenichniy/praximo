@@ -19,7 +19,7 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
 
 ### Bot roles
 
-- The **manager bot** (platform-owned) does provisioning and service notifications to the coach only ("bot needs re-link", permanent pipeline failures). After onboarding it is mostly silent.
+- The **manager bot** (platform-owned; Telegram display name `PraximoMother`, dev instance suffixed) does provisioning and service notifications to the coach only ("bot needs re-link", permanent pipeline failures). After onboarding it is mostly silent.
 - The **coach's own bot is the single surface** for both the coach (Mini App entry, briefs / debriefs / mentor reviews as messages) and their clients. This is the "workspace bot" of the client-onboarding spec.
 
 ### Provisioning flow (within manual coach onboarding)
@@ -61,6 +61,15 @@ Resolve the incoming update's Telegram user id: workspace owner → coach experi
 
 Clients interact with the coach-branded bot through plain messages plus tokenized web-room links. **No client-facing Mini App in MVP** — the Mini App (schedule, sessions/clients) is coach-only, attached to every coach bot via `setChatMenuButton` with the same TanStack Start URL; the workspace is resolved from `initData` (the bot id is available to the `validate3rd` auth path).
 
+### Mini App entry points and the Main Mini App gap
+
+Each bot can surface its Mini App two ways, both shown to the user as **"Open"** (the BotFather pattern):
+
+- **In-chat menu button** (`setChatMenuButton`, `web_app`) — an ordinary Bot API call, set **programmatically** with the bot's token: on the manager bot at setup (`scripts/set-menu-button.ts`, [#80](https://github.com/apshenichniy/praximo/issues/80)) and on each coach bot at provisioning (step 3 above), labelled `"Open"`.
+- **Chat-list "Open" button** (Telegram's *Main Mini App*) — as of **Bot API 10.2 (July 2026) there is no API to set it**; `has_main_web_app` is read-only in `getMe`, and the URL is configured **only in @BotFather, per bot, by the bot's owner**. Managed (coach) bots appear in the owner's @BotFather, so a coach *can* enable it — but the platform cannot do it for them.
+
+Consequence for provisioning: the automated pipeline sets the **menu button** for every coach bot; the chat-list "Open" is **optional coach self-service** and onboarding is never blocked on it ([#86](https://github.com/apshenichniy/praximo/issues/86)). For the platform-owned manager bot the operator enables the Main Mini App once, by hand ([#84](https://github.com/apshenichniy/praximo/issues/84)). This is a Telegram limitation, not deferred work.
+
 ### Explicitly skipped
 
 - **Restricted-access mode** (Bot API 10.0 `BotAccessSettings`): onboarding is manual, a "private beta" state per coach bot buys nothing in MVP.
@@ -76,3 +85,4 @@ On workspace deletion: `deleteWebhook`, wipe the token and the bot record. The b
 - Telegram messaging rate limits apply **per bot, i.e. per coach** — a scalability win that a shared bot would forfeit.
 - Facts the research could not verify from primary sources (exact `KeyboardButtonRequestManagedBot` field list, `replaceManagedBotToken` parameters, any cap on bots per manager bot) are checked empirically during the bot Worker's implementation spike; none of them gate this decision.
 - A coach switching between flows (paste → managed or back) is out of MVP; re-onboarding covers it manually.
+- **Revisit:** the Main Mini App (chat-list "Open") has no programmatic setter (Bot API 10.2). Watch the [Bot API changelog](https://core.telegram.org/bots/api-changelog) ([#83](https://github.com/apshenichniy/praximo/issues/83)); if Telegram ships a setter, fold it into provisioning so coach bots get the chat-list "Open" automatically.
