@@ -13,15 +13,26 @@ The coach surface and the admin surface are **deliberately separated where it ma
 Separated at the layers a human perceives:
 
 - **Bot account / chat.** Coach-facing notifications (sessions, artifacts, service notices) are delivered by the coach's **own branded bot** ([ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md), [ADR 0004](../adr/0004-bot-per-coach-provisioning.md)). Admin-facing notifications (onboarding loop, deep links) are delivered by the **manager bot** (below). For a dual-role person these are **two distinct bot chats** — a session notification never arrives from the same account that reports "a coach onboarded."
-- **Mini App entry point.** The coach opens the coach Mini App from **their coach bot's** menu button; the admin opens the admin Mini App from the **manager bot's** menu button. Different bots, different `initData`, different auth, different `.admin`-themed experience. A coach never sees an admin entry inside the coach app.
+- **Mini App entry point.** The coach opens the coach Mini App from **their coach bot**; the admin opens the admin Mini App from the **manager bot** (Telegram display name `PraximoMother`). Each bot exposes its app two ways — both labelled **"Open"**, both opening that bot's own app (see [Entry points and the Open button](#entry-points-and-the-open-button)). Different bots, different `initData`, different auth, different `.admin`-themed experience. A coach never sees an admin entry inside the coach app.
 
 Unified where only the codebase is affected:
 
 - **One TanStack Start app, one `web` Worker.** The `/admin` route tree shares the deploy, the build, and reusable primitives with the coach app, but nothing a coach sees. The wins of a separate app (independent deploy cadence, zero admin bytes in the coach bundle) are marginal for a solo dev and the second is already covered by code-splitting; they do not justify a fourth Worker plus the ADR 0002 / IaC cost. Refinement of ticket [#34](https://github.com/apshenichniy/praximo/issues/34): the "one app, not a new Worker" decision stands; this section makes the intended isolation (own route tree, own theme, English-only) explicit.
 
+### Entry points and the Open button
+
+Each bot surfaces its Mini App two ways, both shown to the user as **"Open"** (matching the BotFather Mini App) and both opening that bot's own app — for the manager bot, the admin app; for a coach bot, the coach app:
+
+- **In-chat menu button** (`setChatMenuButton`, `web_app`) — an ordinary Bot API call, so it is set **programmatically** with the bot's token. The manager bot's is set at setup (`scripts/set-menu-button.ts`, [#80](https://github.com/apshenichniy/praximo/issues/80)); each coach bot's at provisioning ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md), [#86](https://github.com/apshenichniy/praximo/issues/86)). Its label is `"Open"`.
+- **Chat-list "Open" button** (Telegram's *Main Mini App*) — the button next to the bot in the dialog list, like @BotFather's. As of **Bot API 10.2 (July 2026) there is no API to set it**: `has_main_web_app` is read-only in `getMe`, and the URL is configured **only in @BotFather, per bot, by the bot's owner**.
+
+This makes the "Open" pattern **two-layered**: the menu button is automatable everywhere; the chat-list Main Mini App is a manual @BotFather step. For the platform-owned manager bot the operator enables it once, by hand ([#84](https://github.com/apshenichniy/praximo/issues/84)). For coach bots it is **optional coach self-service** — a coach may enable it in their own @BotFather (managed bots appear there), but the platform cannot do it for them and onboarding never blocks on it ([#86](https://github.com/apshenichniy/praximo/issues/86)). This is a Telegram limitation, not deferred work; revisit only if Telegram ships a setter ([#83](https://github.com/apshenichniy/praximo/issues/83)).
+
+**Known limitation:** a non-admin who has the manager-bot chat — e.g. a coach who received their deep link there — sees the chat-list "Open", lands on the admin app, and is rejected by the admin-flag gate. Accepted in MVP (the admin set is one or two people; see [Rollout phases](#rollout-phases)).
+
 ## Language
 
-**The admin surface is English-only.** The admin is the solo operator; the trilingual (`en | uk | ru`) machinery that serves coaches and clients does not apply to admin routes. Admin routes never touch the i18n layer, and admin copy is authored in English only. (Coach-language selection *within* the Create form is data about the coach being provisioned — [domain-model.md](domain-model.md) `Member.language` — not the language of the admin UI.)
+**The admin surface is English-only.** The admins are a tiny internal set (see [Admin identity and auth](#admin-identity-and-auth)); the trilingual (`en | uk | ru`) machinery that serves coaches and clients does not apply to admin routes. Admin routes never touch the i18n layer, and admin copy is authored in English only. (Coach-language selection *within* the Create form is data about the coach being provisioned — [domain-model.md](domain-model.md) `Member.language` — not the language of the admin UI.)
 
 The manager bot is **not** the management surface. It retains exactly two jobs it is uniquely good at, and no admin commands:
 
@@ -40,10 +51,22 @@ Concrete screen layouts are worked out at implementation; this spec fixes the su
 
 ## Admin identity and auth
 
-- The admin is the **solo operator** (the repo owner) in MVP. There is no admin-role model and no list of admins in the product.
-- **Who is admin lives in the database**, not in config: an admin flag / record keyed by Telegram id, **seeded by the reset/seed script** (below) from a value in the root `.env`. This is deliberately the same shape a future assignable role will use — seeding is simply the only way to grant it in MVP, so no migration is needed when the role graduates.
-- **Auth is the simplest case in the whole system.** The admin opens the Mini App from the **manager bot's chat menu button** (`setChatMenuButton` → the admin route of the same TanStack Start app). The manager bot is platform-owned and its token is a stack secret we hold ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)), so its `initData` is validated by **standard HMAC against our own token** — not the third-party Ed25519 scheme the coach path needs to avoid touching per-coach bot tokens ([client-onboarding-auth.md](client-onboarding-auth.md), [#5](https://github.com/apshenichniy/praximo/issues/5)). The validated Telegram id is then gated on the admin flag; a non-admin opening the route gets nothing.
-- A coach **may also be an admin** (dogfooding): the admin section is orthogonal to owning a workspace and is entered from the manager bot, not a coach bot.
+- Admin is a **flat, seeded set of Telegram ids** — a handful, not a role hierarchy: no admin-role model, no super-admin, and no way to grant admin *inside* the product. In practice the set is one or two people ([Rollout phases](#rollout-phases)).
+- **Who is admin lives in the database**, not in config: an admin flag / record keyed by Telegram id, **seeded by the reset/seed script** (below) from `ADMIN_TELEGRAM_IDS` in the root `.env` (a comma-separated list, [#85](https://github.com/apshenichniy/praximo/issues/85)). This is deliberately the same shape a future assignable role will use — seeding is simply the only way to grant it in MVP, so no migration is needed when the role graduates.
+- **Auth is the simplest case in the whole system.** The admin opens the Mini App from the **manager bot** (`PraximoMother`) via either "Open" surface ([Entry points and the Open button](#entry-points-and-the-open-button)), both landing on the admin route of the same TanStack Start app. The manager bot is platform-owned and its token is a stack secret we hold ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)), so its `initData` is validated by **standard HMAC against our own token** — not the third-party Ed25519 scheme the coach path needs to avoid touching per-coach bot tokens ([client-onboarding-auth.md](client-onboarding-auth.md), [#5](https://github.com/apshenichniy/praximo/issues/5)). The validated Telegram id is then gated on the admin flag; a non-admin opening the route gets nothing.
+- A coach **may also be an admin** (dogfooding): the admin section is orthogonal to owning a workspace and is entered from the manager bot, not a coach bot. Such a person carries two hats on one Telegram id — an admin record *and* workspace ownership — checked independently (admin app → admin flag; coach app → workspace membership).
+
+### Rollout phases
+
+The admin set is seeded, so it simply changes with `ADMIN_TELEGRAM_IDS` across the build's phases; nothing in the product needs to know which phase it is:
+
+| Phase | Admin set | Notes |
+|---|---|---|
+| **1 — active development** | operator only | The operator is admin **and** dogfoods as a coach (own workspace + coach bot) — the dual-role case, self-tested. |
+| **2 — feature-complete build** | operator + spouse | The spouse joins as a coach *and* is granted admin; both test and iterate. |
+| **3 — MVP / production** | spouse (primary), operator optional | Real coaches onboard; the spouse is the standing admin. Coaches are **not** admins. |
+
+Re-seeding is the only mechanism: edit `ADMIN_TELEGRAM_IDS` and re-run the seed. All ids in the set are equal — "primary" is organisational, not a privilege level.
 
 ## Operations (MVP set)
 
@@ -99,7 +122,7 @@ The manager bot proactively notifies the admin of the events that the Mini App c
 
 ## Dev tooling: reset + admin seed
 
-A repo-level script (e.g. `bun run db:reset`) supports MVP development: it **refuses to run against `prod`** (hardcoded stage guard, [ADR 0003](../adr/0003-alchemy-iac-structure.md) stages `dev_<user>` / `prod`), recreates/clears the dev Neon branch, runs Drizzle migrations, and **seeds the admin** from the root `.env` (the admin's Telegram id). This is dev tooling, not an operation of the admin surface itself, and it is the sole way an admin flag is granted in MVP.
+A repo-level script (e.g. `bun run db:reset`) supports MVP development: it **refuses to run against `prod`** (hardcoded stage guard, [ADR 0003](../adr/0003-alchemy-iac-structure.md) stages `dev_<user>` / `prod`), recreates/clears the dev Neon branch, runs Drizzle migrations, and **seeds the admins** from the root `.env` (`ADMIN_TELEGRAM_IDS`, a comma-separated list — [#85](https://github.com/apshenichniy/praximo/issues/85)). This is dev tooling, not an operation of the admin surface itself, and it is the sole way an admin flag is granted in MVP.
 
 ## Explicitly out of MVP
 
