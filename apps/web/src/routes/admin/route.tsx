@@ -1,6 +1,7 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router"
 
 import { AdminThemeShell } from "@/components/admin-theme-shell.tsx"
+import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import adminCss from "@/styles/admin.css?url"
 
 // The admin surface is a self-contained route tree (admin-surface.md): its own
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/admin")({
 function AdminLayout() {
   return (
     <AdminThemeShell>
+      <TelegramFullscreen />
       <Outlet />
     </AdminThemeShell>
   )
