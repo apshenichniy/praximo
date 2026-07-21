@@ -27,6 +27,7 @@
 import * as Alchemy from "alchemy"
 import * as Cloudflare from "alchemy/Cloudflare"
 import * as Neon from "alchemy/Neon"
+import * as Config from "effect/Config"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 
@@ -97,6 +98,13 @@ export default Alchemy.Stack(
         PIPELINE: pipeline,
         UPLOADS: bucket,
         DATABASE_URL: branch.connectionUri,
+        // The manager bot's token, held as a stack secret (ADR 0004): the admin
+        // route validates its Mini App `initData` by HMAC against this same token
+        // (admin-surface.md §Auth). Resolved from the root `.env` at deploy and
+        // bound as secret_text. The `bot` Worker's own binding arrives with #78;
+        // until then the menu-button setup (scripts/set-menu-button.ts) is the
+        // sole consumer of this token off-Worker.
+        MANAGER_BOT_TOKEN: Config.redacted("MANAGER_BOT_TOKEN"),
       },
     })
 
