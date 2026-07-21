@@ -5,5 +5,5 @@
     "rootDir": "..",
     "types": ["node"]
   },
-  "include": ["db-reset.ts"]
+  "include": ["*.ts"]
 }
