@@ -36,11 +36,44 @@ export const resolveStage = (env: {
   throw new Error("cannot resolve stage: set APP_STAGE, or USER for the dev_<user> default")
 }
 
+/** Parse the root `.env` admin seed into validated Telegram identity keys. */
+export const parseAdminTelegramIds = (value: string): ReadonlyArray<TelegramId> => {
+  if (value.trim() === "") {
+    throw new Error("ADMIN_TELEGRAM_IDS must contain at least one Telegram id")
+  }
+
+  return value.split(",").map((rawEntry, index) => {
+    const entry = rawEntry.trim()
+    const entryNumber = index + 1
+
+    if (entry === "") {
+      throw new Error(`ADMIN_TELEGRAM_IDS entry ${entryNumber} is empty`)
+    }
+    if (!/^[1-9]\d*$/.test(entry)) {
+      throw new Error(
+        `ADMIN_TELEGRAM_IDS entry ${entryNumber} ("${entry}") must be a positive decimal Telegram id`,
+      )
+    }
+
+    return TelegramId.make(entry)
+  })
+}
+
+/** Seed every configured platform admin; repository upserts make duplicates idempotent. */
+export const seedAdmins = Effect.fn("Reset.seedAdmins")(function* (
+  telegramIds: ReadonlyArray<TelegramId>,
+) {
+  const admins = yield* AdminRepo.Service
+  yield* Effect.forEach(telegramIds, (telegramId) => admins.upsertByTelegramId(telegramId), {
+    discard: true,
+  })
+})
+
 export interface ResetConfig {
   readonly stage: string
   readonly databaseUrl: string
-  /** The raw admin Telegram id from `.env`; branded at the seed boundary below. */
-  readonly adminTelegramId: string
+  /** The raw comma-separated admin Telegram ids from `.env`. */
+  readonly adminTelegramIds: string
   readonly migrationsFolder: string
 }
 
@@ -51,6 +84,8 @@ export interface ResetConfig {
  */
 export const runReset = async (config: ResetConfig): Promise<void> => {
   assertNotProd(config.stage)
+  // Reject malformed seed input before the destructive schema reset begins.
+  const adminTelegramIds = parseAdminTelegramIds(config.adminTelegramIds)
 
   const client = Database.makeClient(config.databaseUrl)
 
@@ -60,10 +95,7 @@ export const runReset = async (config: ResetConfig): Promise<void> => {
   await migrate(client, { migrationsFolder: config.migrationsFolder })
 
   await Effect.runPromise(
-    Effect.gen(function* () {
-      const admins = yield* AdminRepo.Service
-      yield* admins.upsertByTelegramId(TelegramId.make(config.adminTelegramId))
-    }).pipe(
+    seedAdmins(adminTelegramIds).pipe(
       Effect.provide(AdminRepo.layer),
       // Reuse the one client already built for the DDL, rather than opening a second.
       Effect.provide(Layer.succeed(Database.Service, Database.Service.of({ client }))),
