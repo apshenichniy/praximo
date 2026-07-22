@@ -3,7 +3,7 @@ import { assertNotProd, resolveStage, runReset } from "../packages/db/src/reset.
 
 /**
  * `bun run db:reset` — recreate the dev Neon branch, run migrations, and seed the
- * admin from the root `.env` (admin-surface.md §Dev tooling). Refuses to run
+ * admins from the root `.env` (admin-surface.md §Dev tooling). Refuses to run
  * against `prod` (ADR 0003). The safety-critical logic lives in `@praximo/db`'s
  * pure `reset.ts`; this runner only supplies the environment and logs.
  */
@@ -26,8 +26,8 @@ console.log(`db:reset — clearing and re-seeding stage ${stage}`)
 await runReset({
   stage,
   databaseUrl: requireEnv("DATABASE_URL"),
-  adminTelegramId: requireEnv("ADMIN_TELEGRAM_ID"),
+  adminTelegramIds: requireEnv("ADMIN_TELEGRAM_IDS"),
   migrationsFolder,
 })
 
-console.log(`db:reset — done (stage ${stage}): schema rebuilt, admin seeded`)
+console.log(`db:reset — done (stage ${stage}): schema rebuilt, admins seeded`)
