@@ -93,7 +93,7 @@ The create form collects:
 4. **Description** (optional) — the bot's `description`.
 5. **Short description** (optional) — the bot's `short_description`.
 
-On submit the workspace is created in status `awaiting setup`. The **manager bot then sends the admin the single-use deep link** (TTL 7 days) as a message, formatted ready to forward to the coach; the Mini App also surfaces the link to copy. Everything downstream of the coach opening that link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) (Managed Bots one-tap, or the paste fallback). Omitted profile fields are simply absent at provisioning and can be filled later via **Edit profile**.
+On submit the workspace is created in status `awaiting setup`. The **manager bot then sends the admin the single-use deep link** (TTL 7 days) as a message, formatted ready to forward to the coach; the Mini App also surfaces the link to copy. Everything downstream of the coach opening that link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) through Managed Bots one-tap. Manual token ingestion is a separate follow-up ([#95](https://github.com/apshenichniy/praximo/issues/95)). Omitted profile fields are simply absent at provisioning and can be filled later via **Edit profile**.
 
 ### Default coach-bot avatar operations
 
@@ -138,7 +138,7 @@ Per workspace: the bot connection status (`awaiting setup` → `connected` → `
 
 The manager bot proactively notifies the admin of the events that the Mini App cannot push and that a solo operator would otherwise have to poll for:
 
-- **Coach opened the link → bot provisioned** (`connected`) — or the coach chose the paste fallback.
+- **Coach completed Managed Bots setup → bot connected** (`connected`).
 - **Coach's first Mini App login → terms accepted** — onboarding complete, workspace fully active.
 - **`needs re-link`** — a coach bot returned 401 (token revoked); status flips and the coach is notified per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md). Consistent with [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md), there is no manual retry surface in the product; recovery is coach-side re-linking.
 

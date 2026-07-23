@@ -19,6 +19,7 @@ export interface CreateInput {
   readonly avatarR2Key?: string
   readonly description?: string
   readonly shortDescription?: string
+  readonly issuedByTelegramId: string
   readonly now: Date
 }
 
@@ -29,6 +30,7 @@ const InviteSchema = Schema.Struct({
   issuedAt: Schema.instanceOf(Date),
   expiresAt: Schema.instanceOf(Date),
   usedAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  issuedByTelegramId: Schema.String,
 })
 
 const AggregateSchema = Schema.Struct({
@@ -57,6 +59,7 @@ export interface ReissueInput {
   readonly workspaceId: WorkspaceId
   readonly expectedInviteId: CoachOnboardingInviteId
   readonly requestId: string
+  readonly issuedByTelegramId: string
   readonly now: Date
 }
 
@@ -139,6 +142,7 @@ export const layer = Layer.effect(
               issuedAt: schema.coachOnboardingInvite.issuedAt,
               expiresAt: schema.coachOnboardingInvite.expiresAt,
               usedAt: schema.coachOnboardingInvite.usedAt,
+              issuedByTelegramId: schema.coachOnboardingInvite.issuedByTelegramId,
               name: schema.workspace.name,
               avatarR2Key: schema.workspace.avatarR2Key,
               description: schema.workspace.description,
@@ -184,6 +188,7 @@ export const layer = Layer.effect(
           issuedAt: row.issuedAt,
           expiresAt: row.expiresAt,
           ...(row.usedAt === null ? {} : { usedAt: row.usedAt }),
+          issuedByTelegramId: row.issuedByTelegramId,
         },
       }).pipe(
         Effect.mapError((cause) => new QueryFailed({ operation: "loadByInviteId.decode", cause })),
@@ -284,6 +289,7 @@ export const layer = Layer.effect(
               "workspace_id",
               "request_id",
               "request_fingerprint",
+              "issued_by_telegram_id",
               "issued_at",
               "expires_at"
             )
@@ -292,6 +298,7 @@ export const layer = Layer.effect(
               "id",
               ${input.requestId},
               ${input.requestFingerprint},
+              ${input.issuedByTelegramId},
               ${input.now},
               ${expiresAt}
             from inserted_workspace
@@ -357,6 +364,7 @@ export const layer = Layer.effect(
               issuedAt: schema.coachOnboardingInvite.issuedAt,
               expiresAt: schema.coachOnboardingInvite.expiresAt,
               usedAt: schema.coachOnboardingInvite.usedAt,
+              issuedByTelegramId: schema.coachOnboardingInvite.issuedByTelegramId,
             }),
         catch: (cause) => new QueryFailed({ operation: "markUsed", cause }),
       })
@@ -369,6 +377,7 @@ export const layer = Layer.effect(
           issuedAt: row.issuedAt,
           expiresAt: row.expiresAt,
           ...(row.usedAt === null ? {} : { usedAt: row.usedAt }),
+          issuedByTelegramId: row.issuedByTelegramId,
         }).pipe(
           Effect.mapError((cause) => new QueryFailed({ operation: "markUsed.decode", cause })),
         )
@@ -420,6 +429,7 @@ export const layer = Layer.effect(
           requestFingerprint: fingerprint,
           name: replay.aggregate.workspace.name,
           coachLanguage: replay.aggregate.owner.language,
+          issuedByTelegramId: input.issuedByTelegramId,
           now: input.now,
         })).aggregate
       }
@@ -468,6 +478,7 @@ export const layer = Layer.effect(
               "workspace_id",
               "request_id",
               "request_fingerprint",
+              "issued_by_telegram_id",
               "issued_at",
               "expires_at"
             )
@@ -476,6 +487,7 @@ export const layer = Layer.effect(
               "workspace_id",
               ${input.requestId},
               ${fingerprint},
+              ${input.issuedByTelegramId},
               ${input.now},
               ${expiresAt}
             from expired_previous
@@ -492,6 +504,7 @@ export const layer = Layer.effect(
           requestFingerprint: fingerprint,
           name: reconciled.aggregate.workspace.name,
           coachLanguage: reconciled.aggregate.owner.language,
+          issuedByTelegramId: input.issuedByTelegramId,
           now: input.now,
         })).aggregate
       }

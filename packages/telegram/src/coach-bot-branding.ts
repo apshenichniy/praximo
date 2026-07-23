@@ -33,16 +33,44 @@ export class ApplyFailed extends Schema.TaggedErrorClass<ApplyFailed>()(
   },
 ) {}
 
-/**
- * Ticket #52 owns connected-bot credential acquisition and the real Telegram
- * adapter. Until that layer exists, profile persistence remains authoritative
- * and applying branding is a truthful successful no-op.
- */
+export const RpcResult = Schema.TaggedUnion({
+  Applied: {},
+  Failed: {},
+})
+export type RpcResult = typeof RpcResult.Type
+
+export interface RpcClient {
+  readonly applyCoachBotBranding: (profile: Profile) => Promise<unknown>
+}
+
+/** Local use has no credential boundary; production uses the bot Worker RPC. */
 export const layer = Layer.sync(Service, () =>
   Service.of({
-    apply: Effect.fn("CoachBotBranding.apply")(() => Effect.succeed("skipped" as const)),
+    apply: Effect.fn("CoachBotBranding.apply")((profile) =>
+      Effect.fail(new ApplyFailed({ workspaceId: profile.workspaceId })),
+    ),
   }),
 )
+
+export const rpcLayer = (client: RpcClient) =>
+  Layer.succeed(
+    Service,
+    Service.of({
+      apply: Effect.fn("CoachBotBranding.Rpc.apply")(function* (profile: Profile) {
+        const result = yield* Effect.tryPromise({
+          try: () => client.applyCoachBotBranding(profile),
+          catch: () => new ApplyFailed({ workspaceId: profile.workspaceId }),
+        })
+        const decoded = yield* Schema.decodeUnknownEffect(RpcResult)(result).pipe(
+          Effect.mapError(() => new ApplyFailed({ workspaceId: profile.workspaceId })),
+        )
+        if (RpcResult.guards.Failed(decoded)) {
+          return yield* new ApplyFailed({ workspaceId: profile.workspaceId })
+        }
+        return "applied" as const
+      }),
+    }),
+  )
 
 export interface TestInterface extends Interface {
   readonly applied: () => Effect.Effect<ReadonlyArray<Profile>>

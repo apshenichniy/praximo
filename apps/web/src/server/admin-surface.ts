@@ -361,6 +361,7 @@ export const layer = Layer.effect(
           ? {}
           : { shortDescription: input.shortDescription }),
         ...(avatarR2Key === undefined ? {} : { avatarR2Key }),
+        issuedByTelegramId: recipient,
         now,
       })
       const preflight = yield* onboarding
@@ -603,6 +604,7 @@ export const layer = Layer.effect(
           workspaceId,
           expectedInviteId,
           requestId,
+          issuedByTelegramId: recipient,
           now: new Date(yield* Clock.currentTimeMillis),
         })
         .pipe(
