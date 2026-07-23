@@ -60,6 +60,48 @@ describe("bot worker", () => {
     expect(response.status).toBe(401)
   })
 
+  it("initializes the manager bot before dispatching a webhook update", async () => {
+    const methods: Array<string> = []
+    const telegramFetch: typeof fetch = async (input) => {
+      const method = new URL(input.toString()).pathname.split("/").at(-1) ?? ""
+      methods.push(method)
+      if (method !== "getMe") throw new Error(`unexpected Telegram method ${method}`)
+      return Response.json({
+        ok: true,
+        result: {
+          id: 5100,
+          is_bot: true,
+          first_name: "Praximo Manager",
+          username: "PraximoManagerBot",
+          can_join_groups: false,
+          can_read_all_group_messages: false,
+          supports_inline_queries: false,
+        },
+      })
+    }
+    const response = await handleRequest(
+      new Request("https://bot.praximo.test/telegram/manager", {
+        method: "POST",
+        headers: { "x-telegram-bot-api-secret-token": env.MANAGER_BOT_WEBHOOK_SECRET },
+        body: JSON.stringify({
+          update_id: 51,
+          message: {
+            message_id: 1,
+            date: 0,
+            chat: { id: 123456789, type: "private" },
+            from: { id: 123456789, is_bot: false, first_name: "Ada" },
+            text: "hello",
+          },
+        }),
+      }),
+      env,
+      telegramFetch,
+    )
+
+    expect(response.status).toBe(200)
+    expect(methods).toEqual(["getMe"])
+  })
+
   it.effect("maps a successful manager-bot send to the RPC contract", () =>
     Effect.gen(function* () {
       const recipient = TelegramId.make("123456789")
