@@ -3,6 +3,8 @@
 // purpose — every method here is exercised by the fullscreen flow below; widen
 // it only when a screen needs more.
 
+import { APP_DARK_COLOR } from "@/lib/theme.ts"
+
 export interface TelegramWebApp {
   /** Signed launch credential sent to the server for validation. */
   readonly initData: string
@@ -16,6 +18,12 @@ export interface TelegramWebApp {
   expand: () => void
   /** True when the host client implements at least the given Bot API version. */
   isVersionAtLeast: (version: string) => boolean
+  /** Sets the native header and upper-overscroll color. */
+  setHeaderColor: (color: string) => void
+  /** Sets the native WebView background and lower-overscroll color. */
+  setBackgroundColor: (color: string) => void
+  /** Sets the native bottom bar and Android navigation-bar color. */
+  setBottomBarColor: (color: string) => void
   /** Requests true fullscreen — Bot API 8.0; a no-op on older clients. */
   requestFullscreen: () => void
   readonly BackButton: TelegramBackButton
@@ -82,6 +90,27 @@ export const attachBackButton = (webApp: TelegramWebApp, onBack: () => void): ((
  * event into a client that can't honour it.
  */
 export const FULLSCREEN_MIN_VERSION = "8.0"
+export const CUSTOM_HEADER_COLOR_MIN_VERSION = "6.9"
+export const BOTTOM_BAR_COLOR_MIN_VERSION = "7.10"
+
+/**
+ * Paint Telegram-owned surfaces before hiding its native loading placeholder.
+ * The page stylesheet cannot reach the host header or its overscroll regions,
+ * so these bridge calls must precede `ready()`.
+ */
+export const revealTelegramWebApp = (webApp: TelegramWebApp): void => {
+  webApp.setBackgroundColor(APP_DARK_COLOR)
+
+  if (webApp.isVersionAtLeast(CUSTOM_HEADER_COLOR_MIN_VERSION)) {
+    webApp.setHeaderColor(APP_DARK_COLOR)
+  }
+  if (webApp.isVersionAtLeast(BOTTOM_BAR_COLOR_MIN_VERSION)) {
+    webApp.setBottomBarColor(APP_DARK_COLOR)
+  }
+
+  webApp.ready()
+  webApp.expand()
+}
 
 /**
  * Take the Mini App fullscreen: mark ready, expand, and — on Bot API 8.0+ —
@@ -94,8 +123,7 @@ export const enterFullscreen = (
   webApp: TelegramWebApp,
   onFullscreenChanged: () => void,
 ): (() => void) | undefined => {
-  webApp.ready()
-  webApp.expand()
+  revealTelegramWebApp(webApp)
 
   if (!webApp.isVersionAtLeast(FULLSCREEN_MIN_VERSION)) return undefined
 

@@ -1,11 +1,10 @@
 import { notFound } from "@tanstack/react-router"
 import { loadDevelopmentAdminInitData } from "@/server/admin-workspaces.functions.ts"
-import { loadTelegramWebApp, readTelegramInitData } from "@/lib/telegram.ts"
+import { loadTelegramWebApp, readTelegramInitData, revealTelegramWebApp } from "@/lib/telegram.ts"
 
 export const resolveAdminInitData = async (): Promise<string> => {
   const webApp = await loadTelegramWebApp()
-  webApp?.ready()
-  webApp?.expand()
+  if (webApp) revealTelegramWebApp(webApp)
 
   const initData = readTelegramInitData(webApp)
   if (initData) return initData

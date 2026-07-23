@@ -22,6 +22,7 @@ describe("global application theme", () => {
     expect(root).toContain(`background:\${darkThemeColor}`)
     expect(root).toContain("color:${darkForeground}")
     expect(root).toContain('name: "theme-color", content: darkThemeColor')
+    expect(root).toContain("scripts: [{ src: TELEGRAM_WEBAPP_SRC }]")
     expect(adminRoute).not.toContain("admin.css")
   })
 

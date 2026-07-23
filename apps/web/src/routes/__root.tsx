@@ -1,9 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query"
 import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router"
 
+import { TELEGRAM_WEBAPP_SRC } from "@/lib/telegram.ts"
+import { APP_DARK_COLOR } from "@/lib/theme.ts"
 import appCss from "@/styles/app.css?url"
 
-const darkThemeColor = "#191c1d"
+const darkThemeColor = APP_DARK_COLOR
 const darkBackground = "oklch(0.148 0.004 228.8)"
 const darkForeground = "oklch(0.987 0.002 197.1)"
 const criticalDarkCss = `html,body{background:${darkThemeColor};background:${darkBackground};color:${darkForeground};color-scheme:dark;font-family:"Nunito Sans Variable",ui-sans-serif,system-ui,sans-serif}`
@@ -21,6 +23,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { title: "Praximo" },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
+    scripts: [{ src: TELEGRAM_WEBAPP_SRC }],
   }),
   notFoundComponent: () => (
     <main className="container mx-auto p-4 pt-16">

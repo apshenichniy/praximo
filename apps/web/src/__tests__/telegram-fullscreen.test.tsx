@@ -9,9 +9,11 @@ import {
   attachBackButton,
   enterFullscreen,
   readTelegramInitData,
+  revealTelegramWebApp,
   type TelegramBackButton,
   type TelegramWebApp,
 } from "@/lib/telegram.ts"
+import { APP_DARK_COLOR } from "@/lib/theme.ts"
 
 // The fullscreen requirement (mini-app.md: opens fullscreen via Bot API 8.0
 // `requestFullscreen`, with `fullscreenChanged` handling + safe-area insets)
@@ -37,6 +39,9 @@ const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => 
   ready: vi.fn(),
   expand: vi.fn(),
   isVersionAtLeast: () => true,
+  setHeaderColor: vi.fn(),
+  setBackgroundColor: vi.fn(),
+  setBottomBarColor: vi.fn(),
   requestFullscreen: vi.fn(),
   BackButton: fakeBackButton(),
   onEvent: vi.fn(),
@@ -67,12 +72,21 @@ describe("Telegram admin adapters", () => {
 })
 
 describe("enterFullscreen", () => {
-  it("expands and requests fullscreen on a Bot API 8.0+ host", () => {
+  it("sets dark host chrome before revealing and requesting fullscreen", () => {
     const webApp = fakeWebApp()
     const onChange = vi.fn()
 
     const detach = enterFullscreen(webApp, onChange)
 
+    expect(webApp.setHeaderColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    expect(webApp.setBottomBarColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    const [readyOrder = Number.POSITIVE_INFINITY] = vi.mocked(webApp.ready).mock.invocationCallOrder
+    expect(vi.mocked(webApp.setHeaderColor).mock.invocationCallOrder[0]).toBeLessThan(readyOrder)
+    expect(vi.mocked(webApp.setBackgroundColor).mock.invocationCallOrder[0]).toBeLessThan(
+      readyOrder,
+    )
+    expect(vi.mocked(webApp.setBottomBarColor).mock.invocationCallOrder[0]).toBeLessThan(readyOrder)
     expect(webApp.ready).toHaveBeenCalledOnce()
     expect(webApp.expand).toHaveBeenCalledOnce()
     expect(webApp.requestFullscreen).toHaveBeenCalledOnce()
@@ -95,6 +109,18 @@ describe("enterFullscreen", () => {
     expect(webApp.onEvent).not.toHaveBeenCalled()
     expect(onChange).not.toHaveBeenCalled()
     expect(detach).toBeUndefined()
+  })
+
+  it("uses only host color methods supported by the reported Bot API version", () => {
+    const webApp = fakeWebApp({
+      isVersionAtLeast: (version) => version === "6.1",
+    })
+
+    revealTelegramWebApp(webApp)
+
+    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    expect(webApp.setHeaderColor).not.toHaveBeenCalled()
+    expect(webApp.setBottomBarColor).not.toHaveBeenCalled()
   })
 })
 
