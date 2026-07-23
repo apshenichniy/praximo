@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@praximo/domain": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "grammy": "catalog:"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

@@ -49,6 +49,7 @@ export default Alchemy.Stack(
   },
   Effect.gen(function* () {
     const stage = yield* Alchemy.Stage
+    const managerBotToken = Config.redacted("MANAGER_BOT_TOKEN")
 
     // ── Neon: one EU project, one branch per stage ──
     // region MUST be explicit — the default is aws-us-east-1 and the resource
@@ -71,13 +72,17 @@ export default Alchemy.Stack(
       locationHint: "weur",
     })
 
-    // ── Workers: the web → pipeline → bot service-binding chain (ADR 0002) ──
+    // ── Workers: typed service-binding graph (ADR 0002) ──
     // `branch.connectionUri` is a Redacted value, so it lands as a secret_text
     // binding, not plain text.
     const bot = yield* Cloudflare.Worker("Bot", {
       main: "./apps/bot/src/index.ts",
       compatibility,
-      env: { UPLOADS: bucket, DATABASE_URL: branch.connectionUri },
+      env: {
+        UPLOADS: bucket,
+        DATABASE_URL: branch.connectionUri,
+        MANAGER_BOT_TOKEN: managerBotToken,
+      },
     })
 
     const pipeline = yield* Cloudflare.Worker("Pipeline", {
@@ -105,15 +110,17 @@ export default Alchemy.Stack(
       ...(stage === canonicalDevStage ? { domain: canonicalDevWebDomain } : {}),
       env: {
         PIPELINE: pipeline,
+        // Native RPC, not public HTTP: admin operations use this narrow
+        // capability to send through the bot-owned manager-bot transport.
+        MANAGER_BOT: bot,
         UPLOADS: bucket,
         DATABASE_URL: branch.connectionUri,
         // The manager bot's token, held as a stack secret (ADR 0004): the admin
         // route validates its Mini App `initData` by HMAC against this same token
         // (admin-surface.md §Auth). Resolved from the root `.env` at deploy and
-        // bound as secret_text. The `bot` Worker's own binding arrives with #78;
-        // until then the menu-button setup (scripts/set-menu-button.ts) is the
-        // sole consumer of this token off-Worker.
-        MANAGER_BOT_TOKEN: Config.redacted("MANAGER_BOT_TOKEN"),
+        // bound as secret_text. The bot Worker receives the same stack secret
+        // for outbound delivery; per-coach tokens remain runtime database data.
+        MANAGER_BOT_TOKEN: managerBotToken,
       },
     })
 
