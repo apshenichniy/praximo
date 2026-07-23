@@ -14,7 +14,10 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
 
 ### Mechanism
 
-- **Primary: Managed Bots one-tap provisioning.** **Permanent fallback: manual BotFather token paste** (coaches with existing bots, or Managed Bots outages).
+- **MVP: Managed Bots one-tap provisioning only.** Manual BotFather token
+  ingestion is a separate follow-up
+  ([#95](https://github.com/apshenichniy/praximo/issues/95)) with an
+  ownership-proof handshake; it is not a second path inside this slice.
 - **No shared-single-bot mode**, not even as a degraded state: it breaks branding and forfeits per-coach rate limits.
 
 ### Bot roles
@@ -28,15 +31,25 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
 2. Manager bot shows a `request_managed_bot` keyboard button (equivalently the `t.me/newbot/{manager}/{suggested}` deep link) with a **suggested username derived from the workspace name**; the coach picks the final name/username in Telegram's own dialog.
 3. On `Update.managed_bot` / `ManagedBotCreated`, everything is automatic: `getManagedBotToken` → encrypt and store the token → branding → `setWebhook` with a fresh per-bot secret → `setChatMenuButton` pointing at the Mini App. No manual steps after the tap.
 
-### Fallback flow
+Opening `/start` does not reserve the workspace. It records a resumable request;
+the first subsequent `managed_bot` update from a requester atomically claims the
+still-current invite. The bot id is persisted before Telegram configuration
+begins, and a repeated update resumes the same installation. Only the final
+database transaction sets the owner and `connected`, consumes the invite, and
+queues the manager-bot notification.
 
-- The coach pastes a BotFather token as a message to the manager bot — no web form in MVP. We validate with `getMe`, require a `/start` handshake from the coach's own Telegram account on the new bot before activation (ownership is otherwise unverifiable), delete the chat message containing the token after ingestion, then run the same downstream pipeline (branding, webhook, menu button).
+### Follow-up fallback
+
+- Ticket [#95](https://github.com/apshenichniy/praximo/issues/95) owns this
+  path. The intended contract is: validate with `getMe`, require a `/start`
+  ownership handshake, delete the credential-bearing message, then reuse the
+  downstream configuration pipeline.
 
 ### Webhook architecture and storage
 
 - One `bot` Worker serves all bots, path-routed: `api.praximo.io/telegram/{bot_id}` per coach bot, `api.praximo.io/telegram/manager` for the manager bot (subscribed to `managed_bot` in `allowed_updates`).
-- Every inbound request is verified against the bot's `secret_token` via the `X-Telegram-Bot-Api-Secret-Token` header.
-- Bot records live in **Postgres (Neon)**: bot id, encrypted token, webhook secret, workspace id, status, cached `botInfo` (passed to the grammY `Bot` constructor to skip the per-request `getMe`). The Worker keeps a **per-isolate in-memory cache** of bot records, invalidated on token rotation. No KV/D1 tier in MVP.
+- Every inbound request is verified against the bot's `secret_token` via the `X-Telegram-Bot-Api-Secret-Token` header. Coach-bot rows retain only its SHA-256 hash; the plaintext secret exists only while `setWebhook` is called.
+- Bot records live in **Postgres (Neon)**: bot id, encrypted token, webhook-secret hash, workspace id, status, cached `botInfo` (passed to the grammY `Bot` constructor to skip the per-request `getMe`). The Worker keeps a **per-isolate in-memory cache** of bot records, invalidated on token rotation. No KV/D1 tier in MVP.
 
 ### Token security
 
@@ -55,7 +68,9 @@ Resolve the incoming update's Telegram user id: workspace owner → coach experi
 ### Branding
 
 - Name and username are the coach's choice in the one-tap dialog. Avatar, description, and short description are set **programmatically from the workspace profile** (collected during manual onboarding), in the coach's language.
-- Post-onboarding rebranding is out of MVP (handled manually on request).
+- Admin profile updates reapply avatar, description, and short description
+  through the bot Worker's internal RPC boundary; tokens never enter the web
+  Worker.
 
 ### Client-side experience
 

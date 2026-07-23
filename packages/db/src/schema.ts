@@ -75,6 +75,17 @@ export const coachOnboardingInviteStatusEnum = pgEnum("coach_onboarding_invite_s
   "expired",
 ])
 
+export const coachBotProvisioningStatusEnum = pgEnum("coach_bot_provisioning_status", [
+  "requested",
+  "configuring",
+  "completed",
+])
+
+export const coachBotNotificationStatusEnum = pgEnum("coach_bot_notification_status", [
+  "pending",
+  "delivered",
+])
+
 export const trackParticipantEnum = pgEnum("track_participant", ["coach", "client"])
 
 // ── Platform level (above tenancy) ──
@@ -111,6 +122,7 @@ export const coachOnboardingInvite = pgTable(
       .references(() => workspace.id, { onDelete: "cascade" }),
     requestId: text("request_id").notNull().unique(),
     requestFingerprint: text("request_fingerprint").notNull(),
+    issuedByTelegramId: text("issued_by_telegram_id").notNull(),
     status: coachOnboardingInviteStatusEnum("status").notNull().default("pending"),
     issuedAt: timestamp("issued_at", { withTimezone: true, mode: "date" }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
@@ -133,12 +145,80 @@ export const bot = pgTable("bot", {
   workspaceId: text("workspace_id")
     .primaryKey()
     .references(() => workspace.id, { onDelete: "cascade" }),
+  // A versioned AES-256-GCM envelope. Plain Telegram credentials never enter
+  // Postgres, logs, RPC payloads, or service bindings.
   token: text("token"),
+  telegramBotId: text("telegram_bot_id").unique(),
   username: text("username"),
+  botInfo: jsonb("bot_info"),
+  webhookSecretHash: text("webhook_secret_hash"),
   connectionStatus: text("connection_status").notNull().default("awaiting_setup"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 })
+
+/**
+ * A `/start` only creates a request row. The first matching `managed_bot`
+ * service update atomically advances one row to `configuring`; the partial
+ * unique index keeps the invitation unclaimed until that moment.
+ */
+export const coachBotProvisioning = pgTable(
+  "coach_bot_provisioning",
+  {
+    id: text("id").primaryKey(),
+    inviteId: text("invite_id")
+      .notNull()
+      .references(() => coachOnboardingInvite.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    coachTelegramId: text("coach_telegram_id").notNull(),
+    keyboardRequestId: integer("keyboard_request_id").notNull(),
+    managedBotId: text("managed_bot_id"),
+    managedBotUsername: text("managed_bot_username"),
+    status: coachBotProvisioningStatusEnum("status").notNull().default("requested"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("coach_bot_provisioning_coach_request_idx").on(
+      t.coachTelegramId,
+      t.keyboardRequestId,
+    ),
+    uniqueIndex("coach_bot_provisioning_one_claim_per_invite_idx")
+      .on(t.inviteId)
+      .where(sql`${t.status} in ('configuring', 'completed')`),
+    uniqueIndex("coach_bot_provisioning_one_bot_idx")
+      .on(t.managedBotId)
+      .where(sql`${t.managedBotId} is not null`),
+    index("coach_bot_provisioning_workspace_id_idx").on(t.workspaceId),
+  ],
+)
+
+/**
+ * Completion and its manager notification are committed together. Delivery is
+ * retried independently so a Telegram outage cannot roll back a connected bot.
+ */
+export const coachBotNotification = pgTable(
+  "coach_bot_notification",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    recipientTelegramId: text("recipient_telegram_id").notNull(),
+    status: coachBotNotificationStatusEnum("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    availableAt: timestamp("available_at", { withTimezone: true, mode: "date" }).notNull(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("coach_bot_notification_workspace_id_idx").on(t.workspaceId),
+    index("coach_bot_notification_delivery_idx").on(t.status, t.availableAt),
+  ],
+)
 
 export const member = pgTable(
   "member",

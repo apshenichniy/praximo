@@ -16,7 +16,13 @@ Outline of entities, relationships, and state machines for the MVP spec. Vocabul
 The unit of tenancy. One coach's practice.
 
 - `id`, `name`, timestamps
-- **Bot** (1:1, may be embedded or a child table): the workspace's Telegram bot — token/identity, username, connection status. Provisioning mechanism is decided in the bot-per-coach ADR (ticket #9).
+- **Bot** (1:1 child): the workspace's Telegram bot — Telegram id, username,
+  cached `botInfo`, versioned AES-256-GCM credential envelope, webhook-secret
+  hash, and connection status. A separate provisioning attempt records a
+  request without reserving the workspace; its first valid Managed Bots update
+  becomes the resumable claim. Completion, owner assignment, invite consumption,
+  and the durable manager-notification job commit atomically. See
+  [ADR 0004](../adr/0004-bot-per-coach-provisioning.md).
 
 ### Member
 

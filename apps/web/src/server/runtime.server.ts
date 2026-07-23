@@ -12,7 +12,7 @@ interface Env {
   readonly MANAGER_BOT_USERNAME: string
   readonly COACH_ONBOARDING_TOKEN_SECRET: string
   readonly DEFAULT_COACH_BOT_AVATAR_R2_KEY: string
-  readonly MANAGER_BOT?: ManagerBotSender.RpcClient
+  readonly MANAGER_BOT?: ManagerBotSender.RpcClient & CoachBotBranding.RpcClient
   readonly UPLOADS: Bucket
 }
 
@@ -26,11 +26,15 @@ const runtimeFromEnv = (env: Env) => {
     env.MANAGER_BOT === undefined
       ? ManagerBotSender.layer
       : ManagerBotSender.rpcLayer(env.MANAGER_BOT)
+  const branding =
+    env.MANAGER_BOT === undefined
+      ? CoachBotBranding.layer
+      : CoachBotBranding.rpcLayer(env.MANAGER_BOT)
   const dependencies = Layer.mergeAll(
     ManagerInitData.layer,
     CoachOnboardingToken.layer,
     WorkspaceBrandingStorage.layer(env.UPLOADS),
-    CoachBotBranding.layer,
+    branding,
     sender,
     repositories,
   )
@@ -94,7 +98,10 @@ const resolveEnv = async (): Promise<Env> => {
     ),
     ...(workerEnv.MANAGER_BOT === undefined
       ? {}
-      : { MANAGER_BOT: workerEnv.MANAGER_BOT as ManagerBotSender.RpcClient }),
+      : {
+          MANAGER_BOT: workerEnv.MANAGER_BOT as ManagerBotSender.RpcClient &
+            CoachBotBranding.RpcClient,
+        }),
     UPLOADS: (() => {
       if (workerEnv.UPLOADS === undefined) throw new Error("missing server binding UPLOADS")
       return workerEnv.UPLOADS as Bucket

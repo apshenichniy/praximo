@@ -62,6 +62,7 @@ const createdAggregate: CoachOnboardingRepo.Aggregate = {
     status: "pending",
     issuedAt: new Date("2026-07-23T12:01:00.000Z"),
     expiresAt: new Date("2026-07-30T12:01:00.000Z"),
+    issuedByTelegramId: "100000001",
   },
 }
 

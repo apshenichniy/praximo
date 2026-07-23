@@ -12,10 +12,12 @@ const profile: CoachBotBranding.Profile = {
 }
 
 describe("CoachBotBranding", () => {
-  it.effect("gracefully skips while no connected-bot adapter exists", () =>
+  it.effect("fails loudly while no connected-bot adapter exists", () =>
     Effect.gen(function* () {
       const branding = yield* CoachBotBranding.Service
-      expect(yield* branding.apply(profile)).toBe("skipped")
+      expect((yield* Effect.flip(branding.apply(profile)))._tag).toBe(
+        "CoachBotBranding.ApplyFailed",
+      )
     }).pipe(Effect.provide(CoachBotBranding.layer)),
   )
 
@@ -37,5 +39,33 @@ describe("CoachBotBranding", () => {
       const error = yield* Effect.flip(branding.apply(profile))
       expect(error._tag).toBe("CoachBotBranding.ApplyFailed")
     }).pipe(Effect.provide(CoachBotBranding.testLayer)),
+  )
+
+  it.effect("keeps connected-bot updates behind the Worker RPC boundary", () =>
+    Effect.gen(function* () {
+      const branding = yield* CoachBotBranding.Service
+      expect(yield* branding.apply(profile)).toBe("applied")
+    }).pipe(
+      Effect.provide(
+        CoachBotBranding.rpcLayer({
+          applyCoachBotBranding: async () => CoachBotBranding.RpcResult.cases.Applied.make({}),
+        }),
+      ),
+    ),
+  )
+
+  it.effect("maps an RPC rejection to the typed branding failure", () =>
+    Effect.gen(function* () {
+      const branding = yield* CoachBotBranding.Service
+      expect((yield* Effect.flip(branding.apply(profile)))._tag).toBe(
+        "CoachBotBranding.ApplyFailed",
+      )
+    }).pipe(
+      Effect.provide(
+        CoachBotBranding.rpcLayer({
+          applyCoachBotBranding: async () => CoachBotBranding.RpcResult.cases.Failed.make({}),
+        }),
+      ),
+    ),
   )
 })

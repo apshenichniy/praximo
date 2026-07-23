@@ -8,6 +8,7 @@ import * as schema from "./schema.ts"
 
 const DATABASE_URL = process.env.DATABASE_URL
 const requestId = () => crypto.randomUUID()
+const issuedByTelegramId = "100000001"
 
 describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
   const appLayer = Layer.provideMerge(
@@ -25,6 +26,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
         name: "Ada Coaching",
         coachLanguage: CoachLanguage.make("uk"),
         description: "A coaching practice",
+        issuedByTelegramId,
         now: new Date("2026-07-23T18:00:00.000Z"),
       }
       const createdOutcome = yield* repo.createOrGet(input)
@@ -140,6 +142,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
         requestFingerprint: "concurrent-identical",
         name: "Concurrent Coaching",
         coachLanguage: CoachLanguage.make("en"),
+        issuedByTelegramId,
         now,
       }
       const identical = yield* Effect.all([repo.createOrGet(base), repo.createOrGet(base)], {
@@ -205,6 +208,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
         requestFingerprint: "reissue-source",
         name: "Reissue Coaching",
         coachLanguage: CoachLanguage.make("en"),
+        issuedByTelegramId,
         now: new Date("2026-07-23T18:00:00.000Z"),
       })
       yield* Effect.addFinalizer(() =>
@@ -220,6 +224,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
         workspaceId: created.aggregate.workspace.id,
         expectedInviteId: created.aggregate.invite.id,
         requestId: reissueRequestId,
+        issuedByTelegramId,
         now: new Date("2026-07-24T18:00:00.000Z"),
       })
       expect(reissued.invite.id).not.toBe(created.aggregate.invite.id)
@@ -233,6 +238,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
         workspaceId: created.aggregate.workspace.id,
         expectedInviteId: created.aggregate.invite.id,
         requestId: reissueRequestId,
+        issuedByTelegramId,
         now: new Date("2026-07-24T18:00:01.000Z"),
       })
       expect(replay.invite.id).toBe(reissued.invite.id)
@@ -242,6 +248,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
           workspaceId: created.aggregate.workspace.id,
           expectedInviteId: created.aggregate.invite.id,
           requestId: requestId(),
+          issuedByTelegramId,
           now: new Date("2026-07-24T18:00:02.000Z"),
         }),
       )
@@ -263,6 +270,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
           requestFingerprint: fingerprint,
           name: "Concurrent reissue",
           coachLanguage: CoachLanguage.make("en"),
+          issuedByTelegramId,
           now: new Date("2026-07-23T18:00:00.000Z"),
         })
 
@@ -281,12 +289,14 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
             workspaceId: identicalSource.aggregate.workspace.id,
             expectedInviteId: identicalSource.aggregate.invite.id,
             requestId: identicalRequestId,
+            issuedByTelegramId,
             now: new Date("2026-07-24T18:00:00.000Z"),
           }),
           repo.reissue({
             workspaceId: identicalSource.aggregate.workspace.id,
             expectedInviteId: identicalSource.aggregate.invite.id,
             requestId: identicalRequestId,
+            issuedByTelegramId,
             now: new Date("2026-07-24T18:00:00.000Z"),
           }),
         ],
@@ -309,6 +319,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
               workspaceId: competingSource.aggregate.workspace.id,
               expectedInviteId: competingSource.aggregate.invite.id,
               requestId: requestId(),
+              issuedByTelegramId,
               now: new Date("2026-07-24T18:00:00.000Z"),
             })
             .pipe(Effect.result),
@@ -317,6 +328,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
               workspaceId: competingSource.aggregate.workspace.id,
               expectedInviteId: competingSource.aggregate.invite.id,
               requestId: requestId(),
+              issuedByTelegramId,
               now: new Date("2026-07-24T18:00:00.000Z"),
             })
             .pipe(Effect.result),

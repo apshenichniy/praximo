@@ -51,7 +51,10 @@ export default Alchemy.Stack(
     const stage = yield* Alchemy.Stage
     const managerBotToken = Config.redacted("MANAGER_BOT_TOKEN")
     const managerBotUsername = Config.string("MANAGER_BOT_USERNAME")
+    const managerBotWebhookSecret = Config.redacted("MANAGER_BOT_WEBHOOK_SECRET")
     const coachOnboardingTokenSecret = Config.redacted("COACH_ONBOARDING_TOKEN_SECRET")
+    const coachBotCredentialKey = Config.redacted("COACH_BOT_CREDENTIAL_KEY")
+    const coachMiniAppUrl = Config.string("COACH_MINI_APP_URL")
     const defaultCoachBotAvatarR2Key = Config.string("DEFAULT_COACH_BOT_AVATAR_R2_KEY")
 
     // ── Neon: one EU project, one branch per stage ──
@@ -81,12 +84,16 @@ export default Alchemy.Stack(
     const bot = yield* Cloudflare.Worker("Bot", {
       main: "./apps/bot/src/index.ts",
       compatibility,
+      crons: ["*/5 * * * *"],
       env: {
         UPLOADS: bucket,
         DATABASE_URL: branch.connectionUri,
         MANAGER_BOT_TOKEN: managerBotToken,
         MANAGER_BOT_USERNAME: managerBotUsername,
+        MANAGER_BOT_WEBHOOK_SECRET: managerBotWebhookSecret,
         COACH_ONBOARDING_TOKEN_SECRET: coachOnboardingTokenSecret,
+        COACH_BOT_CREDENTIAL_KEY: coachBotCredentialKey,
+        COACH_MINI_APP_URL: coachMiniAppUrl,
         DEFAULT_COACH_BOT_AVATAR_R2_KEY: defaultCoachBotAvatarR2Key,
       },
     })

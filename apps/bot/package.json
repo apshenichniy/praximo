@@ -9,15 +9,18 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@praximo/auth": "workspace:*",
     "@praximo/db": "workspace:*",
     "@praximo/domain": "workspace:*",
     "@praximo/telegram": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "grammy": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
     "@effect/vitest": "catalog:",
     "@praximo/tooling": "workspace:*",
+    "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "wrangler": "catalog:"

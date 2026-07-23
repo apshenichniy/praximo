@@ -221,6 +221,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
           workspaceId: id,
           requestId: crypto.randomUUID(),
           requestFingerprint: "detail",
+          issuedByTelegramId: "100000001",
           status: "used",
           issuedAt: new Date("2026-07-23T19:00:00.000Z"),
           expiresAt: new Date("2026-07-30T19:00:00.000Z"),
