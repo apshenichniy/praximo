@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 3000",
+    "dev": "bun --env-file=../../.env node_modules/vite/bin/vite.js dev --port 3000",
     "build": "vite build",
     "check": "tsc --noEmit && oxlint -c ../../.oxlintrc.json src",
     "test": "vitest run"
@@ -12,13 +12,18 @@
   "dependencies": {
     "@base-ui/react": "catalog:",
     "@fontsource-variable/geist": "catalog:",
+    "@hugeicons/core-free-icons": "catalog:",
+    "@hugeicons/react": "catalog:",
     "@praximo/auth": "workspace:*",
     "@praximo/db": "workspace:*",
     "@praximo/domain": "workspace:*",
+    "@tanstack/react-query": "catalog:",
     "@tanstack/react-router": "catalog:",
+    "@tanstack/react-router-ssr-query": "catalog:",
     "@tanstack/react-start": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
+    "effect": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "shadcn": "catalog:",
@@ -27,6 +32,8 @@
     "tw-animate-css": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@effect/vitest": "catalog:",
     "@praximo/tooling": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/router-plugin": "catalog:",

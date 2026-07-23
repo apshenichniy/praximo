@@ -10,6 +10,17 @@ import { defineConfig } from "vite"
 // keep (Alchemy owns all infra) and would break `vite dev`. Local dev runs the
 // standard TanStack Start node server; `alchemy dev` gives a workerd runtime.
 export default defineConfig({
+  build: {
+    rolldownOptions: {
+      external: ["cloudflare:workers"],
+    },
+  },
+  optimizeDeps: {
+    exclude: ["cloudflare:workers"],
+  },
   resolve: { tsconfigPaths: true },
+  ssr: {
+    external: ["cloudflare:workers"],
+  },
   plugins: [tailwindcss(), tanstackStart(), viteReact()],
 })

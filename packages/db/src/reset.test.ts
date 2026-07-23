@@ -2,7 +2,14 @@ import { Admin, AdminId } from "@praximo/domain"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Ref } from "effect"
 import { AdminRepo } from "./admin-repo.ts"
-import { assertNotProd, parseAdminTelegramIds, resolveStage, seedAdmins } from "./reset.ts"
+import {
+  assertNotProd,
+  makeResetSeedPlan,
+  parseAdminTelegramIds,
+  parseResetArgs,
+  resolveStage,
+  seedAdmins,
+} from "./reset.ts"
 
 // The safety-critical half of db:reset, tested with no database and no network —
 // this suite runs everywhere, including CI without secrets.
@@ -68,6 +75,30 @@ describe("parseAdminTelegramIds", () => {
     expect(() => parseAdminTelegramIds(`123,${value}`)).toThrow(
       `ADMIN_TELEGRAM_IDS entry 2 ("${value}") must be a positive decimal Telegram id`,
     )
+  })
+})
+
+describe("parseResetArgs", () => {
+  it("keeps the ordinary reset free of demo workspaces", () => {
+    expect(parseResetArgs([])).toBe(false)
+  })
+
+  it("enables the deterministic demo workspace seed explicitly", () => {
+    expect(parseResetArgs(["--demo"])).toBe(true)
+  })
+
+  it("rejects unknown and combined arguments", () => {
+    expect(() => parseResetArgs(["--demo", "--force"])).toThrow("unknown db:reset arguments")
+  })
+})
+
+describe("makeResetSeedPlan", () => {
+  it("keeps ordinary reset workspace-empty", () => {
+    expect(makeResetSeedPlan(false)).toEqual(["admins"])
+  })
+
+  it("adds demo workspaces only after the admin seed", () => {
+    expect(makeResetSeedPlan(true)).toEqual(["admins", "demo-workspaces"])
   })
 })
 

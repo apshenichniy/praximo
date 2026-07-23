@@ -4,6 +4,8 @@
 // it only when a screen needs more.
 
 export interface TelegramWebApp {
+  /** Signed launch credential sent to the server for validation. */
+  readonly initData: string
   /** The Bot API version the host client implements, e.g. "8.0". */
   readonly version: string
   /** Whether the Mini App is currently expanded to fullscreen (Bot API 8.0). */
@@ -16,8 +18,17 @@ export interface TelegramWebApp {
   isVersionAtLeast: (version: string) => boolean
   /** Requests true fullscreen — Bot API 8.0; a no-op on older clients. */
   requestFullscreen: () => void
+  readonly BackButton: TelegramBackButton
   onEvent: (eventType: string, handler: () => void) => void
   offEvent: (eventType: string, handler: () => void) => void
+}
+
+export interface TelegramBackButton {
+  readonly isVisible: boolean
+  show: () => TelegramBackButton
+  hide: () => TelegramBackButton
+  onClick: (handler: () => void) => TelegramBackButton
+  offClick: (handler: () => void) => TelegramBackButton
 }
 
 declare global {
@@ -28,6 +39,41 @@ declare global {
 
 /** The host script that installs `window.Telegram.WebApp`. */
 export const TELEGRAM_WEBAPP_SRC = "https://telegram.org/js/telegram-web-app.js"
+
+let telegramWebAppPromise: Promise<TelegramWebApp | undefined> | undefined
+
+/** Load Telegram's host SDK once and return its WebApp bridge when available. */
+export const loadTelegramWebApp = (): Promise<TelegramWebApp | undefined> => {
+  const existing = window.Telegram?.WebApp
+  if (existing) return Promise.resolve(existing)
+
+  telegramWebAppPromise ??= new Promise((resolve) => {
+    const script = document.createElement("script")
+    script.src = TELEGRAM_WEBAPP_SRC
+    script.async = true
+    script.dataset.praximoTelegramSdk = "true"
+    script.addEventListener("load", () => resolve(window.Telegram?.WebApp), {
+      once: true,
+    })
+    script.addEventListener("error", () => resolve(undefined), { once: true })
+    document.head.appendChild(script)
+  })
+
+  return telegramWebAppPromise
+}
+
+export const readTelegramInitData = (webApp: TelegramWebApp | undefined): string | undefined => {
+  const initData = webApp?.initData.trim()
+  return initData ? initData : undefined
+}
+
+export const attachBackButton = (webApp: TelegramWebApp, onBack: () => void): (() => void) => {
+  webApp.BackButton.onClick(onBack).show()
+
+  return () => {
+    webApp.BackButton.offClick(onBack).hide()
+  }
+}
 
 /**
  * `requestFullscreen` and the `fullscreenChanged` event are Bot API 8.0

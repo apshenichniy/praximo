@@ -5,7 +5,13 @@ import { describe, expect, it, vi } from "vitest"
 
 import { AdminThemeShell } from "@/components/admin-theme-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
-import { enterFullscreen, type TelegramWebApp } from "@/lib/telegram.ts"
+import {
+  attachBackButton,
+  enterFullscreen,
+  readTelegramInitData,
+  type TelegramBackButton,
+  type TelegramWebApp,
+} from "@/lib/telegram.ts"
 
 // The fullscreen requirement (mini-app.md: opens fullscreen via Bot API 8.0
 // `requestFullscreen`, with `fullscreenChanged` handling + safe-area insets)
@@ -13,16 +19,51 @@ import { enterFullscreen, type TelegramWebApp } from "@/lib/telegram.ts"
 // frame and the route wiring. The live `requestFullscreen` on a phone is what
 // the deploy verifies; these pin the version gate and the layout invariants.
 
+const fakeBackButton = (): TelegramBackButton => {
+  const backButton: TelegramBackButton = {
+    isVisible: false,
+    show: vi.fn(() => backButton),
+    hide: vi.fn(() => backButton),
+    onClick: vi.fn(() => backButton),
+    offClick: vi.fn(() => backButton),
+  }
+  return backButton
+}
+
 const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => ({
+  initData: "signed-init-data",
   version: "8.0",
   isFullscreen: false,
   ready: vi.fn(),
   expand: vi.fn(),
   isVersionAtLeast: () => true,
   requestFullscreen: vi.fn(),
+  BackButton: fakeBackButton(),
   onEvent: vi.fn(),
   offEvent: vi.fn(),
   ...overrides,
+})
+
+describe("Telegram admin adapters", () => {
+  it("reads non-empty signed initData only", () => {
+    expect(readTelegramInitData(fakeWebApp())).toBe("signed-init-data")
+    expect(readTelegramInitData(fakeWebApp({ initData: "  " }))).toBeUndefined()
+    expect(readTelegramInitData(undefined)).toBeUndefined()
+  })
+
+  it("shows the native BackButton and detaches it on route exit", () => {
+    const webApp = fakeWebApp()
+    const onBack = vi.fn()
+
+    const detach = attachBackButton(webApp, onBack)
+
+    expect(webApp.BackButton.onClick).toHaveBeenCalledWith(onBack)
+    expect(webApp.BackButton.show).toHaveBeenCalledOnce()
+
+    detach()
+    expect(webApp.BackButton.offClick).toHaveBeenCalledWith(onBack)
+    expect(webApp.BackButton.hide).toHaveBeenCalledOnce()
+  })
 })
 
 describe("enterFullscreen", () => {

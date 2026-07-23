@@ -1,11 +1,16 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
+import type { QueryClient } from "@tanstack/react-query"
+import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router"
 
 import coachCss from "@/styles/coach.css?url"
 
 // The coach root: a neutral default theme (placeholder until the coach UI
 // ticket). `coach.css` is the only stylesheet the shell links, so coach routes
 // never load the admin theme.
-export const Route = createRootRoute({
+export interface RouterContext {
+  readonly queryClient: QueryClient
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -25,7 +30,7 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

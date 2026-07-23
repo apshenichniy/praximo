@@ -17,6 +17,7 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@praximo/tooling": "workspace:*",
+    "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
