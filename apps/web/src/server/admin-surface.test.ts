@@ -13,7 +13,7 @@ import {
   WorkspaceNotFound,
 } from "@praximo/domain"
 import { ConfigProvider, Effect, Layer, Ref } from "effect"
-import { ManagerBotSender } from "@praximo/telegram"
+import { CoachBotBranding, ManagerBotSender } from "@praximo/telegram"
 import * as TestClock from "effect/testing/TestClock"
 import { encode } from "jpeg-js"
 import { AdminSurface } from "./admin-surface.ts"
@@ -65,6 +65,18 @@ const createdAggregate: CoachOnboardingRepo.Aggregate = {
   },
 }
 
+const detailWorkspace: WorkspaceRepo.Detail = {
+  id: createdAggregate.workspace.id,
+  name: "Ada Coaching",
+  description: "Initial description",
+  createdAt: new Date("2026-07-23T12:00:00.000Z"),
+  updatedAt: new Date("2026-07-23T12:01:00.000Z"),
+  coachLanguage: CoachLanguage.make("uk"),
+  botStatus: "connected",
+  botUsername: "ada_coach_bot",
+  invite: createdAggregate.invite,
+}
+
 const workspaceRepoLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
   Layer.succeed(
     WorkspaceRepo.Service,
@@ -74,6 +86,8 @@ const workspaceRepoLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
         Effect.fail(new WorkspaceNotFound({ id })),
       ),
       list: Effect.fn("WorkspaceRepo.Test.list")(() => Effect.succeed(rows)),
+      getDetail: Effect.fn("WorkspaceRepo.Test.getDetail")(() => Effect.die("unused")),
+      updateProfile: Effect.fn("WorkspaceRepo.Test.updateProfile")(() => Effect.die("unused")),
     }),
   )
 
@@ -97,6 +111,9 @@ const onboardingRepoLayer = Layer.succeed(
     markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
       Effect.die("unused in list tests"),
     ),
+    reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() =>
+      Effect.die("unused in list tests"),
+    ),
   }),
 )
 
@@ -118,6 +135,7 @@ const successfulOnboardingRepoLayer = Layer.succeed(
     markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
       Effect.succeed(createdAggregate.invite),
     ),
+    reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() => Effect.succeed(createdAggregate)),
   }),
 )
 
@@ -139,6 +157,7 @@ const replayOnboardingRepoLayer = Layer.succeed(
     markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
       Effect.succeed(createdAggregate.invite),
     ),
+    reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() => Effect.succeed(createdAggregate)),
   }),
 )
 
@@ -160,6 +179,7 @@ const failingOnboardingRepoLayer = Layer.succeed(
     markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
       Effect.succeed(createdAggregate.invite),
     ),
+    reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() => Effect.succeed(createdAggregate)),
   }),
 )
 
@@ -190,6 +210,9 @@ const outcomeUnknownOnboardingRepoLayer = Layer.effect(
       markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
         Effect.succeed(createdAggregate.invite),
       ),
+      reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() =>
+        Effect.succeed(createdAggregate),
+      ),
     })
   }),
 )
@@ -201,6 +224,7 @@ const createDependencies = Layer.mergeAll(
     defaultAvatarKey: "branding/default-coach-avatar.jpg",
   }),
   ManagerBotSender.testLayer,
+  CoachBotBranding.testLayer,
 )
 
 const appLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
@@ -227,6 +251,7 @@ const createAppLayer = Layer.provideMerge(
       defaultAvatarKey: "branding/default-coach-avatar.jpg",
     }),
     ManagerBotSender.testLayer,
+    CoachBotBranding.testLayer,
   ),
 )
 
@@ -243,8 +268,58 @@ const createLayerWith = (onboardingLayer: Layer.Layer<CoachOnboardingRepo.Servic
         defaultAvatarKey: "branding/default-coach-avatar.jpg",
       }),
       ManagerBotSender.testLayer,
+      CoachBotBranding.testLayer,
     ),
   )
+
+const profileWorkspaceRepoLayer = Layer.succeed(
+  WorkspaceRepo.Service,
+  WorkspaceRepo.Service.of({
+    create: Effect.fn("WorkspaceRepo.Test.create")((workspace) => Effect.succeed(workspace)),
+    findById: Effect.fn("WorkspaceRepo.Test.findById")(() =>
+      Effect.succeed({
+        id: detailWorkspace.id,
+        name: detailWorkspace.name,
+      }),
+    ),
+    list: Effect.fn("WorkspaceRepo.Test.list")(() => Effect.succeed([])),
+    getDetail: Effect.fn("WorkspaceRepo.Test.getDetail")(() => Effect.succeed(detailWorkspace)),
+    updateProfile: Effect.fn("WorkspaceRepo.Test.updateProfile")((input) => {
+      const {
+        description: _description,
+        shortDescription: _shortDescription,
+        avatarR2Key: _avatarR2Key,
+        ...base
+      } = detailWorkspace
+      return Effect.succeed({
+        ...base,
+        name: input.name,
+        ...(input.description === undefined ? {} : { description: input.description }),
+        ...(input.shortDescription === undefined
+          ? {}
+          : { shortDescription: input.shortDescription }),
+        ...(input.avatarR2Key === undefined ? {} : { avatarR2Key: input.avatarR2Key }),
+        updatedAt: input.now,
+      })
+    }),
+  }),
+)
+
+const profileAppLayer = Layer.provideMerge(
+  AdminSurface.layer,
+  Layer.mergeAll(
+    ManagerInitData.layer,
+    adminRepoLayer,
+    profileWorkspaceRepoLayer,
+    successfulOnboardingRepoLayer,
+    CoachOnboardingToken.testLayer("test-secret", "PraximoMotherBot"),
+    WorkspaceBrandingStorage.testLayer({
+      defaultAvatarKey: "branding/default-coach-avatar.jpg",
+    }),
+    ManagerBotSender.testLayer,
+    CoachBotBranding.testLayer,
+  ),
+)
 
 const validAvatar = new Uint8Array(
   encode({ width: 512, height: 512, data: new Uint8Array(512 * 512 * 4).fill(255) }, 50).data,
@@ -277,6 +352,9 @@ const conflictingOnboardingRepoLayer = (existingAvatarR2Key: string) =>
         ),
         markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
           Effect.succeed(createdAggregate.invite),
+        ),
+        reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() =>
+          Effect.succeed(createdAggregate),
         ),
       })
     }),
@@ -523,5 +601,103 @@ describe("AdminSurface", () => {
       ),
       Effect.provide(testConfig),
     ),
+  )
+
+  it.effect("loads a complete workspace detail without exposing its private avatar key", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const detail = yield* adminSurface.getWorkspace(VALID_INIT_DATA, detailWorkspace.id)
+
+      expect(detail).toMatchObject({
+        id: detailWorkspace.id,
+        name: "Ada Coaching",
+        description: "Initial description",
+        coachLanguage: "uk",
+        botStatus: "connected",
+        botUsername: "ada_coach_bot",
+        canReissue: false,
+      })
+      expect(detail).not.toHaveProperty("avatarR2Key")
+      expect(detail.invite).not.toHaveProperty("link")
+    }).pipe(Effect.provide(profileAppLayer), Effect.provide(testConfig)),
+  )
+
+  it.effect("saves the workspace profile and applies connected-bot branding without its name", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.updateWorkspaceProfile(
+        VALID_INIT_DATA,
+        detailWorkspace.id,
+        {
+          requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+          expectedUpdatedAt: "2026-07-23T12:01:00.000Z",
+          name: "  Renamed Workspace  ",
+          description: "   ",
+          shortDescription: "  Short  ",
+          avatarIntent: "keep",
+        },
+      )
+      const branding = yield* CoachBotBranding.TestService
+
+      expect(result).toMatchObject({
+        status: "saved",
+        retryAvatar: false,
+        workspace: {
+          name: "Renamed Workspace",
+          shortDescription: "Short",
+        },
+      })
+      expect(result.workspace).not.toHaveProperty("description")
+      expect(yield* branding.applied()).toEqual([
+        {
+          workspaceId: detailWorkspace.id,
+          shortDescription: "Short",
+          avatar: { _tag: "Keep" },
+        },
+      ])
+      expect((yield* branding.applied())[0]).not.toHaveProperty("name")
+    }).pipe(Effect.provide(profileAppLayer), Effect.provide(testConfig)),
+  )
+
+  it.effect("keeps a committed profile visible when Telegram branding fails", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
+      const branding = yield* CoachBotBranding.TestService
+      yield* branding.failNextApply()
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.updateWorkspaceProfile(
+        VALID_INIT_DATA,
+        detailWorkspace.id,
+        {
+          requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+          expectedUpdatedAt: "2026-07-23T12:01:00.000Z",
+          name: "Persisted despite Telegram",
+          avatarIntent: "keep",
+        },
+      )
+
+      expect(result.status).toBe("saved-branding-failed")
+      expect(result.workspace.name).toBe("Persisted despite Telegram")
+    }).pipe(Effect.provide(profileAppLayer), Effect.provide(testConfig)),
+  )
+
+  it.effect("reissues, reconstructs, and delivers a fresh onboarding link after commit", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.reissueWorkspaceInvite(
+        VALID_INIT_DATA,
+        createdAggregate.workspace.id,
+        createdAggregate.invite.id,
+        "cb6bd559-6091-4d69-aeff-2af000354c7f",
+      )
+      const sender = yield* ManagerBotSender.TestService
+
+      expect(result.delivery).toBe("sent")
+      expect(result.link).toContain("https://t.me/PraximoMotherBot?start=ws_")
+      expect(yield* sender.sent()).toHaveLength(1)
+    }).pipe(Effect.provide(profileAppLayer), Effect.provide(testConfig)),
   )
 })

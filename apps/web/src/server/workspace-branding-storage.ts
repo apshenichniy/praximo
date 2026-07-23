@@ -10,6 +10,11 @@ export interface StoredAvatar {
   readonly digest: string
 }
 
+export interface LoadedAvatar {
+  readonly bytes: Uint8Array
+  readonly contentType: string
+}
+
 export interface Interface {
   readonly inspectAvatar: (
     bytes: Uint8Array,
@@ -24,6 +29,7 @@ export interface Interface {
     inspection: { readonly digest: string },
   ) => Effect.Effect<StoredAvatar, UploadFailed>
   readonly deleteAvatar: (key: string) => Effect.Effect<void, UploadFailed>
+  readonly getAvatar: (key: string) => Effect.Effect<LoadedAvatar, ReadFailed>
   readonly resolveAvatarKey: (customKey: string | undefined) => Effect.Effect<string>
 }
 
@@ -41,6 +47,16 @@ export class UploadFailed extends Schema.TaggedErrorClass<UploadFailed>()(
   { operation: Schema.Literals(["put", "delete"]) },
 ) {}
 
+export class ReadFailed extends Schema.TaggedErrorClass<ReadFailed>()(
+  "WorkspaceBrandingStorage.ReadFailed",
+  { reason: Schema.Literals(["not-found", "read"]) },
+) {}
+
+export interface BucketObject {
+  readonly arrayBuffer: () => Promise<ArrayBuffer>
+  readonly httpMetadata?: { readonly contentType?: string }
+}
+
 export interface Bucket {
   readonly put: (
     key: string,
@@ -48,6 +64,7 @@ export interface Bucket {
     options?: { readonly httpMetadata?: { readonly contentType?: string } },
   ) => Promise<unknown>
   readonly delete: (key: string) => Promise<unknown>
+  readonly get: (key: string) => Promise<BucketObject | null>
 }
 
 const validateJpeg = (bytes: Uint8Array): Effect.Effect<void, InvalidAvatar> => {
@@ -109,6 +126,22 @@ const make = (bucket: Bucket, defaultAvatarKey: string): Interface => {
     })
   })
 
+  const getAvatar = Effect.fn("WorkspaceBrandingStorage.getAvatar")(function* (key: string) {
+    const object = yield* Effect.tryPromise({
+      try: () => bucket.get(key),
+      catch: () => new ReadFailed({ reason: "read" }),
+    })
+    if (object === null) return yield* new ReadFailed({ reason: "not-found" })
+    const buffer = yield* Effect.tryPromise({
+      try: () => object.arrayBuffer(),
+      catch: () => new ReadFailed({ reason: "read" }),
+    })
+    return {
+      bytes: new Uint8Array(buffer),
+      contentType: object.httpMetadata?.contentType ?? "image/jpeg",
+    }
+  })
+
   const resolveAvatarKey = Effect.fn("WorkspaceBrandingStorage.resolveAvatarKey")(
     (customKey: string | undefined) => Effect.succeed(customKey ?? defaultAvatarKey),
   )
@@ -118,6 +151,7 @@ const make = (bucket: Bucket, defaultAvatarKey: string): Interface => {
     putAvatar,
     putInspectedAvatar,
     deleteAvatar,
+    getAvatar,
     resolveAvatarKey,
   })
 }
@@ -140,6 +174,7 @@ export interface TestInterface extends Interface {
   readonly puts: () => Effect.Effect<ReadonlyArray<RecordedPut>>
   readonly deletes: () => Effect.Effect<ReadonlyArray<string>>
   readonly failNextPut: () => Effect.Effect<void>
+  readonly failNextGet: () => Effect.Effect<void>
 }
 
 export class TestService extends Context.Service<TestService, TestInterface>()(
@@ -151,14 +186,40 @@ export const testLayer = ({ defaultAvatarKey }: { readonly defaultAvatarKey: str
     Effect.gen(function* () {
       const recorded = yield* Ref.make<ReadonlyArray<RecordedPut>>([])
       const deleted = yield* Ref.make<ReadonlyArray<string>>([])
-      const fail = yield* Ref.make(false)
+      const stored = yield* Ref.make(new Map<string, Uint8Array>())
+      const failPut = yield* Ref.make(false)
+      const failGet = yield* Ref.make(false)
       const bucket: Bucket = {
         put: async (key, bytes) => {
-          if (await Effect.runPromise(Ref.getAndSet(fail, false))) throw new Error("put failed")
+          if (await Effect.runPromise(Ref.getAndSet(failPut, false))) throw new Error("put failed")
           await Effect.runPromise(Ref.update(recorded, (puts) => [...puts, { key, bytes }]))
+          await Effect.runPromise(
+            Ref.update(stored, (objects) => new Map(objects).set(key, bytes.slice())),
+          )
         },
         delete: async (key) => {
           await Effect.runPromise(Ref.update(deleted, (keys) => [...keys, key]))
+          await Effect.runPromise(
+            Ref.update(stored, (objects) => {
+              const next = new Map(objects)
+              next.delete(key)
+              return next
+            }),
+          )
+        },
+        get: async (key) => {
+          if (await Effect.runPromise(Ref.getAndSet(failGet, false))) throw new Error("get failed")
+          const bytes = await Effect.runPromise(Ref.get(stored)).then((objects) => objects.get(key))
+          return bytes === undefined
+            ? null
+            : {
+                arrayBuffer: async () =>
+                  bytes.buffer.slice(
+                    bytes.byteOffset,
+                    bytes.byteOffset + bytes.byteLength,
+                  ) as ArrayBuffer,
+                httpMetadata: { contentType: "image/jpeg" },
+              }
         },
       }
       const base = make(bucket, defaultAvatarKey)
@@ -167,7 +228,10 @@ export const testLayer = ({ defaultAvatarKey }: { readonly defaultAvatarKey: str
         puts: Effect.fn("WorkspaceBrandingStorage.Test.puts")(() => Ref.get(recorded)),
         deletes: Effect.fn("WorkspaceBrandingStorage.Test.deletes")(() => Ref.get(deleted)),
         failNextPut: Effect.fn("WorkspaceBrandingStorage.Test.failNextPut")(() =>
-          Ref.set(fail, true),
+          Ref.set(failPut, true),
+        ),
+        failNextGet: Effect.fn("WorkspaceBrandingStorage.Test.failNextGet")(() =>
+          Ref.set(failGet, true),
         ),
       })
       return Context.make(Service, impl).pipe(Context.add(TestService, impl))

@@ -9,10 +9,28 @@ import {
   parseResetArgs,
   resolveStage,
   seedAdmins,
+  sortAlchemyMigrationNames,
 } from "./reset.ts"
 
 // The safety-critical half of db:reset, tested with no database and no network —
 // this suite runs everywhere, including CI without secrets.
+
+describe("sortAlchemyMigrationNames", () => {
+  it("matches Alchemy's recursive SQL migration ordering", () => {
+    expect(
+      sortAlchemyMigrationNames([
+        "notes.txt",
+        "20260723204615_aspiring_terror/migration.sql",
+        "20260720212719_same_kulan_gath/migration.sql",
+        "20260723181242_wakeful_star_brand/migration.sql",
+      ]),
+    ).toEqual([
+      "20260720212719_same_kulan_gath/migration.sql",
+      "20260723181242_wakeful_star_brand/migration.sql",
+      "20260723204615_aspiring_terror/migration.sql",
+    ])
+  })
+})
 
 describe("assertNotProd", () => {
   it("refuses the prod stage", () => {

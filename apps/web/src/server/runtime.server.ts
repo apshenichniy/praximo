@@ -1,6 +1,6 @@
 import { CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
 import { AdminRepo, CoachOnboardingRepo, Database, WorkspaceRepo } from "@praximo/db"
-import { ManagerBotSender } from "@praximo/telegram"
+import { CoachBotBranding, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
@@ -30,6 +30,7 @@ const runtimeFromEnv = (env: Env) => {
     ManagerInitData.layer,
     CoachOnboardingToken.layer,
     WorkspaceBrandingStorage.layer(env.UPLOADS),
+    CoachBotBranding.layer,
     sender,
     repositories,
   )
@@ -68,6 +69,9 @@ const resolveEnv = async (): Promise<Env> => {
           throw new Error("UPLOADS is unavailable in the local Vite runtime")
         },
         delete: async () => {
+          throw new Error("UPLOADS is unavailable in the local Vite runtime")
+        },
+        get: async () => {
           throw new Error("UPLOADS is unavailable in the local Vite runtime")
         },
       },
@@ -128,5 +132,62 @@ export const resendAdminWorkspaceInvite = async (initData: string, inviteId: str
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(AdminSurface.Service, (service) => service.resendInvite(initData, inviteId)),
+  )
+}
+
+export const getAdminWorkspace = async (initData: string, workspaceId: string) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) => service.getWorkspace(initData, workspaceId)),
+  )
+}
+
+export const getAdminWorkspaceAvatar = async (initData: string, workspaceId: string) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) =>
+      service.getWorkspaceAvatar(initData, workspaceId),
+    ),
+  )
+}
+
+export const updateAdminWorkspaceProfile = async (
+  initData: string,
+  workspaceId: string,
+  input: unknown,
+  avatar?: Uint8Array,
+) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) =>
+      service.updateWorkspaceProfile(initData, workspaceId, input, avatar),
+    ),
+  )
+}
+
+export const retryAdminWorkspaceBranding = async (
+  initData: string,
+  workspaceId: string,
+  retryAvatar: boolean,
+) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) =>
+      service.retryWorkspaceBranding(initData, workspaceId, retryAvatar),
+    ),
+  )
+}
+
+export const reissueAdminWorkspaceInvite = async (
+  initData: string,
+  workspaceId: string,
+  expectedInviteId: string,
+  requestId: string,
+) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) =>
+      service.reissueWorkspaceInvite(initData, workspaceId, expectedInviteId, requestId),
+    ),
   )
 }

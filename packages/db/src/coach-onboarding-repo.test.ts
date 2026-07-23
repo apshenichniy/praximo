@@ -195,4 +195,141 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
       }
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
+
+  it.effect("rotates one provisioning invite idempotently and rejects stale rotation", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachOnboardingRepo.Service
+      const { client } = yield* Database.Service
+      const created = yield* repo.createOrGet({
+        requestId: requestId(),
+        requestFingerprint: "reissue-source",
+        name: "Reissue Coaching",
+        coachLanguage: CoachLanguage.make("en"),
+        now: new Date("2026-07-23T18:00:00.000Z"),
+      })
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client
+            .delete(schema.workspace)
+            .where(eq(schema.workspace.id, created.aggregate.workspace.id)),
+        ).pipe(Effect.asVoid),
+      )
+
+      const reissueRequestId = requestId()
+      const reissued = yield* repo.reissue({
+        workspaceId: created.aggregate.workspace.id,
+        expectedInviteId: created.aggregate.invite.id,
+        requestId: reissueRequestId,
+        now: new Date("2026-07-24T18:00:00.000Z"),
+      })
+      expect(reissued.invite.id).not.toBe(created.aggregate.invite.id)
+      expect(reissued.invite.status).toBe("pending")
+      expect(reissued.invite.expiresAt.getTime() - reissued.invite.issuedAt.getTime()).toBe(
+        InviteTtlMilliseconds,
+      )
+      expect((yield* repo.findInvite(created.aggregate.invite.id)).invite.status).toBe("expired")
+
+      const replay = yield* repo.reissue({
+        workspaceId: created.aggregate.workspace.id,
+        expectedInviteId: created.aggregate.invite.id,
+        requestId: reissueRequestId,
+        now: new Date("2026-07-24T18:00:01.000Z"),
+      })
+      expect(replay.invite.id).toBe(reissued.invite.id)
+
+      const stale = yield* Effect.flip(
+        repo.reissue({
+          workspaceId: created.aggregate.workspace.id,
+          expectedInviteId: created.aggregate.invite.id,
+          requestId: requestId(),
+          now: new Date("2026-07-24T18:00:02.000Z"),
+        }),
+      )
+      expect(stale._tag).toBe("CoachOnboardingRepo.ReissueUnavailable")
+      expect(
+        (yield* repo.verifyPending(reissued.invite.id, new Date("2026-07-24T18:00:03.000Z"))).invite
+          .id,
+      ).toBe(reissued.invite.id)
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("serializes concurrent identical and competing re-issue requests", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachOnboardingRepo.Service
+      const { client } = yield* Database.Service
+      const makeWorkspace = (fingerprint: string) =>
+        repo.createOrGet({
+          requestId: requestId(),
+          requestFingerprint: fingerprint,
+          name: "Concurrent reissue",
+          coachLanguage: CoachLanguage.make("en"),
+          now: new Date("2026-07-23T18:00:00.000Z"),
+        })
+
+      const identicalSource = yield* makeWorkspace("concurrent-reissue-identical")
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client
+            .delete(schema.workspace)
+            .where(eq(schema.workspace.id, identicalSource.aggregate.workspace.id)),
+        ).pipe(Effect.asVoid),
+      )
+      const identicalRequestId = requestId()
+      const identical = yield* Effect.all(
+        [
+          repo.reissue({
+            workspaceId: identicalSource.aggregate.workspace.id,
+            expectedInviteId: identicalSource.aggregate.invite.id,
+            requestId: identicalRequestId,
+            now: new Date("2026-07-24T18:00:00.000Z"),
+          }),
+          repo.reissue({
+            workspaceId: identicalSource.aggregate.workspace.id,
+            expectedInviteId: identicalSource.aggregate.invite.id,
+            requestId: identicalRequestId,
+            now: new Date("2026-07-24T18:00:00.000Z"),
+          }),
+        ],
+        { concurrency: "unbounded" },
+      )
+      expect(identical[0].invite.id).toBe(identical[1].invite.id)
+
+      const competingSource = yield* makeWorkspace("concurrent-reissue-competing")
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client
+            .delete(schema.workspace)
+            .where(eq(schema.workspace.id, competingSource.aggregate.workspace.id)),
+        ).pipe(Effect.asVoid),
+      )
+      const competing = yield* Effect.all(
+        [
+          repo
+            .reissue({
+              workspaceId: competingSource.aggregate.workspace.id,
+              expectedInviteId: competingSource.aggregate.invite.id,
+              requestId: requestId(),
+              now: new Date("2026-07-24T18:00:00.000Z"),
+            })
+            .pipe(Effect.result),
+          repo
+            .reissue({
+              workspaceId: competingSource.aggregate.workspace.id,
+              expectedInviteId: competingSource.aggregate.invite.id,
+              requestId: requestId(),
+              now: new Date("2026-07-24T18:00:00.000Z"),
+            })
+            .pipe(Effect.result),
+        ],
+        { concurrency: "unbounded" },
+      )
+      expect(competing.filter(Result.isSuccess)).toHaveLength(1)
+      expect(competing.filter(Result.isFailure)).toHaveLength(1)
+      const failure = competing.find(Result.isFailure)
+      expect(failure).toBeDefined()
+      if (failure !== undefined && Result.isFailure(failure)) {
+        expect(failure.failure._tag).toBe("CoachOnboardingRepo.ReissueUnavailable")
+      }
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
 })
