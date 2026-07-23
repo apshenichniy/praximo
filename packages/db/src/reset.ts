@@ -1,3 +1,5 @@
+import { readdir } from "node:fs/promises"
+import path from "node:path"
 import { TelegramId } from "@praximo/domain"
 import { sql } from "drizzle-orm"
 import { migrate } from "drizzle-orm/neon-http/migrator"
@@ -15,10 +17,10 @@ import { seedDemoWorkspaces } from "./dev-seed.ts"
  * "Recreates/clears the branch" is done at schema granularity: dropping and
  * recreating `public` wipes every application table and Alchemy's bookkeeping.
  * The local Drizzle migrator keeps its ledger in a separate `drizzle` schema, so
- * that schema is reset as well; otherwise it would incorrectly skip migrations
- * after `public` was emptied. This needs only the connection URI — no Neon
- * control-plane call — so it never contends with Alchemy's ownership of the
- * branch.
+ * that schema is reset as well. After replay, reset rebuilds Alchemy's
+ * `neon_migrations` ledger from the same directory; otherwise the next deploy
+ * would replay already-applied DDL. This needs only the connection URI — no Neon
+ * control-plane call — so it never contends with Alchemy's ownership of the branch.
  */
 
 /** Hardcoded stage guard (ADR 0003 stages `dev_<user>` / `prod`). */
@@ -74,6 +76,55 @@ export type ResetSeedStep = "admins" | "demo-workspaces"
 export const makeResetSeedPlan = (demo: boolean): ReadonlyArray<ResetSeedStep> =>
   demo ? ["admins", "demo-workspaces"] : ["admins"]
 
+const migrationPrefix = (name: string): number | undefined => {
+  const parsed = Number.parseInt(name.split("_")[0] ?? "", 10)
+  return Number.isNaN(parsed) ? undefined : parsed
+}
+
+/**
+ * Match Alchemy's recursive SQL-file ordering and ids so a local reset rebuilds
+ * both migration ledgers. Otherwise the next deploy replays already-applied DDL.
+ */
+export const sortAlchemyMigrationNames = (names: ReadonlyArray<string>): ReadonlyArray<string> =>
+  names
+    .filter((name) => name.endsWith(".sql"))
+    .map((name) => name.split(path.sep).join("/"))
+    .sort((a, b) => {
+      const aPrefix = migrationPrefix(a)
+      const bPrefix = migrationPrefix(b)
+      if (aPrefix !== undefined && bPrefix !== undefined) return aPrefix - bPrefix
+      if (aPrefix !== undefined) return -1
+      if (bPrefix !== undefined) return 1
+      return a.localeCompare(b)
+    })
+
+const listAlchemyMigrationNames = async (
+  migrationsFolder: string,
+): Promise<ReadonlyArray<string>> =>
+  sortAlchemyMigrationNames(await readdir(migrationsFolder, { recursive: true }))
+
+const rebuildAlchemyMigrationLedger = async (
+  client: ReturnType<typeof Database.makeClient>,
+  migrationsFolder: string,
+): Promise<void> => {
+  const names = await listAlchemyMigrationNames(migrationsFolder)
+  await client.execute(sql`
+    create table if not exists "neon_migrations" (
+      "id" text primary key,
+      "name" text not null,
+      "applied_at" timestamptz not null default now()
+    )
+  `)
+  await Promise.all(
+    names.map((name, index) =>
+      client.execute(sql`
+        insert into "neon_migrations" ("id", "name")
+        values (${String(index + 1).padStart(5, "0")}, ${name})
+      `),
+    ),
+  )
+}
+
 /** Seed every configured platform admin; repository upserts make duplicates idempotent. */
 export const seedAdmins = Effect.fn("Reset.seedAdmins")(function* (
   telegramIds: ReadonlyArray<TelegramId>,
@@ -110,6 +161,7 @@ export const runReset = async (config: ResetConfig): Promise<void> => {
   await client.execute(sql`create schema public`)
 
   await migrate(client, { migrationsFolder: config.migrationsFolder })
+  await rebuildAlchemyMigrationLedger(client, config.migrationsFolder)
 
   const seedPlan = makeResetSeedPlan(config.demo === true)
   await Effect.runPromise(
