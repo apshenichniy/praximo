@@ -1,5 +1,5 @@
 import { Workspace, WorkspaceId, WorkspaceNotFound } from "@praximo/domain"
-import { asc, eq, min } from "drizzle-orm"
+import { asc, eq } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database, decodeFirstRow, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
@@ -12,7 +12,7 @@ export const ListItem = Schema.Struct({
   name: Schema.NonEmptyString,
   botStatus: BotStatus,
   botUsername: Schema.optionalKey(Schema.NonEmptyString),
-  ownerAvatarR2Key: Schema.optionalKey(Schema.NonEmptyString),
+  hasCustomAvatar: Schema.Boolean,
 })
 export interface ListItem extends Schema.Schema.Type<typeof ListItem> {}
 
@@ -64,16 +64,6 @@ export const layer = Layer.effect(
     })
 
     const list = Effect.fn("WorkspaceRepo.list")(function* () {
-      const owner = client
-        .select({
-          workspaceId: schema.member.workspaceId,
-          avatarR2Key: min(schema.member.avatarR2Key).as("avatar_r2_key"),
-        })
-        .from(schema.member)
-        .where(eq(schema.member.role, "owner"))
-        .groupBy(schema.member.workspaceId)
-        .as("workspace_owner")
-
       const rows = yield* Effect.tryPromise({
         try: () =>
           client
@@ -82,11 +72,10 @@ export const layer = Layer.effect(
               name: schema.workspace.name,
               connectionStatus: schema.bot.connectionStatus,
               botUsername: schema.bot.username,
-              ownerAvatarR2Key: owner.avatarR2Key,
+              avatarR2Key: schema.workspace.avatarR2Key,
             })
             .from(schema.workspace)
             .leftJoin(schema.bot, eq(schema.bot.workspaceId, schema.workspace.id))
-            .leftJoin(owner, eq(owner.workspaceId, schema.workspace.id))
             .orderBy(asc(schema.workspace.name)),
         catch: (cause) => new QueryFailed({ operation: "list", cause }),
       })
@@ -97,7 +86,7 @@ export const layer = Layer.effect(
           name: string
           botStatus: string
           botUsername?: string
-          ownerAvatarR2Key?: string
+          hasCustomAvatar: boolean
         } = {
           id: row.id,
           name: row.name,
@@ -107,12 +96,10 @@ export const layer = Layer.effect(
               : row.connectionStatus === "needs_relink"
                 ? "needs-relink"
                 : row.connectionStatus,
+          hasCustomAvatar: row.avatarR2Key !== null,
         }
 
         if (row.botUsername !== null) item.botUsername = row.botUsername
-        if (row.ownerAvatarR2Key !== null) {
-          item.ownerAvatarR2Key = row.ownerAvatarR2Key
-        }
         return item
       })
 

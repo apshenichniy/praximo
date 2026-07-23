@@ -69,6 +69,12 @@ export const noShowDetailEnum = pgEnum("no_show_detail", [
 
 export const inviteStatusEnum = pgEnum("invite_status", ["pending", "accepted", "expired"])
 
+export const coachOnboardingInviteStatusEnum = pgEnum("coach_onboarding_invite_status", [
+  "pending",
+  "used",
+  "expired",
+])
+
 export const trackParticipantEnum = pgEnum("track_participant", ["coach", "client"])
 
 // ── Platform level (above tenancy) ──
@@ -89,9 +95,34 @@ export const admin = pgTable("admin", {
 export const workspace = pgTable("workspace", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  avatarR2Key: text("avatar_r2_key"),
+  description: text("description"),
+  shortDescription: text("short_description"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 })
+
+export const coachOnboardingInvite = pgTable(
+  "coach_onboarding_invite",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    requestId: text("request_id").notNull().unique(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    status: coachOnboardingInviteStatusEnum("status").notNull().default("pending"),
+    issuedAt: timestamp("issued_at", { withTimezone: true, mode: "date" }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [
+    index("coach_onboarding_invite_workspace_id_idx").on(t.workspaceId),
+    uniqueIndex("coach_onboarding_invite_one_pending_per_workspace_idx")
+      .on(t.workspaceId)
+      .where(sql`${t.status} = 'pending'`),
+  ],
+)
 
 /**
  * The workspace's Telegram bot (1:1). Modeled as a child table keyed by

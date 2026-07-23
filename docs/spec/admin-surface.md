@@ -95,6 +95,26 @@ The create form collects:
 
 On submit the workspace is created in status `provisioning`. The **manager bot then sends the admin the single-use deep link** (TTL 7 days) as a message, formatted ready to forward to the coach; the Mini App also surfaces the link to copy. Everything downstream of the coach opening that link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) (Managed Bots one-tap, or the paste fallback). Omitted profile fields are simply absent at provisioning and can be filled later via **Edit profile**.
 
+### Default coach-bot avatar operations
+
+The platform default is one private R2 object per stage, addressed by
+`DEFAULT_COACH_BOT_AVATAR_R2_KEY`. Workspaces with no custom branding avatar
+reference that default at provisioning time; the object is not copied into each
+workspace.
+
+Replace it with:
+
+```sh
+bun run branding:avatar:set --stage dev_apshenichniy --file ./avatar.png \
+  --key branding/default-coach-avatar.jpg
+```
+
+The command accepts JPEG, PNG, WebP, or SVG, normalizes the source to a square
+512×512 JPEG, resolves exactly one stage-isolated Alchemy `Uploads` bucket, and
+replaces only the configured key. To roll back, run the same command with the
+previous source file. Replacement affects future provisioning and an explicit
+avatar reset only; it never rewrites already-connected coach bots.
+
 ### Deep link lifecycle
 
 Single-use, **TTL 7 days** — the same constant as the client invite ([client-onboarding-auth.md](client-onboarding-auth.md)), one fewer number to reason about. Re-issue creates a new token and expires the old one. The workspace owner (coach) is fixed by whoever first opens the link and completes provisioning; the admin does not need the coach's Telegram id in advance. The link always reaches the coach as a **forwardable manager-bot message** — the one delivery job the bot keeps.
