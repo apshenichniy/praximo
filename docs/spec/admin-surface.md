@@ -28,6 +28,8 @@ Each bot surfaces its Mini App two ways, both shown to the user as **"Open"** (m
 
 This makes the "Open" pattern **two-layered**: the menu button is automatable everywhere; the chat-list Main Mini App is a manual @BotFather step. For the platform-owned manager bot the operator enables it once, by hand ([#84](https://github.com/apshenichniy/praximo/issues/84)). For coach bots it is **optional coach self-service** — a coach may enable it in their own @BotFather (managed bots appear there), but the platform cannot do it for them and onboarding never blocks on it ([#86](https://github.com/apshenichniy/praximo/issues/86)). This is a Telegram limitation, not deferred work; revisit only if Telegram ships a setter ([#83](https://github.com/apshenichniy/praximo/issues/83)).
 
+The canonical dev manager bot uses `https://stage.praximo.io/admin` for both entry points. Alchemy binds `stage.praximo.io` directly to the `dev_apshenichniy` web Worker, so the BotFather-owned Main Mini App URL remains short and stable across Worker deployments; non-canonical personal stages keep their generated `workers.dev` URLs.
+
 **Known limitation:** a non-admin who has the manager-bot chat — e.g. a coach who received their deep link there — sees the chat-list "Open", lands on the admin app, and is rejected by the admin-flag gate. Accepted in MVP (the admin set is one or two people; see [Rollout phases](#rollout-phases)).
 
 ## Language

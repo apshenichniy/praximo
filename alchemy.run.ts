@@ -4,13 +4,14 @@
 // for infrastructure — there is no wrangler config.
 //
 // This ticket (#46) brings up the **dev stage**: the three skeleton Workers with
-// their Neon/R2 bindings and typed service bindings, each answering `/health` on
-// its `workers.dev` URL. #47 wired the Drizzle migrations dir onto the Neon
-// branch below. The pieces the full stack still needs — the AI Gateway, the
-// Email Sending subdomain, the pipeline Workflow + cron, and the prod custom
-// domain / zone routes / `--adopt` of the existing `praximo-prod` stack — arrive
-// with the slices that first use them. Their shapes are proven in
-// `prototypes/infra-bootstrap` (#32).
+// their Neon/R2 bindings and typed service bindings, each answering `/health`.
+// The canonical web Worker also owns `stage.praximo.io` (#84); workers.dev stays
+// enabled on every Worker and is the only URL for non-canonical dev stages. #47
+// wired the Drizzle migrations dir onto the Neon branch below. The pieces the
+// full stack still needs — the AI Gateway, the Email Sending subdomain, the
+// pipeline Workflow + cron, and the prod custom domain / zone routes / `--adopt`
+// of the existing `praximo-prod` stack — arrive with the slices that first use
+// them. Their shapes are proven in `prototypes/infra-bootstrap` (#32).
 //
 // Workers are declared inline here with string `main` paths, not via the
 // co-located `class Web extends Cloudflare.Worker<Web>()(...)` form ADR 0003's
@@ -33,6 +34,8 @@ import * as Layer from "effect/Layer"
 
 // Every Worker shares one compatibility surface; keep it in step with the apps.
 const compatibility = { date: "2026-07-19", flags: ["nodejs_compat"] }
+const canonicalDevStage = "dev_apshenichniy"
+const canonicalDevWebDomain = "stage.praximo.io"
 
 export default Alchemy.Stack(
   "Praximo",
@@ -45,6 +48,8 @@ export default Alchemy.Stack(
     state: Cloudflare.state(),
   },
   Effect.gen(function* () {
+    const stage = yield* Alchemy.Stage
+
     // ── Neon: one EU project, one branch per stage ──
     // region MUST be explicit — the default is aws-us-east-1 and the resource
     // diffs on region, so a wrong first deploy replaces the project (ADR 0003).
@@ -94,6 +99,10 @@ export default Alchemy.Stack(
     const web = yield* Cloudflare.Website.Vite("Web", {
       rootDir: "./apps/web",
       compatibility,
+      // BotFather persists one Main Mini App URL per bot and its input rejects
+      // the generated workers.dev hostname. Keep the canonical dev stand on a
+      // stable short domain; other personal stages retain their isolated URLs.
+      ...(stage === canonicalDevStage ? { domain: canonicalDevWebDomain } : {}),
       env: {
         PIPELINE: pipeline,
         UPLOADS: bucket,
@@ -111,7 +120,7 @@ export default Alchemy.Stack(
     return {
       neonProjectId: project.projectId,
       bucket: bucket.bucketName,
-      // The workers.dev URLs (enabled by default) — hit `/health` on each.
+      // `web.url` prefers its custom domain; the other Workers return workers.dev.
       webUrl: web.url,
       botUrl: bot.url,
       pipelineUrl: pipeline.url,

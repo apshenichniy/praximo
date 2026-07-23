@@ -28,16 +28,17 @@ describe("adminUrlForOrigin", () => {
 })
 
 describe("buildSetMenuButtonRequest", () => {
-  it("puts the token in the endpoint and a web_app button in the body", () => {
+  it('builds the manager bot web_app button with the "Open" label', () => {
     const request = buildSetMenuButtonRequest({
       botToken: "123:ABC",
       adminUrl: "https://host.workers.dev/admin",
     })
+    expect(MENU_BUTTON_TEXT).toBe("Open")
     expect(request.endpoint).toBe("https://api.telegram.org/bot123:ABC/setChatMenuButton")
     expect(request.body).toEqual({
       menu_button: {
         type: "web_app",
-        text: MENU_BUTTON_TEXT,
+        text: "Open",
         web_app: { url: "https://host.workers.dev/admin" },
       },
     })
