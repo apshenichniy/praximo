@@ -10,8 +10,8 @@
  * setup time, never a committed constant.
  */
 
-/** The chat menu button's label. Admin copy is English-only (admin-surface.md). */
-export const MENU_BUTTON_TEXT = "Admin"
+/** The BotFather-style chat menu label shared by both manager-bot entry points. */
+export const MENU_BUTTON_TEXT = "Open"
 
 /**
  * The admin route URL for a stage, from its deployed `web` Worker origin (the
