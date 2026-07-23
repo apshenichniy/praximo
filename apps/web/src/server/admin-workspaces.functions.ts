@@ -3,6 +3,7 @@ import { notFound } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
 import {
   createAdminWorkspace,
+  deleteAdminWorkspace,
   getAdminWorkspace,
   getAdminWorkspaceAvatar,
   listAdminWorkspaces,
@@ -345,6 +346,78 @@ export const reissueAdminWorkspaceInvite = createServerFn({ method: "POST" })
         throw notFound()
       }
       return { ok: false, error: "server" }
+    }
+  })
+
+export type DeleteWorkspaceTransportError =
+  | "validation"
+  | "confirmation"
+  | "conflict"
+  | "retryable"
+  | "blocked"
+  | "server"
+
+export type DeleteWorkspaceTransportResult =
+  | { readonly ok: true; readonly value: AdminSurface.DeleteResult }
+  | { readonly ok: false; readonly error: DeleteWorkspaceTransportError }
+
+const validateDeleteWorkspace = (
+  input: unknown,
+): {
+  readonly initData: string
+  readonly workspaceId: string
+  readonly requestId: string
+  readonly confirmationName: string
+} => {
+  const validated = validateWorkspaceRequest(input)
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("requestId" in input) ||
+    typeof input.requestId !== "string" ||
+    !("confirmationName" in input) ||
+    typeof input.confirmationName !== "string"
+  ) {
+    throw notFound()
+  }
+  return {
+    ...validated,
+    requestId: input.requestId,
+    confirmationName: input.confirmationName,
+  }
+}
+
+export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
+  .validator(validateDeleteWorkspace)
+  .handler(async ({ data }): Promise<DeleteWorkspaceTransportResult> => {
+    try {
+      return {
+        ok: true,
+        value: await deleteAdminWorkspace(data.initData, data.workspaceId, {
+          requestId: data.requestId,
+          confirmationName: data.confirmationName,
+        }),
+      }
+    } catch (error) {
+      if (typeof error !== "object" || error === null || !("_tag" in error)) {
+        return { ok: false, error: "server" }
+      }
+      switch (error._tag) {
+        case "AdminSurface.AccessDenied":
+          throw notFound()
+        case "AdminSurface.ValidationFailed":
+          return { ok: false, error: "validation" }
+        case "AdminSurface.DeleteConfirmationMismatch":
+          return { ok: false, error: "confirmation" }
+        case "AdminSurface.DeletionConflict":
+          return { ok: false, error: "conflict" }
+        case "AdminSurface.DeletionRetryable":
+          return { ok: false, error: "retryable" }
+        case "AdminSurface.DeletionFailed":
+          return { ok: false, error: "blocked" }
+        default:
+          return { ok: false, error: "server" }
+      }
     }
   })
 

@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "@effect/vitest"
 import { CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
-import { AdminRepo, CoachOnboardingRepo, QueryFailed, WorkspaceRepo } from "@praximo/db"
+import {
+  AdminRepo,
+  CoachOnboardingRepo,
+  QueryFailed,
+  WorkspaceDeletionRepo,
+  WorkspaceRepo,
+} from "@praximo/db"
 import {
   Admin,
   AdminId,
@@ -13,11 +19,12 @@ import {
   WorkspaceNotFound,
 } from "@praximo/domain"
 import { ConfigProvider, Effect, Layer, Ref } from "effect"
-import { CoachBotBranding, ManagerBotSender } from "@praximo/telegram"
+import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import * as TestClock from "effect/testing/TestClock"
 import { encode } from "jpeg-js"
 import { AdminSurface } from "./admin-surface.ts"
 import { WorkspaceBrandingStorage } from "./workspace-branding-storage.ts"
+import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
 const MANAGER_BOT_TOKEN = "123456789:AAExampleTestToken"
 const VALID_INIT_DATA =
@@ -218,6 +225,27 @@ const outcomeUnknownOnboardingRepoLayer = Layer.effect(
   }),
 )
 
+const unusedDeletionRepoLayer = Layer.succeed(
+  WorkspaceDeletionRepo.Service,
+  WorkspaceDeletionRepo.Service.of({
+    prepare: Effect.fn("WorkspaceDeletionRepo.Test.prepare")(() => Effect.die("unused")),
+    markPipeline: Effect.fn("WorkspaceDeletionRepo.Test.markPipeline")(() => Effect.die("unused")),
+    markFarewell: Effect.fn("WorkspaceDeletionRepo.Test.markFarewell")(() => Effect.die("unused")),
+    markBotReleased: Effect.fn("WorkspaceDeletionRepo.Test.markBotReleased")(() =>
+      Effect.die("unused"),
+    ),
+    finalize: Effect.fn("WorkspaceDeletionRepo.Test.finalize")(() => Effect.die("unused")),
+    isDeleting: Effect.fn("WorkspaceDeletionRepo.Test.isDeleting")(() => Effect.succeed(false)),
+    purgeExpired: Effect.fn("WorkspaceDeletionRepo.Test.purgeExpired")(() => Effect.succeed(0)),
+  }),
+)
+
+const deletionDependencies = Layer.mergeAll(
+  unusedDeletionRepoLayer,
+  WorkspaceRunCancellation.layer,
+  CoachBotRelease.layer,
+)
+
 const createDependencies = Layer.mergeAll(
   onboardingRepoLayer,
   CoachOnboardingToken.testLayer("test-secret", "PraximoMotherBot"),
@@ -226,6 +254,7 @@ const createDependencies = Layer.mergeAll(
   }),
   ManagerBotSender.testLayer,
   CoachBotBranding.testLayer,
+  deletionDependencies,
 )
 
 const appLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
@@ -253,6 +282,7 @@ const createAppLayer = Layer.provideMerge(
     }),
     ManagerBotSender.testLayer,
     CoachBotBranding.testLayer,
+    deletionDependencies,
   ),
 )
 
@@ -270,6 +300,7 @@ const createLayerWith = (onboardingLayer: Layer.Layer<CoachOnboardingRepo.Servic
       }),
       ManagerBotSender.testLayer,
       CoachBotBranding.testLayer,
+      deletionDependencies,
     ),
   )
 
@@ -319,6 +350,7 @@ const profileAppLayer = Layer.provideMerge(
     }),
     ManagerBotSender.testLayer,
     CoachBotBranding.testLayer,
+    deletionDependencies,
   ),
 )
 

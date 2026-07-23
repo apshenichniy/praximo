@@ -113,6 +113,56 @@ export const workspace = pgTable("workspace", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 })
 
+/**
+ * Operational receipt outside the tenancy cascade. It contains no workspace
+ * content or Telegram credentials and exists only to resume/reconcile deletion.
+ */
+export const workspaceDeletionOperation = pgTable(
+  "workspace_deletion_operation",
+  {
+    requestId: text("request_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    pipelineStatus: text("pipeline_status").notNull().default("pending"),
+    farewellStatus: text("farewell_status").notNull().default("pending"),
+    botReleaseStatus: text("bot_release_status").notNull().default("pending"),
+    state: text("state").notNull().default("prepared"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [
+    uniqueIndex("workspace_deletion_operation_one_prepared_per_workspace_idx")
+      .on(t.workspaceId)
+      .where(sql`${t.state} = 'prepared'`),
+    index("workspace_deletion_operation_expires_at_idx").on(t.expiresAt),
+  ],
+)
+
+/** Generic durable R2 deletion work, shared with the later retention slice. */
+export const objectCleanupJob = pgTable(
+  "object_cleanup_job",
+  {
+    id: text("id").primaryKey(),
+    objectKey: text("object_key").notNull().unique(),
+    reason: text("reason").notNull(),
+    correlationId: text("correlation_id").notNull(),
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    availableAt: timestamp("available_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    leaseUntil: timestamp("lease_until", { withTimezone: true, mode: "date" }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("object_cleanup_job_available_idx").on(t.status, t.availableAt),
+    index("object_cleanup_job_lease_idx").on(t.leaseUntil),
+  ],
+)
+
 export const coachOnboardingInvite = pgTable(
   "coach_onboarding_invite",
   {

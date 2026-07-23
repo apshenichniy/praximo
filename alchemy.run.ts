@@ -101,6 +101,7 @@ export default Alchemy.Stack(
     const pipeline = yield* Cloudflare.Worker("Pipeline", {
       main: "./apps/pipeline/src/index.ts",
       compatibility,
+      crons: ["*/15 * * * *"],
       env: {
         BOT: bot,
         UPLOADS: bucket,

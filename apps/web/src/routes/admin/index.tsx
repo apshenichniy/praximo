@@ -2,9 +2,10 @@ import { AddCircleIcon, ArrowRight01Icon, Search01Icon } from "@hugeicons/core-f
 import { HugeiconsIcon } from "@hugeicons/react"
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { Link, createFileRoute, getRouteApi } from "@tanstack/react-router"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
+import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
 import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
 
 export const Route = createFileRoute("/admin/")({ component: AdminHome })
@@ -39,6 +40,7 @@ function AdminHome() {
   const { initData } = adminRoute.useLoaderData()
   const { data: workspaces } = useSuspenseQuery(adminWorkspaceListQuery(initData))
   const [search, setSearch] = useState("")
+  const [deletionMessage, setDeletionMessage] = useState<string>()
   const normalizedSearch = search.trim().toLocaleLowerCase()
   const filteredWorkspaces = useMemo(
     () =>
@@ -52,9 +54,22 @@ function AdminHome() {
     [normalizedSearch, workspaces],
   )
 
+  useEffect(() => {
+    const message = sessionStorage.getItem("praximo.workspaceDeleted")
+    if (message === null) return
+    sessionStorage.removeItem("praximo.workspaceDeleted")
+    setDeletionMessage(message)
+  }, [])
+
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
       <AdminHero />
+
+      {deletionMessage ? (
+        <Alert className="mt-8">
+          <AlertDescription>{deletionMessage}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <label className="bg-card ring-border focus-within:ring-primary/60 mt-10 flex h-14 items-center gap-3 rounded-2xl px-4 ring-1 transition-shadow focus-within:ring-2">
         <HugeiconsIcon
