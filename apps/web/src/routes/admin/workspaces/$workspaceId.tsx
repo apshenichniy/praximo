@@ -65,7 +65,7 @@ const formatTimestamp = (value: string | undefined, empty: string): string =>
       }).format(new Date(value))
 
 const statusLabel = {
-  provisioning: "Provisioning",
+  "awaiting-setup": "Awaiting setup",
   connected: "Connected",
   "needs-relink": "Needs re-link",
 } as const
@@ -609,7 +609,7 @@ function StatusCard({ workspace }: { readonly workspace: AdminSurface.WorkspaceD
         Status
       </h2>
       <dl className="bg-card ring-border mt-4 overflow-hidden rounded-2xl ring-1">
-        <StatusRow label="Bot status" value={statusLabel[workspace.botStatus]} />
+        <StatusRow label="Bot connection" value={statusLabel[workspace.botStatus]} />
         <StatusRow
           label="Coach language"
           value={
@@ -671,7 +671,7 @@ function OnboardingCard({
 }) {
   const [copied, setCopied] = useState(false)
   const fallbackRef = useRef<HTMLTextAreaElement>(null)
-  const completed = workspace.botStatus !== "provisioning" || workspace.invite?.status === "used"
+  const completed = workspace.botStatus !== "awaiting-setup" || workspace.invite?.status === "used"
 
   const copy = async () => {
     if (invite?.link === undefined) return

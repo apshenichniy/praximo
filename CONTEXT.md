@@ -10,6 +10,10 @@ Multi-tenant platform for coaches: session scheduling, video calls, recording, t
 A coach's practice and the unit of tenancy; every client, session, and artifact belongs to exactly one workspace.
 _Avoid_: tenant, organization, account
 
+**Awaiting Setup**:
+A workspace created by the operator whose coach has not yet completed onboarding and taken ownership. Its onboarding Invite may be current or expired; no coach Bot is connected yet.
+_Avoid_: provisioning workspace, provisioned workspace, unclaimed workspace, pending workspace
+
 **Member**:
 A person with a role inside a workspace. The only MVP role is the owning coach; the role set is open (assistant, co-coach later).
 _Avoid_: user

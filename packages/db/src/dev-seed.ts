@@ -21,7 +21,7 @@ export const demoWorkspaces = [
       avatarR2Key: null,
     },
     bot: {
-      connectionStatus: "pending",
+      connectionStatus: "awaiting_setup",
       token: null,
     },
   },

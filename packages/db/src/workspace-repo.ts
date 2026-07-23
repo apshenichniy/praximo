@@ -11,13 +11,13 @@ import { Context, Effect, Layer, Schema } from "effect"
 import { Database, decodeFirstRow, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
 
-export const BotStatus = Schema.Literals(["provisioning", "connected", "needs-relink"])
-export type BotStatus = typeof BotStatus.Type
+export const BotConnectionStatus = Schema.Literals(["awaiting-setup", "connected", "needs-relink"])
+export type BotConnectionStatus = typeof BotConnectionStatus.Type
 
 export const ListItem = Schema.Struct({
   id: WorkspaceId,
   name: Schema.NonEmptyString,
-  botStatus: BotStatus,
+  botStatus: BotConnectionStatus,
   botUsername: Schema.optionalKey(Schema.NonEmptyString),
   hasCustomAvatar: Schema.Boolean,
 })
@@ -36,7 +36,7 @@ export const Detail = Schema.Struct({
   termsAcceptedAt: Schema.optionalKey(Schema.instanceOf(Date)),
   lastLoginAt: Schema.optionalKey(Schema.instanceOf(Date)),
   lastActivityAt: Schema.optionalKey(Schema.instanceOf(Date)),
-  botStatus: BotStatus,
+  botStatus: BotConnectionStatus,
   botUsername: Schema.optionalKey(Schema.NonEmptyString),
   invite: Schema.optionalKey(
     Schema.Struct({
@@ -146,8 +146,8 @@ export const layer = Layer.effect(
           id: row.id,
           name: row.name,
           botStatus:
-            row.connectionStatus === null || row.connectionStatus === "pending"
-              ? "provisioning"
+            row.connectionStatus === null || row.connectionStatus === "awaiting_setup"
+              ? "awaiting-setup"
               : row.connectionStatus === "needs_relink"
                 ? "needs-relink"
                 : row.connectionStatus,
@@ -216,9 +216,9 @@ export const layer = Layer.effect(
         catch: (cause) => new QueryFailed({ operation: "getDetail.invite", cause }),
       })
       const invite = inviteRows[0]
-      const botStatus: BotStatus =
-        row.connectionStatus === null || row.connectionStatus === "pending"
-          ? "provisioning"
+      const botStatus: BotConnectionStatus =
+        row.connectionStatus === null || row.connectionStatus === "awaiting_setup"
+          ? "awaiting-setup"
           : row.connectionStatus === "needs_relink"
             ? "needs-relink"
             : "connected"

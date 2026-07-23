@@ -196,7 +196,7 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
-  it.effect("rotates one provisioning invite idempotently and rejects stale rotation", () =>
+  it.effect("rotates one Awaiting Setup invite idempotently and rejects stale rotation", () =>
     Effect.gen(function* () {
       const repo = yield* CoachOnboardingRepo.Service
       const { client } = yield* Database.Service

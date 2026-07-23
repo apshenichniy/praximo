@@ -437,7 +437,7 @@ describe("AdminSurface", () => {
         workspace: {
           id: "ws_cb6bd55960914d69aeff2af000354c7f",
           name: "Ada Coaching",
-          botStatus: "provisioning",
+          botStatus: "awaiting-setup",
           hasCustomAvatar: false,
         },
         delivery: "sent",

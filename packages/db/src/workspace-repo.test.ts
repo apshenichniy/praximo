@@ -82,10 +82,10 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
       const repo = yield* WorkspaceRepo.Service
       const { client } = yield* Database.Service
       const noBot = WorkspaceId.make(uniqueId("ws_no_bot"))
-      const pending = WorkspaceId.make(uniqueId("ws_pending"))
+      const awaitingSetup = WorkspaceId.make(uniqueId("ws_awaiting_setup"))
       const connected = WorkspaceId.make(uniqueId("ws_connected"))
       const needsRelink = WorkspaceId.make(uniqueId("ws_needs_relink"))
-      const ids = [noBot, pending, connected, needsRelink]
+      const ids = [noBot, awaitingSetup, connected, needsRelink]
 
       yield* Effect.addFinalizer(() =>
         Effect.promise(() =>
@@ -96,7 +96,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
       yield* Effect.promise(() =>
         client.insert(schema.workspace).values([
           { id: noBot, name: "A No Bot" },
-          { id: pending, name: "B Pending" },
+          { id: awaitingSetup, name: "B Awaiting Setup" },
           { id: connected, name: "C Connected", avatarR2Key: "avatars/a-owner.png" },
           { id: needsRelink, name: "D Needs Relink" },
         ]),
@@ -104,8 +104,8 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
       yield* Effect.promise(() =>
         client.insert(schema.member).values([
           {
-            id: uniqueId("mem_pending"),
-            workspaceId: pending,
+            id: uniqueId("mem_awaiting_setup"),
+            workspaceId: awaitingSetup,
             role: "owner",
             language: "en",
             avatarR2Key: null,
@@ -128,7 +128,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
       )
       yield* Effect.promise(() =>
         client.insert(schema.bot).values([
-          { workspaceId: pending, connectionStatus: "pending" },
+          { workspaceId: awaitingSetup, connectionStatus: "awaiting_setup" },
           {
             workspaceId: connected,
             connectionStatus: "connected",
@@ -148,13 +148,13 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
         {
           id: noBot,
           name: "A No Bot",
-          botStatus: "provisioning",
+          botStatus: "awaiting-setup",
           hasCustomAvatar: false,
         },
         {
-          id: pending,
-          name: "B Pending",
-          botStatus: "provisioning",
+          id: awaitingSetup,
+          name: "B Awaiting Setup",
+          botStatus: "awaiting-setup",
           hasCustomAvatar: false,
         },
         {
