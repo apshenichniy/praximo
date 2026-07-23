@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url"
-import { assertNotProd, resolveStage, runReset } from "../packages/db/src/reset.ts"
+import { assertNotProd, parseResetArgs, resolveStage, runReset } from "../packages/db/src/reset.ts"
 
 /**
  * `bun run db:reset` — recreate the dev Neon branch, run migrations, and seed the
@@ -18,16 +18,22 @@ const requireEnv = (name: string): string => {
 
 const stage = resolveStage({ APP_STAGE: process.env.APP_STAGE, USER: process.env.USER })
 assertNotProd(stage)
+const demo = parseResetArgs(process.argv.slice(2))
 
 const migrationsFolder = fileURLToPath(new URL("../packages/db/migrations", import.meta.url))
 
-console.log(`db:reset — clearing and re-seeding stage ${stage}`)
+console.log(
+  `db:reset — clearing and re-seeding stage ${stage}${demo ? " with demo workspaces" : ""}`,
+)
 
 await runReset({
   stage,
   databaseUrl: requireEnv("DATABASE_URL"),
   adminTelegramIds: requireEnv("ADMIN_TELEGRAM_IDS"),
   migrationsFolder,
+  demo,
 })
 
-console.log(`db:reset — done (stage ${stage}): schema rebuilt, admins seeded`)
+console.log(
+  `db:reset — done (stage ${stage}): schema rebuilt, admins seeded${demo ? ", demo workspaces seeded" : ""}`,
+)

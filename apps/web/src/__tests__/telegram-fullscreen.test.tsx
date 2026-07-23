@@ -3,9 +3,17 @@ import { fileURLToPath } from "node:url"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
-import { AdminThemeShell } from "@/components/admin-theme-shell.tsx"
+import { AdminShell } from "@/components/admin-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
-import { enterFullscreen, type TelegramWebApp } from "@/lib/telegram.ts"
+import {
+  attachBackButton,
+  enterFullscreen,
+  readTelegramInitData,
+  revealTelegramWebApp,
+  type TelegramBackButton,
+  type TelegramWebApp,
+} from "@/lib/telegram.ts"
+import { APP_DARK_COLOR } from "@/lib/theme.ts"
 
 // The fullscreen requirement (mini-app.md: opens fullscreen via Bot API 8.0
 // `requestFullscreen`, with `fullscreenChanged` handling + safe-area insets)
@@ -13,25 +21,72 @@ import { enterFullscreen, type TelegramWebApp } from "@/lib/telegram.ts"
 // frame and the route wiring. The live `requestFullscreen` on a phone is what
 // the deploy verifies; these pin the version gate and the layout invariants.
 
+const fakeBackButton = (): TelegramBackButton => {
+  const backButton: TelegramBackButton = {
+    isVisible: false,
+    show: vi.fn(() => backButton),
+    hide: vi.fn(() => backButton),
+    onClick: vi.fn(() => backButton),
+    offClick: vi.fn(() => backButton),
+  }
+  return backButton
+}
+
 const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => ({
+  initData: "signed-init-data",
   version: "8.0",
   isFullscreen: false,
   ready: vi.fn(),
   expand: vi.fn(),
   isVersionAtLeast: () => true,
+  setHeaderColor: vi.fn(),
+  setBackgroundColor: vi.fn(),
+  setBottomBarColor: vi.fn(),
   requestFullscreen: vi.fn(),
+  BackButton: fakeBackButton(),
   onEvent: vi.fn(),
   offEvent: vi.fn(),
   ...overrides,
 })
 
+describe("Telegram admin adapters", () => {
+  it("reads non-empty signed initData only", () => {
+    expect(readTelegramInitData(fakeWebApp())).toBe("signed-init-data")
+    expect(readTelegramInitData(fakeWebApp({ initData: "  " }))).toBeUndefined()
+    expect(readTelegramInitData(undefined)).toBeUndefined()
+  })
+
+  it("shows the native BackButton and detaches it on route exit", () => {
+    const webApp = fakeWebApp()
+    const onBack = vi.fn()
+
+    const detach = attachBackButton(webApp, onBack)
+
+    expect(webApp.BackButton.onClick).toHaveBeenCalledWith(onBack)
+    expect(webApp.BackButton.show).toHaveBeenCalledOnce()
+
+    detach()
+    expect(webApp.BackButton.offClick).toHaveBeenCalledWith(onBack)
+    expect(webApp.BackButton.hide).toHaveBeenCalledOnce()
+  })
+})
+
 describe("enterFullscreen", () => {
-  it("expands and requests fullscreen on a Bot API 8.0+ host", () => {
+  it("sets dark host chrome before revealing and requesting fullscreen", () => {
     const webApp = fakeWebApp()
     const onChange = vi.fn()
 
     const detach = enterFullscreen(webApp, onChange)
 
+    expect(webApp.setHeaderColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    expect(webApp.setBottomBarColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    const [readyOrder = Number.POSITIVE_INFINITY] = vi.mocked(webApp.ready).mock.invocationCallOrder
+    expect(vi.mocked(webApp.setHeaderColor).mock.invocationCallOrder[0]).toBeLessThan(readyOrder)
+    expect(vi.mocked(webApp.setBackgroundColor).mock.invocationCallOrder[0]).toBeLessThan(
+      readyOrder,
+    )
+    expect(vi.mocked(webApp.setBottomBarColor).mock.invocationCallOrder[0]).toBeLessThan(readyOrder)
     expect(webApp.ready).toHaveBeenCalledOnce()
     expect(webApp.expand).toHaveBeenCalledOnce()
     expect(webApp.requestFullscreen).toHaveBeenCalledOnce()
@@ -55,6 +110,18 @@ describe("enterFullscreen", () => {
     expect(onChange).not.toHaveBeenCalled()
     expect(detach).toBeUndefined()
   })
+
+  it("uses only host color methods supported by the reported Bot API version", () => {
+    const webApp = fakeWebApp({
+      isVersionAtLeast: (version) => version === "6.1",
+    })
+
+    revealTelegramWebApp(webApp)
+
+    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    expect(webApp.setHeaderColor).not.toHaveBeenCalled()
+    expect(webApp.setBottomBarColor).not.toHaveBeenCalled()
+  })
 })
 
 describe("TelegramFullscreen", () => {
@@ -71,12 +138,12 @@ describe("TelegramFullscreen", () => {
   })
 })
 
-describe("AdminThemeShell safe-area insets", () => {
+describe("AdminShell safe-area insets", () => {
   it("pads the frame by the host's device + content safe-area insets", () => {
     const html = renderToStaticMarkup(
-      <AdminThemeShell>
+      <AdminShell>
         <span>content</span>
-      </AdminThemeShell>,
+      </AdminShell>,
     )
 
     expect(html).toContain("--tg-safe-area-inset-top")

@@ -1,18 +1,29 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
+import type { QueryClient } from "@tanstack/react-query"
+import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router"
 
-import coachCss from "@/styles/coach.css?url"
+import { TELEGRAM_WEBAPP_SRC } from "@/lib/telegram.ts"
+import { APP_DARK_COLOR } from "@/lib/theme.ts"
+import appCss from "@/styles/app.css?url"
 
-// The coach root: a neutral default theme (placeholder until the coach UI
-// ticket). `coach.css` is the only stylesheet the shell links, so coach routes
-// never load the admin theme.
-export const Route = createRootRoute({
+const darkThemeColor = APP_DARK_COLOR
+const darkBackground = "oklch(0.148 0.004 228.8)"
+const darkForeground = "oklch(0.987 0.002 197.1)"
+const criticalDarkCss = `html,body{background:${darkThemeColor};background:${darkBackground};color:${darkForeground};color-scheme:dark;font-family:"Nunito Sans Variable",ui-sans-serif,system-ui,sans-serif}`
+
+export interface RouterContext {
+  readonly queryClient: QueryClient
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "theme-color", content: darkThemeColor },
       { title: "Praximo" },
     ],
-    links: [{ rel: "stylesheet", href: coachCss }],
+    links: [{ rel: "stylesheet", href: appCss }],
+    scripts: [{ src: TELEGRAM_WEBAPP_SRC }],
   }),
   notFoundComponent: () => (
     <main className="container mx-auto p-4 pt-16">
@@ -25,8 +36,9 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
+        <style>{criticalDarkCss}</style>
         <HeadContent />
       </head>
       <body>

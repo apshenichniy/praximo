@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 
-import { enterFullscreen, TELEGRAM_WEBAPP_SRC } from "@/lib/telegram.ts"
+import { enterFullscreen, loadTelegramWebApp } from "@/lib/telegram.ts"
 
 /**
  * Drives the Mini App into fullscreen on mount (mini-app.md: "opens fullscreen …
@@ -20,26 +20,15 @@ export function TelegramFullscreen() {
     let cancelled = false
     let detach: (() => void) | undefined
 
-    const start = () => {
-      const webApp = window.Telegram?.WebApp
+    const start = async () => {
+      const webApp = await loadTelegramWebApp()
       if (cancelled || !webApp) return
       detach = enterFullscreen(webApp, () => {
         document.documentElement.classList.toggle("tg-fullscreen", webApp.isFullscreen)
       })
     }
 
-    // The host script may already be present (e.g. a client-side navigation);
-    // otherwise load it and enter fullscreen once it installs the global.
-    if (window.Telegram?.WebApp) {
-      start()
-    } else {
-      const script = document.createElement("script")
-      script.src = TELEGRAM_WEBAPP_SRC
-      script.async = true
-      script.addEventListener("load", start)
-      document.head.appendChild(script)
-      detach = () => script.removeEventListener("load", start)
-    }
+    void start()
 
     return () => {
       cancelled = true

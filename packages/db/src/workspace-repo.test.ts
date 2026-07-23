@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Workspace, WorkspaceId } from "@praximo/domain"
-import { eq } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Database } from "./client.ts"
 import * as schema from "./schema.ts"
@@ -65,6 +65,101 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
 
       expect((yield* repo.findById(first)).name).toBe("First")
       expect((yield* repo.findById(second)).name).toBe("Second")
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("lists every workspace once with normalized bot status and optional owner data", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkspaceRepo.Service
+      const { client } = yield* Database.Service
+      const noBot = WorkspaceId.make(uniqueId("ws_no_bot"))
+      const pending = WorkspaceId.make(uniqueId("ws_pending"))
+      const connected = WorkspaceId.make(uniqueId("ws_connected"))
+      const needsRelink = WorkspaceId.make(uniqueId("ws_needs_relink"))
+      const ids = [noBot, pending, connected, needsRelink]
+
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client.delete(schema.workspace).where(inArray(schema.workspace.id, ids)),
+        ).pipe(Effect.asVoid),
+      )
+
+      yield* Effect.promise(() =>
+        client.insert(schema.workspace).values([
+          { id: noBot, name: "A No Bot" },
+          { id: pending, name: "B Pending" },
+          { id: connected, name: "C Connected" },
+          { id: needsRelink, name: "D Needs Relink" },
+        ]),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.member).values([
+          {
+            id: uniqueId("mem_pending"),
+            workspaceId: pending,
+            role: "owner",
+            language: "en",
+            avatarR2Key: null,
+          },
+          {
+            id: uniqueId("mem_connected_first"),
+            workspaceId: connected,
+            role: "owner",
+            language: "en",
+            avatarR2Key: "avatars/z-owner.png",
+          },
+          {
+            id: uniqueId("mem_connected_second"),
+            workspaceId: connected,
+            role: "owner",
+            language: "en",
+            avatarR2Key: "avatars/a-owner.png",
+          },
+        ]),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.bot).values([
+          { workspaceId: pending, connectionStatus: "pending" },
+          {
+            workspaceId: connected,
+            connectionStatus: "connected",
+            username: "connected_coach_bot",
+          },
+          {
+            workspaceId: needsRelink,
+            connectionStatus: "needs_relink",
+            username: "relink_coach_bot",
+          },
+        ]),
+      )
+
+      const listed = (yield* repo.list()).filter((item) => ids.includes(item.id))
+
+      expect(listed).toEqual([
+        {
+          id: noBot,
+          name: "A No Bot",
+          botStatus: "provisioning",
+        },
+        {
+          id: pending,
+          name: "B Pending",
+          botStatus: "provisioning",
+        },
+        {
+          id: connected,
+          name: "C Connected",
+          botStatus: "connected",
+          botUsername: "connected_coach_bot",
+          ownerAvatarR2Key: "avatars/a-owner.png",
+        },
+        {
+          id: needsRelink,
+          name: "D Needs Relink",
+          botStatus: "needs-relink",
+          botUsername: "relink_coach_bot",
+        },
+      ])
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 })

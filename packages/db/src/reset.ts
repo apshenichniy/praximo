@@ -4,6 +4,7 @@ import { migrate } from "drizzle-orm/neon-http/migrator"
 import { Effect, Layer } from "effect"
 import { AdminRepo } from "./admin-repo.ts"
 import { Database } from "./client.ts"
+import { seedDemoWorkspaces } from "./dev-seed.ts"
 
 /**
  * The dev-tooling half of db:reset (admin-surface.md §Dev tooling), kept as pure,
@@ -12,11 +13,12 @@ import { Database } from "./client.ts"
  * in `scripts/db-reset.ts` supplies the real env and does the logging.
  *
  * "Recreates/clears the branch" is done at schema granularity: dropping and
- * recreating `public` wipes every table and the migration bookkeeping, so the
- * subsequent migrate rebuilds from zero. This needs only the connection URI — no
- * Neon control-plane call — so it never contends with Alchemy's ownership of the
- * branch. (Alchemy tracks its deploy-time migrations in `neon_migrations`; the
- * migrator here uses its own `__drizzle_migrations` table. They don't collide.)
+ * recreating `public` wipes every application table and Alchemy's bookkeeping.
+ * The local Drizzle migrator keeps its ledger in a separate `drizzle` schema, so
+ * that schema is reset as well; otherwise it would incorrectly skip migrations
+ * after `public` was emptied. This needs only the connection URI — no Neon
+ * control-plane call — so it never contends with Alchemy's ownership of the
+ * branch.
  */
 
 /** Hardcoded stage guard (ADR 0003 stages `dev_<user>` / `prod`). */
@@ -59,6 +61,19 @@ export const parseAdminTelegramIds = (value: string): ReadonlyArray<TelegramId> 
   })
 }
 
+/** `db:reset` accepts no arguments besides the explicit demo-fixture switch. */
+export const parseResetArgs = (args: ReadonlyArray<string>): boolean => {
+  if (args.length === 0) return false
+  if (args.length === 1 && args[0] === "--demo") return true
+  throw new Error(`unknown db:reset arguments: ${args.join(" ")}`)
+}
+
+export type ResetSeedStep = "admins" | "demo-workspaces"
+
+/** The ordinary reset stays empty; demo fixtures are always an explicit step. */
+export const makeResetSeedPlan = (demo: boolean): ReadonlyArray<ResetSeedStep> =>
+  demo ? ["admins", "demo-workspaces"] : ["admins"]
+
 /** Seed every configured platform admin; repository upserts make duplicates idempotent. */
 export const seedAdmins = Effect.fn("Reset.seedAdmins")(function* (
   telegramIds: ReadonlyArray<TelegramId>,
@@ -75,6 +90,7 @@ export interface ResetConfig {
   /** The raw comma-separated admin Telegram ids from `.env`. */
   readonly adminTelegramIds: string
   readonly migrationsFolder: string
+  readonly demo?: boolean
 }
 
 /**
@@ -89,13 +105,23 @@ export const runReset = async (config: ResetConfig): Promise<void> => {
 
   const client = Database.makeClient(config.databaseUrl)
 
+  await client.execute(sql`drop schema if exists drizzle cascade`)
   await client.execute(sql`drop schema if exists public cascade`)
   await client.execute(sql`create schema public`)
 
   await migrate(client, { migrationsFolder: config.migrationsFolder })
 
+  const seedPlan = makeResetSeedPlan(config.demo === true)
   await Effect.runPromise(
-    seedAdmins(adminTelegramIds).pipe(
+    Effect.gen(function* () {
+      for (const step of seedPlan) {
+        if (step === "admins") {
+          yield* seedAdmins(adminTelegramIds)
+        } else {
+          yield* seedDemoWorkspaces()
+        }
+      }
+    }).pipe(
       Effect.provide(AdminRepo.layer),
       // Reuse the one client already built for the DDL, rather than opening a second.
       Effect.provide(Layer.succeed(Database.Service, Database.Service.of({ client }))),
