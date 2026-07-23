@@ -2,7 +2,7 @@ import { TelegramId } from "@praximo/domain"
 import { Api, GrammyError, HttpError } from "grammy"
 import { Config, Context, Effect, Layer, Option, Redacted, Ref, Schema } from "effect"
 
-export const FailureCategory = Schema.Literals(["bot-api", "transport", "unknown"])
+export const FailureCategory = Schema.Literals(["bot-api", "transport", "undeliverable", "unknown"])
 export type FailureCategory = typeof FailureCategory.Type
 
 export interface Interface {
@@ -52,7 +52,10 @@ const makeLayer = (fetch?: typeof globalThis.fetch) =>
               recipient,
               category:
                 cause instanceof GrammyError
-                  ? "bot-api"
+                  ? cause.error_code === 403 ||
+                    cause.description.toLocaleLowerCase().includes("chat not found")
+                    ? "undeliverable"
+                    : "bot-api"
                   : cause instanceof HttpError
                     ? "transport"
                     : "unknown",

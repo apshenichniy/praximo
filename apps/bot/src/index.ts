@@ -1,9 +1,10 @@
 import { WorkerEntrypoint } from "cloudflare:workers"
-import { TelegramId } from "@praximo/domain"
-import { CoachBotBranding, ManagerBotSender } from "@praximo/telegram"
+import { TelegramId, WorkspaceId } from "@praximo/domain"
+import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import {
   type Env,
   handleCoachBotBrandingRpc,
+  handleCoachBotReleaseRpc,
   handleManagerTextRpc,
   handleRequest,
   handleScheduled,
@@ -15,7 +16,10 @@ import {
  * Public HTTP remains limited to `/health`; inbound webhooks arrive in later
  * bot-provisioning tickets.
  */
-export default class BotWorker extends WorkerEntrypoint<Env> implements ManagerBotSender.RpcClient {
+export default class BotWorker
+  extends WorkerEntrypoint<Env>
+  implements ManagerBotSender.RpcClient, CoachBotBranding.RpcClient, CoachBotRelease.RpcClient
+{
   override fetch(request: Request): Promise<Response> {
     return handleRequest(request, this.env)
   }
@@ -30,5 +34,9 @@ export default class BotWorker extends WorkerEntrypoint<Env> implements ManagerB
 
   applyCoachBotBranding(profile: CoachBotBranding.Profile): Promise<CoachBotBranding.RpcResult> {
     return handleCoachBotBrandingRpc(this.env, profile)
+  }
+
+  releaseCoachBot(workspaceId: WorkspaceId): Promise<CoachBotRelease.Result> {
+    return handleCoachBotReleaseRpc(this.env, workspaceId)
   }
 }

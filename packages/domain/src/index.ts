@@ -3,6 +3,12 @@ export { TelegramId } from "./telegram-id.ts"
 export { CoachOnboardingInviteId, CoachOnboardingInviteStatus } from "./coach-onboarding.ts"
 export { Workspace, WorkspaceId, WorkspaceNotFound } from "./workspace.ts"
 export {
+  DeleteWorkspaceInput,
+  WorkspaceDeletionRequestId,
+  WorkspaceRunCancellationResult,
+  type WorkspaceRunCancellationRpcClient,
+} from "./workspace-deletion.ts"
+export {
   CoachLanguage,
   CreateWorkspaceInput,
   CreateWorkspaceRequestId,

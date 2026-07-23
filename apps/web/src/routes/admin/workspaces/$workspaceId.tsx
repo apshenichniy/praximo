@@ -14,10 +14,21 @@ import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { AvatarProcessingError, normalizeAvatarFile } from "@/features/admin/avatar-normalizer.ts"
 import {
   adminWorkspaceDetailQuery,
+  deleteWorkspaceMutation,
   reissueWorkspaceInviteMutation,
   retryWorkspaceBrandingMutation,
   updateWorkspaceProfileMutation,
 } from "@/features/admin/workspace-queries.ts"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog.tsx"
+import { Input } from "@/components/ui/input.tsx"
 import { loadTelegramWebApp } from "@/lib/telegram.ts"
 import {
   loadAdminWorkspaceAvatar,
@@ -102,11 +113,16 @@ function WorkspaceDetailsPage() {
   const [saveError, setSaveError] = useState<string>()
   const [retryAvatar, setRetryAvatar] = useState(false)
   const [inviteResult, setInviteResult] = useState<AdminSurface.CreateResult>()
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [confirmationName, setConfirmationName] = useState("")
+  const [deleteError, setDeleteError] = useState<string>()
   const reissueRequestId = useRef<string | undefined>(undefined)
+  const deleteRequestId = useRef<string | undefined>(undefined)
 
   const update = useMutation(updateWorkspaceProfileMutation(initData, queryClient))
   const retryBranding = useMutation(retryWorkspaceBrandingMutation(initData, queryClient))
   const reissue = useMutation(reissueWorkspaceInviteMutation(initData, queryClient))
+  const remove = useMutation(deleteWorkspaceMutation(initData, queryClient))
   const resend = useMutation({
     mutationFn: (inviteId: string) => resendAdminWorkspaceInvite({ data: { initData, inviteId } }),
     onSuccess: (result) => {
@@ -340,6 +356,43 @@ function WorkspaceDetailsPage() {
       })
   }
 
+  const deleteWorkspace = async () => {
+    deleteRequestId.current ??= crypto.randomUUID()
+    setDeleteError(undefined)
+    const result = await remove
+      .mutateAsync({
+        workspaceId,
+        requestId: deleteRequestId.current,
+        confirmationName,
+      })
+      .catch(() => undefined)
+    if (result === undefined) {
+      setDeleteError("Deletion failed. Check your connection and try again.")
+      return
+    }
+    if (!result.ok) {
+      const messages = {
+        validation: "The deletion request is invalid. Close this dialog and try again.",
+        confirmation: `Enter “${workspace.name}” exactly as shown.`,
+        conflict: "Another deletion request is already in progress. Retry from this dialog.",
+        retryable: "A required cleanup step failed. The workspace was kept; retry deletion.",
+        blocked:
+          "The connected bot could not be released. The workspace was kept; contact support before retrying.",
+        server: "Deletion failed. The workspace was kept; try again.",
+      } as const
+      setDeleteError(messages[result.error])
+      return
+    }
+
+    sessionStorage.setItem(
+      "praximo.workspaceDeleted",
+      result.value.status === "deleted-farewell-undeliverable"
+        ? "Workspace deleted. The coach farewell could not be delivered."
+        : "Workspace deleted",
+    )
+    await router.navigate({ to: "/admin" })
+  }
+
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-6 pb-32">
       <TelegramBackButton onBack={goBack} />
@@ -542,6 +595,36 @@ function WorkspaceDetailsPage() {
           }}
           onReissue={rotateInvite}
         />
+        <form.Subscribe selector={(state) => state.isDirty}>
+          {(formDirty) => (
+            <DangerZone
+              workspaceName={workspace.name}
+              open={deleteOpen}
+              confirmationName={confirmationName}
+              error={deleteError}
+              disabled={
+                formDirty ||
+                avatarIntent !== "keep" ||
+                update.isPending ||
+                processingAvatar ||
+                remove.isPending
+              }
+              pending={remove.isPending}
+              onOpenChange={(open) => {
+                setDeleteOpen(open)
+                if (!open) {
+                  setConfirmationName("")
+                  setDeleteError(undefined)
+                }
+              }}
+              onConfirmationNameChange={(value) => {
+                setConfirmationName(value)
+                setDeleteError(undefined)
+              }}
+              onDelete={() => void deleteWorkspace()}
+            />
+          )}
+        </form.Subscribe>
 
         {saveError ? (
           <div className="bg-destructive/10 text-destructive mt-8 rounded-2xl px-4 py-3 text-sm">
@@ -599,6 +682,94 @@ function WorkspaceDetailsPage() {
         </div>
       </form>
     </main>
+  )
+}
+
+function DangerZone({
+  workspaceName,
+  open,
+  confirmationName,
+  error,
+  disabled,
+  pending,
+  onOpenChange,
+  onConfirmationNameChange,
+  onDelete,
+}: {
+  readonly workspaceName: string
+  readonly open: boolean
+  readonly confirmationName: string
+  readonly error: string | undefined
+  readonly disabled: boolean
+  readonly pending: boolean
+  readonly onOpenChange: (open: boolean) => void
+  readonly onConfirmationNameChange: (value: string) => void
+  readonly onDelete: () => void
+}) {
+  return (
+    <section className="mt-12" aria-labelledby="danger-zone-heading">
+      <h2
+        id="danger-zone-heading"
+        className="text-destructive px-1 text-2xl font-semibold tracking-tight"
+      >
+        Danger zone
+      </h2>
+      <div className="border-destructive/40 bg-destructive/5 mt-4 rounded-2xl border p-5">
+        <p className="font-semibold">Delete workspace permanently</p>
+        <p className="text-muted-foreground mt-2 text-sm">
+          Deletes the workspace, its clients, sessions, transcripts, artifacts, and custom uploads.
+          This cannot be undone.
+        </p>
+        {disabled ? (
+          <p className="text-muted-foreground mt-3 text-sm">
+            Save or discard profile changes before deleting this workspace.
+          </p>
+        ) : null}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onOpenChange(true)}
+          className="border-destructive text-destructive mt-5 h-11 rounded-xl border px-4 font-semibold disabled:opacity-50"
+        >
+          Delete workspace
+        </button>
+      </div>
+
+      <AlertDialog open={open} onOpenChange={onOpenChange}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{workspaceName}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes all workspace data. To confirm, enter the workspace name
+              exactly as shown.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium">Workspace name</span>
+            <Input
+              value={confirmationName}
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-invalid={error === undefined ? undefined : true}
+              onChange={(event) => onConfirmationNameChange(event.target.value)}
+            />
+          </label>
+          {error ? <p className="text-destructive text-sm">{error}</p> : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <button
+              type="button"
+              disabled={pending || confirmationName !== workspaceName}
+              onClick={onDelete}
+              className="bg-destructive text-destructive-foreground h-10 rounded-4xl px-4 text-sm font-medium disabled:opacity-50"
+            >
+              {pending ? "Deleting…" : "Delete permanently"}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </section>
   )
 }
 

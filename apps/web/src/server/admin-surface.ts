@@ -1,16 +1,19 @@
 import { createHash } from "node:crypto"
 import { CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
-import { AdminRepo, CoachOnboardingRepo, WorkspaceRepo } from "@praximo/db"
+import { AdminRepo, CoachOnboardingRepo, WorkspaceDeletionRepo, WorkspaceRepo } from "@praximo/db"
 import {
   CoachLanguage,
   CreateWorkspaceInput,
+  DeleteWorkspaceInput,
   TelegramId,
   UpdateWorkspaceProfileInput,
   WorkspaceId,
+  WorkspaceRunCancellationResult,
 } from "@praximo/domain"
-import { CoachBotBranding, ManagerBotSender } from "@praximo/telegram"
+import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { Clock, Context, DateTime, Effect, Layer, Result, Schema } from "effect"
 import { WorkspaceBrandingStorage } from "./workspace-branding-storage.ts"
+import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
 export type DeliveryStatus = "sent" | "failed" | "unknown"
 
@@ -50,6 +53,10 @@ export interface UpdateProfileResult {
   readonly workspace: WorkspaceDetail
   readonly status: "saved" | "saved-branding-failed"
   readonly retryAvatar: boolean
+}
+
+export interface DeleteResult {
+  readonly status: "deleted" | "deleted-farewell-undeliverable"
 }
 
 export interface Interface {
@@ -109,6 +116,20 @@ export interface Interface {
     expectedInviteId: string,
     requestId: string,
   ) => Effect.Effect<CreateResult, AccessDenied | ReissueUnavailable | LoadFailed>
+  readonly deleteWorkspace: (
+    initData: string,
+    workspaceId: string,
+    input: unknown,
+  ) => Effect.Effect<
+    DeleteResult,
+    | AccessDenied
+    | ValidationFailed
+    | DeleteConfirmationMismatch
+    | DeletionConflict
+    | DeletionRetryable
+    | DeletionFailed
+    | LoadFailed
+  >
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/web/AdminSurface") {}
@@ -147,8 +168,29 @@ export class AvatarUnavailable extends Schema.TaggedErrorClass<AvatarUnavailable
   {},
 ) {}
 
+export class DeleteConfirmationMismatch extends Schema.TaggedErrorClass<DeleteConfirmationMismatch>()(
+  "AdminSurface.DeleteConfirmationMismatch",
+  {},
+) {}
+
+export class DeletionConflict extends Schema.TaggedErrorClass<DeletionConflict>()(
+  "AdminSurface.DeletionConflict",
+  {},
+) {}
+
+export class DeletionRetryable extends Schema.TaggedErrorClass<DeletionRetryable>()(
+  "AdminSurface.DeletionRetryable",
+  { operation: Schema.Literals(["pipeline", "farewell", "bot-release", "finalize"]) },
+) {}
+
+export class DeletionFailed extends Schema.TaggedErrorClass<DeletionFailed>()(
+  "AdminSurface.DeletionFailed",
+  { operation: Schema.Literal("bot-release") },
+) {}
+
 const decodeCreateInput = Schema.decodeUnknownEffect(CreateWorkspaceInput)
 const decodeUpdateInput = Schema.decodeUnknownEffect(UpdateWorkspaceProfileInput)
+const decodeDeleteInput = Schema.decodeUnknownEffect(DeleteWorkspaceInput)
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId)
 const decodeInviteId = Schema.decodeUnknownEffect(
   Schema.NonEmptyString.pipe(Schema.brand("CoachOnboardingInviteId")),
@@ -166,6 +208,17 @@ const forwardableMessage = (language: CoachLanguage, name: string, link: string)
   }
 }
 
+const deletionFarewell = (language: CoachLanguage, name: string): string => {
+  switch (language) {
+    case "uk":
+      return `Ваш простір Praximo «${name}» видалено. Бот більше не підключений до Praximo.`
+    case "ru":
+      return `Ваше пространство Praximo «${name}» удалено. Бот больше не подключён к Praximo.`
+    case "en":
+      return `Your Praximo workspace “${name}” has been deleted. The bot is no longer connected to Praximo.`
+  }
+}
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -177,7 +230,9 @@ export const layer = Layer.effect(
     const storage = yield* WorkspaceBrandingStorage.Service
     const sender = yield* ManagerBotSender.Service
     const botBranding = yield* CoachBotBranding.Service
-
+    const deletions = yield* WorkspaceDeletionRepo.Service
+    const runCancellation = yield* WorkspaceRunCancellation.Service
+    const botRelease = yield* CoachBotRelease.Service
     const verifyAdmin = Effect.fn("AdminSurface.verifyAdmin")(function* (rawInitData: string) {
       const telegramId = yield* initData
         .verify(rawInitData)
@@ -617,6 +672,129 @@ export const layer = Layer.effect(
       return yield* deliver(recipient, aggregate)
     })
 
+    const deleteWorkspace = Effect.fn("AdminSurface.deleteWorkspace")(function* (
+      rawInitData: string,
+      rawWorkspaceId: string,
+      rawInput: unknown,
+    ) {
+      yield* verifyAdmin(rawInitData)
+      const workspaceId = yield* decodeWorkspaceId(rawWorkspaceId).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
+      const input = yield* decodeDeleteInput(rawInput).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
+      let operation = yield* deletions
+        .prepare(
+          workspaceId,
+          input.requestId,
+          input.confirmationName,
+          new Date(yield* Clock.currentTimeMillis),
+        )
+        .pipe(
+          Effect.mapError((error) => {
+            switch (error._tag) {
+              case "WorkspaceDeletionRepo.NameMismatch":
+                return new DeleteConfirmationMismatch()
+              case "WorkspaceDeletionRepo.RequestConflict":
+                return new DeletionConflict()
+              default:
+                return new LoadFailed({ operation: "deleteWorkspace.prepare" })
+            }
+          }),
+        )
+
+      if (operation.state === "completed") {
+        return {
+          status:
+            operation.farewellStatus === "undeliverable"
+              ? "deleted-farewell-undeliverable"
+              : "deleted",
+        } satisfies DeleteResult
+      }
+
+      if (operation.pipelineStatus === "pending") {
+        const cancellation = yield* runCancellation.cancel(workspaceId)
+        if (WorkspaceRunCancellationResult.guards.Failed(cancellation)) {
+          return yield* new DeletionRetryable({ operation: "pipeline" })
+        }
+        operation = yield* deletions
+          .markPipeline(
+            input.requestId,
+            WorkspaceRunCancellationResult.guards.Cancelled(cancellation)
+              ? "cancelled"
+              : "nothing-active",
+            new Date(yield* Clock.currentTimeMillis),
+          )
+          .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "pipeline" })))
+      }
+
+      if (operation.farewellStatus === "pending") {
+        if (
+          operation.coachTelegramId === undefined ||
+          operation.coachLanguage === undefined ||
+          operation.workspaceName === undefined
+        ) {
+          operation = yield* deletions
+            .markFarewell(
+              input.requestId,
+              "not-applicable",
+              new Date(yield* Clock.currentTimeMillis),
+            )
+            .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "farewell" })))
+        } else {
+          const recipient = yield* Schema.decodeUnknownEffect(TelegramId)(
+            operation.coachTelegramId,
+          ).pipe(Effect.mapError(() => new DeletionRetryable({ operation: "farewell" })))
+          const farewell = yield* sender
+            .sendText(recipient, deletionFarewell(operation.coachLanguage, operation.workspaceName))
+            .pipe(Effect.result)
+          if (Result.isFailure(farewell) && farewell.failure.category !== "undeliverable") {
+            return yield* new DeletionRetryable({ operation: "farewell" })
+          }
+          operation = yield* deletions
+            .markFarewell(
+              input.requestId,
+              Result.isFailure(farewell) ? "undeliverable" : "sent",
+              new Date(yield* Clock.currentTimeMillis),
+            )
+            .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "farewell" })))
+        }
+      }
+
+      if (operation.botReleaseStatus === "pending") {
+        const released = yield* botRelease.release(workspaceId)
+        if (CoachBotRelease.Result.guards.Failed(released)) {
+          return yield* released.retryable
+            ? new DeletionRetryable({ operation: "bot-release" })
+            : new DeletionFailed({ operation: "bot-release" })
+        }
+        operation = yield* deletions
+          .markBotReleased(
+            input.requestId,
+            CoachBotRelease.Result.guards.Released(released)
+              ? "released"
+              : CoachBotRelease.Result.guards.AlreadyReleased(released)
+                ? "already-released"
+                : "not-connected",
+            new Date(yield* Clock.currentTimeMillis),
+          )
+          .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "bot-release" })))
+      }
+
+      operation = yield* deletions
+        .finalize(input.requestId, new Date(yield* Clock.currentTimeMillis))
+        .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "finalize" })))
+      yield* runCancellation.kickObjectCleanup()
+
+      return {
+        status:
+          operation.farewellStatus === "undeliverable"
+            ? "deleted-farewell-undeliverable"
+            : "deleted",
+      } satisfies DeleteResult
+    })
+
     return Service.of({
       listWorkspaces,
       createWorkspace,
@@ -626,6 +804,7 @@ export const layer = Layer.effect(
       updateWorkspaceProfile,
       retryWorkspaceBranding,
       reissueWorkspaceInvite,
+      deleteWorkspace,
     })
   }),
 )

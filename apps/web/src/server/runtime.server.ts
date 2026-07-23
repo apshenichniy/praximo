@@ -1,10 +1,18 @@
 import { CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
-import { AdminRepo, CoachOnboardingRepo, Database, WorkspaceRepo } from "@praximo/db"
-import { CoachBotBranding, ManagerBotSender } from "@praximo/telegram"
+import {
+  AdminRepo,
+  CoachOnboardingRepo,
+  Database,
+  WorkspaceDeletionRepo,
+  WorkspaceRepo,
+} from "@praximo/db"
+import type { WorkspaceRunCancellationRpcClient } from "@praximo/domain"
+import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
 import { type Bucket, WorkspaceBrandingStorage } from "./workspace-branding-storage.ts"
+import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
 interface Env {
   readonly DATABASE_URL: string
@@ -12,7 +20,10 @@ interface Env {
   readonly MANAGER_BOT_USERNAME: string
   readonly COACH_ONBOARDING_TOKEN_SECRET: string
   readonly DEFAULT_COACH_BOT_AVATAR_R2_KEY: string
-  readonly MANAGER_BOT?: ManagerBotSender.RpcClient & CoachBotBranding.RpcClient
+  readonly MANAGER_BOT?: ManagerBotSender.RpcClient &
+    CoachBotBranding.RpcClient &
+    CoachBotRelease.RpcClient
+  readonly PIPELINE?: WorkspaceRunCancellationRpcClient
   readonly UPLOADS: Bucket
 }
 
@@ -21,6 +32,7 @@ const runtimeFromEnv = (env: Env) => {
     AdminRepo.layer,
     WorkspaceRepo.layer,
     CoachOnboardingRepo.layer,
+    WorkspaceDeletionRepo.layer,
   ).pipe(Layer.provide(Database.layer))
   const sender =
     env.MANAGER_BOT === undefined
@@ -30,12 +42,22 @@ const runtimeFromEnv = (env: Env) => {
     env.MANAGER_BOT === undefined
       ? CoachBotBranding.layer
       : CoachBotBranding.rpcLayer(env.MANAGER_BOT)
+  const coachBotRelease =
+    env.MANAGER_BOT === undefined
+      ? CoachBotRelease.layer
+      : CoachBotRelease.rpcLayer(env.MANAGER_BOT)
+  const runCancellation =
+    env.PIPELINE === undefined
+      ? WorkspaceRunCancellation.layer
+      : WorkspaceRunCancellation.rpcLayer(env.PIPELINE)
   const dependencies = Layer.mergeAll(
     ManagerInitData.layer,
     CoachOnboardingToken.layer,
     WorkspaceBrandingStorage.layer(env.UPLOADS),
     branding,
     sender,
+    coachBotRelease,
+    runCancellation,
     repositories,
   )
   const app = AdminSurface.layer.pipe(Layer.provide(dependencies))
@@ -100,8 +122,12 @@ const resolveEnv = async (): Promise<Env> => {
       ? {}
       : {
           MANAGER_BOT: workerEnv.MANAGER_BOT as ManagerBotSender.RpcClient &
-            CoachBotBranding.RpcClient,
+            CoachBotBranding.RpcClient &
+            CoachBotRelease.RpcClient,
         }),
+    ...(workerEnv.PIPELINE === undefined
+      ? {}
+      : { PIPELINE: workerEnv.PIPELINE as WorkspaceRunCancellationRpcClient }),
     UPLOADS: (() => {
       if (workerEnv.UPLOADS === undefined) throw new Error("missing server binding UPLOADS")
       return workerEnv.UPLOADS as Bucket
@@ -195,6 +221,19 @@ export const reissueAdminWorkspaceInvite = async (
   return appRuntime.runPromise(
     Effect.flatMap(AdminSurface.Service, (service) =>
       service.reissueWorkspaceInvite(initData, workspaceId, expectedInviteId, requestId),
+    ),
+  )
+}
+
+export const deleteAdminWorkspace = async (
+  initData: string,
+  workspaceId: string,
+  input: unknown,
+) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) =>
+      service.deleteWorkspace(initData, workspaceId, input),
     ),
   )
 }

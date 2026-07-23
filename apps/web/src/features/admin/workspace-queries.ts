@@ -3,6 +3,8 @@ import { queryOptions } from "@tanstack/react-query"
 import {
   createAdminWorkspaceFromForm,
   type CreateWorkspaceTransportResult,
+  deleteAdminWorkspaceRequest,
+  type DeleteWorkspaceTransportResult,
   loadAdminWorkspace,
   loadAdminWorkspaces,
   reissueAdminWorkspaceInvite,
@@ -157,5 +159,31 @@ export const reissueWorkspaceInviteMutation = (initData: string, queryClient: Qu
   ) => {
     if (!result.ok) return
     void queryClient.invalidateQueries({ queryKey: workspaceKeys.detail(variables.workspaceId) })
+  },
+})
+
+export const deleteWorkspaceMutation = (initData: string, queryClient: QueryClient) => ({
+  mutationFn: ({
+    workspaceId,
+    requestId,
+    confirmationName,
+  }: {
+    readonly workspaceId: string
+    readonly requestId: string
+    readonly confirmationName: string
+  }): Promise<DeleteWorkspaceTransportResult> =>
+    deleteAdminWorkspaceRequest({
+      data: { initData, workspaceId, requestId, confirmationName },
+    }),
+  onSuccess: (
+    result: DeleteWorkspaceTransportResult,
+    variables: { readonly workspaceId: string },
+  ) => {
+    if (!result.ok) return
+    queryClient.removeQueries({ queryKey: workspaceKeys.detail(variables.workspaceId) })
+    queryClient.setQueryData<ReadonlyArray<AdminSurface.CreateResult["workspace"]>>(
+      workspaceKeys.list(),
+      (current) => current?.filter((workspace) => workspace.id !== variables.workspaceId),
+    )
   },
 })

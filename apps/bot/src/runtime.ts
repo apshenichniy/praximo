@@ -1,11 +1,12 @@
 import { createHash, timingSafeEqual } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
 import { CoachBotProvisioningRepo, Database, WorkspaceRepo } from "@praximo/db"
-import { TelegramId } from "@praximo/domain"
+import { TelegramId, WorkspaceId } from "@praximo/domain"
 import {
   BotRegistry,
   CoachBotBranding,
   CoachBotCredential,
+  CoachBotRelease,
   ManagerBotSender,
 } from "@praximo/telegram"
 import { Bot, InlineKeyboard, Keyboard } from "grammy"
@@ -18,6 +19,7 @@ import {
   prepareOnboarding,
   provisionManagedBot,
 } from "./provisioning.ts"
+import * as CoachBotReleaseLive from "./coach-bot-release.ts"
 
 export interface Env {
   readonly DATABASE_URL: string
@@ -34,12 +36,13 @@ export interface Env {
 const DbLive = Layer.mergeAll(WorkspaceRepo.layer, CoachBotProvisioningRepo.layer).pipe(
   Layer.provide(Database.layer),
 )
+const CoachBotDataLive = Layer.mergeAll(DbLive, CoachBotCredential.layer)
+const CoachBotReleaseLayer = Layer.provideMerge(CoachBotReleaseLive.layer, CoachBotDataLive)
 const AppLive = Layer.mergeAll(
-  DbLive,
+  CoachBotReleaseLayer,
   BotRegistry.layer,
   ManagerBotSender.layer,
   CoachOnboardingToken.layer,
-  CoachBotCredential.layer,
 )
 
 const runtimeFromEnv = (env: Env) =>
@@ -210,6 +213,13 @@ export const sendManagerText = Effect.fn("BotWorker.sendManagerText")(function* 
   )
 })
 
+export const releaseCoachBot = Effect.fn("BotWorker.releaseCoachBot")(function* (
+  workspaceId: WorkspaceId,
+) {
+  const release = yield* CoachBotRelease.Service
+  return yield* release.release(workspaceId)
+})
+
 export const handleRequest = async (request: Request, env: Env): Promise<Response> => {
   const pathname = new URL(request.url).pathname
   if (pathname === "/health") return Response.json(await getRuntime(env).runPromise(health))
@@ -242,3 +252,8 @@ export const handleCoachBotBrandingRpc = (
 
 export const handleScheduled = (env: Env): Promise<void> =>
   getRuntime(env).runPromise(deliverProvisioningNotifications())
+
+export const handleCoachBotReleaseRpc = (
+  env: Env,
+  workspaceId: WorkspaceId,
+): Promise<CoachBotRelease.Result> => getRuntime(env).runPromise(releaseCoachBot(workspaceId))
