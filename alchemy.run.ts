@@ -33,6 +33,8 @@ import * as Layer from "effect/Layer"
 
 // Every Worker shares one compatibility surface; keep it in step with the apps.
 const compatibility = { date: "2026-07-19", flags: ["nodejs_compat"] }
+const canonicalDevStage = "dev_apshenichniy"
+const canonicalDevWebDomain = "stage.praximo.io"
 
 export default Alchemy.Stack(
   "Praximo",
@@ -45,6 +47,8 @@ export default Alchemy.Stack(
     state: Cloudflare.state(),
   },
   Effect.gen(function* () {
+    const stage = yield* Alchemy.Stage
+
     // ── Neon: one EU project, one branch per stage ──
     // region MUST be explicit — the default is aws-us-east-1 and the resource
     // diffs on region, so a wrong first deploy replaces the project (ADR 0003).
@@ -94,6 +98,10 @@ export default Alchemy.Stack(
     const web = yield* Cloudflare.Website.Vite("Web", {
       rootDir: "./apps/web",
       compatibility,
+      // BotFather persists one Main Mini App URL per bot and its input rejects
+      // the generated workers.dev hostname. Keep the canonical dev stand on a
+      // stable short domain; other personal stages retain their isolated URLs.
+      ...(stage === canonicalDevStage ? { domain: canonicalDevWebDomain } : {}),
       env: {
         PIPELINE: pipeline,
         UPLOADS: bucket,
