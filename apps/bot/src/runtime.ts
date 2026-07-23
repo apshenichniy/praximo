@@ -51,6 +51,7 @@ const runtimeFromEnv = (env: Env) =>
 /** Exactly one runtime per Worker isolate (ADR 0002), built from `env` once. */
 let runtime: ReturnType<typeof runtimeFromEnv> | undefined
 let managerBot: Bot | undefined
+let managerBotInitialization: Promise<Bot> | undefined
 const coachBots = new Map<string, Bot>()
 
 const getRuntime = (env: Env) => (runtime ??= runtimeFromEnv(env))
@@ -83,8 +84,8 @@ const errorText = (tag: string, reason?: string): string => {
   return "Bot setup could not be started. Please try again or ask your administrator for help."
 }
 
-const makeManagerBot = (env: Env): Bot => {
-  const bot = new Bot(env.MANAGER_BOT_TOKEN)
+const makeManagerBot = (env: Env, telegramFetch: typeof globalThis.fetch): Bot => {
+  const bot = new Bot(env.MANAGER_BOT_TOKEN, { client: { fetch: telegramFetch } })
 
   bot.command("start", async (ctx) => {
     if (ctx.from === undefined || typeof ctx.match !== "string" || ctx.match.length === 0) {
@@ -125,7 +126,25 @@ const makeManagerBot = (env: Env): Bot => {
   return bot
 }
 
-const handleManagerWebhook = async (request: Request, env: Env): Promise<Response> => {
+const managerBotFor = (env: Env, telegramFetch: typeof globalThis.fetch): Promise<Bot> => {
+  if (managerBot !== undefined) return Promise.resolve(managerBot)
+  managerBotInitialization ??= (async () => {
+    const bot = makeManagerBot(env, telegramFetch)
+    await bot.init()
+    managerBot = bot
+    return bot
+  })().catch((cause: unknown) => {
+    managerBotInitialization = undefined
+    throw cause
+  })
+  return managerBotInitialization
+}
+
+const handleManagerWebhook = async (
+  request: Request,
+  env: Env,
+  telegramFetch: typeof globalThis.fetch,
+): Promise<Response> => {
   const received = request.headers.get("x-telegram-bot-api-secret-token") ?? ""
   if (!constantTimeEqual(received, env.MANAGER_BOT_WEBHOOK_SECRET)) {
     return new Response(null, { status: 401 })
@@ -136,7 +155,7 @@ const handleManagerWebhook = async (request: Request, env: Env): Promise<Respons
   }
   // The webhook's public origin is the canonical endpoint installed on every
   // coach bot. Attach it to this dispatch without persisting another secret.
-  const bot = (managerBot ??= makeManagerBot(env))
+  const bot = await managerBotFor(env, telegramFetch)
   if (update.managed_bot !== undefined) {
     const result = await getRuntime(env).runPromise(
       provisionManagedBot(
@@ -220,11 +239,15 @@ export const releaseCoachBot = Effect.fn("BotWorker.releaseCoachBot")(function* 
   return yield* release.release(workspaceId)
 })
 
-export const handleRequest = async (request: Request, env: Env): Promise<Response> => {
+export const handleRequest = async (
+  request: Request,
+  env: Env,
+  telegramFetch: typeof globalThis.fetch = globalThis.fetch,
+): Promise<Response> => {
   const pathname = new URL(request.url).pathname
   if (pathname === "/health") return Response.json(await getRuntime(env).runPromise(health))
   if (request.method !== "POST") return new Response(null, { status: 404 })
-  if (pathname === "/telegram/manager") return handleManagerWebhook(request, env)
+  if (pathname === "/telegram/manager") return handleManagerWebhook(request, env, telegramFetch)
   const match = /^\/telegram\/coach\/([0-9]+)$/.exec(pathname)
   if (match?.[1] !== undefined) return handleCoachWebhook(request, env, match[1])
   return new Response(null, { status: 404 })
