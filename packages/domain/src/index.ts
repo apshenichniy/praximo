@@ -6,7 +6,10 @@ export {
   CoachLanguage,
   CreateWorkspaceInput,
   CreateWorkspaceRequestId,
+  UpdateWorkspaceProfileInput,
+  WorkspaceAvatarIntent,
   WorkspaceDescriptionMaxLength,
   WorkspaceNameMaxLength,
+  WorkspaceProfileRequestId,
   WorkspaceShortDescriptionMaxLength,
 } from "./workspace-create.ts"

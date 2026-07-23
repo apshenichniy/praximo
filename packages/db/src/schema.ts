@@ -153,6 +153,9 @@ export const member = pgTable(
     // Auth identity — the coach authenticates via Telegram (ticket #5).
     telegramUserId: text("telegram_user_id"),
     avatarR2Key: text("avatar_r2_key"),
+    termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true, mode: "date" }),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true, mode: "date" }),
+    lastActivityAt: timestamp("last_activity_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },

@@ -53,6 +53,13 @@ export interface CreateOutcome {
   readonly created: boolean
 }
 
+export interface ReissueInput {
+  readonly workspaceId: WorkspaceId
+  readonly expectedInviteId: CoachOnboardingInviteId
+  readonly requestId: string
+  readonly now: Date
+}
+
 export interface Interface {
   readonly lookupCreate: (
     input: CreateInput,
@@ -71,6 +78,9 @@ export interface Interface {
     id: CoachOnboardingInviteId,
     now: Date,
   ) => Effect.Effect<Aggregate["invite"], InviteUnavailable | QueryFailed>
+  readonly reissue: (
+    input: ReissueInput,
+  ) => Effect.Effect<Aggregate, IdempotencyConflict | ReissueUnavailable | QueryFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()(
@@ -90,6 +100,13 @@ export class InviteUnavailable extends Schema.TaggedErrorClass<InviteUnavailable
   {
     id: CoachOnboardingInviteId,
     reason: Schema.Literals(["not-found", "expired", "used"]),
+  },
+) {}
+
+export class ReissueUnavailable extends Schema.TaggedErrorClass<ReissueUnavailable>()(
+  "CoachOnboardingRepo.ReissueUnavailable",
+  {
+    workspaceId: WorkspaceId,
   },
 ) {}
 
@@ -394,7 +411,99 @@ export const layer = Layer.effect(
       return aggregate
     })
 
-    return Service.of({ lookupCreate, createOrGet, findInvite, verifyPending, markUsed })
+    const reissue = Effect.fn("CoachOnboardingRepo.reissue")(function* (input: ReissueInput) {
+      const fingerprint = `reissue:${input.workspaceId}:${input.expectedInviteId}`
+      const replay = yield* loadByRequestId(input.requestId)
+      if (replay !== undefined) {
+        return (yield* resolveReplay(replay, {
+          requestId: input.requestId,
+          requestFingerprint: fingerprint,
+          name: replay.aggregate.workspace.name,
+          coachLanguage: replay.aggregate.owner.language,
+          now: input.now,
+        })).aggregate
+      }
+
+      const inviteId = idsFor(input.requestId).inviteId
+      const expiresAt = new Date(input.now.getTime() + InviteTtlMilliseconds)
+      const inserted = yield* Effect.tryPromise({
+        try: () =>
+          client.execute(sql`
+            with eligible_workspace as (
+              select "workspace"."id"
+              from "workspace"
+              left join "member"
+                on "member"."workspace_id" = "workspace"."id"
+                and "member"."role" = 'owner'
+              left join "bot"
+                on "bot"."workspace_id" = "workspace"."id"
+              where
+                "workspace"."id" = ${input.workspaceId}
+                and "member"."telegram_user_id" is null
+                and ("bot"."connection_status" is null or "bot"."connection_status" = 'pending')
+                and not exists (
+                  select 1
+                  from "coach_onboarding_invite" as "newer_pending"
+                  where
+                    "newer_pending"."workspace_id" = "workspace"."id"
+                    and "newer_pending"."status" = 'pending'
+                    and "newer_pending"."id" <> ${input.expectedInviteId}
+                )
+            ),
+            expired_previous as (
+              update "coach_onboarding_invite"
+              set "status" = 'expired'
+              where
+                "id" = ${input.expectedInviteId}
+                and "workspace_id" = ${input.workspaceId}
+                and "status" in ('pending', 'expired')
+                and exists (select 1 from eligible_workspace)
+              returning "workspace_id"
+            )
+            insert into "coach_onboarding_invite" (
+              "id",
+              "workspace_id",
+              "request_id",
+              "request_fingerprint",
+              "issued_at",
+              "expires_at"
+            )
+            select
+              ${inviteId},
+              "workspace_id",
+              ${input.requestId},
+              ${fingerprint},
+              ${input.now},
+              ${expiresAt}
+            from expired_previous
+            on conflict ("request_id") do nothing
+            returning "id"
+          `),
+        catch: (cause) => new QueryFailed({ operation: "reissue.transaction", cause }),
+      }).pipe(Effect.result)
+
+      const reconciled = yield* loadByRequestId(input.requestId)
+      if (reconciled !== undefined) {
+        return (yield* resolveReplay(reconciled, {
+          requestId: input.requestId,
+          requestFingerprint: fingerprint,
+          name: reconciled.aggregate.workspace.name,
+          coachLanguage: reconciled.aggregate.owner.language,
+          now: input.now,
+        })).aggregate
+      }
+      if (Result.isFailure(inserted)) return yield* inserted.failure
+      return yield* new ReissueUnavailable({ workspaceId: input.workspaceId })
+    })
+
+    return Service.of({
+      lookupCreate,
+      createOrGet,
+      findInvite,
+      verifyPending,
+      markUsed,
+      reissue,
+    })
   }),
 )
 

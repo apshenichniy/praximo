@@ -23,6 +23,10 @@ describe("WorkspaceBrandingStorage", () => {
         )
         expect(yield* storage.resolveAvatarKey(undefined)).toBe("branding/default-coach-avatar.jpg")
         expect(yield* storage.resolveAvatarKey(first.key)).toBe(first.key)
+        expect(yield* storage.getAvatar(first.key)).toEqual({
+          bytes: jpeg,
+          contentType: "image/jpeg",
+        })
         expect((yield* test.puts()).map((put) => put.key)).toEqual([first.key, second.key])
       }).pipe(
         Effect.provide(
@@ -31,6 +35,31 @@ describe("WorkspaceBrandingStorage", () => {
           }),
         ),
       ),
+  )
+
+  it.effect("reports missing and failed private avatar reads", () =>
+    Effect.gen(function* () {
+      const storage = yield* WorkspaceBrandingStorage.Service
+      const missing = yield* Effect.flip(storage.getAvatar("workspace-branding/missing.jpg"))
+      expect(missing).toMatchObject({
+        _tag: "WorkspaceBrandingStorage.ReadFailed",
+        reason: "not-found",
+      })
+
+      const test = yield* WorkspaceBrandingStorage.TestService
+      yield* test.failNextGet()
+      const failed = yield* Effect.flip(storage.getAvatar("workspace-branding/missing.jpg"))
+      expect(failed).toMatchObject({
+        _tag: "WorkspaceBrandingStorage.ReadFailed",
+        reason: "read",
+      })
+    }).pipe(
+      Effect.provide(
+        WorkspaceBrandingStorage.testLayer({
+          defaultAvatarKey: "branding/default-coach-avatar.jpg",
+        }),
+      ),
+    ),
   )
 
   it.effect("rejects non-JPEG bytes and can surface an upload failure", () =>

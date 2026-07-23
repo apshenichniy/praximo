@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Workspace, WorkspaceId } from "@praximo/domain"
+import { CoachOnboardingInviteId, Workspace, WorkspaceId } from "@praximo/domain"
 import { eq, inArray } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Database } from "./client.ts"
@@ -33,6 +33,15 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
 
       expect(found.id).toBe(id)
       expect(found.name).toBe("Ada's practice")
+
+      const detail = yield* repo.getDetail(id)
+      const updated = yield* repo.updateProfile({
+        id,
+        expectedUpdatedAt: detail.updatedAt,
+        name: "Ada's updated practice",
+        now: new Date("2026-07-23T21:00:00.000Z"),
+      })
+      expect(updated.name).toBe("Ada's updated practice")
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
@@ -163,6 +172,98 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
           hasCustomAvatar: false,
         },
       ])
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("loads the complete detail projection and protects profile updates by version", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkspaceRepo.Service
+      const { client } = yield* Database.Service
+      const id = WorkspaceId.make(uniqueId("ws_detail"))
+      const inviteId = CoachOnboardingInviteId.make(uniqueId("ci_detail"))
+      const initialVersion = new Date("2026-07-23T20:00:00.000Z")
+      const nextVersion = new Date("2026-07-23T20:01:00.000Z")
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() => client.delete(schema.workspace).where(eq(schema.workspace.id, id))),
+      )
+
+      yield* Effect.promise(() =>
+        client.insert(schema.workspace).values({
+          id,
+          name: "Initial name",
+          description: "Initial description",
+          avatarR2Key: "workspace-branding/initial.jpg",
+          createdAt: initialVersion,
+          updatedAt: initialVersion,
+        }),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.member).values({
+          id: uniqueId("mem_detail"),
+          workspaceId: id,
+          role: "owner",
+          language: "uk",
+          termsAcceptedAt: new Date("2026-07-23T20:00:10.000Z"),
+          lastLoginAt: new Date("2026-07-23T20:00:20.000Z"),
+          lastActivityAt: new Date("2026-07-23T20:00:30.000Z"),
+        }),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.bot).values({
+          workspaceId: id,
+          connectionStatus: "connected",
+          username: "detail_coach_bot",
+        }),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.coachOnboardingInvite).values({
+          id: inviteId,
+          workspaceId: id,
+          requestId: crypto.randomUUID(),
+          requestFingerprint: "detail",
+          status: "used",
+          issuedAt: new Date("2026-07-23T19:00:00.000Z"),
+          expiresAt: new Date("2026-07-30T19:00:00.000Z"),
+          usedAt: new Date("2026-07-23T19:05:00.000Z"),
+        }),
+      )
+
+      expect(yield* repo.getDetail(id)).toMatchObject({
+        id,
+        name: "Initial name",
+        avatarR2Key: "workspace-branding/initial.jpg",
+        description: "Initial description",
+        coachLanguage: "uk",
+        botStatus: "connected",
+        botUsername: "detail_coach_bot",
+        invite: { id: inviteId, status: "used" },
+      })
+
+      const updated = yield* repo.updateProfile({
+        id,
+        expectedUpdatedAt: initialVersion,
+        name: "Updated name",
+        shortDescription: "Updated short description",
+        now: nextVersion,
+      })
+      expect(updated).toMatchObject({
+        name: "Updated name",
+        shortDescription: "Updated short description",
+        updatedAt: nextVersion,
+      })
+      expect(updated).not.toHaveProperty("description")
+      expect(updated).not.toHaveProperty("avatarR2Key")
+
+      const conflict = yield* Effect.flip(
+        repo.updateProfile({
+          id,
+          expectedUpdatedAt: initialVersion,
+          name: "Stale overwrite",
+          now: new Date("2026-07-23T20:02:00.000Z"),
+        }),
+      )
+      expect(conflict._tag).toBe("WorkspaceRepo.UpdateConflict")
+      expect((yield* repo.getDetail(id)).name).toBe("Updated name")
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 })
