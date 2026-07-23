@@ -1,7 +1,7 @@
 # ADR 0003: Alchemy IaC structure
 
 - **Status**: accepted
-- **Date**: 2026-07-19 (verified by execution 2026-07-20, [#32](https://github.com/apshenichniy/praximo/issues/32))
+- **Date**: 2026-07-19 (verified by execution 2026-07-20, [#32](https://github.com/apshenichniy/praximo/issues/32); dev-domain exception added 2026-07-23, [#84](https://github.com/apshenichniy/praximo/issues/84))
 - **Ticket**: [#18](https://github.com/apshenichniy/praximo/issues/18) — bootstrap proven by [#32](https://github.com/apshenichniy/praximo/issues/32)
 
 ## Context
@@ -31,7 +31,8 @@ Guiding principle for every choice here: **the agent does all devops; the human 
 - Prod web: **`app.praximo.io`** as a Worker custom domain.
 - Prod webhooks/API: one **`api.praximo.io`** hostname shared by path-based zone routes — `api.praximo.io/telegram/*` → bot Worker, `api.praximo.io/livekit/*` and STT callback paths → pipeline Worker (`routes: [{ pattern, zoneName }]` + a proxied `Cloudflare.DNS.Record` AAAA `100::` for the hostname). Verified: distinct path patterns on one hostname may target different Workers.
 - The `praximo.io` **zone pre-exists** in the Cloudflare account; Alchemy manages records and routes inside it, not the zone itself.
-- Dev: **`workers.dev`** URLs only (stable per stage; sufficient for Telegram/LiveKit webhooks). No dev custom domains.
+- Canonical dev web: **`stage.praximo.io`** is a Worker custom domain bound only to `dev_apshenichniy`. Telegram's @BotFather Main Mini App input could not persist the generated hostname, so the platform-owned dev manager bot needs one short URL that remains stable across Worker deployments ([#84](https://github.com/apshenichniy/praximo/issues/84)).
+- Other dev surfaces stay on **`workers.dev`**: the canonical bot and pipeline Workers, and every non-canonical personal/ad-hoc stage including its web Worker. `stage.praximo.io` is singular by design and must never move implicitly when another personal stage deploys.
 
 ### Deploy and state
 

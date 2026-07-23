@@ -11,7 +11,7 @@ import { adminUrlForOrigin, buildSetMenuButtonRequest } from "./menu-button.ts"
  * supplies env + args, checks whether the manual Main Mini App setup is visible
  * through `getMe`, makes the call, and logs.
  *
- *   bun run manager-bot:set-menu https://praximo-dev-<user>-web.<subdomain>.workers.dev
+ *   bun run manager-bot:set-menu https://stage.praximo.io
  */
 
 const requireEnv = (name: string): string => {
@@ -26,7 +26,7 @@ const webOrigin = process.argv[2] ?? process.env.WEB_URL
 if (!webOrigin) {
   throw new Error(
     "missing web origin — pass the deployed web URL as the first argument " +
-      "(the `webUrl` from `alchemy deploy`), e.g. manager-bot:set-menu https://…workers.dev",
+      "(the `webUrl` from `alchemy deploy`), e.g. manager-bot:set-menu https://stage.praximo.io",
   )
 }
 

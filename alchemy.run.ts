@@ -4,13 +4,14 @@
 // for infrastructure — there is no wrangler config.
 //
 // This ticket (#46) brings up the **dev stage**: the three skeleton Workers with
-// their Neon/R2 bindings and typed service bindings, each answering `/health` on
-// its `workers.dev` URL. #47 wired the Drizzle migrations dir onto the Neon
-// branch below. The pieces the full stack still needs — the AI Gateway, the
-// Email Sending subdomain, the pipeline Workflow + cron, and the prod custom
-// domain / zone routes / `--adopt` of the existing `praximo-prod` stack — arrive
-// with the slices that first use them. Their shapes are proven in
-// `prototypes/infra-bootstrap` (#32).
+// their Neon/R2 bindings and typed service bindings, each answering `/health`.
+// The canonical web Worker also owns `stage.praximo.io` (#84); workers.dev stays
+// enabled on every Worker and is the only URL for non-canonical dev stages. #47
+// wired the Drizzle migrations dir onto the Neon branch below. The pieces the
+// full stack still needs — the AI Gateway, the Email Sending subdomain, the
+// pipeline Workflow + cron, and the prod custom domain / zone routes / `--adopt`
+// of the existing `praximo-prod` stack — arrive with the slices that first use
+// them. Their shapes are proven in `prototypes/infra-bootstrap` (#32).
 //
 // Workers are declared inline here with string `main` paths, not via the
 // co-located `class Web extends Cloudflare.Worker<Web>()(...)` form ADR 0003's
@@ -119,7 +120,7 @@ export default Alchemy.Stack(
     return {
       neonProjectId: project.projectId,
       bucket: bucket.bucketName,
-      // The workers.dev URLs (enabled by default) — hit `/health` on each.
+      // `web.url` prefers its custom domain; the other Workers return workers.dev.
       webUrl: web.url,
       botUrl: bot.url,
       pipelineUrl: pipeline.url,
