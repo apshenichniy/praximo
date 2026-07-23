@@ -88,7 +88,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
         client.insert(schema.workspace).values([
           { id: noBot, name: "A No Bot" },
           { id: pending, name: "B Pending" },
-          { id: connected, name: "C Connected" },
+          { id: connected, name: "C Connected", avatarR2Key: "avatars/a-owner.png" },
           { id: needsRelink, name: "D Needs Relink" },
         ]),
       )
@@ -140,24 +140,27 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
           id: noBot,
           name: "A No Bot",
           botStatus: "provisioning",
+          hasCustomAvatar: false,
         },
         {
           id: pending,
           name: "B Pending",
           botStatus: "provisioning",
+          hasCustomAvatar: false,
         },
         {
           id: connected,
           name: "C Connected",
           botStatus: "connected",
           botUsername: "connected_coach_bot",
-          ownerAvatarR2Key: "avatars/a-owner.png",
+          hasCustomAvatar: true,
         },
         {
           id: needsRelink,
           name: "D Needs Relink",
           botStatus: "needs-relink",
           botUsername: "relink_coach_bot",
+          hasCustomAvatar: false,
         },
       ])
     }).pipe(Effect.scoped, Effect.provide(appLayer)),

@@ -27,6 +27,9 @@ export interface TelegramWebApp {
   /** Requests true fullscreen — Bot API 8.0; a no-op on older clients. */
   requestFullscreen: () => void
   readonly BackButton: TelegramBackButton
+  readonly HapticFeedback?: {
+    readonly notificationOccurred: (type: "error" | "success" | "warning") => void
+  }
   onEvent: (eventType: string, handler: () => void) => void
   offEvent: (eventType: string, handler: () => void) => void
 }

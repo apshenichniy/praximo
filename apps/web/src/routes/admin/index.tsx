@@ -79,15 +79,15 @@ function AdminHome() {
         </h2>
 
         <div className="bg-card ring-border mt-4 overflow-hidden rounded-2xl ring-1">
-          <button
-            type="button"
+          <Link
+            to="/admin/workspaces/new"
             className="text-primary hover:bg-accent/40 active:bg-accent/70 flex min-h-[70px] w-full items-center gap-4 px-4 text-left font-medium transition-colors"
           >
             <span className="border-primary/50 flex size-11 items-center justify-center rounded-full border">
               <HugeiconsIcon icon={AddCircleIcon} size={25} strokeWidth={1.8} />
             </span>
             Create a workspace
-          </button>
+          </Link>
 
           {workspaces.length === 0 ? (
             <div className="border-border border-t px-6 py-10 text-center">
