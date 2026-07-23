@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest"
-import worker, { handleRequest } from "./index.ts"
+import { describe, expect, it } from "@effect/vitest"
+import { TelegramId } from "@praximo/domain"
+import { ManagerBotSender } from "@praximo/telegram"
+import { Effect } from "effect"
+import { handleRequest, sendManagerText } from "./runtime.ts"
 
 // The health route builds WorkspaceRepo over the real Neon connection (#47),
 // which reads DATABASE_URL from the app's ConfigProvider over the Worker env. On
@@ -9,6 +12,7 @@ import worker, { handleRequest } from "./index.ts"
 const env = {
   DATABASE_URL:
     "postgresql://user:pass@ep-dummy-123456.eu-central-1.aws.neon.tech/neondb?sslmode=require",
+  MANAGER_BOT_TOKEN: "test-token",
 }
 
 describe("bot worker", () => {
@@ -25,7 +29,37 @@ describe("bot worker", () => {
     expect(response.status).toBe(404)
   })
 
-  it("exposes the handler as the Worker's fetch entrypoint", () => {
-    expect(worker.fetch).toBe(handleRequest)
-  })
+  it.effect("maps a successful manager-bot send to the RPC contract", () =>
+    Effect.gen(function* () {
+      const recipient = TelegramId.make("123456789")
+      const text = "Forward this invitation"
+      const result = yield* sendManagerText(recipient, text)
+      const stub = yield* ManagerBotSender.TestService
+
+      expect(result).toEqual(ManagerBotSender.RpcResult.cases.Sent.make({}))
+      expect(yield* stub.sent()).toEqual([{ recipient, text }])
+    }).pipe(Effect.provide(ManagerBotSender.testLayer)),
+  )
+
+  it.effect("maps typed manager-bot failures to the RPC contract", () =>
+    Effect.gen(function* () {
+      const recipient = TelegramId.make("123456789")
+      const stub = yield* ManagerBotSender.TestService
+      yield* stub.failNextSend(
+        new ManagerBotSender.SendFailed({
+          recipient,
+          category: "transport",
+        }),
+      )
+
+      const result = yield* sendManagerText(recipient, "Forward this invitation")
+
+      expect(result).toEqual(
+        ManagerBotSender.RpcResult.cases.Failed.make({
+          recipient,
+          category: "transport",
+        }),
+      )
+    }).pipe(Effect.provide(ManagerBotSender.testLayer)),
+  )
 })

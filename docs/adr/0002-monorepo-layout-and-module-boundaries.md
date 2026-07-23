@@ -29,7 +29,7 @@ Three Workers, each an independent deploy:
 
 Workflow definitions live in `apps/pipeline`; steps stay thin and call package services.
 
-**Cross-worker communication is service bindings only** (typed `WorkerEntrypoint` RPC, declared in Alchemy): web → pipeline to trigger the brief workflow on session creation and to cancel a session's in-flight run when the coach deletes its data ([privacy-retention.md](../spec/privacy-retention.md)); pipeline → bot for artifact delivery and failure notifications. No public HTTP between our own Workers, no queues (per ADR 0001).
+**Cross-worker communication is service bindings only** (typed `WorkerEntrypoint` RPC, declared in Alchemy): web → pipeline to trigger the brief workflow on session creation and to cancel a session's in-flight run when the coach deletes its data ([privacy-retention.md](../spec/privacy-retention.md)); web → bot for the narrow manager-bot send capability used by admin operations; pipeline → bot for artifact delivery and failure notifications. No public HTTP between our own Workers, no queues (per ADR 0001).
 
 ### Shared packages — `packages/`
 
