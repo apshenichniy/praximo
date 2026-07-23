@@ -17,7 +17,7 @@ describe("demo workspace seed contract", () => {
           avatarR2Key: null,
         },
         bot: {
-          connectionStatus: "pending",
+          connectionStatus: "awaiting_setup",
           token: null,
         },
       },

@@ -31,7 +31,7 @@ export interface WorkspaceDetail {
   readonly createdAt: string
   readonly updatedAt: string
   readonly coachLanguage?: CoachLanguage
-  readonly botStatus: WorkspaceRepo.BotStatus
+  readonly botStatus: WorkspaceRepo.BotConnectionStatus
   readonly botUsername?: string
   readonly termsAcceptedAt?: string
   readonly lastLoginAt?: string
@@ -225,7 +225,7 @@ export const layer = Layer.effect(
           ? "expired"
           : detail.invite?.status
       const canReissue =
-        detail.botStatus === "provisioning" && detail.ownerTelegramUserId === undefined
+        detail.botStatus === "awaiting-setup" && detail.ownerTelegramUserId === undefined
       const link =
         detail.invite !== undefined && inviteStatus === "pending" && canReissue
           ? yield* tokens
@@ -301,7 +301,7 @@ export const layer = Layer.effect(
         workspace: WorkspaceRepo.ListItem.make({
           id: aggregate.workspace.id,
           name: aggregate.workspace.name,
-          botStatus: "provisioning",
+          botStatus: "awaiting-setup",
           hasCustomAvatar: aggregate.workspace.avatarR2Key !== undefined,
         }),
         inviteId: aggregate.invite.id,

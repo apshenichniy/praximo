@@ -135,7 +135,7 @@ export const bot = pgTable("bot", {
     .references(() => workspace.id, { onDelete: "cascade" }),
   token: text("token"),
   username: text("username"),
-  connectionStatus: text("connection_status").notNull().default("pending"),
+  connectionStatus: text("connection_status").notNull().default("awaiting_setup"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 })

@@ -440,7 +440,10 @@ export const layer = Layer.effect(
               where
                 "workspace"."id" = ${input.workspaceId}
                 and "member"."telegram_user_id" is null
-                and ("bot"."connection_status" is null or "bot"."connection_status" = 'pending')
+                and (
+                  "bot"."connection_status" is null
+                  or "bot"."connection_status" = 'awaiting_setup'
+                )
                 and not exists (
                   select 1
                   from "coach_onboarding_invite" as "newer_pending"

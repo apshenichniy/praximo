@@ -11,8 +11,8 @@ export const Route = createFileRoute("/admin/")({ component: AdminHome })
 const adminRoute = getRouteApi("/admin")
 
 const statusPresentation = {
-  provisioning: {
-    label: "Provisioning",
+  "awaiting-setup": {
+    label: "Awaiting setup",
     className: "bg-amber-400/12 text-amber-300 ring-amber-400/20",
   },
   connected: {

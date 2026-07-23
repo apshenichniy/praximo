@@ -74,8 +74,8 @@ Re-seeding is the only mechanism: edit `ADMIN_TELEGRAM_IDS` and re-run the seed.
 
 | Operation | Surface | Notes |
 |---|---|---|
-| **Create** | Mini App create form | Collects the workspace profile; on submit the workspace is `provisioning` and the manager bot delivers the deep link (below). |
-| **List + status** | Mini App workspace list / page | Bot status (`provisioning`→`connected`→`needs re-link`), coach language, bot username, terms-accepted, and the four dates below. |
+| **Create** | Mini App create form | Collects the workspace profile; on submit the workspace is `awaiting setup` and the manager bot delivers the deep link (below). |
+| **List + status** | Mini App workspace list / page | Bot connection (`awaiting setup`→`connected`→`needs re-link`), coach language, bot username, terms-accepted, and the four dates below. |
 | **Re-issue deep link** | Mini App action | Mints a fresh single-use token (TTL 7 days), **annuls the previous one**, updates the `invited` date; the manager bot re-delivers it as a forwardable message. |
 | **Rename** | Mini App profile form | Renames the workspace only. The bot's Telegram name is **not** changed automatically — it is the coach's property. |
 | **Edit profile** | Mini App profile form | Edit avatar / description / short description; on save, **re-applies branding** to the coach's bot if it is already `connected` (the "rebranding on request" of [ADR 0004](../adr/0004-bot-per-coach-provisioning.md)), otherwise branding applies at provisioning. |
@@ -93,7 +93,7 @@ The create form collects:
 4. **Description** (optional) — the bot's `description`.
 5. **Short description** (optional) — the bot's `short_description`.
 
-On submit the workspace is created in status `provisioning`. The **manager bot then sends the admin the single-use deep link** (TTL 7 days) as a message, formatted ready to forward to the coach; the Mini App also surfaces the link to copy. Everything downstream of the coach opening that link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) (Managed Bots one-tap, or the paste fallback). Omitted profile fields are simply absent at provisioning and can be filled later via **Edit profile**.
+On submit the workspace is created in status `awaiting setup`. The **manager bot then sends the admin the single-use deep link** (TTL 7 days) as a message, formatted ready to forward to the coach; the Mini App also surfaces the link to copy. Everything downstream of the coach opening that link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) (Managed Bots one-tap, or the paste fallback). Omitted profile fields are simply absent at provisioning and can be filled later via **Edit profile**.
 
 ### Default coach-bot avatar operations
 
@@ -127,7 +127,7 @@ Single-use, **TTL 7 days** — the same constant as the client invite ([client-o
 
 ## Status fields on the workspace page
 
-Per workspace: the bot connection status (`provisioning` → `connected` → `needs re-link`), coach language, bot username, terms-accepted, and four dates:
+Per workspace: the bot connection status (`awaiting setup` → `connected` → `needs re-link`), coach language, bot username, terms-accepted, and four dates:
 
 - **`invited`** — when the current deep link was issued (updated on re-issue).
 - **`created`** — workspace creation.
@@ -148,7 +148,7 @@ A repo-level script (e.g. `bun run db:reset`) supports MVP development: it **ref
 
 `bun run db:reset --demo` performs the same guarded reset and additionally
 seeds three deterministic workspace-list fixtures: **Praximo Lab** (no owner or
-bot), **North Star Coaching** (owner plus pending bot), and **Quiet Harbor**
+bot), **North Star Coaching** (owner plus Awaiting Setup bot connection), and **Quiet Harbor**
 (owner plus a username-bearing bot that needs re-linking). The ordinary command
 never creates workspaces. Demo bot tokens are always absent; no fixture pretends
 to be connected to Telegram.
