@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
-import { AdminThemeShell } from "@/components/admin-theme-shell.tsx"
+import { AdminShell } from "@/components/admin-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import {
   attachBackButton,
@@ -112,12 +112,12 @@ describe("TelegramFullscreen", () => {
   })
 })
 
-describe("AdminThemeShell safe-area insets", () => {
+describe("AdminShell safe-area insets", () => {
   it("pads the frame by the host's device + content safe-area insets", () => {
     const html = renderToStaticMarkup(
-      <AdminThemeShell>
+      <AdminShell>
         <span>content</span>
-      </AdminThemeShell>,
+      </AdminShell>,
     )
 
     expect(html).toContain("--tg-safe-area-inset-top")

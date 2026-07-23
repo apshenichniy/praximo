@@ -68,7 +68,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@base-ui/react": "catalog:",
-        "@fontsource-variable/geist": "catalog:",
+        "@fontsource-variable/nunito-sans": "catalog:",
         "@hugeicons/core-free-icons": "catalog:",
         "@hugeicons/react": "catalog:",
         "@praximo/auth": "workspace:*",
@@ -200,7 +200,7 @@
     "@base-ui/react": "1.6.0",
     "@cloudflare/workers-types": "5.20260719.1",
     "@effect/vitest": "4.0.0-beta.99",
-    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/nunito-sans": "5.3.0",
     "@hugeicons/core-free-icons": "4.2.3",
     "@hugeicons/react": "1.1.9",
     "@tailwindcss/vite": "4.3.3",
@@ -466,7 +466,7 @@
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.12", "", {}, "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="],
 
-    "@fontsource-variable/geist": ["@fontsource-variable/geist@5.3.0", "", {}, "sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA=="],
+    "@fontsource-variable/nunito-sans": ["@fontsource-variable/nunito-sans@5.3.0", "", {}, "sha512-Vk1PSfckNDwgw2yGcsvJP3o/0zEW8Rp6KzbD8Ql/6iRHQshnhhAjt+cSIfAUyp5vQuSlleGHFW2LfYaaex0diw=="],
 
     "@grammyjs/types": ["@grammyjs/types@4.0.0", "", {}, "sha512-Z8lDLTvOlo12e5Vnly/vQh3JC9ppaitS1dGZ3w068gNitOd/y8tTSiib+Xm38aBGbtYGmUZwOc6afYrLs2CSTg=="],
 

@@ -2,19 +2,16 @@ import { Outlet, createFileRoute } from "@tanstack/react-router"
 
 import { AdminLoading } from "@/components/admin-loading.tsx"
 import { AdminNotFound } from "@/components/admin-not-found.tsx"
-import { AdminThemeShell } from "@/components/admin-theme-shell.tsx"
+import { AdminShell } from "@/components/admin-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import { resolveAdminInitData } from "@/features/admin/admin-init-data.ts"
 import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
-import adminCss from "@/styles/admin.css?url"
 
-// The admin surface is a self-contained route tree (admin-surface.md): its own
-// layout, its own theme, English-only. The theme stylesheet is attached on this
-// layout route, so TanStack only emits its <link> when an /admin route matches —
-// code-split out of the coach bundle, and absent from every coach page.
+// The admin surface is a client-only, English-only route tree
+// (admin-surface.md). Its frame owns Telegram fullscreen behavior and safe-area
+// layout; visual tokens come from the application-wide dark preset.
 export const Route = createFileRoute("/admin")({
   ssr: false,
-  head: () => ({ links: [{ rel: "stylesheet", href: adminCss }] }),
   pendingMs: 0,
   pendingMinMs: 200,
   pendingComponent: AdminLoading,
@@ -34,9 +31,9 @@ export const Route = createFileRoute("/admin")({
 
 function AdminLayout() {
   return (
-    <AdminThemeShell>
+    <AdminShell>
       <TelegramFullscreen />
       <Outlet />
-    </AdminThemeShell>
+    </AdminShell>
   )
 }

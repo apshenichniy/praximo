@@ -1,9 +1,9 @@
 import { AdminHero } from "@/components/admin-hero.tsx"
-import { AdminThemeShell } from "@/components/admin-theme-shell.tsx"
+import { AdminShell } from "@/components/admin-shell.tsx"
 
 export function AdminLoading() {
   return (
-    <AdminThemeShell>
+    <AdminShell>
       <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
         <AdminHero />
         <div className="bg-card/70 mt-10 h-14 animate-pulse rounded-2xl" />
@@ -23,6 +23,6 @@ export function AdminLoading() {
           ))}
         </div>
       </main>
-    </AdminThemeShell>
+    </AdminShell>
   )
 }

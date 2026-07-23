@@ -117,7 +117,7 @@ function AdminHome() {
                   params={{ workspaceId: workspace.id }}
                   className="border-border hover:bg-accent/40 active:bg-accent/70 flex min-h-[78px] items-center gap-4 border-t px-4 transition-colors"
                 >
-                  <span className="from-primary/85 flex size-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br to-violet-950 text-sm font-semibold text-white">
+                  <span className="admin-avatar flex size-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
                     {initials(workspace.name)}
                   </span>
                   <span className="min-w-0 flex-1 py-3">

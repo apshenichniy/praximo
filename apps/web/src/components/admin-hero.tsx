@@ -3,7 +3,7 @@ export function AdminHero() {
     <header className="flex flex-col items-center text-center">
       <div
         aria-hidden="true"
-        className="from-primary/95 shadow-primary/20 ring-primary/25 flex size-24 items-center justify-center rounded-full bg-gradient-to-br to-violet-950 text-4xl font-semibold text-white shadow-2xl ring-1"
+        className="admin-avatar shadow-primary/20 ring-primary/25 flex size-24 items-center justify-center rounded-full text-4xl font-semibold shadow-2xl ring-1"
       >
         P
       </div>

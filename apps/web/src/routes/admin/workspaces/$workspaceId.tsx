@@ -29,7 +29,7 @@ function WorkspaceDetailsPlaceholder() {
       <TelegramBackButton />
 
       <section className="mt-8 text-center">
-        <div className="from-primary/90 mx-auto flex size-24 items-center justify-center rounded-full bg-gradient-to-br to-violet-950 text-3xl font-semibold text-white">
+        <div className="admin-avatar mx-auto flex size-24 items-center justify-center rounded-full text-3xl font-semibold">
           {workspace.name.charAt(0).toUpperCase()}
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">{workspace.name}</h1>
