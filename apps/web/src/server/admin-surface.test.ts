@@ -368,7 +368,7 @@ describe("AdminSurface", () => {
       expect(recorded).toEqual([
         {
           id: createdAggregate.invite.id,
-          delivery: { channel: "telegram", language: "uk" },
+          delivery: { channel: "telegram", destination: adminTelegramId, language: "uk" },
         },
       ])
     }).pipe(

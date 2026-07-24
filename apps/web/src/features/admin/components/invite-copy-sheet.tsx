@@ -1,5 +1,8 @@
+import type { CoachLanguage } from "@praximo/domain"
 import { useState } from "react"
 
+import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
+import { Button } from "@/components/ui/button.tsx"
 import {
   Drawer,
   DrawerContent,
@@ -7,18 +10,10 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer.tsx"
-import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
-import { Button } from "@/components/ui/button.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
-import { cn } from "@/lib/utils.ts"
-
-export type InviteLanguage = "en" | "uk" | "ru"
-
-const languages: ReadonlyArray<{ readonly value: InviteLanguage; readonly label: string }> = [
-  { value: "en", label: "English" },
-  { value: "uk", label: "Українська" },
-  { value: "ru", label: "Русский" },
-]
+import { Textarea } from "@/components/ui/textarea.tsx"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group.tsx"
+import { languageOptions } from "@/features/admin/formatting.ts"
 
 /**
  * Bottom drawer for the Copy channel: pick the invite-message language, then
@@ -40,10 +35,10 @@ export function InviteCopySheet({
   readonly pending: boolean
   readonly error?: string | undefined
   readonly fallbackMessage?: string | undefined
-  readonly onCopy: (language: InviteLanguage) => void
+  readonly onCopy: (language: CoachLanguage) => void
   readonly onCopyFallback: (message: string) => void
 }) {
-  const [language, setLanguage] = useState<InviteLanguage>("en")
+  const [language, setLanguage] = useState<CoachLanguage>("en")
 
   return (
     <Drawer
@@ -64,26 +59,26 @@ export function InviteCopySheet({
             <>
               <div>
                 <p className="text-sm font-medium">Invite language</p>
-                <div className="mt-2 flex gap-2" role="radiogroup" aria-label="Invite language">
-                  {languages.map((option) => (
-                    <button
+                <ToggleGroup
+                  aria-label="Invite language"
+                  className="mt-2"
+                  value={[language]}
+                  onValueChange={(next) => {
+                    const value = next[0]
+                    if (value === "en" || value === "uk" || value === "ru") setLanguage(value)
+                  }}
+                >
+                  {languageOptions.map((option) => (
+                    <ToggleGroupItem
                       key={option.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={language === option.value}
+                      value={option.value}
                       disabled={pending}
-                      onClick={() => setLanguage(option.value)}
-                      className={cn(
-                        "rounded-full px-4 py-2 text-sm transition-colors",
-                        language === option.value
-                          ? "bg-primary/15 text-primary font-semibold"
-                          : "bg-muted text-muted-foreground",
-                      )}
+                      className="rounded-full px-4"
                     >
                       {option.label}
-                    </button>
+                    </ToggleGroupItem>
                   ))}
-                </div>
+                </ToggleGroup>
               </div>
 
               {error === undefined ? null : (
@@ -116,11 +111,16 @@ export function InviteCopySheet({
                   message to copy it manually.
                 </AlertDescription>
               </Alert>
-              <textarea
+              {error === undefined ? null : (
+                <Alert variant="destructive" className="bg-destructive/10 border-transparent">
+                  <AlertDescription className="text-destructive">{error}</AlertDescription>
+                </Alert>
+              )}
+              <Textarea
                 readOnly
                 value={fallbackMessage}
                 rows={6}
-                className="bg-muted w-full rounded-2xl p-4 text-sm"
+                className="bg-muted rounded-2xl p-4 text-sm"
                 onFocus={(event) => event.target.select()}
               />
               <Button

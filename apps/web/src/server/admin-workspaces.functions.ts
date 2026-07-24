@@ -38,11 +38,11 @@ export const loadAdminWorkspaces = createServerFn({ method: "POST" })
     }
   })
 
-export type CreateWorkspaceTransportError = "validation" | "conflict" | "server"
+export type CreateInviteTransportError = "validation" | "conflict" | "server"
 
-export type CreateWorkspaceTransportResult =
+export type CreateInviteTransportResult =
   | { readonly ok: true; readonly value: AdminSurface.CreateResult }
-  | { readonly ok: false; readonly error: CreateWorkspaceTransportError }
+  | { readonly ok: false; readonly error: CreateInviteTransportError }
 
 const validateCreateInvite = (
   input: unknown,
@@ -61,7 +61,7 @@ const validateCreateInvite = (
 
 export const createAdminCoachInvite = createServerFn({ method: "POST" })
   .validator(validateCreateInvite)
-  .handler(async ({ data }): Promise<CreateWorkspaceTransportResult> => {
+  .handler(async ({ data }): Promise<CreateInviteTransportResult> => {
     try {
       return {
         ok: true,
@@ -102,7 +102,7 @@ const validateResend = (
 
 export const resendAdminWorkspaceInvite = createServerFn({ method: "POST" })
   .validator(validateResend)
-  .handler(async ({ data }): Promise<CreateWorkspaceTransportResult> => {
+  .handler(async ({ data }): Promise<CreateInviteTransportResult> => {
     try {
       return {
         ok: true,
@@ -307,7 +307,7 @@ const validateReissue = (
 
 export const reissueAdminWorkspaceInvite = createServerFn({ method: "POST" })
   .validator(validateReissue)
-  .handler(async ({ data }): Promise<CreateWorkspaceTransportResult> => {
+  .handler(async ({ data }): Promise<CreateInviteTransportResult> => {
     try {
       return {
         ok: true,

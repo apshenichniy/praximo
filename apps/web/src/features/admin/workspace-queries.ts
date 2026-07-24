@@ -1,8 +1,9 @@
+import type { CreateInviteDelivery } from "@praximo/domain"
 import type { QueryClient } from "@tanstack/react-query"
 import { queryOptions } from "@tanstack/react-query"
 import {
   createAdminCoachInvite,
-  type CreateWorkspaceTransportResult,
+  type CreateInviteTransportResult,
   deleteAdminWorkspaceRequest,
   type DeleteWorkspaceTransportResult,
   loadAdminWorkspace,
@@ -39,19 +40,16 @@ export interface CreateCoachInviteMutationInput {
     readonly requestId: string
     readonly name: string
   }
-  readonly delivery: {
-    readonly channel: "telegram" | "copy"
-    readonly language: "en" | "uk" | "ru"
-  }
+  readonly delivery: CreateInviteDelivery
 }
 
 export const createCoachInviteMutation = (initData: string, queryClient: QueryClient) => ({
   mutationFn: async ({
     input,
     delivery,
-  }: CreateCoachInviteMutationInput): Promise<CreateWorkspaceTransportResult> =>
+  }: CreateCoachInviteMutationInput): Promise<CreateInviteTransportResult> =>
     createAdminCoachInvite({ data: { initData, input, delivery } }),
-  onSuccess: (result: CreateWorkspaceTransportResult) => {
+  onSuccess: (result: CreateInviteTransportResult) => {
     if (!result.ok) return
     queryClient.setQueryData<ReadonlyArray<typeof result.value.workspace>>(
       workspaceKeys.list(),

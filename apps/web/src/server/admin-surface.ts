@@ -196,17 +196,30 @@ const decodeInviteId = Schema.decodeUnknownEffect(
 )
 const decodeRequestId = Schema.decodeUnknownEffect(Schema.String.check(Schema.isUUID(4)))
 
-// The invite-first workspace may carry no label yet, so the message has a
-// named and an unnamed variant per language.
+// The invite-first workspace may carry no label yet, so each language has a
+// named and an unnamed opening line.
+const forwardableCopy = {
+  uk: {
+    named: (name: string) => `Ваш простір Praximo «${name}» готовий.`,
+    unnamed: "Ваш простір Praximo готовий.",
+    tail: "Відкрийте це одноразове посилання протягом 7 днів, щоб підключити свого бота:",
+  },
+  ru: {
+    named: (name: string) => `Ваше пространство Praximo «${name}» готово.`,
+    unnamed: "Ваше пространство Praximo готово.",
+    tail: "Откройте эту одноразовую ссылку в течение 7 дней, чтобы подключить своего бота:",
+  },
+  en: {
+    named: (name: string) => `Your Praximo workspace “${name}” is ready.`,
+    unnamed: "Your Praximo workspace is ready.",
+    tail: "Open this one-time link within 7 days to connect your bot:",
+  },
+} as const
+
 const forwardableMessage = (language: CoachLanguage, name: string, link: string): string => {
-  switch (language) {
-    case "uk":
-      return `${name.length === 0 ? "Ваш простір Praximo готовий." : `Ваш простір Praximo «${name}» готовий.`}\n\nВідкрийте це одноразове посилання протягом 7 днів, щоб підключити свого бота:\n${link}`
-    case "ru":
-      return `${name.length === 0 ? "Ваше пространство Praximo готово." : `Ваше пространство Praximo «${name}» готово.`}\n\nОткройте эту одноразовую ссылку в течение 7 дней, чтобы подключить своего бота:\n${link}`
-    case "en":
-      return `${name.length === 0 ? "Your Praximo workspace is ready." : `Your Praximo workspace “${name}” is ready.`}\n\nOpen this one-time link within 7 days to connect your bot:\n${link}`
-  }
+  const copy = forwardableCopy[language]
+  const opening = name.length === 0 ? copy.unnamed : copy.named(name)
+  return `${opening}\n\n${copy.tail}\n${link}`
 }
 
 const deletionFarewell = (language: CoachLanguage, name: string): string => {
@@ -380,7 +393,11 @@ export const layer = Layer.effect(
       return yield* sender.sendText(recipient, result.message).pipe(
         Effect.andThen(
           onboarding
-            .recordDelivery(aggregate.invite.id, { channel: "telegram", language })
+            .recordDelivery(aggregate.invite.id, {
+              channel: "telegram",
+              destination: recipient,
+              language,
+            })
             .pipe(Effect.ignore),
         ),
         Effect.as(result),

@@ -57,5 +57,11 @@ export const languageLabel = {
   ru: "Русский",
 } as const
 
+/** The one language list, as options — invite-language chips derive from it. */
+export const languageOptions = Object.entries(languageLabel).map(([value, label]) => ({
+  value: value as keyof typeof languageLabel,
+  label,
+}))
+
 /** An invite-first workspace may have no label yet; every display site falls back. */
 export const displayName = (name: string): string => (name.length === 0 ? "Unnamed invite" : name)

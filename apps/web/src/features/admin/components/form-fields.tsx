@@ -16,6 +16,7 @@ interface CommonFieldProps {
   /** Displayed character budget, e.g. 512 → "37/512". */
   readonly counter?: number
   readonly placeholder?: string
+  readonly disabled?: boolean
 }
 
 function FieldHeading({
@@ -51,6 +52,7 @@ export function TextField({
   maxLength,
   counter,
   placeholder,
+  disabled,
 }: CommonFieldProps) {
   const id = useId()
   return (
@@ -62,6 +64,7 @@ export function TextField({
         value={value}
         maxLength={maxLength}
         placeholder={placeholder}
+        disabled={disabled}
         aria-invalid={error === undefined ? undefined : true}
         aria-describedby={error === undefined ? undefined : `${id}-error`}
         onBlur={onBlur}

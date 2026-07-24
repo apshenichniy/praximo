@@ -2,20 +2,18 @@ import { Copy01Icon, Mail01Icon, TelegramIcon } from "@hugeicons/core-free-icons
 import { HugeiconsIcon } from "@hugeicons/react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
-import { WorkspaceNameMaxLength } from "@praximo/domain"
+import { type CoachLanguage, WorkspaceNameMaxLength } from "@praximo/domain"
 import { useState } from "react"
 import type { ReactNode } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
 import { Card } from "@/components/ui/card.tsx"
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
-import {
-  InviteCopySheet,
-  type InviteLanguage,
-} from "@/features/admin/components/invite-copy-sheet.tsx"
+import { InviteCopySheet } from "@/features/admin/components/invite-copy-sheet.tsx"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
 import { createCoachInviteMutation } from "@/features/admin/workspace-queries.ts"
 
@@ -43,6 +41,9 @@ function InviteCoachPage() {
   const navigate = useNavigate()
   const [requestId] = useState(() => crypto.randomUUID())
   const [name, setName] = useState("")
+  // Once an invite exists, the label is committed — editing it would only
+  // produce an idempotency conflict on the next tap.
+  const [created, setCreated] = useState(false)
   const [actionError, setActionError] = useState<string>()
   const [emailNote, setEmailNote] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
@@ -77,6 +78,7 @@ function InviteCoachPage() {
       notifyHaptic("error")
       return
     }
+    setCreated(true)
     if (response.value.delivery === "failed") {
       setActionError(
         "The invite is ready, but Telegram delivery failed. Tap again — the same invite will be re-sent.",
@@ -87,7 +89,7 @@ function InviteCoachPage() {
     finish("Invite sent to your Telegram chat — forward it to the coach")
   }
 
-  const copyInvite = async (language: InviteLanguage) => {
+  const copyInvite = async (language: CoachLanguage) => {
     setCopyError(undefined)
     const response = await mutation
       .mutateAsync({ input: { requestId, name }, delivery: { channel: "copy", language } })
@@ -102,6 +104,7 @@ function InviteCoachPage() {
       notifyHaptic("error")
       return
     }
+    setCreated(true)
     try {
       await navigator.clipboard.writeText(response.value.message)
     } catch {
@@ -113,8 +116,14 @@ function InviteCoachPage() {
     finish("Invite copied — paste it to the coach")
   }
 
-  const copyFallbackDirect = (message: string) => {
-    void navigator.clipboard.writeText(message).catch(() => undefined)
+  const copyFallbackDirect = async (message: string) => {
+    try {
+      await navigator.clipboard.writeText(message)
+    } catch {
+      setCopyError("Copy is blocked here — long-press the message and copy it manually.")
+      notifyHaptic("error")
+      return
+    }
     finish("Invite copied — paste it to the coach")
   }
 
@@ -142,6 +151,7 @@ function InviteCoachPage() {
           maxLength={WorkspaceNameMaxLength}
           placeholder="e.g. Ada Lovelace"
           error={undefined}
+          disabled={created}
           onChange={setName}
           onBlur={() => undefined}
         />
@@ -215,7 +225,7 @@ function InviteCoachPage() {
         error={copyError}
         fallbackMessage={copyFallback}
         onCopy={(language) => void copyInvite(language)}
-        onCopyFallback={copyFallbackDirect}
+        onCopyFallback={(message) => void copyFallbackDirect(message)}
       />
     </main>
   )
@@ -235,19 +245,19 @@ function InviteAction({
   readonly onClick: () => void
 }) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className="hover:bg-muted active:bg-accent/70 flex min-h-[70px] w-full items-center gap-4 px-4 py-3 text-left transition-colors disabled:opacity-60"
+    <Item
+      render={<button type="button" disabled={disabled} onClick={onClick} />}
+      className="hover:bg-muted active:bg-accent/70 min-h-[70px] w-full rounded-none border-0 text-left transition-colors disabled:opacity-60"
     >
-      <span className="border-primary/50 text-primary flex size-11 shrink-0 items-center justify-center rounded-full border">
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block font-medium">{title}</span>
-        <span className="text-muted-foreground block text-xs leading-4">{subtitle}</span>
-      </span>
-    </button>
+      <ItemMedia>
+        <span className="border-primary/50 text-primary flex size-11 items-center justify-center rounded-full border">
+          {icon}
+        </span>
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="font-medium">{title}</ItemTitle>
+        <ItemDescription className="text-xs leading-4">{subtitle}</ItemDescription>
+      </ItemContent>
+    </Item>
   )
 }
