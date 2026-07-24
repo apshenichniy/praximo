@@ -3,7 +3,7 @@ import { TelegramId } from "@praximo/domain"
 import { ManagerBotSender } from "@praximo/telegram"
 import { Effect } from "effect"
 import { managedBotSuggestions } from "./provisioning.ts"
-import { handleRequest, sendManagerText } from "./runtime.ts"
+import { handleRequest, prepareManagerInlineInvite, sendManagerText } from "./runtime.ts"
 
 // The health route builds WorkspaceRepo over the real Neon connection (#47),
 // which reads DATABASE_URL from the app's ConfigProvider over the Worker env. On
@@ -131,6 +131,42 @@ describe("bot worker", () => {
           recipient,
           category: "transport",
         }),
+      )
+    }).pipe(Effect.provide(ManagerBotSender.testLayer)),
+  )
+
+  const invite: ManagerBotSender.InlineInvite = {
+    title: "Praximo invite",
+    text: "Forward this invitation\nhttps://t.me/PraximoManagerBot?start=ws_ADA23456",
+    buttonText: "Start onboarding",
+    buttonUrl: "https://t.me/PraximoManagerBot?start=ws_ADA23456",
+  }
+
+  it.effect("maps a prepared inline invite to the RPC contract", () =>
+    Effect.gen(function* () {
+      const recipient = TelegramId.make("123456789")
+      const result = yield* prepareManagerInlineInvite(recipient, invite)
+      const stub = yield* ManagerBotSender.TestService
+
+      expect(result).toEqual(
+        ManagerBotSender.PrepareRpcResult.cases.Prepared.make({ id: "prepared-message-0" }),
+      )
+      expect(yield* stub.prepared()).toEqual([{ recipient, invite }])
+    }).pipe(Effect.provide(ManagerBotSender.testLayer)),
+  )
+
+  it.effect("maps typed prepare failures to the RPC contract", () =>
+    Effect.gen(function* () {
+      const recipient = TelegramId.make("123456789")
+      const stub = yield* ManagerBotSender.TestService
+      yield* stub.failNextPrepare(
+        new ManagerBotSender.PrepareFailed({ recipient, category: "bot-api" }),
+      )
+
+      const result = yield* prepareManagerInlineInvite(recipient, invite)
+
+      expect(result).toEqual(
+        ManagerBotSender.PrepareRpcResult.cases.Failed.make({ recipient, category: "bot-api" }),
       )
     }).pipe(Effect.provide(ManagerBotSender.testLayer)),
   )

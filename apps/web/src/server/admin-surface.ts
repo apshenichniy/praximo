@@ -28,6 +28,11 @@ export interface CreateResult {
   readonly message: string
 }
 
+export interface PrepareShareResult {
+  /** The short-lived prepared-message id handed to `WebApp.shareMessage`. */
+  readonly preparedMessageId: string
+}
+
 export interface WorkspaceDetail {
   readonly id: WorkspaceId
   readonly name: string
@@ -74,6 +79,19 @@ export interface Interface {
     CreateResult,
     AccessDenied | ValidationFailed | IdempotencyConflict | LoadFailed
   >
+  readonly prepareInviteShareMessage: (
+    initData: string,
+    inviteId: string,
+    language: unknown,
+  ) => Effect.Effect<
+    PrepareShareResult,
+    AccessDenied | ValidationFailed | LoadFailed | SharePreparationFailed
+  >
+  readonly recordInviteShare: (
+    initData: string,
+    inviteId: string,
+    language: unknown,
+  ) => Effect.Effect<void, AccessDenied | ValidationFailed | LoadFailed>
   readonly resendInvite: (
     initData: string,
     inviteId: string,
@@ -161,6 +179,16 @@ export class ReissueUnavailable extends Schema.TaggedErrorClass<ReissueUnavailab
   {},
 ) {}
 
+/**
+ * The prepared inline message could not be saved (Bot API failure, or a
+ * short-lived message that expired before sharing). Retryable: the invite stays
+ * pending and the manager can tap Share again to mint a fresh prepared message.
+ */
+export class SharePreparationFailed extends Schema.TaggedErrorClass<SharePreparationFailed>()(
+  "AdminSurface.SharePreparationFailed",
+  {},
+) {}
+
 export class AvatarUnavailable extends Schema.TaggedErrorClass<AvatarUnavailable>()(
   "AdminSurface.AvatarUnavailable",
   {},
@@ -188,6 +216,7 @@ export class DeletionFailed extends Schema.TaggedErrorClass<DeletionFailed>()(
 
 const decodeCreateInput = Schema.decodeUnknownEffect(CreateWorkspaceInput)
 const decodeCreateDelivery = Schema.decodeUnknownEffect(CreateInviteDelivery)
+const decodeCoachLanguage = Schema.decodeUnknownEffect(CoachLanguage)
 const decodeUpdateInput = Schema.decodeUnknownEffect(UpdateWorkspaceProfileInput)
 const decodeDeleteInput = Schema.decodeUnknownEffect(DeleteWorkspaceInput)
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId)
@@ -220,6 +249,13 @@ const forwardableMessage = (language: CoachLanguage, name: string, link: string)
   const copy = forwardableCopy[language]
   const opening = name.length === 0 ? copy.unnamed : copy.named(name)
   return `${opening}\n\n${copy.tail}\n${link}`
+}
+
+// The inline "open the deep link" button on the bot-authored prepared message.
+const startOnboardingLabel: Record<CoachLanguage, string> = {
+  uk: "Почати налаштування",
+  ru: "Начать настройку",
+  en: "Start onboarding",
 }
 
 const deletionFarewell = (language: CoachLanguage, name: string): string => {
@@ -472,8 +508,73 @@ export const layer = Layer.effect(
           return yield* buildResult(outcome.aggregate, "sent", delivery.language)
         }
         case "telegram":
-          return yield* deliver(recipient, outcome.aggregate, delivery.language)
+          // The invite is only minted here; the manager shares it from the Mini
+          // App in a follow-up `prepareInviteShareMessage` + `WebApp.shareMessage`
+          // step. Delivery stays "unknown" because the chat picker can still be
+          // cancelled, and nothing is recorded until a prepared message is saved.
+          return yield* buildResult(outcome.aggregate, "unknown", delivery.language)
       }
+    })
+
+    /**
+     * The Telegram share step (#104): mint a short-lived prepared inline message
+     * the manager forwards into a coach's chat via the native picker. The coach
+     * receives a *bot-authored* message carrying the onboarding deep-link button.
+     * Prepared messages are short-lived, so this runs on tap, not on page load.
+     */
+    const prepareInviteShareMessage = Effect.fn("AdminSurface.prepareInviteShareMessage")(
+      function* (rawInitData: string, rawInviteId: string, rawLanguage: unknown) {
+        const recipient = yield* verifyAdmin(rawInitData)
+        const inviteId = yield* decodeInviteId(rawInviteId).pipe(
+          Effect.mapError(() => new LoadFailed({ operation: "prepareInviteShareMessage" })),
+        )
+        const language = yield* decodeCoachLanguage(rawLanguage).pipe(
+          Effect.mapError(() => new ValidationFailed()),
+        )
+        const aggregate = yield* onboarding
+          .verifyPending(inviteId, new Date(yield* Clock.currentTimeMillis))
+          .pipe(Effect.mapError(() => new LoadFailed({ operation: "prepareInviteShareMessage" })))
+
+        const link = yield* tokens.linkFor(aggregate.invite.code)
+        const prepared = yield* sender
+          .prepareInlineInvite(recipient, {
+            title: aggregate.workspace.name.length === 0 ? "Praximo" : aggregate.workspace.name,
+            text: forwardableMessage(language, aggregate.workspace.name, link),
+            buttonText: startOnboardingLabel[language],
+            buttonUrl: link,
+          })
+          .pipe(Effect.mapError(() => new SharePreparationFailed()))
+
+        // Delivery is recorded only once the client confirms the share landed
+        // (`recordInviteShare`) — a cancelled picker prepared a message that was
+        // never sent, so recording here would mislabel a dismissal as delivered.
+        return { preparedMessageId: prepared.id } satisfies PrepareShareResult
+      },
+    )
+
+    /**
+     * Record that a Telegram invite left through the share sheet — the only
+     * server-visible evidence of an outcome the Mini App observes client-side.
+     * Called after the picker confirms a share (or after the pre-8.0 share-url
+     * fallback opens), never on a dismissal. The coach is unknown until they
+     * claim the invite, so no destination is recorded. Best-effort: the invite
+     * is already out, so a bookkeeping hiccup must not fail the caller.
+     */
+    const recordInviteShare = Effect.fn("AdminSurface.recordInviteShare")(function* (
+      rawInitData: string,
+      rawInviteId: string,
+      rawLanguage: unknown,
+    ) {
+      yield* verifyAdmin(rawInitData)
+      const inviteId = yield* decodeInviteId(rawInviteId).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
+      const language = yield* decodeCoachLanguage(rawLanguage).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
+      yield* onboarding
+        .recordDelivery(inviteId, { channel: "telegram", language })
+        .pipe(Effect.ignore)
     })
 
     const resendInvite = Effect.fn("AdminSurface.resendInvite")(function* (
@@ -797,6 +898,8 @@ export const layer = Layer.effect(
     return Service.of({
       listWorkspaces,
       createWorkspace,
+      prepareInviteShareMessage,
+      recordInviteShare,
       resendInvite,
       getWorkspace,
       getWorkspaceAvatar,

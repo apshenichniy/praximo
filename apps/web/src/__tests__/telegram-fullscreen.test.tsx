@@ -10,6 +10,7 @@ import {
   enterFullscreen,
   readTelegramInitData,
   revealTelegramWebApp,
+  shareInviteMessage,
   type TelegramBackButton,
   type TelegramWebApp,
 } from "@/lib/telegram.ts"
@@ -44,6 +45,8 @@ const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => 
   setBottomBarColor: vi.fn(),
   requestFullscreen: vi.fn(),
   disableVerticalSwipes: vi.fn(),
+  shareMessage: vi.fn(),
+  openTelegramLink: vi.fn(),
   BackButton: fakeBackButton(),
   onEvent: vi.fn(),
   offEvent: vi.fn(),
@@ -149,6 +152,69 @@ describe("enterFullscreen", () => {
     expect(webApp.setHeaderColor).not.toHaveBeenCalled()
     expect(webApp.setBottomBarColor).not.toHaveBeenCalled()
     expect(webApp.disableVerticalSwipes).not.toHaveBeenCalled()
+  })
+})
+
+describe("shareInviteMessage", () => {
+  const link = "https://t.me/PraximoManagerBot?start=ws_ADA23456"
+  const message = `Your Praximo workspace is ready.\n\nOpen this one-time link within 7 days to connect your bot:\n${link}`
+
+  it("prepares on tap and shares the bot message on 8.0+ hosts", async () => {
+    const webApp = fakeWebApp({
+      shareMessage: vi.fn((_id: string, callback?: (sent: boolean) => void) => callback?.(true)),
+    })
+    const prepare = vi.fn(async () => "prepared-123")
+
+    const outcome = await shareInviteMessage(webApp, { prepare, link, message })
+
+    expect(outcome).toBe("shared")
+    expect(prepare).toHaveBeenCalledOnce()
+    expect(webApp.shareMessage).toHaveBeenCalledWith("prepared-123", expect.any(Function))
+    expect(webApp.openTelegramLink).not.toHaveBeenCalled()
+  })
+
+  it("reports a dismissed picker without preparing twice", async () => {
+    const webApp = fakeWebApp({
+      shareMessage: vi.fn((_id: string, callback?: (sent: boolean) => void) => callback?.(false)),
+    })
+
+    const outcome = await shareInviteMessage(webApp, {
+      prepare: async () => "prepared-123",
+      link,
+      message,
+    })
+
+    expect(outcome).toBe("dismissed")
+  })
+
+  it("falls back to a share-url on pre-8.0 hosts without preparing", async () => {
+    const webApp = fakeWebApp({ version: "7.0", isVersionAtLeast: () => false })
+    const prepare = vi.fn(async () => "unused")
+
+    const outcome = await shareInviteMessage(webApp, { prepare, link, message })
+
+    expect(outcome).toBe("fallback")
+    expect(prepare).not.toHaveBeenCalled()
+    expect(webApp.shareMessage).not.toHaveBeenCalled()
+    const [url] = vi.mocked(webApp.openTelegramLink).mock.calls[0] ?? []
+    expect(url).toContain("https://t.me/share/url?url=")
+    expect(url).toContain(encodeURIComponent(link))
+    // The link is the url param; the text is the prose without a duplicate link.
+    const text = new URL(url ?? "").searchParams.get("text") ?? ""
+    expect(text).toContain("Your Praximo workspace is ready.")
+    expect(text).not.toContain(link)
+  })
+
+  it("propagates a prepare failure so the caller can offer a retry", async () => {
+    const webApp = fakeWebApp()
+    const prepare = vi.fn(async () => {
+      throw new Error("prepared message expired")
+    })
+
+    await expect(shareInviteMessage(webApp, { prepare, link, message })).rejects.toThrow(
+      "prepared message expired",
+    )
+    expect(webApp.shareMessage).not.toHaveBeenCalled()
   })
 })
 

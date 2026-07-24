@@ -148,6 +148,32 @@ export const createAdminWorkspace = async (initData: string, input: unknown, del
   )
 }
 
+export const prepareAdminInviteShareMessage = async (
+  initData: string,
+  inviteId: string,
+  language: unknown,
+) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) =>
+      service.prepareInviteShareMessage(initData, inviteId, language),
+    ),
+  )
+}
+
+export const recordAdminInviteShare = async (
+  initData: string,
+  inviteId: string,
+  language: unknown,
+) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) =>
+      service.recordInviteShare(initData, inviteId, language),
+    ),
+  )
+}
+
 export const resendAdminWorkspaceInvite = async (initData: string, inviteId: string) => {
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(

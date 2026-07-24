@@ -15,7 +15,12 @@ import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
 import { InviteCopySheet } from "@/features/admin/components/invite-copy-sheet.tsx"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
-import { createCoachInviteMutation } from "@/features/admin/workspace-queries.ts"
+import {
+  createCoachInviteMutation,
+  prepareCoachInviteShareMutation,
+  recordCoachInviteShareMutation,
+} from "@/features/admin/workspace-queries.ts"
+import { loadTelegramWebApp, shareInviteMessage } from "@/lib/telegram.ts"
 
 export const Route = createFileRoute("/admin/workspaces/new")({
   component: InviteCoachPage,
@@ -28,6 +33,10 @@ const errorMessages = {
   conflict: "This invite draft was already used with different details. Go back and reopen it.",
   server: "The invite could not be created. Check your connection and try again.",
 } as const
+
+// The Telegram share sends an English message today; a future language picker
+// (like Copy has) would replace this constant.
+const telegramInviteLanguage: CoachLanguage = "en"
 
 /**
  * Action-first "Invite a coach" screen (#103): one optional internal label and
@@ -51,7 +60,9 @@ function InviteCoachPage() {
   const [copyFallback, setCopyFallback] = useState<string>()
 
   const mutation = useMutation(createCoachInviteMutation(initData, queryClient))
-  const pending = mutation.isPending
+  const shareMutation = useMutation(prepareCoachInviteShareMutation(initData))
+  const recordShareMutation = useMutation(recordCoachInviteShareMutation(initData))
+  const pending = mutation.isPending || shareMutation.isPending
 
   const finish = (notice: string) => {
     setAdminNotice(notice)
@@ -59,13 +70,20 @@ function InviteCoachPage() {
     void navigate({ to: "/admin" })
   }
 
+  /**
+   * Create the invite (lazy, idempotent under `requestId`), then hand it to
+   * Telegram's native chat picker. The prepared inline message is minted *on
+   * tap* — prepared messages are short-lived — and the fallback covers hosts
+   * below Bot API 8.0. A cancelled picker leaves the invite pending: nothing is
+   * duplicated on a retry, and nothing is stranded on a back-out.
+   */
   const sendInTelegram = async () => {
     setActionError(undefined)
     setEmailNote(false)
     const response = await mutation
       .mutateAsync({
         input: { requestId, name },
-        delivery: { channel: "telegram", language: "en" },
+        delivery: { channel: "telegram", language: telegramInviteLanguage },
       })
       .catch(() => undefined)
     if (response === undefined) {
@@ -79,14 +97,49 @@ function InviteCoachPage() {
       return
     }
     setCreated(true)
-    if (response.value.delivery === "failed") {
-      setActionError(
-        "The invite is ready, but Telegram delivery failed. Tap again — the same invite will be re-sent.",
-      )
+
+    const webApp = await loadTelegramWebApp()
+    if (webApp === undefined) {
+      setActionError("Open this from Telegram to share the invite.")
       notifyHaptic("error")
       return
     }
-    finish("Invite sent to your Telegram chat — forward it to the coach")
+
+    const { inviteId, link, message } = response.value
+    let outcome
+    try {
+      outcome = await shareInviteMessage(webApp, {
+        prepare: async () => {
+          const prepared = await shareMutation.mutateAsync({
+            inviteId,
+            language: telegramInviteLanguage,
+          })
+          if (!prepared.ok) throw new Error(prepared.error)
+          return prepared.value.preparedMessageId
+        },
+        link,
+        message,
+      })
+    } catch {
+      setActionError("Telegram couldn't prepare the invite. Tap again to retry.")
+      notifyHaptic("error")
+      return
+    }
+
+    // A dismissed picker is not a failure: the invite stays pending, nothing is
+    // recorded, and the manager can tap Share again. Leave the screen untouched.
+    if (outcome === "dismissed") return
+    // The share landed (or the fallback sheet opened): record the delivery so the
+    // pending invite remembers its channel and language. Best-effort bookkeeping —
+    // the invite is already out, so ignore any failure.
+    await recordShareMutation
+      .mutateAsync({ inviteId, language: telegramInviteLanguage })
+      .catch(() => undefined)
+    finish(
+      outcome === "fallback"
+        ? "Opening Telegram to share the invite…"
+        : "Invite shared — the coach can start onboarding",
+    )
   }
 
   const copyInvite = async (language: CoachLanguage) => {
@@ -167,7 +220,7 @@ function InviteCoachPage() {
         <InviteAction
           icon={<HugeiconsIcon icon={TelegramIcon} size={22} strokeWidth={1.8} />}
           title="Send in Telegram"
-          subtitle="The bot sends it to your chat — forward it to the coach"
+          subtitle="Pick a chat — the coach gets a ready-to-tap invite"
           disabled={pending}
           onClick={() => void sendInTelegram()}
         />

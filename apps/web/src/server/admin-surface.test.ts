@@ -332,7 +332,7 @@ describe("AdminSurface", () => {
     }).pipe(Effect.provide(appLayer(workspaceRows)), Effect.provide(testConfig)),
   )
 
-  it.effect("telegram action: creates, sends the invite-language message, records delivery", () => {
+  it.effect("telegram action: creates the invite only — the share is a follow-up step", () => {
     const recorded: Array<RecordedDelivery> = []
     return Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
@@ -354,23 +354,17 @@ describe("AdminSurface", () => {
           botStatus: "awaiting-setup",
           hasCustomAvatar: false,
         },
-        delivery: "sent",
+        // Nothing is delivered on create: the manager shares from the Mini App
+        // in a follow-up prepare step, and the picker can still be cancelled.
+        delivery: "unknown",
       })
       expect(result.link).toContain("https://t.me/PraximoMotherBot?start=ws_")
       expect(result.message).toContain("Ваш простір Praximo")
       expect(result.message).toContain(result.link)
-      expect(yield* sender.sent()).toEqual([
-        {
-          recipient: adminTelegramId,
-          text: expect.stringContaining("Ваш простір Praximo"),
-        },
-      ])
-      expect(recorded).toEqual([
-        {
-          id: createdAggregate.invite.id,
-          delivery: { channel: "telegram", destination: adminTelegramId, language: "uk" },
-        },
-      ])
+      // No send to the manager's own chat, and nothing prepared or recorded yet.
+      expect(yield* sender.sent()).toEqual([])
+      expect(yield* sender.prepared()).toEqual([])
+      expect(recorded).toEqual([])
     }).pipe(
       Effect.provide(
         createLayerWith(
@@ -455,43 +449,109 @@ describe("AdminSurface", () => {
     },
   )
 
-  it.effect("keeps the committed result and copyable link when Telegram delivery fails", () => {
+  it.effect("prepare share: prepares the bot-authored invite without recording delivery", () => {
     const recorded: Array<RecordedDelivery> = []
     return Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
-      const sender = yield* ManagerBotSender.TestService
-      yield* sender.failNextSend(
-        new ManagerBotSender.SendFailed({
-          recipient: adminTelegramId,
-          category: "transport",
-        }),
-      )
       const adminSurface = yield* AdminSurface.Service
-      const result = yield* adminSurface.createWorkspace(
+      const result = yield* adminSurface.prepareInviteShareMessage(
         VALID_INIT_DATA,
-        {
-          requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-          name: "Ada Coaching",
-        },
-        { channel: "telegram", language: "uk" },
+        createdAggregate.invite.id,
+        "uk",
       )
+      const sender = yield* ManagerBotSender.TestService
 
-      expect(result.delivery).toBe("failed")
-      expect(result.link).toContain("?start=")
-      // Nothing left the building, so nothing is recorded.
+      expect(result.preparedMessageId).toBe("prepared-message-0")
+      const prepared = yield* sender.prepared()
+      expect(prepared).toEqual([
+        {
+          recipient: adminTelegramId,
+          invite: {
+            title: expect.any(String),
+            text: expect.stringContaining("Ваш простір Praximo «Ada Coaching»"),
+            buttonText: "Почати налаштування",
+            buttonUrl: "https://t.me/PraximoMotherBot?start=ws_ADA23456",
+          },
+        },
+      ])
+      // The prepared text carries the deep link so the button has a plain-text peer.
+      expect(prepared[0]?.invite.text).toContain("https://t.me/PraximoMotherBot?start=ws_ADA23456")
+      // Preparing does not record delivery: the picker can still be cancelled, so
+      // the record waits for the client to confirm the share (recordInviteShare).
       expect(recorded).toEqual([])
     }).pipe(
-      Effect.provide(
-        createLayerWith(
-          onboardingRepoDouble({
-            outcome: Effect.succeed({ aggregate: createdAggregate, created: true }),
-            recorded,
-          }),
-        ),
-      ),
+      Effect.provide(createLayerWith(onboardingRepoDouble({ recorded }))),
       Effect.provide(testConfig),
     )
   })
+
+  it.effect("record share: records the telegram delivery once the client confirms it", () => {
+    const recorded: Array<RecordedDelivery> = []
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      yield* adminSurface.recordInviteShare(VALID_INIT_DATA, createdAggregate.invite.id, "uk")
+
+      // Coach is unknown until they claim the invite, so destination is omitted.
+      expect(recorded).toEqual([
+        {
+          id: createdAggregate.invite.id,
+          delivery: { channel: "telegram", language: "uk" },
+        },
+      ])
+    }).pipe(
+      Effect.provide(createLayerWith(onboardingRepoDouble({ recorded }))),
+      Effect.provide(testConfig),
+    )
+  })
+
+  it.effect("record share: rejects a non-admin caller", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const error = yield* Effect.flip(
+        adminSurface.recordInviteShare(VALID_INIT_DATA, createdAggregate.invite.id, "en"),
+      )
+
+      expect(error._tag).toBe("AdminSurface.AccessDenied")
+    }).pipe(Effect.provide(nonAdminLayer)),
+  )
+
+  it.effect(
+    "prepare share: a failed prepare surfaces a retryable error and records nothing",
+    () => {
+      const recorded: Array<RecordedDelivery> = []
+      return Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
+        const sender = yield* ManagerBotSender.TestService
+        yield* sender.failNextPrepare(
+          new ManagerBotSender.PrepareFailed({ recipient: adminTelegramId, category: "bot-api" }),
+        )
+        const adminSurface = yield* AdminSurface.Service
+        const error = yield* Effect.flip(
+          adminSurface.prepareInviteShareMessage(VALID_INIT_DATA, createdAggregate.invite.id, "uk"),
+        )
+
+        expect(error._tag).toBe("AdminSurface.SharePreparationFailed")
+        expect(recorded).toEqual([])
+      }).pipe(
+        Effect.provide(createLayerWith(onboardingRepoDouble({ recorded }))),
+        Effect.provide(testConfig),
+      )
+    },
+  )
+
+  it.effect("prepare share: rejects a non-admin caller", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const error = yield* Effect.flip(
+        adminSurface.prepareInviteShareMessage(VALID_INIT_DATA, createdAggregate.invite.id, "en"),
+      )
+
+      expect(error._tag).toBe("AdminSurface.AccessDenied")
+    }).pipe(Effect.provide(nonAdminLayer)),
+  )
 
   it.effect("rejects an unshippable delivery channel and surfaces an idempotency conflict", () =>
     Effect.gen(function* () {
