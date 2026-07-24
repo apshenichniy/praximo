@@ -1,5 +1,9 @@
 import { describe, expect, it } from "@effect/vitest"
-import { CoachLanguage, CoachOnboardingInviteCode, CoachOnboardingInviteCodePattern } from "@praximo/domain"
+import {
+  CoachLanguage,
+  CoachOnboardingInviteCode,
+  CoachOnboardingInviteCodePattern,
+} from "@praximo/domain"
 import { eq } from "drizzle-orm"
 import { Effect, Layer, Result } from "effect"
 import { CoachOnboardingRepo, InviteTtlMilliseconds } from "./coach-onboarding-repo.ts"
