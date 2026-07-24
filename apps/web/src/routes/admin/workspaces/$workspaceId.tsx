@@ -16,6 +16,8 @@ import {
   DeleteWorkspaceCard,
   ResetInviteCard,
 } from "@/features/admin/components/danger-zone.tsx"
+import { DeleteWorkspaceSheet } from "@/features/admin/components/delete-workspace-sheet.tsx"
+import { WorkspaceDeletionPanel } from "@/features/admin/components/deletion-panel.tsx"
 import { InviteSection } from "@/features/admin/components/invite-section.tsx"
 import { LabelSettingsSection } from "@/features/admin/components/label-settings-section.tsx"
 import { OnboardingStepsSection } from "@/features/admin/components/onboarding-steps.tsx"
@@ -29,7 +31,9 @@ import {
   reissueCopy,
   type WorkspaceDetail,
 } from "@/features/admin/workspace-detail.ts"
+import { type DeletionProgress, deletionCardCopy } from "@/features/admin/workspace-deletion.ts"
 import {
+  adminWorkspaceDeletionQuery,
   adminWorkspaceDetailQuery,
   deleteWorkspaceMutation,
   reissueWorkspaceInviteMutation,
@@ -41,10 +45,20 @@ export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
   // router has the coach in hand before it swaps screens. Combined with the
   // app-wide `defaultPreload: "intent"`, a tap that follows a touch-down has
   // usually already fetched, and nothing pending is shown at all.
-  loader: ({ context, params }) =>
-    context.queryClient.ensureQueryData(
-      adminWorkspaceDetailQuery(context.initData, params.workspaceId),
-    ),
+  //
+  // The deletion receipt is loaded beside it — almost always empty, and the one
+  // fact that decides whether this screen shows a workspace or its purge.
+  loader: async ({ context, params }) => {
+    const [workspace] = await Promise.all([
+      context.queryClient.ensureQueryData(
+        adminWorkspaceDetailQuery(context.initData, params.workspaceId),
+      ),
+      context.queryClient.ensureQueryData(
+        adminWorkspaceDeletionQuery(context.initData, params.workspaceId),
+      ),
+    ])
+    return workspace
+  },
   // Only worth a skeleton once the wait is perceptible; below that the flash
   // costs more than it explains.
   pendingMs: 150,
@@ -56,13 +70,76 @@ export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
 const adminRoute = getRouteApi("/admin")
 
 const deleteMessages = {
-  validation: "The deletion request is invalid. Close this dialog and try again.",
-  conflict: "Another deletion request is already in progress. Retry from this dialog.",
-  retryable: "A required cleanup step failed. The workspace was kept; retry deletion.",
+  validation: "The deletion request is invalid. Close this and start again.",
+  conflict: "Another deletion of this workspace is already running. Try again in a moment.",
+  retryable: "A step could not be completed. Nothing was lost — try again to finish the deletion.",
   blocked:
     "The connected bot could not be released. The workspace was kept; contact support before retrying.",
   server: "Deletion failed. The workspace was kept; try again.",
 } as const
+
+interface WorkspaceDeletion {
+  readonly progress: DeletionProgress | undefined
+  readonly running: boolean
+  readonly error: string | undefined
+  readonly start: () => void
+}
+
+/**
+ * The deletion pipeline, driven from one place (#110). The request is minted
+ * once per workspace and reused for every attempt, so an interrupted deletion
+ * resumes the same operation rather than opening a second one; the server
+ * adopts an operation started by an earlier session in the same way.
+ *
+ * Progress is read from the server's own receipt rather than guessed from the
+ * request's lifetime, and polled only while an attempt is actually in flight —
+ * a receipt with nobody driving it is paused, not slow.
+ */
+function useWorkspaceDeletion(initData: string, workspaceId: string): WorkspaceDeletion {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+  const remove = useMutation(deleteWorkspaceMutation(initData, queryClient))
+  const requestId = useRef<string | undefined>(undefined)
+  const [error, setError] = useState<string>()
+
+  const { data: receipt } = useSuspenseQuery(
+    adminWorkspaceDeletionQuery(initData, workspaceId, { watch: remove.isPending }),
+  )
+
+  const start = async () => {
+    requestId.current ??= crypto.randomUUID()
+    setError(undefined)
+    const result = await remove
+      .mutateAsync({ workspaceId, requestId: requestId.current })
+      .catch(() => undefined)
+
+    if (result === undefined) {
+      setError("Deletion failed. Check your connection and try again.")
+      notifyHaptic("error")
+      return
+    }
+    if (!result.ok) {
+      setError(deleteMessages[result.error])
+      notifyHaptic("error")
+      return
+    }
+
+    notifyHaptic("success")
+    setAdminNotice(
+      result.value.status === "deleted-farewell-undeliverable"
+        ? "Workspace deleted. The coach farewell could not be delivered."
+        : "Workspace deleted",
+    )
+    await router.navigate({ to: "/admin" })
+  }
+
+  return {
+    progress: receipt ?? undefined,
+    running: remove.isPending,
+    error,
+    start: () => void start(),
+  }
+}
 
 /**
  * Two screens behind one route (#108). Which one a coach gets is not a local
@@ -71,21 +148,58 @@ const deleteMessages = {
  * invite, its progression, and the ways to push it along; an active coach sees
  * status first, then the little that is actually theirs to configure.
  *
+ * A third state outranks both: a workspace being deleted shows its pipeline and
+ * nothing else (#110).
+ *
  * Neither variant edits bot branding — that belongs to the coach.
  */
 function WorkspaceDetailsPage() {
   const { workspaceId } = Route.useParams()
   const { initData } = adminRoute.useLoaderData()
   const { data: workspace } = useSuspenseQuery(adminWorkspaceDetailQuery(initData, workspaceId))
+  const deletion = useWorkspaceDeletion(initData, workspaceId)
+  const progress = deletion.progress
+  // Owned by the page rather than the danger zone: the moment a deletion is
+  // prepared the sections below give way to the pipeline panel, and a sheet
+  // living inside them would be unmounted mid-run by its own success.
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-6 pb-16">
       <TelegramBackButton />
-      {detailVariant(workspace) === "active" ? (
-        <ActiveWorkspace workspace={workspace} initData={initData} />
+      <WorkspaceDetailHeader
+        workspace={workspace}
+        onOpenBot={(link) => void openTelegramLink(link)}
+      />
+      {progress !== undefined && progress.state === "prepared" ? (
+        <WorkspaceDeletionPanel
+          progress={progress}
+          running={deletion.running}
+          error={deletion.error}
+          onResume={deletion.start}
+        />
+      ) : detailVariant(workspace) === "active" ? (
+        <ActiveWorkspace
+          workspace={workspace}
+          initData={initData}
+          onDelete={() => setDeleteOpen(true)}
+        />
       ) : (
-        <OnboardingWorkspace workspace={workspace} initData={initData} />
+        <OnboardingWorkspace
+          workspace={workspace}
+          initData={initData}
+          onDelete={() => setDeleteOpen(true)}
+        />
       )}
+      <DeleteWorkspaceSheet
+        workspace={workspace}
+        open={deleteOpen}
+        progress={progress}
+        running={deletion.running}
+        error={deletion.error}
+        onOpenChange={setDeleteOpen}
+        onConfirm={deletion.start}
+      />
     </main>
   )
 }
@@ -93,21 +207,19 @@ function WorkspaceDetailsPage() {
 function ActiveWorkspace({
   workspace,
   initData,
+  onDelete,
 }: {
   readonly workspace: WorkspaceDetail
   readonly initData: string
+  readonly onDelete: () => void
 }) {
   return (
     <>
-      <WorkspaceDetailHeader
-        workspace={workspace}
-        onOpenBot={(link) => void openTelegramLink(link)}
-      />
       <CoachStatusSection workspace={workspace} />
       <AboutSection workspace={workspace} />
       <PracticeSection />
       <LabelSettingsSection workspace={workspace} initData={initData} />
-      <WorkspaceDangerZone workspace={workspace} initData={initData} />
+      <WorkspaceDangerZone workspace={workspace} onDelete={onDelete} />
     </>
   )
 }
@@ -115,9 +227,11 @@ function ActiveWorkspace({
 function OnboardingWorkspace({
   workspace,
   initData,
+  onDelete,
 }: {
   readonly workspace: WorkspaceDetail
   readonly initData: string
+  readonly onDelete: () => void
 }) {
   const queryClient = useQueryClient()
   const [shareError, setShareError] = useState<string>()
@@ -184,10 +298,6 @@ function OnboardingWorkspace({
 
   return (
     <>
-      <WorkspaceDetailHeader
-        workspace={workspace}
-        onOpenBot={(link) => void openTelegramLink(link)}
-      />
       <InviteSection
         workspace={workspace}
         sharing={inviteShare.sharingInviteId !== undefined}
@@ -213,7 +323,7 @@ function OnboardingWorkspace({
         </Alert>
       )}
       <OnboardingStepsSection workspace={workspace} />
-      <WorkspaceDangerZone workspace={workspace} initData={initData}>
+      <WorkspaceDangerZone workspace={workspace} onDelete={onDelete}>
         {canReset && reset.destructive ? (
           <ResetInviteCard
             copy={reset}
@@ -240,80 +350,17 @@ function OnboardingWorkspace({
 
 function WorkspaceDangerZone({
   workspace,
-  initData,
+  onDelete,
   children,
 }: {
   readonly workspace: WorkspaceDetail
-  readonly initData: string
+  readonly onDelete: () => void
   readonly children?: ReactNode
 }) {
-  const queryClient = useQueryClient()
-  const router = useRouter()
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [confirmationName, setConfirmationName] = useState("")
-  const [deleteError, setDeleteError] = useState<string>()
-  // Minted once per attempt and reused across retries, so an interrupted
-  // deletion resumes the same operation instead of starting a second one.
-  const deleteRequestId = useRef<string | undefined>(undefined)
-
-  const remove = useMutation(deleteWorkspaceMutation(initData, queryClient))
-
-  const deleteWorkspace = async () => {
-    deleteRequestId.current ??= crypto.randomUUID()
-    setDeleteError(undefined)
-    const result = await remove
-      .mutateAsync({
-        workspaceId: workspace.id,
-        requestId: deleteRequestId.current,
-        confirmationName,
-      })
-      .catch(() => undefined)
-    if (result === undefined) {
-      setDeleteError("Deletion failed. Check your connection and try again.")
-      notifyHaptic("error")
-      return
-    }
-    if (!result.ok) {
-      setDeleteError(
-        result.error === "confirmation"
-          ? `Enter “${workspace.name}” exactly as shown.`
-          : deleteMessages[result.error],
-      )
-      notifyHaptic("error")
-      return
-    }
-
-    notifyHaptic("success")
-    setAdminNotice(
-      result.value.status === "deleted-farewell-undeliverable"
-        ? "Workspace deleted. The coach farewell could not be delivered."
-        : "Workspace deleted",
-    )
-    await router.navigate({ to: "/admin" })
-  }
-
   return (
     <DangerZone>
       {children}
-      <DeleteWorkspaceCard
-        workspaceName={workspace.name}
-        open={deleteOpen}
-        confirmationName={confirmationName}
-        error={deleteError}
-        pending={remove.isPending}
-        onOpenChange={(open) => {
-          setDeleteOpen(open)
-          if (!open) {
-            setConfirmationName("")
-            setDeleteError(undefined)
-          }
-        }}
-        onConfirmationNameChange={(value) => {
-          setConfirmationName(value)
-          setDeleteError(undefined)
-        }}
-        onDelete={() => void deleteWorkspace()}
-      />
+      <DeleteWorkspaceCard copy={deletionCardCopy(workspace)} onOpen={onDelete} />
     </DangerZone>
   )
 }

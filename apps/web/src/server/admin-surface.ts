@@ -76,6 +76,12 @@ export interface CoachListEntry {
   readonly lastActivityAt?: string
   /** Absent exactly when onboarding is complete — an active coach. */
   readonly onboarding?: CoachOnboarding
+  /**
+   * A deletion is in flight for this coach (#110). It outranks every other
+   * state the row could report: nothing else about a workspace being purged is
+   * worth acting on, and the row's only remaining job is to offer a resume.
+   */
+  readonly deleting?: true
 }
 
 /**
@@ -145,6 +151,29 @@ export interface DeleteResult {
   readonly status: "deleted" | "deleted-farewell-undeliverable"
 }
 
+/**
+ * The deletion pipeline as the progress sheet reads it (#110): one settled-or-
+ * pending status per stage, straight off the operation's own receipt. It is
+ * deliberately free of any notion of "currently running" — the server knows
+ * only what has landed, and the screen driving an attempt is the one place
+ * that can honestly say which stage is in flight.
+ *
+ * It survives its own workspace: the receipt is kept for a week after the
+ * cascade, so the sheet can watch the last stage complete instead of losing
+ * the screen the moment the workspace row disappears.
+ */
+export interface DeletionProgress {
+  readonly workspaceId: WorkspaceId
+  readonly state: "prepared" | "completed"
+  readonly pipeline: WorkspaceDeletionRepo.PipelineStatus
+  readonly farewell: WorkspaceDeletionRepo.FarewellStatus
+  readonly botRelease: WorkspaceDeletionRepo.BotReleaseStatus
+  /** The label the workspace carried; absent once the cascade has removed it. */
+  readonly workspaceName?: string
+  readonly startedAt: string
+  readonly completedAt?: string
+}
+
 export interface Interface {
   readonly listWorkspaces: (
     initData: string,
@@ -193,12 +222,15 @@ export interface Interface {
     DeleteResult,
     | AccessDenied
     | ValidationFailed
-    | DeleteConfirmationMismatch
     | DeletionConflict
     | DeletionRetryable
     | DeletionFailed
     | LoadFailed
   >
+  readonly getWorkspaceDeletion: (
+    initData: string,
+    workspaceId: string,
+  ) => Effect.Effect<DeletionProgress | undefined, AccessDenied | LoadFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/web/AdminSurface") {}
@@ -240,11 +272,6 @@ export class ReissueUnavailable extends Schema.TaggedErrorClass<ReissueUnavailab
  */
 export class SharePreparationFailed extends Schema.TaggedErrorClass<SharePreparationFailed>()(
   "AdminSurface.SharePreparationFailed",
-  {},
-) {}
-
-export class DeleteConfirmationMismatch extends Schema.TaggedErrorClass<DeleteConfirmationMismatch>()(
-  "AdminSurface.DeleteConfirmationMismatch",
   {},
 ) {}
 
@@ -357,6 +384,7 @@ const onboardingStage = (item: OnboardingFacts, now: Date): CoachOnboardingStage
 const presentCoach = (
   item: WorkspaceRepo.ListItem,
   stage: CoachOnboardingStage | undefined,
+  deleting: boolean,
 ): CoachListEntry => {
   const invite = item.invite
 
@@ -364,6 +392,7 @@ const presentCoach = (
     id: item.id,
     name: item.name,
     botStatus: item.botStatus,
+    ...(deleting ? { deleting: true as const } : {}),
     ...(item.botUsername === undefined ? {} : { botUsername: item.botUsername }),
     ...(item.lastActivityAt === undefined
       ? {}
@@ -494,8 +523,16 @@ export const layer = Layer.effect(
           (left.item.invite?.issuedAt.getTime() ?? 0),
       )
 
+      // One query for the whole list rather than one per row: a deletion in
+      // flight is rare, so the common answer is an empty set.
+      const deleting = new Set(
+        yield* deletions
+          .listPrepared()
+          .pipe(Effect.mapError(() => new LoadFailed({ operation: "listWorkspaces.deleting" }))),
+      )
+
       const coaches = [...pinned, ...staged.filter((entry) => entry.stage === undefined)].map(
-        (entry) => presentCoach(entry.item, entry.stage),
+        (entry) => presentCoach(entry.item, entry.stage, deleting.has(entry.item.id)),
       )
 
       const viewerCoach = yield* resolveViewerCoach(items, viewer)
@@ -863,23 +900,13 @@ export const layer = Layer.effect(
         Effect.mapError(() => new ValidationFailed()),
       )
       let operation = yield* deletions
-        .prepare(
-          workspaceId,
-          input.requestId,
-          input.confirmationName,
-          new Date(yield* Clock.currentTimeMillis),
-        )
+        .prepare(workspaceId, input.requestId, new Date(yield* Clock.currentTimeMillis))
         .pipe(
-          Effect.mapError((error) => {
-            switch (error._tag) {
-              case "WorkspaceDeletionRepo.NameMismatch":
-                return new DeleteConfirmationMismatch()
-              case "WorkspaceDeletionRepo.RequestConflict":
-                return new DeletionConflict()
-              default:
-                return new LoadFailed({ operation: "deleteWorkspace.prepare" })
-            }
-          }),
+          Effect.mapError((error) =>
+            error._tag === "WorkspaceDeletionRepo.RequestConflict"
+              ? new DeletionConflict()
+              : new LoadFailed({ operation: "deleteWorkspace.prepare" }),
+          ),
         )
 
       // prepare may adopt an in-flight operation created under an earlier
@@ -978,6 +1005,40 @@ export const layer = Layer.effect(
       } satisfies DeleteResult
     })
 
+    /**
+     * What the progress sheet and the resume panel read. `undefined` is the
+     * ordinary answer — a workspace nobody has ever tried to delete — and the
+     * caller treats it as "nothing in flight" rather than as an error.
+     */
+    const getWorkspaceDeletion = Effect.fn("AdminSurface.getWorkspaceDeletion")(function* (
+      rawInitData: string,
+      rawWorkspaceId: string,
+    ) {
+      yield* verifyAdmin(rawInitData)
+      const workspaceId = yield* decodeWorkspaceId(rawWorkspaceId).pipe(
+        Effect.mapError(() => new LoadFailed({ operation: "getWorkspaceDeletion" })),
+      )
+      const operation = yield* deletions
+        .findByWorkspace(workspaceId)
+        .pipe(Effect.mapError(() => new LoadFailed({ operation: "getWorkspaceDeletion" })))
+      if (operation === undefined) return undefined
+
+      return {
+        workspaceId: operation.workspaceId,
+        state: operation.state,
+        pipeline: operation.pipelineStatus,
+        farewell: operation.farewellStatus,
+        botRelease: operation.botReleaseStatus,
+        ...(operation.workspaceName === undefined
+          ? {}
+          : { workspaceName: operation.workspaceName }),
+        startedAt: operation.createdAt.toISOString(),
+        ...(operation.completedAt === undefined
+          ? {}
+          : { completedAt: operation.completedAt.toISOString() }),
+      } satisfies DeletionProgress
+    })
+
     return Service.of({
       listWorkspaces,
       createWorkspace,
@@ -987,6 +1048,7 @@ export const layer = Layer.effect(
       renameWorkspace,
       reissueWorkspaceInvite,
       deleteWorkspace,
+      getWorkspaceDeletion,
     })
   }),
 )

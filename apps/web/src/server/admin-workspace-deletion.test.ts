@@ -110,17 +110,12 @@ describe("AdminSurface workspace deletion", () => {
       const deletionLayer = Layer.succeed(
         WorkspaceDeletionRepo.Service,
         WorkspaceDeletionRepo.Service.of({
-          prepare: Effect.fn("WorkspaceDeletionRepo.DeleteTest.prepare")(
-            function* (_workspaceId, _requestId, confirmationName) {
-              if (confirmationName !== initial.workspaceName) {
-                return yield* new WorkspaceDeletionRepo.NameMismatch()
-              }
-              const current = yield* Ref.get(state)
-              if (current !== undefined) return current
-              yield* Ref.set(state, initial)
-              return initial
-            },
-          ),
+          prepare: Effect.fn("WorkspaceDeletionRepo.DeleteTest.prepare")(function* () {
+            const current = yield* Ref.get(state)
+            if (current !== undefined) return current
+            yield* Ref.set(state, initial)
+            return initial
+          }),
           markPipeline: Effect.fn("WorkspaceDeletionRepo.DeleteTest.markPipeline")(
             (_requestId, status, now) => update({ pipelineStatus: status }, now),
           ),
@@ -133,8 +128,11 @@ describe("AdminSurface workspace deletion", () => {
           finalize: Effect.fn("WorkspaceDeletionRepo.DeleteTest.finalize")((_requestId, now) =>
             update({ state: "completed", completedAt: now }, now),
           ),
-          isDeleting: Effect.fn("WorkspaceDeletionRepo.DeleteTest.isDeleting")(() =>
-            Effect.succeed(true),
+          findByWorkspace: Effect.fn("WorkspaceDeletionRepo.DeleteTest.findByWorkspace")(() =>
+            Ref.get(state),
+          ),
+          listPrepared: Effect.fn("WorkspaceDeletionRepo.DeleteTest.listPrepared")(() =>
+            Effect.succeed([workspaceId]),
           ),
           purgeExpired: Effect.fn("WorkspaceDeletionRepo.DeleteTest.purgeExpired")(() =>
             Effect.succeed(0),
@@ -170,14 +168,9 @@ describe("AdminSurface workspace deletion", () => {
 
       yield* Effect.gen(function* () {
         const admin = yield* AdminSurface.Service
-        const result = yield* admin.deleteWorkspace("valid", workspaceId, {
-          requestId,
-          confirmationName: "Ada Coaching",
-        })
-        const replay = yield* admin.deleteWorkspace("valid", workspaceId, {
-          requestId,
-          confirmationName: "Ada Coaching",
-        })
+        const result = yield* admin.deleteWorkspace("valid", workspaceId, { requestId })
+        const replay = yield* admin.deleteWorkspace("valid", workspaceId, { requestId })
+        const progress = yield* admin.getWorkspaceDeletion("valid", workspaceId)
         const messages = yield* ManagerBotSender.TestService.pipe(
           Effect.flatMap((sender) => sender.sent()),
         )
@@ -188,6 +181,15 @@ describe("AdminSurface workspace deletion", () => {
         expect(result).toEqual({ status: "deleted" })
         expect(replay).toEqual({ status: "deleted" })
         expect((yield* Ref.get(state))?.state).toBe("completed")
+        // The receipt outlives the workspace, so the progress surface can watch
+        // the last stage land instead of losing its subject at the cascade.
+        expect(progress).toMatchObject({
+          workspaceId,
+          state: "completed",
+          pipeline: "nothing-active",
+          farewell: "sent",
+          botRelease: "not-connected",
+        })
         expect(yield* Ref.get(cancellationCalls)).toBe(1)
         expect(yield* Ref.get(cleanupKicks)).toBe(1)
         expect(messages).toEqual([
@@ -250,8 +252,11 @@ describe("AdminSurface workspace deletion", () => {
           finalize: Effect.fn("WorkspaceDeletionRepo.AdoptTest.finalize")((stepRequestId, now) =>
             step(stepRequestId, { state: "completed", completedAt: now }, now),
           ),
-          isDeleting: Effect.fn("WorkspaceDeletionRepo.AdoptTest.isDeleting")(() =>
-            Effect.succeed(true),
+          findByWorkspace: Effect.fn("WorkspaceDeletionRepo.AdoptTest.findByWorkspace")(() =>
+            Ref.get(state),
+          ),
+          listPrepared: Effect.fn("WorkspaceDeletionRepo.AdoptTest.listPrepared")(() =>
+            Effect.succeed([workspaceId]),
           ),
           purgeExpired: Effect.fn("WorkspaceDeletionRepo.AdoptTest.purgeExpired")(() =>
             Effect.succeed(0),
@@ -288,7 +293,6 @@ describe("AdminSurface workspace deletion", () => {
         const admin = yield* AdminSurface.Service
         const result = yield* admin.deleteWorkspace("valid", workspaceId, {
           requestId: freshRequestId,
-          confirmationName: "Ada Coaching",
         })
 
         expect(result).toEqual({ status: "deleted" })

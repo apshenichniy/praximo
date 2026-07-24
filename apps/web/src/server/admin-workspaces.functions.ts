@@ -5,6 +5,7 @@ import {
   createAdminWorkspace,
   deleteAdminWorkspace,
   getAdminWorkspace,
+  getAdminWorkspaceDeletion,
   listAdminWorkspaces,
   prepareAdminInviteShareMessage,
   recordAdminInviteShare,
@@ -278,7 +279,6 @@ export const reissueAdminWorkspaceInvite = createServerFn({ method: "POST" })
 
 export type DeleteWorkspaceTransportError =
   | "validation"
-  | "confirmation"
   | "conflict"
   | "retryable"
   | "blocked"
@@ -294,24 +294,17 @@ const validateDeleteWorkspace = (
   readonly initData: string
   readonly workspaceId: string
   readonly requestId: string
-  readonly confirmationName: string
 } => {
   const validated = validateWorkspaceRequest(input)
   if (
     typeof input !== "object" ||
     input === null ||
     !("requestId" in input) ||
-    typeof input.requestId !== "string" ||
-    !("confirmationName" in input) ||
-    typeof input.confirmationName !== "string"
+    typeof input.requestId !== "string"
   ) {
     throw notFound()
   }
-  return {
-    ...validated,
-    requestId: input.requestId,
-    confirmationName: input.confirmationName,
-  }
+  return { ...validated, requestId: input.requestId }
 }
 
 export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
@@ -322,7 +315,6 @@ export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
         ok: true,
         value: await deleteAdminWorkspace(data.initData, data.workspaceId, {
           requestId: data.requestId,
-          confirmationName: data.confirmationName,
         }),
       }
     } catch (error) {
@@ -334,8 +326,6 @@ export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
           throw notFound()
         case "AdminSurface.ValidationFailed":
           return { ok: false, error: "validation" }
-        case "AdminSurface.DeleteConfirmationMismatch":
-          return { ok: false, error: "confirmation" }
         case "AdminSurface.DeletionConflict":
           return { ok: false, error: "conflict" }
         case "AdminSurface.DeletionRetryable":
@@ -345,6 +335,23 @@ export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
         default:
           return { ok: false, error: "server" }
       }
+    }
+  })
+
+/**
+ * The progress poll. It keeps answering after the cascade has removed the
+ * workspace itself, so a sheet watching the pipeline never loses its subject
+ * mid-run. Absence travels as `null` rather than `undefined`: "no deletion has
+ * ever been requested" is a cacheable answer, and a query cache cannot hold
+ * `undefined` — that is its own word for "nothing fetched yet".
+ */
+export const loadAdminWorkspaceDeletion = createServerFn({ method: "POST" })
+  .validator(validateWorkspaceRequest)
+  .handler(async ({ data }): Promise<AdminSurface.DeletionProgress | null> => {
+    try {
+      return (await getAdminWorkspaceDeletion(data.initData, data.workspaceId)) ?? null
+    } catch {
+      throw notFound()
     }
   })
 

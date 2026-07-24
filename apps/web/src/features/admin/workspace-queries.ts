@@ -7,6 +7,7 @@ import {
   deleteAdminWorkspaceRequest,
   type DeleteWorkspaceTransportResult,
   loadAdminWorkspace,
+  loadAdminWorkspaceDeletion,
   loadAdminWorkspaces,
   prepareAdminCoachInviteShare,
   type PrepareShareTransportResult,
@@ -21,6 +22,7 @@ export const workspaceKeys = {
   all: ["admin", "workspaces"] as const,
   list: () => [...workspaceKeys.all, "list"] as const,
   detail: (workspaceId: string) => [...workspaceKeys.all, "detail", workspaceId] as const,
+  deletion: (workspaceId: string) => [...workspaceKeys.all, "deletion", workspaceId] as const,
 }
 
 export const adminWorkspaceListQuery = (initData: string) =>
@@ -35,6 +37,31 @@ export const adminWorkspaceDetailQuery = (initData: string, workspaceId: string)
     queryKey: workspaceKeys.detail(workspaceId),
     queryFn: () => loadAdminWorkspace({ data: { initData, workspaceId } }),
     retry: false,
+  })
+
+/**
+ * Fast enough that a stage settling reads as the sheet reacting to the server
+ * rather than as a page refreshing, slow enough that a pipeline dominated by
+ * two Telegram round-trips is not polled dozens of times per stage.
+ */
+const DeletionPollMs = 800
+
+/**
+ * The deletion receipt for one workspace (#110). Polling is opt-in rather than
+ * derived from the data: a receipt that sits `prepared` with nobody driving it
+ * is a *paused* deletion, and a screen showing it as paused has nothing to wait
+ * for. Only a screen actually driving the pipeline asks to watch it.
+ */
+export const adminWorkspaceDeletionQuery = (
+  initData: string,
+  workspaceId: string,
+  options?: { readonly watch?: boolean },
+) =>
+  queryOptions({
+    queryKey: workspaceKeys.deletion(workspaceId),
+    queryFn: () => loadAdminWorkspaceDeletion({ data: { initData, workspaceId } }),
+    retry: false,
+    refetchInterval: options?.watch === true ? DeletionPollMs : false,
   })
 
 export interface CreateCoachInviteMutationInput {
@@ -133,15 +160,20 @@ export const deleteWorkspaceMutation = (initData: string, queryClient: QueryClie
   mutationFn: ({
     workspaceId,
     requestId,
-    confirmationName,
   }: {
     readonly workspaceId: string
     readonly requestId: string
-    readonly confirmationName: string
   }): Promise<DeleteWorkspaceTransportResult> =>
-    deleteAdminWorkspaceRequest({
-      data: { initData, workspaceId, requestId, confirmationName },
-    }),
+    deleteAdminWorkspaceRequest({ data: { initData, workspaceId, requestId } }),
+  onSettled: (
+    _result: DeleteWorkspaceTransportResult | undefined,
+    _error: unknown,
+    variables: { readonly workspaceId: string },
+  ) => {
+    // Whatever the attempt did — finished, stalled on a stage, or died — the
+    // receipt is the only honest account of it, so it is refetched either way.
+    void queryClient.invalidateQueries({ queryKey: workspaceKeys.deletion(variables.workspaceId) })
+  },
   onSuccess: (
     result: DeleteWorkspaceTransportResult,
     variables: { readonly workspaceId: string },

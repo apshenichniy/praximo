@@ -4,7 +4,7 @@ import {
   WorkspaceId,
   WorkspaceNotFound,
 } from "@praximo/domain"
-import { and, eq, type SQL, sql } from "drizzle-orm"
+import { and, desc, eq, type SQL, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
@@ -43,11 +43,6 @@ export const Operation = Schema.Struct({
 })
 export interface Operation extends Schema.Schema.Type<typeof Operation> {}
 
-export class NameMismatch extends Schema.TaggedErrorClass<NameMismatch>()(
-  "WorkspaceDeletionRepo.NameMismatch",
-  {},
-) {}
-
 export class RequestConflict extends Schema.TaggedErrorClass<RequestConflict>()(
   "WorkspaceDeletionRepo.RequestConflict",
   {},
@@ -64,11 +59,10 @@ export interface Interface {
   readonly prepare: (
     workspaceId: WorkspaceId,
     requestId: WorkspaceDeletionRequestId,
-    confirmationName: string,
     now: Date,
   ) => Effect.Effect<
     Operation,
-    WorkspaceNotFound | NameMismatch | RequestConflict | InvalidTransition | QueryFailed
+    WorkspaceNotFound | RequestConflict | InvalidTransition | QueryFailed
   >
   readonly markPipeline: (
     requestId: WorkspaceDeletionRequestId,
@@ -89,7 +83,16 @@ export interface Interface {
     requestId: WorkspaceDeletionRequestId,
     now: Date,
   ) => Effect.Effect<Operation, InvalidTransition | QueryFailed>
-  readonly isDeleting: (workspaceId: WorkspaceId) => Effect.Effect<boolean, QueryFailed>
+  /**
+   * The workspace's own deletion receipt, prepared or completed. It outlives
+   * the workspace by design — the progress surface keeps reading it after the
+   * cascade has removed everything else (#110).
+   */
+  readonly findByWorkspace: (
+    workspaceId: WorkspaceId,
+  ) => Effect.Effect<Operation | undefined, QueryFailed>
+  /** Every workspace with a deletion still in flight, for the list's badge. */
+  readonly listPrepared: () => Effect.Effect<ReadonlyArray<WorkspaceId>, QueryFailed>
   readonly purgeExpired: (now: Date) => Effect.Effect<number, QueryFailed>
   readonly reconcileOrphans: () => Effect.Effect<number, QueryFailed>
 }
@@ -105,6 +108,8 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const { client } = yield* Database.Service
 
+    // Newest first so a workspace lookup lands on its live receipt: the unique
+    // index allows one prepared operation, but completed ones linger for a week.
     const queryOperations = (where: SQL | undefined, operation: string) =>
       Effect.tryPromise({
         try: () =>
@@ -137,6 +142,7 @@ export const layer = Layer.effect(
               ),
             )
             .where(where)
+            .orderBy(desc(schema.workspaceDeletionOperation.createdAt))
             .limit(1),
         catch: (cause) => new QueryFailed({ operation, cause }),
       })
@@ -206,7 +212,7 @@ export const layer = Layer.effect(
     })
 
     const prepare: Interface["prepare"] = Effect.fn("WorkspaceDeletionRepo.prepare")(
-      function* (workspaceId, requestId, confirmationName, now) {
+      function* (workspaceId, requestId, now) {
         const replay = yield* load(requestId)
         if (replay !== undefined) {
           if (replay.workspaceId !== workspaceId) return yield* new RequestConflict()
@@ -216,15 +222,13 @@ export const layer = Layer.effect(
         const workspaceRows = yield* Effect.tryPromise({
           try: () =>
             client
-              .select({ name: schema.workspace.name })
+              .select({ id: schema.workspace.id })
               .from(schema.workspace)
               .where(eq(schema.workspace.id, workspaceId))
               .limit(1),
           catch: (cause) => new QueryFailed({ operation: "WorkspaceDeletionRepo.prepare", cause }),
         })
-        const workspace = workspaceRows[0]
-        if (workspace === undefined) return yield* new WorkspaceNotFound({ id: workspaceId })
-        if (workspace.name !== confirmationName) return yield* new NameMismatch()
+        if (workspaceRows[0] === undefined) return yield* new WorkspaceNotFound({ id: workspaceId })
 
         yield* Effect.tryPromise({
           try: () =>
@@ -393,24 +397,30 @@ export const layer = Layer.effect(
       },
     )
 
-    const isDeleting: Interface["isDeleting"] = Effect.fn("WorkspaceDeletionRepo.isDeleting")(
-      function* (workspaceId) {
+    const findByWorkspace: Interface["findByWorkspace"] = Effect.fn(
+      "WorkspaceDeletionRepo.findByWorkspace",
+    )(function* (workspaceId) {
+      const rows = yield* queryOperations(
+        eq(schema.workspaceDeletionOperation.workspaceId, workspaceId),
+        "WorkspaceDeletionRepo.findByWorkspace",
+      )
+      const row = rows[0]
+      if (row === undefined) return undefined
+      return yield* decodeRow(row)
+    })
+
+    const listPrepared: Interface["listPrepared"] = Effect.fn("WorkspaceDeletionRepo.listPrepared")(
+      function* () {
         const rows = yield* Effect.tryPromise({
           try: () =>
             client
-              .select({ requestId: schema.workspaceDeletionOperation.requestId })
+              .select({ workspaceId: schema.workspaceDeletionOperation.workspaceId })
               .from(schema.workspaceDeletionOperation)
-              .where(
-                and(
-                  eq(schema.workspaceDeletionOperation.workspaceId, workspaceId),
-                  eq(schema.workspaceDeletionOperation.state, "prepared"),
-                ),
-              )
-              .limit(1),
+              .where(eq(schema.workspaceDeletionOperation.state, "prepared")),
           catch: (cause) =>
-            new QueryFailed({ operation: "WorkspaceDeletionRepo.isDeleting", cause }),
+            new QueryFailed({ operation: "WorkspaceDeletionRepo.listPrepared", cause }),
         })
-        return rows.length > 0
+        return rows.map((row) => WorkspaceId.make(row.workspaceId))
       },
     )
 
@@ -461,7 +471,8 @@ export const layer = Layer.effect(
       markFarewell,
       markBotReleased,
       finalize,
-      isDeleting,
+      findByWorkspace,
+      listPrepared,
       purgeExpired,
       reconcileOrphans,
     })

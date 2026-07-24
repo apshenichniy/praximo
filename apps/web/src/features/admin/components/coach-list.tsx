@@ -76,6 +76,7 @@ const dotClass = {
 export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
   const state = coachRowState(coach)
   const time = coachRowTime(coach)
+  const deleting = coach.deleting === true
 
   return (
     <Item
@@ -83,7 +84,10 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
       className="active:bg-accent/70 h-16 gap-3.5 rounded-none border-0 px-4 py-0"
     >
       <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
-        <WorkspaceAvatar name={coach.name} className="size-[38px]" />
+        <WorkspaceAvatar
+          name={coach.name}
+          className={cn("size-[38px]", deleting && "opacity-45 grayscale")}
+        />
       </ItemMedia>
       <ItemContent className="min-w-0 gap-0.5">
         <ItemTitle className="block truncate text-[15px] font-semibold">
@@ -102,12 +106,22 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
           )}
         </ItemDescription>
       </ItemContent>
-      <HugeiconsIcon
-        icon={ArrowRight01Icon}
-        size={20}
-        strokeWidth={2}
-        className="text-muted-foreground/60 shrink-0"
-      />
+      {deleting ? (
+        // An interrupted deletion is the one row that names its own action
+        // (#110). It is still the same link — the workspace screen owns the
+        // pipeline, as it owns every other action on a coach — but the row says
+        // what is waiting there rather than leaving it to a chevron.
+        <span className="border-destructive/40 text-destructive shrink-0 rounded-full border px-3 py-1 text-[13px] font-semibold">
+          Resume
+        </span>
+      ) : (
+        <HugeiconsIcon
+          icon={ArrowRight01Icon}
+          size={20}
+          strokeWidth={2}
+          className="text-muted-foreground/60 shrink-0"
+        />
+      )}
     </Item>
   )
 }

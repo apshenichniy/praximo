@@ -273,7 +273,10 @@ const unusedDeletionRepoLayer = Layer.succeed(
       Effect.die("unused"),
     ),
     finalize: Effect.fn("WorkspaceDeletionRepo.Test.finalize")(() => Effect.die("unused")),
-    isDeleting: Effect.fn("WorkspaceDeletionRepo.Test.isDeleting")(() => Effect.succeed(false)),
+    findByWorkspace: Effect.fn("WorkspaceDeletionRepo.Test.findByWorkspace")(() =>
+      Effect.succeed(undefined),
+    ),
+    listPrepared: Effect.fn("WorkspaceDeletionRepo.Test.listPrepared")(() => Effect.succeed([])),
     purgeExpired: Effect.fn("WorkspaceDeletionRepo.Test.purgeExpired")(() => Effect.succeed(0)),
     reconcileOrphans: Effect.fn("WorkspaceDeletionRepo.Test.reconcileOrphans")(() =>
       Effect.succeed(0),

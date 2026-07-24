@@ -187,7 +187,6 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
       const prepared = yield* repo.prepare(
         workspaceId,
         requestId,
-        "Ada Coaching",
         new Date("2026-07-23T12:01:00.000Z"),
       )
       expect(prepared.workspaceName).toBe("Ada Coaching")
@@ -233,39 +232,50 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
       )
       expect(new Set(jobs.map((job) => job.objectKey))).toEqual(new Set(expectedKeys))
 
-      expect((yield* repo.prepare(workspaceId, requestId, "Ada Coaching", new Date())).state).toBe(
-        "completed",
-      )
-      const missing = yield* Effect.flip(
-        repo.prepare(workspaceId, retryRequestId, "Ada Coaching", new Date()),
-      )
+      expect((yield* repo.prepare(workspaceId, requestId, new Date())).state).toBe("completed")
+      const missing = yield* Effect.flip(repo.prepare(workspaceId, retryRequestId, new Date()))
       expect(missing._tag).toBe("Domain.WorkspaceNotFound")
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
-  it.effect("requires the persisted workspace name exactly", () =>
+  it.effect("reads a workspace's own receipt before and after the cascade", () =>
     Effect.gen(function* () {
       const repo = yield* WorkspaceDeletionRepo.Service
       const { client } = yield* Database.Service
-      const workspaceId = WorkspaceId.make(uniqueId("ws_delete_name"))
+      const workspaceId = WorkspaceId.make(uniqueId("ws_progress"))
+      const requestId = WorkspaceDeletionRequestId.make(crypto.randomUUID())
       yield* Effect.addFinalizer(() =>
-        Effect.promise(() =>
-          client.delete(schema.workspace).where(eq(schema.workspace.id, workspaceId)),
-        ).pipe(Effect.asVoid),
+        Effect.promise(async () => {
+          await client
+            .delete(schema.workspaceDeletionOperation)
+            .where(eq(schema.workspaceDeletionOperation.workspaceId, workspaceId))
+          await client.delete(schema.workspace).where(eq(schema.workspace.id, workspaceId))
+        }).pipe(Effect.asVoid),
       )
+
+      expect(yield* repo.findByWorkspace(workspaceId)).toBeUndefined()
       yield* Effect.promise(() =>
         client.insert(schema.workspace).values({ id: workspaceId, name: "Ada Coaching" }),
       )
+      yield* repo.prepare(workspaceId, requestId, new Date("2026-07-24T10:00:00.000Z"))
 
-      const error = yield* Effect.flip(
-        repo.prepare(
-          workspaceId,
-          WorkspaceDeletionRequestId.make(crypto.randomUUID()),
-          "ada coaching",
-          new Date(),
-        ),
-      )
-      expect(error._tag).toBe("WorkspaceDeletionRepo.NameMismatch")
+      const prepared = yield* repo.findByWorkspace(workspaceId)
+      expect(prepared?.requestId).toBe(requestId)
+      expect(prepared?.state).toBe("prepared")
+      expect(prepared?.workspaceName).toBe("Ada Coaching")
+      expect(yield* repo.listPrepared()).toContain(workspaceId)
+
+      yield* repo.markPipeline(requestId, "nothing-active", new Date())
+      yield* repo.markFarewell(requestId, "not-applicable", new Date())
+      yield* repo.markBotReleased(requestId, "not-connected", new Date())
+      yield* repo.finalize(requestId, new Date())
+
+      // The workspace is gone; the receipt is the only remaining account of it,
+      // and the progress surface keeps reading it to its final stage (#110).
+      const completed = yield* repo.findByWorkspace(workspaceId)
+      expect(completed?.state).toBe("completed")
+      expect(completed?.workspaceName).toBeUndefined()
+      expect(yield* repo.listPrepared()).not.toContain(workspaceId)
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
@@ -294,7 +304,6 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
       const prepared = yield* repo.prepare(
         workspaceId,
         staleRequestId,
-        "Ada Coaching",
         new Date("2026-07-24T10:00:00.000Z"),
       )
       expect(prepared.requestId).toBe(staleRequestId)
@@ -304,7 +313,6 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
       const adopted = yield* repo.prepare(
         workspaceId,
         freshRequestId,
-        "Ada Coaching",
         new Date("2026-07-24T10:05:00.000Z"),
       )
       expect(adopted.requestId).toBe(staleRequestId)
@@ -358,7 +366,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
       yield* Effect.promise(() =>
         client.insert(schema.workspace).values({ id: workspaceId, name: "Ada Coaching" }),
       )
-      yield* repo.prepare(workspaceId, requestId, "Ada Coaching", new Date())
+      yield* repo.prepare(workspaceId, requestId, new Date())
 
       // Safety: a prepared operation whose workspace still exists is left alone.
       yield* repo.reconcileOrphans()
