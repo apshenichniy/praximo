@@ -268,4 +268,108 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
       expect(error._tag).toBe("WorkspaceDeletionRepo.NameMismatch")
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
+
+  it.effect("adopts an interrupted operation for a fresh requestId and resumes to completion", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkspaceDeletionRepo.Service
+      const { client } = yield* Database.Service
+      const workspaceId = WorkspaceId.make(uniqueId("ws_adopt"))
+      const staleRequestId = WorkspaceDeletionRequestId.make(crypto.randomUUID())
+      const freshRequestId = WorkspaceDeletionRequestId.make(crypto.randomUUID())
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(async () => {
+          await client
+            .delete(schema.objectCleanupJob)
+            .where(eq(schema.objectCleanupJob.correlationId, staleRequestId))
+          await client
+            .delete(schema.workspaceDeletionOperation)
+            .where(eq(schema.workspaceDeletionOperation.workspaceId, workspaceId))
+          await client.delete(schema.workspace).where(eq(schema.workspace.id, workspaceId))
+        }).pipe(Effect.asVoid),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.workspace).values({ id: workspaceId, name: "Ada Coaching" }),
+      )
+
+      const prepared = yield* repo.prepare(
+        workspaceId,
+        staleRequestId,
+        "Ada Coaching",
+        new Date("2026-07-24T10:00:00.000Z"),
+      )
+      expect(prepared.requestId).toBe(staleRequestId)
+
+      // Interruption: the dialog remounts and mints a fresh requestId. prepare
+      // must adopt the existing prepared operation rather than report a conflict.
+      const adopted = yield* repo.prepare(
+        workspaceId,
+        freshRequestId,
+        "Ada Coaching",
+        new Date("2026-07-24T10:05:00.000Z"),
+      )
+      expect(adopted.requestId).toBe(staleRequestId)
+      expect(adopted.state).toBe("prepared")
+
+      // The resumed session drives the adopted operation under its own id.
+      yield* repo.markPipeline(
+        staleRequestId,
+        "nothing-active",
+        new Date("2026-07-24T10:06:00.000Z"),
+      )
+      yield* repo.markFarewell(
+        staleRequestId,
+        "not-applicable",
+        new Date("2026-07-24T10:06:00.000Z"),
+      )
+      yield* repo.markBotReleased(
+        staleRequestId,
+        "not-connected",
+        new Date("2026-07-24T10:06:00.000Z"),
+      )
+      const completed = yield* repo.finalize(staleRequestId, new Date("2026-07-24T10:07:00.000Z"))
+      expect(completed.state).toBe("completed")
+      expect(
+        yield* Effect.promise(() =>
+          client.select().from(schema.workspace).where(eq(schema.workspace.id, workspaceId)),
+        ),
+      ).toEqual([])
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("reconciles a prepared operation whose workspace is already gone", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkspaceDeletionRepo.Service
+      const { client } = yield* Database.Service
+      const workspaceId = WorkspaceId.make(uniqueId("ws_orphan"))
+      const requestId = WorkspaceDeletionRequestId.make(crypto.randomUUID())
+      const selectRow = () =>
+        client
+          .select({ requestId: schema.workspaceDeletionOperation.requestId })
+          .from(schema.workspaceDeletionOperation)
+          .where(eq(schema.workspaceDeletionOperation.requestId, requestId))
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(async () => {
+          await client
+            .delete(schema.workspaceDeletionOperation)
+            .where(eq(schema.workspaceDeletionOperation.requestId, requestId))
+          await client.delete(schema.workspace).where(eq(schema.workspace.id, workspaceId))
+        }).pipe(Effect.asVoid),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.workspace).values({ id: workspaceId, name: "Ada Coaching" }),
+      )
+      yield* repo.prepare(workspaceId, requestId, "Ada Coaching", new Date())
+
+      // Safety: a prepared operation whose workspace still exists is left alone.
+      yield* repo.reconcileOrphans()
+      expect((yield* Effect.promise(selectRow)).length).toBe(1)
+
+      // Workspace removed out of band: the prepared row can never finalize.
+      yield* Effect.promise(() =>
+        client.delete(schema.workspace).where(eq(schema.workspace.id, workspaceId)),
+      )
+      expect(yield* repo.reconcileOrphans()).toBeGreaterThanOrEqual(1)
+      expect(yield* Effect.promise(selectRow)).toEqual([])
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
 })

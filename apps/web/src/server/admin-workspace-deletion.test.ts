@@ -137,6 +137,9 @@ describe("AdminSurface workspace deletion", () => {
           purgeExpired: Effect.fn("WorkspaceDeletionRepo.DeleteTest.purgeExpired")(() =>
             Effect.succeed(0),
           ),
+          reconcileOrphans: Effect.fn("WorkspaceDeletionRepo.DeleteTest.reconcileOrphans")(() =>
+            Effect.succeed(0),
+          ),
         }),
       )
       const cancellationLayer = Layer.succeed(
@@ -196,6 +199,109 @@ describe("AdminSurface workspace deletion", () => {
           },
         ])
         expect(releases).toEqual([workspaceId])
+      }).pipe(Effect.provide(appLayer))
+    }),
+  )
+
+  it.effect("adopts an interrupted operation and resumes it by its own requestId", () =>
+    Effect.gen(function* () {
+      // The client mints a fresh requestId on the retry after an interruption.
+      const freshRequestId = WorkspaceDeletionRequestId.make("f1e2d3c4-b5a6-4788-99aa-bbccddeeff00")
+      const adopted: WorkspaceDeletionRepo.Operation = {
+        requestId,
+        workspaceId,
+        state: "prepared",
+        pipelineStatus: "cancelled",
+        farewellStatus: "sent",
+        botReleaseStatus: "pending",
+        createdAt: new Date("2026-07-23T12:00:00.000Z"),
+        updatedAt: new Date("2026-07-23T12:03:00.000Z"),
+        workspaceName: "Ada Coaching",
+        coachTelegramId: adminTelegramId,
+        coachLanguage: CoachLanguage.make("en"),
+      }
+      const state = yield* Ref.make<WorkspaceDeletionRepo.Operation>(adopted)
+      const seenRequestIds = yield* Ref.make<ReadonlyArray<string>>([])
+
+      const step = Effect.fn("WorkspaceDeletionRepo.AdoptTest.step")(function* (
+        stepRequestId: string,
+        values: Partial<WorkspaceDeletionRepo.Operation>,
+        now: Date,
+      ) {
+        yield* Ref.update(seenRequestIds, (ids) => [...ids, stepRequestId])
+        const next = { ...(yield* Ref.get(state)), ...values, updatedAt: now }
+        yield* Ref.set(state, next)
+        return next
+      })
+
+      const deletionLayer = Layer.succeed(
+        WorkspaceDeletionRepo.Service,
+        WorkspaceDeletionRepo.Service.of({
+          // Adoption: the fresh requestId never matches, so prepare returns the
+          // existing operation, which still carries the original requestId.
+          prepare: Effect.fn("WorkspaceDeletionRepo.AdoptTest.prepare")(() => Ref.get(state)),
+          markPipeline: Effect.fn("WorkspaceDeletionRepo.AdoptTest.markPipeline")(
+            (stepRequestId, status, now) => step(stepRequestId, { pipelineStatus: status }, now),
+          ),
+          markFarewell: Effect.fn("WorkspaceDeletionRepo.AdoptTest.markFarewell")(
+            (stepRequestId, status, now) => step(stepRequestId, { farewellStatus: status }, now),
+          ),
+          markBotReleased: Effect.fn("WorkspaceDeletionRepo.AdoptTest.markBotReleased")(
+            (stepRequestId, status, now) => step(stepRequestId, { botReleaseStatus: status }, now),
+          ),
+          finalize: Effect.fn("WorkspaceDeletionRepo.AdoptTest.finalize")((stepRequestId, now) =>
+            step(stepRequestId, { state: "completed", completedAt: now }, now),
+          ),
+          isDeleting: Effect.fn("WorkspaceDeletionRepo.AdoptTest.isDeleting")(() =>
+            Effect.succeed(true),
+          ),
+          purgeExpired: Effect.fn("WorkspaceDeletionRepo.AdoptTest.purgeExpired")(() =>
+            Effect.succeed(0),
+          ),
+          reconcileOrphans: Effect.fn("WorkspaceDeletionRepo.AdoptTest.reconcileOrphans")(() =>
+            Effect.succeed(0),
+          ),
+        }),
+      )
+      const cancellationLayer = Layer.succeed(
+        WorkspaceRunCancellation.Service,
+        WorkspaceRunCancellation.Service.of({
+          cancel: Effect.fn("WorkspaceRunCancellation.AdoptTest.cancel")(() =>
+            Effect.succeed(WorkspaceRunCancellationResult.cases.NothingActive.make({})),
+          ),
+          kickObjectCleanup: Effect.fn("WorkspaceRunCancellation.AdoptTest.kickObjectCleanup")(
+            () => Effect.void,
+          ),
+        }),
+      )
+      const dependencies = Layer.mergeAll(
+        authLayer,
+        unusedWorkspaceLayer,
+        unusedOnboardingLayer,
+        deletionLayer,
+        cancellationLayer,
+        CoachOnboardingToken.testLayer("PraximoMotherBot"),
+        WorkspaceBrandingStorage.testLayer({
+          defaultAvatarKey: "branding/default-coach-avatar.jpg",
+        }),
+        ManagerBotSender.testLayer,
+        CoachBotBranding.testLayer,
+        CoachBotRelease.testLayer,
+      )
+      const appLayer = Layer.provideMerge(AdminSurface.layer, dependencies)
+
+      yield* Effect.gen(function* () {
+        const admin = yield* AdminSurface.Service
+        const result = yield* admin.deleteWorkspace("valid", workspaceId, {
+          requestId: freshRequestId,
+          confirmationName: "Ada Coaching",
+        })
+
+        expect(result).toEqual({ status: "deleted" })
+        expect((yield* Ref.get(state)).state).toBe("completed")
+        // Terminal stages (pipeline, farewell) are not re-run; only bot-release
+        // and finalize execute, both against the adopted operation's requestId.
+        expect(yield* Ref.get(seenRequestIds)).toEqual([requestId, requestId])
       }).pipe(Effect.provide(appLayer))
     }),
   )

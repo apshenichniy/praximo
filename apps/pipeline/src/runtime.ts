@@ -52,6 +52,7 @@ const runCleanup = Effect.fn("Pipeline.runCleanup")(function* () {
 const runScheduledMaintenance = Effect.fn("Pipeline.runScheduledMaintenance")(function* () {
   yield* runCleanup()
   const deletion = yield* WorkspaceDeletionRepo.Service
+  yield* deletion.reconcileOrphans()
   yield* deletion.purgeExpired(new Date(yield* Clock.currentTimeMillis))
 })
 

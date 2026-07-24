@@ -254,6 +254,9 @@ const unusedDeletionRepoLayer = Layer.succeed(
     finalize: Effect.fn("WorkspaceDeletionRepo.Test.finalize")(() => Effect.die("unused")),
     isDeleting: Effect.fn("WorkspaceDeletionRepo.Test.isDeleting")(() => Effect.succeed(false)),
     purgeExpired: Effect.fn("WorkspaceDeletionRepo.Test.purgeExpired")(() => Effect.succeed(0)),
+    reconcileOrphans: Effect.fn("WorkspaceDeletionRepo.Test.reconcileOrphans")(() =>
+      Effect.succeed(0),
+    ),
   }),
 )
 
