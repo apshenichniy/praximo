@@ -10,13 +10,13 @@ import {
 describe("default coach-bot branding", () => {
   it("templates the description around the coach's name", () => {
     expect(defaultBotDescription("Ada Lovelace")).toBe(
-      "Coaching with Ada Lovelace · powered by Praximo.",
+      "Coaching with Ada Lovelace · powered by Praximo",
     )
     expect(defaultBotShortDescription("Ada Lovelace")).toBe("Coaching with Ada Lovelace")
   })
 
   it("still says something when there is no name to say it about", () => {
-    expect(defaultBotDescription("   ")).toBe("Coaching, powered by Praximo.")
+    expect(defaultBotDescription("   ")).toBe("Coaching, powered by Praximo")
     expect(defaultBotShortDescription("")).toBe("Coaching, powered by Praximo")
   })
 

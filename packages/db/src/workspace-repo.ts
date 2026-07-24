@@ -329,10 +329,11 @@ export const layer = Layer.effect(
       })
       const invite = inviteRows[0]
 
-      // "Joined" is onboarding completion. Terms acceptance is the honest
-      // signal; the owner member's creation is the earlier fallback for a coach
-      // whose bot connected but who has not accepted yet (admin-surface.md).
-      const joinedAt = row.termsAcceptedAt ?? row.memberCreatedAt
+      // "Joined" is when the coach's membership began — the owner member row's
+      // creation, written when their bot connects. Deliberately *not* terms
+      // acceptance: the details screen shows that as its own row, and two
+      // labels over one timestamp would read as two facts (admin-surface.md).
+      const joinedAt = row.memberCreatedAt
 
       return yield* decodeDetail({
         id: row.id,

@@ -21,8 +21,8 @@ export const defaultBotDescription = (coachName: string): string => {
   const name = coachName.trim()
   const text =
     name.length === 0
-      ? "Coaching, powered by Praximo."
-      : `Coaching with ${name} · powered by Praximo.`
+      ? "Coaching, powered by Praximo"
+      : `Coaching with ${name} · powered by Praximo`
   return clamp(text, WorkspaceDescriptionMaxLength)
 }
 

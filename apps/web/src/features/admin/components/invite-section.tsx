@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner.tsx"
 import { DetailCard, DetailRow, TimestampValue } from "@/features/admin/components/detail-card.tsx"
 import { InviteLinkPanel } from "@/features/admin/components/invite-link-panel.tsx"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
-import { formatExpiresIn } from "@/features/admin/formatting.ts"
+import { formatDate, formatExpiresIn } from "@/features/admin/formatting.ts"
 import { useCopyLink } from "@/features/admin/hooks/use-copy-link.ts"
 import {
   inviteChannel,
@@ -155,11 +155,7 @@ export function InviteSection({
               <span className="flex flex-col items-end">
                 <span>{formatExpiresIn(invite.expiresAt)}</span>
                 <span className="text-muted-foreground text-xs font-normal">
-                  {new Date(invite.expiresAt).toLocaleDateString("en-GB", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}
+                  {formatDate(invite.expiresAt, "")}
                 </span>
               </span>
             ) : (

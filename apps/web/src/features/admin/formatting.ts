@@ -21,6 +21,16 @@ const absoluteFormat = new Intl.DateTimeFormat("en-GB", {
 export const formatTimestamp = (value: string | undefined, empty: string): string =>
   value === undefined ? empty : absoluteFormat.format(new Date(value))
 
+const dateFormat = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+})
+
+/** The day alone, for a value whose time of day carries no meaning. */
+export const formatDate = (value: string | undefined, empty: string): string =>
+  value === undefined ? empty : dateFormat.format(new Date(value))
+
 const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
 
 const relativeSteps: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [

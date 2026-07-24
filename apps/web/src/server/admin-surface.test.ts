@@ -171,7 +171,7 @@ const detailWorkspace: WorkspaceRepo.Detail = {
   coachLanguage: CoachLanguage.make("uk"),
   botStatus: "connected",
   botUsername: "ada_coach_bot",
-  joinedAt: new Date("2026-07-15T09:00:00.000Z"),
+  joinedAt: new Date("2026-07-14T08:00:00.000Z"),
   termsAcceptedAt: new Date("2026-07-15T09:00:00.000Z"),
   invite: createdAggregate.invite,
 }
@@ -888,7 +888,8 @@ describe("AdminSurface", () => {
         coachLanguage: "uk",
         botStatus: "connected",
         botUsername: "ada_coach_bot",
-        joinedAt: "2026-07-15T09:00:00.000Z",
+        joinedAt: "2026-07-14T08:00:00.000Z",
+        termsAcceptedAt: "2026-07-15T09:00:00.000Z",
         canReissue: false,
       })
       // Onboarding is complete, so the screen switches to the active variant.

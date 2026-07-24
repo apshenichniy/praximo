@@ -5,7 +5,8 @@ export const WorkspaceDescriptionMaxLength = 512
 export const WorkspaceShortDescriptionMaxLength = 120
 
 export const CreateWorkspaceRequestId = Schema.String.check(Schema.isUUID(4))
-export const WorkspaceProfileRequestId = CreateWorkspaceRequestId
+/** Idempotency for a workspace rename — the same shape the create path uses. */
+export const WorkspaceRenameRequestId = CreateWorkspaceRequestId
 
 export const CoachLanguage = Schema.Literals(["en", "uk", "ru"])
 export type CoachLanguage = typeof CoachLanguage.Type
@@ -97,7 +98,7 @@ export type InviteDeliveryRecord = typeof InviteDeliveryRecord.Type
  * carries the optimistic-concurrency check the profile form used to carry.
  */
 export const RenameWorkspaceInput = Schema.Struct({
-  requestId: WorkspaceProfileRequestId,
+  requestId: WorkspaceRenameRequestId,
   expectedUpdatedAt: Schema.DateTimeUtcFromString,
   name: WorkspaceName,
 })

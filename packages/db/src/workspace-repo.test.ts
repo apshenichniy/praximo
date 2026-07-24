@@ -276,6 +276,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
       const id = WorkspaceId.make(uniqueId("ws_detail"))
       const inviteId = CoachOnboardingInviteId.make(uniqueId("ci_detail"))
       const initialVersion = new Date("2026-07-23T20:00:00.000Z")
+      const memberJoinedAt = new Date("2026-07-23T19:30:00.000Z")
       const nextVersion = new Date("2026-07-23T20:01:00.000Z")
       yield* Effect.addFinalizer(() =>
         Effect.promise(() => client.delete(schema.workspace).where(eq(schema.workspace.id, id))),
@@ -297,6 +298,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
           workspaceId: id,
           role: "owner",
           language: "uk",
+          createdAt: memberJoinedAt,
           termsAcceptedAt: new Date("2026-07-23T20:00:10.000Z"),
           lastLoginAt: new Date("2026-07-23T20:00:20.000Z"),
           lastActivityAt: new Date("2026-07-23T20:00:30.000Z"),
@@ -331,8 +333,10 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
         coachLanguage: "uk",
         botStatus: "connected",
         botUsername: "detail_coach_bot",
-        // Terms acceptance wins over the member row's creation as "joined".
-        joinedAt: new Date("2026-07-23T20:00:10.000Z"),
+        // "Joined" is the member row's own creation, so it stays a different
+        // fact from the terms acceptance rendered beside it.
+        joinedAt: memberJoinedAt,
+        termsAcceptedAt: new Date("2026-07-23T20:00:10.000Z"),
         invite: { id: inviteId, status: "used" },
       })
       // Bot branding never reaches the admin's read model (#108).

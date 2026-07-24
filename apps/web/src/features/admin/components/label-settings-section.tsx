@@ -23,9 +23,11 @@ const errorMessages = {
 } as const
 
 /**
- * The one editable field left on the admin's side (#108). The label is internal:
- * the coach never sees it, and it exists so a pending invite has something to be
- * called before the coach's own Telegram name takes over.
+ * The one editable field left on the admin's side (#108). The label is the
+ * admin's own name for a coach, so a pending invite has something to be called
+ * before the coach's Telegram name takes over. It is not a secret — the invite
+ * message titles itself with it — but it never reaches the coach's clients, and
+ * the helper text says exactly that rather than promising more.
  *
  * `expectedUpdatedAt` carries optimistic concurrency, so a stale screen is
  * refused rather than silently overwriting a rename made elsewhere. The Save
@@ -106,8 +108,8 @@ export function LabelSettingsSection({
             }}
           />
           <p className="text-muted-foreground mt-2 text-xs leading-5">
-            Only you see this. The coach&rsquo;s own Telegram name is what their clients see; the
-            label wins in your list when it is set.
+            Your own name for this coach: it labels them in your list and titles the invite message.
+            Their clients only ever see the coach&rsquo;s own Telegram name.
           </p>
 
           {error === undefined ? null : (

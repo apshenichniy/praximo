@@ -73,6 +73,20 @@ const sha256 = (value: string) =>
       ),
   )
 
+const loadAvatarObject = Effect.fnUntraced(function* (env: ProvisioningEnv, key: string) {
+  const object = yield* Effect.tryPromise({
+    try: () => env.UPLOADS.get(key),
+    catch: () => new TelegramSetupFailed({ operation: "avatar.load" }),
+  })
+  if (object === null) return yield* new TelegramSetupFailed({ operation: "avatar.not-found" })
+  return new Uint8Array(
+    yield* Effect.tryPromise({
+      try: () => object.arrayBuffer(),
+      catch: () => new TelegramSetupFailed({ operation: "avatar.read" }),
+    }),
+  )
+})
+
 /**
  * The bot's starting avatar. A workspace that still carries a stored key (from
  * before manager-side branding was removed, #108) keeps it; everything else is
@@ -85,27 +99,15 @@ const resolveAvatarBytes = Effect.fn("BotWorker.resolveAvatarBytes")(function* (
   workspace: CoachBotProvisioningRepo.WorkspaceProfile,
   seed: string,
 ) {
-  const loadFromBucket = Effect.fn("BotWorker.loadAvatarObject")(function* (key: string) {
-    const object = yield* Effect.tryPromise({
-      try: () => env.UPLOADS.get(key),
-      catch: () => new TelegramSetupFailed({ operation: "avatar.load" }),
-    })
-    if (object === null) return yield* new TelegramSetupFailed({ operation: "avatar.not-found" })
-    return new Uint8Array(
-      yield* Effect.tryPromise({
-        try: () => object.arrayBuffer(),
-        catch: () => new TelegramSetupFailed({ operation: "avatar.read" }),
-      }),
-    )
-  })
-
-  if (workspace.avatarR2Key !== undefined) return yield* loadFromBucket(workspace.avatarR2Key)
+  if (workspace.avatarR2Key !== undefined) {
+    return yield* loadAvatarObject(env, workspace.avatarR2Key)
+  }
   const generated = yield* Effect.try({
     try: () => generateDefaultAvatar(seed),
     catch: () => new TelegramSetupFailed({ operation: "avatar.generate" }),
   }).pipe(Effect.result)
   if (Result.isSuccess(generated)) return generated.success
-  return yield* loadFromBucket(env.DEFAULT_COACH_BOT_AVATAR_R2_KEY)
+  return yield* loadAvatarObject(env, env.DEFAULT_COACH_BOT_AVATAR_R2_KEY)
 })
 
 const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
