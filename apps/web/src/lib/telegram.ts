@@ -93,6 +93,19 @@ export const readTelegramInitData = (webApp: TelegramWebApp | undefined): string
   return initData ? initData : undefined
 }
 
+/**
+ * Open a `t.me` link without leaving the Mini App. Outside a Telegram host
+ * (local browser development) there is no bridge, so the link opens normally.
+ */
+export const openTelegramLink = async (link: string): Promise<void> => {
+  const webApp = await loadTelegramWebApp()
+  if (webApp === undefined) {
+    window.open(link, "_blank", "noopener,noreferrer")
+    return
+  }
+  webApp.openTelegramLink(link)
+}
+
 export const attachBackButton = (webApp: TelegramWebApp, onBack: () => void): (() => void) => {
   webApp.BackButton.onClick(onBack).show()
 

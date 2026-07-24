@@ -12,9 +12,8 @@ import {
   type PrepareShareTransportResult,
   recordAdminCoachInviteShare,
   reissueAdminWorkspaceInvite,
-  retryAdminWorkspaceProfileBranding,
-  updateAdminWorkspaceProfileFromForm,
-  type UpdateProfileTransportResult,
+  renameAdminWorkspace,
+  type RenameTransportResult,
 } from "@/server/admin-workspaces.functions.ts"
 import type { AdminSurface } from "@/server/admin-surface.ts"
 
@@ -81,57 +80,30 @@ export const recordCoachInviteShareMutation = (initData: string) => ({
   }) => recordAdminCoachInviteShare({ data: { initData, inviteId, language } }),
 })
 
-const updateWorkspaceCaches = (
-  queryClient: QueryClient,
-  workspace: AdminSurface.WorkspaceDetail,
-) => {
-  queryClient.setQueryData(workspaceKeys.detail(workspace.id), workspace)
-  void queryClient.invalidateQueries({ queryKey: workspaceKeys.list() })
-}
-
-export interface UpdateWorkspaceProfileMutationInput {
+export interface RenameWorkspaceMutationInput {
   readonly workspaceId: string
   readonly input: {
     readonly requestId: string
     readonly expectedUpdatedAt: string
     readonly name: string
-    readonly description: string
-    readonly shortDescription: string
-    readonly avatarIntent: "keep" | "replace" | "reset"
   }
-  readonly avatar?: File
 }
 
-export const updateWorkspaceProfileMutation = (initData: string, queryClient: QueryClient) => ({
+/**
+ * The label rename (#108). The server answers with the whole detail projection
+ * — including the new `updatedAt` the next rename is checked against — so the
+ * cache is written from the response rather than patched optimistically.
+ */
+export const renameWorkspaceMutation = (initData: string, queryClient: QueryClient) => ({
   mutationFn: async ({
     workspaceId,
     input,
-    avatar,
-  }: UpdateWorkspaceProfileMutationInput): Promise<UpdateProfileTransportResult> => {
-    const data = new FormData()
-    data.set("initData", initData)
-    data.set("workspaceId", workspaceId)
-    data.set("input", JSON.stringify(input))
-    if (avatar !== undefined) data.set("avatar", avatar)
-    return updateAdminWorkspaceProfileFromForm({ data })
-  },
-  onSuccess: (result: UpdateProfileTransportResult) => {
+  }: RenameWorkspaceMutationInput): Promise<RenameTransportResult> =>
+    renameAdminWorkspace({ data: { initData, workspaceId, input } }),
+  onSuccess: (result: RenameTransportResult) => {
     if (!result.ok) return
-    updateWorkspaceCaches(queryClient, result.value.workspace)
-  },
-})
-
-export const retryWorkspaceBrandingMutation = (initData: string, queryClient: QueryClient) => ({
-  mutationFn: ({
-    workspaceId,
-    retryAvatar,
-  }: {
-    readonly workspaceId: string
-    readonly retryAvatar: boolean
-  }) => retryAdminWorkspaceProfileBranding({ data: { initData, workspaceId, retryAvatar } }),
-  onSuccess: (result: UpdateProfileTransportResult) => {
-    if (!result.ok) return
-    updateWorkspaceCaches(queryClient, result.value.workspace)
+    queryClient.setQueryData(workspaceKeys.detail(result.value.id), result.value)
+    void queryClient.invalidateQueries({ queryKey: workspaceKeys.list() })
   },
 })
 

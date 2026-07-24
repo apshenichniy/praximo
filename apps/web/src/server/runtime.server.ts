@@ -7,23 +7,18 @@ import {
   WorkspaceRepo,
 } from "@praximo/db"
 import type { WorkspaceRunCancellationRpcClient } from "@praximo/domain"
-import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
+import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
-import { type Bucket, WorkspaceBrandingStorage } from "./workspace-branding-storage.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
 interface Env {
   readonly DATABASE_URL: string
   readonly MANAGER_BOT_TOKEN: string
   readonly MANAGER_BOT_USERNAME: string
-  readonly DEFAULT_COACH_BOT_AVATAR_R2_KEY: string
-  readonly MANAGER_BOT?: ManagerBotSender.RpcClient &
-    CoachBotBranding.RpcClient &
-    CoachBotRelease.RpcClient
+  readonly MANAGER_BOT?: ManagerBotSender.RpcClient & CoachBotRelease.RpcClient
   readonly PIPELINE?: WorkspaceRunCancellationRpcClient
-  readonly UPLOADS: Bucket
 }
 
 const runtimeFromEnv = (env: Env) => {
@@ -37,10 +32,6 @@ const runtimeFromEnv = (env: Env) => {
     env.MANAGER_BOT === undefined
       ? ManagerBotSender.layer
       : ManagerBotSender.rpcLayer(env.MANAGER_BOT)
-  const branding =
-    env.MANAGER_BOT === undefined
-      ? CoachBotBranding.layer
-      : CoachBotBranding.rpcLayer(env.MANAGER_BOT)
   const coachBotRelease =
     env.MANAGER_BOT === undefined
       ? CoachBotRelease.layer
@@ -52,8 +43,6 @@ const runtimeFromEnv = (env: Env) => {
   const dependencies = Layer.mergeAll(
     ManagerInitData.layer,
     CoachOnboardingToken.layer,
-    WorkspaceBrandingStorage.layer(env.UPLOADS),
-    branding,
     sender,
     coachBotRelease,
     runCancellation,
@@ -81,21 +70,6 @@ const resolveEnv = async (): Promise<Env> => {
       DATABASE_URL: requireString(process.env.DATABASE_URL, "DATABASE_URL"),
       MANAGER_BOT_TOKEN: requireString(process.env.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
       MANAGER_BOT_USERNAME: requireString(process.env.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
-      DEFAULT_COACH_BOT_AVATAR_R2_KEY: requireString(
-        process.env.DEFAULT_COACH_BOT_AVATAR_R2_KEY,
-        "DEFAULT_COACH_BOT_AVATAR_R2_KEY",
-      ),
-      UPLOADS: {
-        put: async () => {
-          throw new Error("UPLOADS is unavailable in the local Vite runtime")
-        },
-        delete: async () => {
-          throw new Error("UPLOADS is unavailable in the local Vite runtime")
-        },
-        get: async () => {
-          throw new Error("UPLOADS is unavailable in the local Vite runtime")
-        },
-      },
     }
   }
 
@@ -105,24 +79,15 @@ const resolveEnv = async (): Promise<Env> => {
     DATABASE_URL: requireString(workerEnv.DATABASE_URL, "DATABASE_URL"),
     MANAGER_BOT_TOKEN: requireString(workerEnv.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
     MANAGER_BOT_USERNAME: requireString(workerEnv.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
-    DEFAULT_COACH_BOT_AVATAR_R2_KEY: requireString(
-      workerEnv.DEFAULT_COACH_BOT_AVATAR_R2_KEY,
-      "DEFAULT_COACH_BOT_AVATAR_R2_KEY",
-    ),
     ...(workerEnv.MANAGER_BOT === undefined
       ? {}
       : {
           MANAGER_BOT: workerEnv.MANAGER_BOT as ManagerBotSender.RpcClient &
-            CoachBotBranding.RpcClient &
             CoachBotRelease.RpcClient,
         }),
     ...(workerEnv.PIPELINE === undefined
       ? {}
       : { PIPELINE: workerEnv.PIPELINE as WorkspaceRunCancellationRpcClient }),
-    UPLOADS: (() => {
-      if (workerEnv.UPLOADS === undefined) throw new Error("missing server binding UPLOADS")
-      return workerEnv.UPLOADS as Bucket
-    })(),
   }
 }
 
@@ -174,13 +139,6 @@ export const recordAdminInviteShare = async (
   )
 }
 
-export const resendAdminWorkspaceInvite = async (initData: string, inviteId: string) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) => service.resendInvite(initData, inviteId)),
-  )
-}
-
 export const getAdminWorkspace = async (initData: string, workspaceId: string) => {
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
@@ -188,38 +146,15 @@ export const getAdminWorkspace = async (initData: string, workspaceId: string) =
   )
 }
 
-export const getAdminWorkspaceAvatar = async (initData: string, workspaceId: string) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.getWorkspaceAvatar(initData, workspaceId),
-    ),
-  )
-}
-
-export const updateAdminWorkspaceProfile = async (
+export const renameAdminWorkspace = async (
   initData: string,
   workspaceId: string,
   input: unknown,
-  avatar?: Uint8Array,
 ) => {
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(AdminSurface.Service, (service) =>
-      service.updateWorkspaceProfile(initData, workspaceId, input, avatar),
-    ),
-  )
-}
-
-export const retryAdminWorkspaceBranding = async (
-  initData: string,
-  workspaceId: string,
-  retryAvatar: boolean,
-) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.retryWorkspaceBranding(initData, workspaceId, retryAvatar),
+      service.renameWorkspace(initData, workspaceId, input),
     ),
   )
 }

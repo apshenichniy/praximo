@@ -1,46 +1,40 @@
-import { revalidateLogic, useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, getRouteApi, useRouter } from "@tanstack/react-router"
-import {
-  WorkspaceDescriptionMaxLength,
-  WorkspaceNameMaxLength,
-  WorkspaceShortDescriptionMaxLength,
-} from "@praximo/domain"
+import type { ReactNode } from "react"
 import { useRef, useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
-import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
-import { setAdminNotice } from "@/features/admin/admin-notice.ts"
-import { Button } from "@/components/ui/button.tsx"
-import { Spinner } from "@/components/ui/spinner.tsx"
-import { ActionBar } from "@/features/admin/components/action-bar.tsx"
-import { AvatarEditor, AvatarEditorMessage } from "@/features/admin/components/avatar-editor.tsx"
 import { ConfirmDialog } from "@/features/admin/components/confirm-dialog.tsx"
-import { DangerZone } from "@/features/admin/components/danger-zone.tsx"
-import { TextField, TextareaField } from "@/features/admin/components/form-fields.tsx"
-import { OnboardingSection } from "@/features/admin/components/onboarding-section.tsx"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
-import { StatusSection } from "@/features/admin/components/status-section.tsx"
-import { displayName, initials } from "@/features/admin/formatting.ts"
+import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
+import {
+  AboutSection,
+  CoachStatusSection,
+  PracticeSection,
+} from "@/features/admin/components/active-sections.tsx"
+import {
+  DangerZone,
+  DeleteWorkspaceCard,
+  ResetInviteCard,
+} from "@/features/admin/components/danger-zone.tsx"
+import { InviteSection } from "@/features/admin/components/invite-section.tsx"
+import { LabelSettingsSection } from "@/features/admin/components/label-settings-section.tsx"
+import { OnboardingStepsSection } from "@/features/admin/components/onboarding-steps.tsx"
+import { WorkspaceDetailHeader } from "@/features/admin/components/workspace-detail-header.tsx"
+import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
-import { useAvatarPicker } from "@/features/admin/hooks/use-avatar-picker.ts"
-import { useUnsavedChanges } from "@/features/admin/hooks/use-unsaved-changes.ts"
-import { useWorkspaceAvatar } from "@/features/admin/hooks/use-workspace-avatar.ts"
+import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
+import {
+  detailSubtitle,
+  detailVariant,
+  reissueCopy,
+  type WorkspaceDetail,
+} from "@/features/admin/workspace-detail.ts"
 import {
   adminWorkspaceDetailQuery,
   deleteWorkspaceMutation,
   reissueWorkspaceInviteMutation,
-  retryWorkspaceBrandingMutation,
-  updateWorkspaceProfileMutation,
 } from "@/features/admin/workspace-queries.ts"
-import {
-  fieldError,
-  focusFirstInvalidField,
-  optionalLimit,
-  requiredName,
-} from "@/features/admin/validation.ts"
-import { resendAdminWorkspaceInvite } from "@/server/admin-workspaces.functions.ts"
-import type { AdminSurface } from "@/server/admin-surface.ts"
+import { openTelegramLink } from "@/lib/telegram.ts"
 
 export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
   component: WorkspaceDetailsPage,
@@ -48,180 +42,219 @@ export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
 
 const adminRoute = getRouteApi("/admin")
 
+const deleteMessages = {
+  validation: "The deletion request is invalid. Close this dialog and try again.",
+  conflict: "Another deletion request is already in progress. Retry from this dialog.",
+  retryable: "A required cleanup step failed. The workspace was kept; retry deletion.",
+  blocked:
+    "The connected bot could not be released. The workspace was kept; contact support before retrying.",
+  server: "Deletion failed. The workspace was kept; try again.",
+} as const
+
+/**
+ * Two screens behind one route (#108). Which one a coach gets is not a local
+ * guess: the server hands back the same onboarding stage the list rows carry,
+ * and its absence *is* the completion signal. A coach mid-onboarding sees the
+ * invite, its progression, and the ways to push it along; an active coach sees
+ * status first, then the little that is actually theirs to configure.
+ *
+ * Neither variant edits bot branding — that belongs to the coach.
+ */
 function WorkspaceDetailsPage() {
   const { workspaceId } = Route.useParams()
   const { initData } = adminRoute.useLoaderData()
-  const queryClient = useQueryClient()
-  const router = useRouter()
   const { data: workspace } = useSuspenseQuery(adminWorkspaceDetailQuery(initData, workspaceId))
 
-  const [avatarRevision, setAvatarRevision] = useState(0)
-  const [saveMessage, setSaveMessage] = useState<string>()
-  const [saveError, setSaveError] = useState<string>()
-  const [retryAvatar, setRetryAvatar] = useState(false)
-  const [inviteResult, setInviteResult] = useState<AdminSurface.CreateResult>()
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [confirmationName, setConfirmationName] = useState("")
-  const [deleteError, setDeleteError] = useState<string>()
-  const reissueRequestId = useRef<string | undefined>(undefined)
-  const deleteRequestId = useRef<string | undefined>(undefined)
+  return (
+    <main className="mx-auto w-full max-w-2xl px-5 pt-6 pb-16">
+      <TelegramBackButton />
+      {detailVariant(workspace) === "active" ? (
+        <ActiveWorkspace workspace={workspace} initData={initData} />
+      ) : (
+        <OnboardingWorkspace workspace={workspace} initData={initData} />
+      )}
+    </main>
+  )
+}
 
-  const avatar = useAvatarPicker({ onChange: () => setSaveMessage(undefined) })
-  const currentAvatar = useWorkspaceAvatar({
-    initData,
-    workspaceId,
-    hasCustomAvatar: workspace.hasCustomAvatar,
-    revision: avatarRevision,
-  })
+function ActiveWorkspace({
+  workspace,
+  initData,
+}: {
+  readonly workspace: WorkspaceDetail
+  readonly initData: string
+}) {
+  return (
+    <>
+      <WorkspaceDetailHeader
+        name={workspace.name}
+        botUsername={workspace.botUsername}
+        subtitle={detailSubtitle(workspace)}
+        onOpenBot={(link) => void openTelegramLink(link)}
+      />
+      <CoachStatusSection workspace={workspace} />
+      <AboutSection workspace={workspace} />
+      <PracticeSection />
+      <LabelSettingsSection workspace={workspace} initData={initData} />
+      <WorkspaceDangerZone workspace={workspace} initData={initData} />
+    </>
+  )
+}
 
-  const update = useMutation(updateWorkspaceProfileMutation(initData, queryClient))
-  const retryBranding = useMutation(retryWorkspaceBrandingMutation(initData, queryClient))
+function OnboardingWorkspace({
+  workspace,
+  initData,
+}: {
+  readonly workspace: WorkspaceDetail
+  readonly initData: string
+}) {
+  const queryClient = useQueryClient()
+  const [shareError, setShareError] = useState<string>()
+  const [shareNotice, setShareNotice] = useState<string>()
+  const [resetOpen, setResetOpen] = useState(false)
+  const inviteShare = useInviteShare(initData)
   const reissue = useMutation(reissueWorkspaceInviteMutation(initData, queryClient))
-  const remove = useMutation(deleteWorkspaceMutation(initData, queryClient))
-  const resend = useMutation({
-    mutationFn: (inviteId: string) => resendAdminWorkspaceInvite({ data: { initData, inviteId } }),
-    onSuccess: (result) => {
-      if (result.ok) setInviteResult(result.value)
-    },
-  })
+  // Minted once per attempt and reused across retries, so a network failure
+  // that actually landed replays the same reissue instead of minting a second.
+  const reissueRequestId = useRef<string | undefined>(undefined)
 
-  const form = useForm({
-    defaultValues: {
-      name: workspace.name,
-      description: workspace.description ?? "",
-      shortDescription: workspace.shortDescription ?? "",
-    },
-    validationLogic: revalidateLogic({ mode: "blur", modeAfterSubmission: "change" }),
-    onSubmit: async ({ value }) => {
-      setSaveMessage(undefined)
-      setSaveError(undefined)
-      const response = await update
-        .mutateAsync({
-          workspaceId,
-          input: {
-            requestId: crypto.randomUUID(),
-            expectedUpdatedAt: workspace.updatedAt,
-            name: value.name,
-            description: value.description,
-            shortDescription: value.shortDescription,
-            avatarIntent: avatar.intent,
-          },
-          ...(avatar.file === undefined ? {} : { avatar: avatar.file }),
-        })
-        .catch(() => undefined)
-      if (response === undefined) {
-        setSaveError("Saving failed. Check your connection and try again.")
-        notifyHaptic("error")
-        return
-      }
-      if (!response.ok) {
-        const messages = {
-          validation: "Check the highlighted fields and try again.",
-          conflict: "Workspace changed elsewhere. Reload and review before saving.",
-          avatar: "The selected avatar is not a valid normalized JPEG.",
-          upload: "Avatar upload failed. No profile changes were saved.",
-          server: "Saving failed. Please try again.",
-        } as const
-        setSaveError(messages[response.error])
-        notifyHaptic("error")
-        return
-      }
+  const invite = workspace.invite
+  const reset = reissueCopy(workspace)
+  const canReset = workspace.canReissue && invite !== undefined
 
-      const saved = response.value.workspace
-      form.reset({
-        name: saved.name,
-        description: saved.description ?? "",
-        shortDescription: saved.shortDescription ?? "",
-      })
-      avatar.undo()
-      setRetryAvatar(response.value.retryAvatar)
-      setAvatarRevision((revision) => revision + 1)
-      if (response.value.status === "saved") {
-        setSaveMessage("Changes saved")
-        notifyHaptic("success")
-      } else {
-        setSaveMessage("Changes saved, but Telegram update failed")
-        notifyHaptic("warning")
-      }
-    },
-  })
-
-  const guard = useUnsavedChanges(() => form.state.isDirty || avatar.intent !== "keep")
-
-  const displayAvatarUrl =
-    avatar.intent === "replace"
-      ? avatar.previewUrl
-      : avatar.intent === "reset"
-        ? undefined
-        : currentAvatar.url
-
-  const reloadProfile = () => {
-    setSaveError(undefined)
-    void queryClient
-      .fetchQuery(adminWorkspaceDetailQuery(initData, workspaceId))
-      .then((current) => {
-        form.reset({
-          name: current.name,
-          description: current.description ?? "",
-          shortDescription: current.shortDescription ?? "",
-        })
-        avatar.undo()
-      })
-      .catch(() => setSaveError("The current profile could not be reloaded."))
-  }
-
-  const retryTelegram = () => {
-    setSaveError(undefined)
-    void retryBranding
-      .mutateAsync({ workspaceId, retryAvatar })
-      .then((result) => {
-        if (result.ok && result.value.status === "saved") {
-          setSaveMessage("Changes saved")
-        } else {
-          setSaveMessage("Changes saved, but Telegram update failed")
-        }
-      })
-      .catch(() => setSaveMessage("Changes saved, but Telegram update failed"))
-  }
-
-  const currentInvite =
-    inviteResult === undefined
-      ? workspace.invite
-      : {
-          id: inviteResult.inviteId,
-          status: "pending" as const,
-          issuedAt: new Date().toISOString(),
-          expiresAt: inviteResult.expiresAt,
-          link: inviteResult.link,
-        }
-
-  const reissueInvite = () => {
-    if (currentInvite === undefined) return
+  const resetInvite = () => {
+    if (invite === undefined) return
     reissueRequestId.current ??= crypto.randomUUID()
     void reissue
       .mutateAsync({
-        workspaceId,
-        expectedInviteId: currentInvite.id,
+        workspaceId: workspace.id,
+        expectedInviteId: invite.id,
         requestId: reissueRequestId.current,
       })
       .then((result) => {
         if (!result.ok) return
-        setInviteResult(result.value)
         reissueRequestId.current = undefined
+        notifyHaptic("success")
       })
   }
 
-  const resendInvite = () => {
-    if (currentInvite === undefined) return
-    resend.mutate(currentInvite.id)
+  const resend = async () => {
+    if (invite?.link === undefined || invite.message === undefined) return
+    setShareError(undefined)
+    setShareNotice(undefined)
+    switch (
+      await inviteShare.share({
+        inviteId: invite.id,
+        link: invite.link,
+        // The server built this in the language the invite last left in, so a
+        // resend never switches languages on the coach mid-onboarding.
+        message: invite.message,
+        language: invite.language ?? "en",
+      })
+    ) {
+      // A dismissed picker is not a failure: the invite is untouched and tapping
+      // again is safe, so the screen simply stays as it was.
+      case "dismissed":
+        return
+      case "no-telegram":
+        setShareError("Open this from Telegram to share the invite.")
+        notifyHaptic("error")
+        return
+      case "failed":
+        setShareError("Telegram couldn't prepare the invite. Tap Resend to retry.")
+        notifyHaptic("error")
+        return
+      case "fallback":
+      case "shared":
+        setShareNotice("Invite sent again — the same link still works.")
+        notifyHaptic("success")
+    }
   }
+
+  return (
+    <>
+      <WorkspaceDetailHeader
+        name={workspace.name}
+        botUsername={workspace.botUsername}
+        subtitle={detailSubtitle(workspace)}
+        onOpenBot={(link) => void openTelegramLink(link)}
+      />
+      <InviteSection
+        workspace={workspace}
+        sharing={inviteShare.sharingInviteId !== undefined}
+        onResend={() => void resend()}
+        {...(canReset && !reset.destructive
+          ? {
+              recovery: {
+                label: reset.label,
+                pending: reissue.isPending,
+                onStart: () => setResetOpen(true),
+              },
+            }
+          : {})}
+      />
+      {shareError === undefined ? null : (
+        <Alert variant="destructive" className="bg-destructive/10 mt-4 border-transparent">
+          <AlertDescription className="text-destructive">{shareError}</AlertDescription>
+        </Alert>
+      )}
+      {shareNotice === undefined ? null : (
+        <Alert className="mt-4">
+          <AlertDescription>{shareNotice}</AlertDescription>
+        </Alert>
+      )}
+      <OnboardingStepsSection workspace={workspace} />
+      <WorkspaceDangerZone workspace={workspace} initData={initData}>
+        {canReset && reset.destructive ? (
+          <ResetInviteCard
+            copy={reset}
+            pending={reissue.isPending}
+            onOpen={() => setResetOpen(true)}
+          />
+        ) : null}
+      </WorkspaceDangerZone>
+      <ConfirmDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        title={reset.title}
+        description={reset.description}
+        confirmLabel={reset.label}
+        confirmVariant={reset.destructive ? "destructive" : "default"}
+        onConfirm={() => {
+          setResetOpen(false)
+          resetInvite()
+        }}
+      />
+    </>
+  )
+}
+
+function WorkspaceDangerZone({
+  workspace,
+  initData,
+  children,
+}: {
+  readonly workspace: WorkspaceDetail
+  readonly initData: string
+  readonly children?: ReactNode
+}) {
+  const queryClient = useQueryClient()
+  const router = useRouter()
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [confirmationName, setConfirmationName] = useState("")
+  const [deleteError, setDeleteError] = useState<string>()
+  // Minted once per attempt and reused across retries, so an interrupted
+  // deletion resumes the same operation instead of starting a second one.
+  const deleteRequestId = useRef<string | undefined>(undefined)
+
+  const remove = useMutation(deleteWorkspaceMutation(initData, queryClient))
 
   const deleteWorkspace = async () => {
     deleteRequestId.current ??= crypto.randomUUID()
     setDeleteError(undefined)
     const result = await remove
       .mutateAsync({
-        workspaceId,
+        workspaceId: workspace.id,
         requestId: deleteRequestId.current,
         confirmationName,
       })
@@ -232,16 +265,11 @@ function WorkspaceDetailsPage() {
       return
     }
     if (!result.ok) {
-      const messages = {
-        validation: "The deletion request is invalid. Close this dialog and try again.",
-        confirmation: `Enter “${workspace.name}” exactly as shown.`,
-        conflict: "Another deletion request is already in progress. Retry from this dialog.",
-        retryable: "A required cleanup step failed. The workspace was kept; retry deletion.",
-        blocked:
-          "The connected bot could not be released. The workspace was kept; contact support before retrying.",
-        server: "Deletion failed. The workspace was kept; try again.",
-      } as const
-      setDeleteError(messages[result.error])
+      setDeleteError(
+        result.error === "confirmation"
+          ? `Enter “${workspace.name}” exactly as shown.`
+          : deleteMessages[result.error],
+      )
       notifyHaptic("error")
       return
     }
@@ -255,266 +283,28 @@ function WorkspaceDetailsPage() {
     await router.navigate({ to: "/admin" })
   }
 
-  const clearSaveMessage = () => setSaveMessage(undefined)
-
   return (
-    <main className="mx-auto w-full max-w-2xl px-5 pt-6 pb-32">
-      <TelegramBackButton onBack={guard.requestBack} />
-      <ConfirmDialog
-        open={guard.confirmOpen}
-        onOpenChange={guard.setConfirmOpen}
-        title="Discard changes?"
-        description="Unsaved profile changes will be lost."
-        confirmLabel="Discard changes"
-        confirmVariant="destructive"
-        onConfirm={guard.confirmDiscard}
-      />
-
-      <header className="mt-7 text-center">
-        <AvatarEditor
-          imageUrl={displayAvatarUrl}
-          fallback={initials(workspace.name) || "?"}
-          loading={avatar.intent === "keep" && currentAvatar.loading}
-          disabled={avatar.processing || update.isPending}
-          srLabel={workspace.hasCustomAvatar ? "Replace avatar" : "Choose custom avatar"}
-          onSelectFile={(file) => void avatar.choose(file)}
-        />
-        <div className="mt-1 flex justify-center">
-          {avatar.intent !== "keep" ? (
-            <Button
-              variant="link"
-              size="sm"
-              className="text-muted-foreground"
-              onClick={avatar.undo}
-            >
-              Undo avatar change
-            </Button>
-          ) : workspace.hasCustomAvatar ? (
-            <Button
-              variant="link"
-              size="sm"
-              className="text-muted-foreground"
-              onClick={avatar.reset}
-            >
-              Reset to Praximo default
-            </Button>
-          ) : null}
-        </div>
-        {avatar.processing ? (
-          <AvatarEditorMessage tone="muted">Processing…</AvatarEditorMessage>
-        ) : null}
-        {avatar.error === undefined ? null : (
-          <AvatarEditorMessage tone="destructive">{avatar.error}</AvatarEditorMessage>
-        )}
-        {currentAvatar.failed ? (
-          <AvatarEditorMessage tone="warning">
-            The custom avatar could not be loaded. You can still edit this workspace.
-          </AvatarEditorMessage>
-        ) : null}
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight">
-          {displayName(workspace.name)}
-        </h1>
-        {workspace.botUsername === undefined ? null : (
-          <a
-            href={`https://t.me/${workspace.botUsername}`}
-            className="text-muted-foreground mt-2 inline-block"
-          >
-            @{workspace.botUsername}
-          </a>
-        )}
-      </header>
-
-      <form
-        className="mt-10"
-        onSubmit={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          void form.handleSubmit().then(() => {
-            if (!form.state.isValid) focusFirstInvalidField()
-          })
+    <DangerZone>
+      {children}
+      <DeleteWorkspaceCard
+        workspaceName={workspace.name}
+        open={deleteOpen}
+        confirmationName={confirmationName}
+        error={deleteError}
+        pending={remove.isPending}
+        onOpenChange={(open) => {
+          setDeleteOpen(open)
+          if (!open) {
+            setConfirmationName("")
+            setDeleteError(undefined)
+          }
         }}
-      >
-        <Section className="mt-0 space-y-6" aria-labelledby="profile-heading">
-          <SectionTitle id="profile-heading">Profile</SectionTitle>
-
-          <form.Field name="name" validators={{ onDynamic: ({ value }) => requiredName(value) }}>
-            {(field) => (
-              <TextField
-                label="Workspace name"
-                name={field.name}
-                value={field.state.value}
-                maxLength={WorkspaceNameMaxLength + 1}
-                error={fieldError(field.state.meta.errors)}
-                onBlur={field.handleBlur}
-                onChange={(value) => {
-                  field.handleChange(value)
-                  clearSaveMessage()
-                }}
-              />
-            )}
-          </form.Field>
-
-          <form.Field
-            name="description"
-            validators={{
-              onDynamic: ({ value }) => optionalLimit(WorkspaceDescriptionMaxLength)(value),
-            }}
-          >
-            {(field) => (
-              <TextareaField
-                label="Description"
-                name={field.name}
-                value={field.state.value}
-                maxLength={WorkspaceDescriptionMaxLength + 1}
-                counter={WorkspaceDescriptionMaxLength}
-                rows={4}
-                error={fieldError(field.state.meta.errors)}
-                onBlur={field.handleBlur}
-                onChange={(value) => {
-                  field.handleChange(value)
-                  clearSaveMessage()
-                }}
-              />
-            )}
-          </form.Field>
-
-          <form.Field
-            name="shortDescription"
-            validators={{
-              onDynamic: ({ value }) => optionalLimit(WorkspaceShortDescriptionMaxLength)(value),
-            }}
-          >
-            {(field) => (
-              <TextareaField
-                label="Short description"
-                name={field.name}
-                value={field.state.value}
-                maxLength={WorkspaceShortDescriptionMaxLength + 1}
-                counter={WorkspaceShortDescriptionMaxLength}
-                rows={2}
-                error={fieldError(field.state.meta.errors)}
-                onBlur={field.handleBlur}
-                onChange={(value) => {
-                  field.handleChange(value)
-                  clearSaveMessage()
-                }}
-              />
-            )}
-          </form.Field>
-        </Section>
-
-        <StatusSection workspace={workspace} />
-        <OnboardingSection
-          workspace={workspace}
-          invite={currentInvite}
-          delivery={inviteResult?.delivery}
-          resendPending={resend.isPending}
-          reissuePending={reissue.isPending}
-          onResend={resendInvite}
-          onReissue={reissueInvite}
-        />
-        <form.Subscribe selector={(state) => state.isDirty}>
-          {(formDirty) => (
-            <DangerZone
-              workspaceName={workspace.name}
-              open={deleteOpen}
-              confirmationName={confirmationName}
-              error={deleteError}
-              disabled={
-                formDirty ||
-                avatar.intent !== "keep" ||
-                update.isPending ||
-                avatar.processing ||
-                remove.isPending
-              }
-              pending={remove.isPending}
-              onOpenChange={(open) => {
-                setDeleteOpen(open)
-                if (!open) {
-                  setConfirmationName("")
-                  setDeleteError(undefined)
-                }
-              }}
-              onConfirmationNameChange={(value) => {
-                setConfirmationName(value)
-                setDeleteError(undefined)
-              }}
-              onDelete={() => void deleteWorkspace()}
-            />
-          )}
-        </form.Subscribe>
-
-        {saveError === undefined ? null : (
-          <Alert variant="destructive" className="bg-destructive/10 mt-8 border-transparent">
-            <AlertDescription className="text-destructive">
-              <p>{saveError}</p>
-              {saveError.startsWith("Workspace changed") ? (
-                <button
-                  type="button"
-                  onClick={reloadProfile}
-                  className="mt-2 font-semibold underline"
-                >
-                  Reload current profile
-                </button>
-              ) : null}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <ActionBar>
-          {saveMessage === undefined ? (
-            <form.Subscribe selector={(state) => state.isDirty}>
-              {(formDirty) =>
-                formDirty || avatar.intent !== "keep" ? (
-                  <p className="text-muted-foreground mb-3 text-sm">Unsaved changes</p>
-                ) : null
-              }
-            </form.Subscribe>
-          ) : (
-            <div className="mb-3 flex items-center justify-between gap-3 text-sm">
-              <span
-                className={saveMessage.includes("failed") ? "text-amber-200" : "text-emerald-300"}
-              >
-                {saveMessage}
-              </span>
-              {saveMessage.includes("failed") ? (
-                <button
-                  type="button"
-                  disabled={retryBranding.isPending}
-                  onClick={retryTelegram}
-                  className="font-semibold underline disabled:opacity-50"
-                >
-                  {retryBranding.isPending ? "Retrying…" : "Retry Telegram update"}
-                </button>
-              ) : null}
-            </div>
-          )}
-          <form.Subscribe selector={(state) => state.isDirty}>
-            {(formDirty) => (
-              <Button
-                type="submit"
-                size="lg"
-                disabled={
-                  (!formDirty && avatar.intent === "keep") ||
-                  update.isPending ||
-                  avatar.processing ||
-                  avatar.error !== undefined
-                }
-                aria-busy={update.isPending || undefined}
-                className="h-13 w-full font-semibold"
-              >
-                {update.isPending ? (
-                  <>
-                    <Spinner /> Saving…
-                  </>
-                ) : (
-                  "Save changes"
-                )}
-              </Button>
-            )}
-          </form.Subscribe>
-        </ActionBar>
-      </form>
-    </main>
+        onConfirmationNameChange={(value) => {
+          setConfirmationName(value)
+          setDeleteError(undefined)
+        }}
+        onDelete={() => void deleteWorkspace()}
+      />
+    </DangerZone>
   )
 }

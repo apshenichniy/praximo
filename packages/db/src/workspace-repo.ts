@@ -43,7 +43,6 @@ export const ListItem = Schema.Struct({
   name: Schema.String,
   botStatus: BotConnectionStatus,
   botUsername: Schema.optionalKey(Schema.NonEmptyString),
-  hasCustomAvatar: Schema.Boolean,
   /** Bound only once the coach's bot connects — not at invite acceptance. */
   ownerTelegramUserId: Schema.optionalKey(Schema.NonEmptyString),
   termsAcceptedAt: Schema.optionalKey(Schema.instanceOf(Date)),
@@ -52,16 +51,21 @@ export const ListItem = Schema.Struct({
 })
 export interface ListItem extends Schema.Schema.Type<typeof ListItem> {}
 
+/**
+ * The details screen reads the same aggregate the list does, plus the two facts
+ * only the details screen shows: when the coach joined and when they last
+ * logged in. Bot branding (description, avatar) is deliberately absent — it is
+ * the coach's property and no admin surface reads or writes it (#108).
+ */
 export const Detail = Schema.Struct({
   id: WorkspaceId,
   name: Schema.String,
-  avatarR2Key: Schema.optionalKey(Schema.NonEmptyString),
-  description: Schema.optionalKey(Schema.String),
-  shortDescription: Schema.optionalKey(Schema.String),
   createdAt: Schema.instanceOf(Date),
   updatedAt: Schema.instanceOf(Date),
   coachLanguage: Schema.optionalKey(CoachLanguage),
   ownerTelegramUserId: Schema.optionalKey(Schema.String),
+  /** Onboarding completion: terms acceptance, or the owner member's creation. */
+  joinedAt: Schema.optionalKey(Schema.instanceOf(Date)),
   termsAcceptedAt: Schema.optionalKey(Schema.instanceOf(Date)),
   lastLoginAt: Schema.optionalKey(Schema.instanceOf(Date)),
   lastActivityAt: Schema.optionalKey(Schema.instanceOf(Date)),
@@ -71,13 +75,10 @@ export const Detail = Schema.Struct({
 })
 export interface Detail extends Schema.Schema.Type<typeof Detail> {}
 
-export interface UpdateProfileInput {
+export interface RenameInput {
   readonly id: WorkspaceId
   readonly expectedUpdatedAt: Date
   readonly name: string
-  readonly description?: string
-  readonly shortDescription?: string
-  readonly avatarR2Key?: string
   readonly now: Date
 }
 
@@ -91,8 +92,8 @@ export interface Interface {
   readonly create: (workspace: Workspace) => Effect.Effect<Workspace, QueryFailed>
   readonly list: () => Effect.Effect<ReadonlyArray<ListItem>, QueryFailed>
   readonly getDetail: (id: WorkspaceId) => Effect.Effect<Detail, WorkspaceNotFound | QueryFailed>
-  readonly updateProfile: (
-    input: UpdateProfileInput,
+  readonly rename: (
+    input: RenameInput,
   ) => Effect.Effect<Detail, WorkspaceNotFound | UpdateConflict | QueryFailed>
 }
 
@@ -201,7 +202,6 @@ export const layer = Layer.effect(
               name: schema.workspace.name,
               connectionStatus: schema.bot.connectionStatus,
               botUsername: schema.bot.username,
-              avatarR2Key: schema.workspace.avatarR2Key,
               ownerTelegramUserId: rankedOwner.telegramUserId,
               termsAcceptedAt: rankedOwner.termsAcceptedAt,
               lastActivityAt: rankedOwner.lastActivityAt,
@@ -235,7 +235,6 @@ export const layer = Layer.effect(
         name: row.name,
         botStatus: botConnectionStatus(row.connectionStatus),
         ...(row.botUsername === null ? {} : { botUsername: row.botUsername }),
-        hasCustomAvatar: row.avatarR2Key !== null,
         ...(row.ownerTelegramUserId === null
           ? {}
           : { ownerTelegramUserId: row.ownerTelegramUserId }),
@@ -279,13 +278,11 @@ export const layer = Layer.effect(
             .select({
               id: schema.workspace.id,
               name: schema.workspace.name,
-              avatarR2Key: schema.workspace.avatarR2Key,
-              description: schema.workspace.description,
-              shortDescription: schema.workspace.shortDescription,
               createdAt: schema.workspace.createdAt,
               updatedAt: schema.workspace.updatedAt,
               coachLanguage: schema.member.language,
               ownerTelegramUserId: schema.member.telegramUserId,
+              memberCreatedAt: schema.member.createdAt,
               termsAcceptedAt: schema.member.termsAcceptedAt,
               lastLoginAt: schema.member.lastLoginAt,
               lastActivityAt: schema.member.lastActivityAt,
@@ -332,18 +329,21 @@ export const layer = Layer.effect(
       })
       const invite = inviteRows[0]
 
+      // "Joined" is onboarding completion. Terms acceptance is the honest
+      // signal; the owner member's creation is the earlier fallback for a coach
+      // whose bot connected but who has not accepted yet (admin-surface.md).
+      const joinedAt = row.termsAcceptedAt ?? row.memberCreatedAt
+
       return yield* decodeDetail({
         id: row.id,
         name: row.name,
-        ...(row.avatarR2Key === null ? {} : { avatarR2Key: row.avatarR2Key }),
-        ...(row.description === null ? {} : { description: row.description }),
-        ...(row.shortDescription === null ? {} : { shortDescription: row.shortDescription }),
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         ...(row.coachLanguage === null ? {} : { coachLanguage: row.coachLanguage }),
         ...(row.ownerTelegramUserId === null
           ? {}
           : { ownerTelegramUserId: row.ownerTelegramUserId }),
+        ...(joinedAt === null ? {} : { joinedAt }),
         ...(row.termsAcceptedAt === null ? {} : { termsAcceptedAt: row.termsAcceptedAt }),
         ...(row.lastLoginAt === null ? {} : { lastLoginAt: row.lastLoginAt }),
         ...(row.lastActivityAt === null ? {} : { lastActivityAt: row.lastActivityAt }),
@@ -372,20 +372,17 @@ export const layer = Layer.effect(
       }).pipe(Effect.mapError((cause) => new QueryFailed({ operation: "getDetail.decode", cause })))
     })
 
-    const updateProfile = Effect.fn("WorkspaceRepo.updateProfile")(function* (
-      input: UpdateProfileInput,
-    ) {
+    /**
+     * The internal label is the only workspace field an admin writes (#108).
+     * The `updatedAt` comparison is the optimistic-concurrency check: a rename
+     * against a stale version fails rather than clobbering a concurrent one.
+     */
+    const rename = Effect.fn("WorkspaceRepo.rename")(function* (input: RenameInput) {
       const rows = yield* Effect.tryPromise({
         try: () =>
           client
             .update(schema.workspace)
-            .set({
-              name: input.name,
-              description: input.description ?? null,
-              shortDescription: input.shortDescription ?? null,
-              avatarR2Key: input.avatarR2Key ?? null,
-              updatedAt: input.now,
-            })
+            .set({ name: input.name, updatedAt: input.now })
             .where(
               and(
                 eq(schema.workspace.id, input.id),
@@ -393,7 +390,7 @@ export const layer = Layer.effect(
               ),
             )
             .returning({ id: schema.workspace.id }),
-        catch: (cause) => new QueryFailed({ operation: "updateProfile", cause }),
+        catch: (cause) => new QueryFailed({ operation: "rename", cause }),
       })
       if (rows[0] !== undefined) return yield* getDetail(input.id)
 
@@ -405,7 +402,7 @@ export const layer = Layer.effect(
       return yield* new UpdateConflict({ id: input.id })
     })
 
-    return Service.of({ findById, create, list, getDetail, updateProfile })
+    return Service.of({ findById, create, list, getDetail, rename })
   }),
 )
 

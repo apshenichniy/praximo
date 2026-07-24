@@ -90,43 +90,16 @@ export const InviteDeliveryRecord = Schema.Struct({
 })
 export type InviteDeliveryRecord = typeof InviteDeliveryRecord.Type
 
-export const WorkspaceAvatarIntent = Schema.Literals(["keep", "replace", "reset"])
-export type WorkspaceAvatarIntent = typeof WorkspaceAvatarIntent.Type
-
-const RawUpdateWorkspaceProfileInput = Schema.Struct({
+/**
+ * The one thing the admin still edits on an existing workspace (#108): the
+ * internal label. Branding — description, short description, avatar — belongs
+ * to the coach, so it is not part of any admin write. `expectedUpdatedAt`
+ * carries the optimistic-concurrency check the profile form used to carry.
+ */
+export const RenameWorkspaceInput = Schema.Struct({
   requestId: WorkspaceProfileRequestId,
   expectedUpdatedAt: Schema.DateTimeUtcFromString,
   name: WorkspaceName,
-  description: RawOptionalDescription,
-  shortDescription: RawOptionalShortDescription,
-  avatarIntent: WorkspaceAvatarIntent,
 })
 
-const NormalizedUpdateWorkspaceProfileInput = Schema.Struct({
-  requestId: WorkspaceProfileRequestId,
-  expectedUpdatedAt: Schema.DateTimeUtc,
-  name: WorkspaceName,
-  description: Schema.optionalKey(NonEmptyDescription),
-  shortDescription: Schema.optionalKey(NonEmptyShortDescription),
-  avatarIntent: WorkspaceAvatarIntent,
-})
-
-export const UpdateWorkspaceProfileInput = RawUpdateWorkspaceProfileInput.pipe(
-  Schema.decodeTo(NormalizedUpdateWorkspaceProfileInput, {
-    decode: SchemaGetter.transform((input) => ({
-      requestId: input.requestId,
-      expectedUpdatedAt: input.expectedUpdatedAt,
-      name: input.name,
-      avatarIntent: input.avatarIntent,
-      ...(input.description === undefined || input.description.length === 0
-        ? {}
-        : { description: input.description }),
-      ...(input.shortDescription === undefined || input.shortDescription.length === 0
-        ? {}
-        : { shortDescription: input.shortDescription }),
-    })),
-    encode: SchemaGetter.transform((input) => input),
-  }),
-)
-
-export type UpdateWorkspaceProfileInput = typeof UpdateWorkspaceProfileInput.Type
+export type RenameWorkspaceInput = typeof RenameWorkspaceInput.Type

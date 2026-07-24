@@ -4,7 +4,6 @@ import { CoachBotProvisioningRepo, CoachOnboardingRepo, Database, WorkspaceRepo 
 import { TelegramId, WorkspaceId } from "@praximo/domain"
 import {
   BotRegistry,
-  CoachBotBranding,
   CoachBotCredential,
   CoachBotRelease,
   ManagerBotSender,
@@ -13,7 +12,6 @@ import { Bot, InlineKeyboard, Keyboard } from "grammy"
 import type { User, UserFromGetMe } from "grammy/types"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import {
-  applyCoachBotBranding,
   deliverProvisioningNotifications,
   managedBotSuggestions,
   prepareOnboarding,
@@ -290,19 +288,6 @@ export const handleManagerInlineInviteRpc = (
   invite: ManagerBotSender.InlineInvite,
 ): Promise<ManagerBotSender.PrepareRpcResult> =>
   getRuntime(env).runPromise(prepareManagerInlineInvite(recipient, invite))
-
-export const handleCoachBotBrandingRpc = (
-  env: Env,
-  profile: CoachBotBranding.Profile,
-): Promise<CoachBotBranding.RpcResult> =>
-  getRuntime(env).runPromise(
-    applyCoachBotBranding(env, profile).pipe(
-      Effect.match({
-        onFailure: () => CoachBotBranding.RpcResult.cases.Failed.make({}),
-        onSuccess: () => CoachBotBranding.RpcResult.cases.Applied.make({}),
-      }),
-    ),
-  )
 
 export const handleScheduled = (env: Env): Promise<void> =>
   getRuntime(env).runPromise(deliverProvisioningNotifications())

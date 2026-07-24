@@ -19,10 +19,9 @@ import {
   WorkspaceNotFound,
 } from "@praximo/domain"
 import { ConfigProvider, Effect, Layer } from "effect"
-import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
+import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import * as TestClock from "effect/testing/TestClock"
 import { AdminSurface } from "./admin-surface.ts"
-import { WorkspaceBrandingStorage } from "./workspace-branding-storage.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
 const MANAGER_BOT_TOKEN = "123456789:AAExampleTestToken"
@@ -69,7 +68,6 @@ const activeRow = WorkspaceRepo.ListItem.make({
   name: "Ada Coaching",
   botStatus: "connected",
   botUsername: "ada_coach_bot",
-  hasCustomAvatar: false,
   ownerTelegramUserId: "700000001",
   termsAcceptedAt: hoursBefore(200),
   lastActivityAt: hoursBefore(2),
@@ -84,14 +82,12 @@ const stageRows: ReadonlyArray<WorkspaceRepo.ListItem> = [
     id: WorkspaceId.make("ws_invited"),
     name: "Invited",
     botStatus: "awaiting-setup",
-    hasCustomAvatar: false,
     invite: listInvite({ delivery: { channel: "telegram", language: "en" } }),
   }),
   WorkspaceRepo.ListItem.make({
     id: WorkspaceId.make("ws_accepted"),
     name: "Accepted",
     botStatus: "awaiting-setup",
-    hasCustomAvatar: false,
     invite: listInvite({
       status: "accepted",
       acceptedAt: hoursBefore(2),
@@ -102,7 +98,6 @@ const stageRows: ReadonlyArray<WorkspaceRepo.ListItem> = [
     id: WorkspaceId.make("ws_stalled"),
     name: "Stalled",
     botStatus: "awaiting-setup",
-    hasCustomAvatar: false,
     invite: listInvite({
       status: "accepted",
       acceptedAt: hoursBefore(48),
@@ -114,7 +109,6 @@ const stageRows: ReadonlyArray<WorkspaceRepo.ListItem> = [
     name: "Bot connected",
     botStatus: "connected",
     botUsername: "connected_bot",
-    hasCustomAvatar: false,
     ownerTelegramUserId: "800000003",
     invite: listInvite({ status: "used" }),
   }),
@@ -122,7 +116,6 @@ const stageRows: ReadonlyArray<WorkspaceRepo.ListItem> = [
     id: WorkspaceId.make("ws_expired"),
     name: "Expired",
     botStatus: "awaiting-setup",
-    hasCustomAvatar: false,
     // Still `pending` in the row: expiry is lazy, so the surface derives it.
     invite: listInvite({ issuedAt: hoursBefore(8 * 24), expiresAt: hoursBefore(24) }),
   }),
@@ -130,7 +123,6 @@ const stageRows: ReadonlyArray<WorkspaceRepo.ListItem> = [
     id: WorkspaceId.make("ws_declined"),
     name: "Declined",
     botStatus: "awaiting-setup",
-    hasCustomAvatar: false,
     invite: listInvite({
       status: "cancelled",
       cancelledAt: hoursBefore(30),
@@ -141,7 +133,6 @@ const stageRows: ReadonlyArray<WorkspaceRepo.ListItem> = [
     id: WorkspaceId.make("ws_reset"),
     name: "Reset",
     botStatus: "awaiting-setup",
-    hasCustomAvatar: false,
     invite: listInvite({
       status: "cancelled",
       cancelledAt: hoursBefore(30),
@@ -152,7 +143,6 @@ const stageRows: ReadonlyArray<WorkspaceRepo.ListItem> = [
     id: WorkspaceId.make("ws_bare"),
     name: "Never invited",
     botStatus: "awaiting-setup",
-    hasCustomAvatar: false,
   }),
 ]
 
@@ -176,13 +166,31 @@ const createdAggregate: CoachOnboardingRepo.Aggregate = {
 const detailWorkspace: WorkspaceRepo.Detail = {
   id: createdAggregate.workspace.id,
   name: "Ada Coaching",
-  description: "Initial description",
   createdAt: new Date("2026-07-23T12:00:00.000Z"),
   updatedAt: new Date("2026-07-23T12:01:00.000Z"),
   coachLanguage: CoachLanguage.make("uk"),
   botStatus: "connected",
   botUsername: "ada_coach_bot",
+  joinedAt: new Date("2026-07-15T09:00:00.000Z"),
+  termsAcceptedAt: new Date("2026-07-15T09:00:00.000Z"),
   invite: createdAggregate.invite,
+}
+
+/** A workspace still mid-onboarding: pending invite, no bot, no owner yet. */
+const pendingWorkspace: WorkspaceRepo.Detail = {
+  id: WorkspaceId.make("ws_pending_detail"),
+  name: "Grace",
+  createdAt: new Date("2026-07-23T11:00:00.000Z"),
+  updatedAt: new Date("2026-07-23T11:00:00.000Z"),
+  botStatus: "awaiting-setup",
+  invite: {
+    id: createdAggregate.invite.id,
+    code: createdAggregate.invite.code,
+    status: "pending",
+    issuedAt: createdAggregate.invite.issuedAt,
+    expiresAt: createdAggregate.invite.expiresAt,
+    delivery: { channel: "copy", language: "uk" },
+  },
 }
 
 const workspaceRepoLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
@@ -195,7 +203,7 @@ const workspaceRepoLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
       ),
       list: Effect.fn("WorkspaceRepo.Test.list")(() => Effect.succeed(rows)),
       getDetail: Effect.fn("WorkspaceRepo.Test.getDetail")(() => Effect.die("unused")),
-      updateProfile: Effect.fn("WorkspaceRepo.Test.updateProfile")(() => Effect.die("unused")),
+      rename: Effect.fn("WorkspaceRepo.Test.rename")(() => Effect.die("unused")),
     }),
   )
 
@@ -282,11 +290,7 @@ const deletionDependencies = Layer.mergeAll(
 const createDependencies = Layer.mergeAll(
   onboardingRepoLayer,
   CoachOnboardingToken.testLayer("PraximoMotherBot"),
-  WorkspaceBrandingStorage.testLayer({
-    defaultAvatarKey: "branding/default-coach-avatar.jpg",
-  }),
   ManagerBotSender.testLayer,
-  CoachBotBranding.testLayer,
   deletionDependencies,
 )
 
@@ -311,64 +315,54 @@ const createLayerWith = (onboardingLayer: Layer.Layer<CoachOnboardingRepo.Servic
       workspaceRepoLayer([]),
       onboardingLayer,
       CoachOnboardingToken.testLayer("PraximoMotherBot"),
-      WorkspaceBrandingStorage.testLayer({
-        defaultAvatarKey: "branding/default-coach-avatar.jpg",
-      }),
       ManagerBotSender.testLayer,
-      CoachBotBranding.testLayer,
       deletionDependencies,
     ),
   )
 
-const profileWorkspaceRepoLayer = Layer.succeed(
-  WorkspaceRepo.Service,
-  WorkspaceRepo.Service.of({
-    create: Effect.fn("WorkspaceRepo.Test.create")((workspace) => Effect.succeed(workspace)),
-    findById: Effect.fn("WorkspaceRepo.Test.findById")(() =>
-      Effect.succeed({
-        id: detailWorkspace.id,
-        name: detailWorkspace.name,
-      }),
-    ),
-    list: Effect.fn("WorkspaceRepo.Test.list")(() => Effect.succeed([])),
-    getDetail: Effect.fn("WorkspaceRepo.Test.getDetail")(() => Effect.succeed(detailWorkspace)),
-    updateProfile: Effect.fn("WorkspaceRepo.Test.updateProfile")((input) => {
-      const {
-        description: _description,
-        shortDescription: _shortDescription,
-        avatarR2Key: _avatarR2Key,
-        ...base
-      } = detailWorkspace
-      return Effect.succeed({
-        ...base,
-        name: input.name,
-        ...(input.description === undefined ? {} : { description: input.description }),
-        ...(input.shortDescription === undefined
-          ? {}
-          : { shortDescription: input.shortDescription }),
-        ...(input.avatarR2Key === undefined ? {} : { avatarR2Key: input.avatarR2Key }),
-        updatedAt: input.now,
-      })
+/**
+ * A repo double for the details screen: `getDetail` returns whichever workspace
+ * the test asked for, and `rename` writes the label the way the real one does —
+ * a fresh `updatedAt`, and nothing else touched.
+ */
+const detailWorkspaceRepoLayer = (
+  detail: WorkspaceRepo.Detail,
+  renameResult?: Effect.Effect<WorkspaceRepo.Detail, WorkspaceRepo.UpdateConflict>,
+) =>
+  Layer.succeed(
+    WorkspaceRepo.Service,
+    WorkspaceRepo.Service.of({
+      create: Effect.fn("WorkspaceRepo.Test.create")((workspace) => Effect.succeed(workspace)),
+      findById: Effect.fn("WorkspaceRepo.Test.findById")(() =>
+        Effect.succeed({ id: detail.id, name: detail.name }),
+      ),
+      list: Effect.fn("WorkspaceRepo.Test.list")(() => Effect.succeed([])),
+      getDetail: Effect.fn("WorkspaceRepo.Test.getDetail")(() => Effect.succeed(detail)),
+      rename: Effect.fn("WorkspaceRepo.Test.rename")(
+        (input) =>
+          renameResult ?? Effect.succeed({ ...detail, name: input.name, updatedAt: input.now }),
+      ),
     }),
-  }),
-)
+  )
 
-const profileAppLayer = Layer.provideMerge(
-  AdminSurface.layer,
-  Layer.mergeAll(
-    ManagerInitData.layer,
-    adminRepoLayer,
-    profileWorkspaceRepoLayer,
-    successfulOnboardingRepoLayer,
-    CoachOnboardingToken.testLayer("PraximoMotherBot"),
-    WorkspaceBrandingStorage.testLayer({
-      defaultAvatarKey: "branding/default-coach-avatar.jpg",
-    }),
-    ManagerBotSender.testLayer,
-    CoachBotBranding.testLayer,
-    deletionDependencies,
-  ),
-)
+const detailAppLayer = (
+  detail: WorkspaceRepo.Detail,
+  renameResult?: Effect.Effect<WorkspaceRepo.Detail, WorkspaceRepo.UpdateConflict>,
+) =>
+  Layer.provideMerge(
+    AdminSurface.layer,
+    Layer.mergeAll(
+      ManagerInitData.layer,
+      adminRepoLayer,
+      detailWorkspaceRepoLayer(detail, renameResult),
+      successfulOnboardingRepoLayer,
+      CoachOnboardingToken.testLayer("PraximoMotherBot"),
+      ManagerBotSender.testLayer,
+      deletionDependencies,
+    ),
+  )
+
+const profileAppLayer = detailAppLayer(detailWorkspace)
 
 const nonAdminVerifierLayer = Layer.succeed(
   ManagerInitData.Service,
@@ -440,14 +434,12 @@ describe("AdminSurface", () => {
             id: WorkspaceId.make("ws_fresh"),
             name: "Fresh invite",
             botStatus: "awaiting-setup",
-            hasCustomAvatar: false,
             invite: listInvite({ issuedAt: hoursBefore(1) }),
           }),
           WorkspaceRepo.ListItem.make({
             id: WorkspaceId.make("ws_older"),
             name: "Older invite",
             botStatus: "awaiting-setup",
-            hasCustomAvatar: false,
             invite: listInvite({ issuedAt: hoursBefore(50) }),
           }),
           WorkspaceRepo.ListItem.make({
@@ -455,7 +447,6 @@ describe("AdminSurface", () => {
             name: "Zoe Coaching",
             botStatus: "connected",
             botUsername: "zoe_bot",
-            hasCustomAvatar: false,
             termsAcceptedAt: hoursBefore(500),
           }),
         ]),
@@ -531,7 +522,6 @@ describe("AdminSurface", () => {
             id: WorkspaceId.make("ws_mine"),
             name: "My practice",
             botStatus: "awaiting-setup",
-            hasCustomAvatar: false,
             invite: listInvite({
               status: "accepted",
               acceptedAt: hoursBefore(3),
@@ -562,7 +552,6 @@ describe("AdminSurface", () => {
             id: WorkspaceId.make("ws_claimed"),
             name: "Claimed",
             botStatus: "awaiting-setup",
-            hasCustomAvatar: false,
             invite: listInvite({
               status: "accepted",
               acceptedAt: hoursBefore(3),
@@ -574,7 +563,6 @@ describe("AdminSurface", () => {
             name: "My bot",
             botStatus: "connected",
             botUsername: "my_own_bot",
-            hasCustomAvatar: false,
             ownerTelegramUserId: adminTelegramId,
             termsAcceptedAt: hoursBefore(100),
           }),
@@ -888,7 +876,7 @@ describe("AdminSurface", () => {
     ),
   )
 
-  it.effect("loads a complete workspace detail without exposing its private avatar key", () =>
+  it.effect("presents an active coach with no branding and no onboarding stage", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
       const adminSurface = yield* AdminSurface.Service
@@ -897,75 +885,100 @@ describe("AdminSurface", () => {
       expect(detail).toMatchObject({
         id: detailWorkspace.id,
         name: "Ada Coaching",
-        description: "Initial description",
         coachLanguage: "uk",
         botStatus: "connected",
         botUsername: "ada_coach_bot",
+        joinedAt: "2026-07-15T09:00:00.000Z",
         canReissue: false,
       })
-      expect(detail).not.toHaveProperty("avatarR2Key")
+      // Onboarding is complete, so the screen switches to the active variant.
+      expect(detail).not.toHaveProperty("onboarding")
+      // Bot branding is the coach's; the admin read model never carries it.
+      expect(detail).not.toHaveProperty("description")
+      expect(detail).not.toHaveProperty("hasCustomAvatar")
       expect(detail.invite).not.toHaveProperty("link")
     }).pipe(Effect.provide(profileAppLayer), Effect.provide(testConfig)),
   )
 
-  it.effect("saves the workspace profile and applies connected-bot branding without its name", () =>
+  it.effect("presents a pending invite with its channel, link, and forwardable message", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
       const adminSurface = yield* AdminSurface.Service
-      const result = yield* adminSurface.updateWorkspaceProfile(
-        VALID_INIT_DATA,
-        detailWorkspace.id,
-        {
-          requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-          expectedUpdatedAt: "2026-07-23T12:01:00.000Z",
-          name: "  Renamed Workspace  ",
-          description: "   ",
-          shortDescription: "  Short  ",
-          avatarIntent: "keep",
-        },
-      )
-      const branding = yield* CoachBotBranding.TestService
+      const detail = yield* adminSurface.getWorkspace(VALID_INIT_DATA, pendingWorkspace.id)
 
-      expect(result).toMatchObject({
-        status: "saved",
-        retryAvatar: false,
-        workspace: {
-          name: "Renamed Workspace",
-          shortDescription: "Short",
-        },
+      expect(detail.onboarding).toBe("invited")
+      expect(detail.canReissue).toBe(true)
+      expect(detail.invite).toMatchObject({ status: "pending", channel: "copy", language: "uk" })
+      expect(detail.invite?.link).toContain("https://t.me/PraximoMotherBot?start=ws_")
+      // A resend re-delivers the same invite, so the message keeps the language
+      // that invite last left in rather than defaulting back to English.
+      expect(detail.invite?.message).toContain("Ваш простір Praximo «Grace» готовий.")
+      expect(detail.invite?.message).toContain(detail.invite?.link ?? "")
+    }).pipe(Effect.provide(detailAppLayer(pendingWorkspace)), Effect.provide(testConfig)),
+  )
+
+  it.effect("renames the internal label and leaves everything else untouched", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const renamed = yield* adminSurface.renameWorkspace(VALID_INIT_DATA, detailWorkspace.id, {
+        requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+        expectedUpdatedAt: "2026-07-23T12:01:00.000Z",
+        name: "  Renamed Workspace  ",
       })
-      expect(result.workspace).not.toHaveProperty("description")
-      expect(yield* branding.applied()).toEqual([
-        {
-          workspaceId: detailWorkspace.id,
-          shortDescription: "Short",
-          avatar: { _tag: "Keep" },
-        },
-      ])
-      expect((yield* branding.applied())[0]).not.toHaveProperty("name")
+
+      expect(renamed).toMatchObject({
+        name: "Renamed Workspace",
+        botUsername: "ada_coach_bot",
+        coachLanguage: "uk",
+      })
     }).pipe(Effect.provide(profileAppLayer), Effect.provide(testConfig)),
   )
 
-  it.effect("keeps a committed profile visible when Telegram branding fails", () =>
+  it.effect("refuses a rename made against a stale version", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
-      const branding = yield* CoachBotBranding.TestService
-      yield* branding.failNextApply()
       const adminSurface = yield* AdminSurface.Service
-      const result = yield* adminSurface.updateWorkspaceProfile(
-        VALID_INIT_DATA,
-        detailWorkspace.id,
-        {
+      const error = yield* Effect.flip(
+        adminSurface.renameWorkspace(VALID_INIT_DATA, detailWorkspace.id, {
           requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-          expectedUpdatedAt: "2026-07-23T12:01:00.000Z",
-          name: "Persisted despite Telegram",
-          avatarIntent: "keep",
-        },
+          expectedUpdatedAt: "2026-07-23T11:00:00.000Z",
+          name: "Stale overwrite",
+        }),
       )
 
-      expect(result.status).toBe("saved-branding-failed")
-      expect(result.workspace.name).toBe("Persisted despite Telegram")
-    }).pipe(Effect.provide(profileAppLayer), Effect.provide(testConfig)),
+      expect(error._tag).toBe("AdminSurface.RenameConflict")
+    }).pipe(
+      Effect.provide(
+        detailAppLayer(
+          detailWorkspace,
+          Effect.fail(new WorkspaceRepo.UpdateConflict({ id: detailWorkspace.id })),
+        ),
+      ),
+      Effect.provide(testConfig),
+    ),
+  )
+
+  it.effect("reports a losing rename that actually landed as success, not a conflict", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:02:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const renamed = yield* adminSurface.renameWorkspace(VALID_INIT_DATA, detailWorkspace.id, {
+        requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+        expectedUpdatedAt: "2026-07-23T11:00:00.000Z",
+        name: "Ada Coaching",
+      })
+
+      expect(renamed.name).toBe("Ada Coaching")
+    }).pipe(
+      Effect.provide(
+        detailAppLayer(
+          detailWorkspace,
+          Effect.fail(new WorkspaceRepo.UpdateConflict({ id: detailWorkspace.id })),
+        ),
+      ),
+      Effect.provide(testConfig),
+    ),
   )
 
   it.effect("reissues, reconstructs, and delivers a fresh onboarding link after commit", () =>

@@ -35,13 +35,13 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
       expect(found.name).toBe("Ada's practice")
 
       const detail = yield* repo.getDetail(id)
-      const updated = yield* repo.updateProfile({
+      const renamed = yield* repo.rename({
         id,
         expectedUpdatedAt: detail.updatedAt,
         name: "Ada's updated practice",
         now: new Date("2026-07-23T21:00:00.000Z"),
       })
-      expect(updated.name).toBe("Ada's updated practice")
+      expect(renamed.name).toBe("Ada's updated practice")
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
@@ -149,27 +149,23 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
           id: noBot,
           name: "A No Bot",
           botStatus: "awaiting-setup",
-          hasCustomAvatar: false,
         },
         {
           id: awaitingSetup,
           name: "B Awaiting Setup",
           botStatus: "awaiting-setup",
-          hasCustomAvatar: false,
         },
         {
           id: connected,
           name: "C Connected",
           botStatus: "connected",
           botUsername: "connected_coach_bot",
-          hasCustomAvatar: true,
         },
         {
           id: needsRelink,
           name: "D Needs Relink",
           botStatus: "needs-relink",
           botUsername: "relink_coach_bot",
-          hasCustomAvatar: false,
         },
       ])
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
@@ -251,7 +247,6 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
           id: reissued,
           name: "E Reissued",
           botStatus: "awaiting-setup",
-          hasCustomAvatar: false,
           // The superseded invite is history; the live one is what the list reads.
           invite: {
             id: expect.stringContaining("ci_new") as string,
@@ -266,7 +261,6 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
           id: activeCoach,
           name: "F Active",
           botStatus: "awaiting-setup",
-          hasCustomAvatar: false,
           ownerTelegramUserId: "800000042",
           termsAcceptedAt: new Date("2026-07-01T10:00:00.000Z"),
           lastActivityAt: new Date("2026-07-24T10:00:00.000Z"),
@@ -330,34 +324,31 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
         }),
       )
 
-      expect(yield* repo.getDetail(id)).toMatchObject({
+      const detail = yield* repo.getDetail(id)
+      expect(detail).toMatchObject({
         id,
         name: "Initial name",
-        avatarR2Key: "workspace-branding/initial.jpg",
-        description: "Initial description",
         coachLanguage: "uk",
         botStatus: "connected",
         botUsername: "detail_coach_bot",
+        // Terms acceptance wins over the member row's creation as "joined".
+        joinedAt: new Date("2026-07-23T20:00:10.000Z"),
         invite: { id: inviteId, status: "used" },
       })
+      // Bot branding never reaches the admin's read model (#108).
+      expect(detail).not.toHaveProperty("description")
+      expect(detail).not.toHaveProperty("avatarR2Key")
 
-      const updated = yield* repo.updateProfile({
+      const renamed = yield* repo.rename({
         id,
         expectedUpdatedAt: initialVersion,
         name: "Updated name",
-        shortDescription: "Updated short description",
         now: nextVersion,
       })
-      expect(updated).toMatchObject({
-        name: "Updated name",
-        shortDescription: "Updated short description",
-        updatedAt: nextVersion,
-      })
-      expect(updated).not.toHaveProperty("description")
-      expect(updated).not.toHaveProperty("avatarR2Key")
+      expect(renamed).toMatchObject({ name: "Updated name", updatedAt: nextVersion })
 
       const conflict = yield* Effect.flip(
-        repo.updateProfile({
+        repo.rename({
           id,
           expectedUpdatedAt: initialVersion,
           name: "Stale overwrite",

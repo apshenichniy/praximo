@@ -61,10 +61,11 @@ export const formatExpiresIn = (value: string): string => {
   return "expires today"
 }
 
+/** The delivery channel as a standalone value — a table cell, not a sentence. */
 export const channelLabel = {
   telegram: "Telegram",
-  email: "email",
-  copy: "a copied link",
+  email: "Email",
+  copy: "Copied link",
 } as const
 
 export const statusLabel = {

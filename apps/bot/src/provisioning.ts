@@ -1,10 +1,15 @@
 import { CoachOnboardingToken } from "@praximo/auth"
 import { CoachBotProvisioningRepo, CoachOnboardingRepo } from "@praximo/db"
 import { TelegramId } from "@praximo/domain"
-import { CoachBotBranding, CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
+import { CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Api, InputFile } from "grammy"
 import type { User } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
+import {
+  defaultBotDescription,
+  defaultBotShortDescription,
+  generateDefaultAvatar,
+} from "./default-branding.ts"
 
 export interface ProvisioningEnv {
   readonly MANAGER_BOT_TOKEN: string
@@ -35,6 +40,16 @@ export const managedBotSuggestions = (
   }
 }
 
+/**
+ * Whose name the bot's description carries. The coach's own Telegram name is
+ * the honest answer — the workspace label is the admin's private shorthand and
+ * the coach never sees it — so the label is only the fallback.
+ */
+const coachDisplayName = (user: User, workspaceName: string): string => {
+  const telegramName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim()
+  return telegramName.length === 0 ? workspaceName : telegramName
+}
+
 const telegram = <A>(operation: string, run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
@@ -58,11 +73,47 @@ const sha256 = (value: string) =>
       ),
   )
 
+/**
+ * The bot's starting avatar. A workspace that still carries a stored key (from
+ * before manager-side branding was removed, #108) keeps it; everything else is
+ * generated on the spot. The stage's static R2 object stays as the fallback for
+ * the case where generation itself fails — a bot with a stock avatar is a far
+ * smaller problem than a coach who cannot finish onboarding.
+ */
+const resolveAvatarBytes = Effect.fn("BotWorker.resolveAvatarBytes")(function* (
+  env: ProvisioningEnv,
+  workspace: CoachBotProvisioningRepo.WorkspaceProfile,
+  seed: string,
+) {
+  const loadFromBucket = Effect.fn("BotWorker.loadAvatarObject")(function* (key: string) {
+    const object = yield* Effect.tryPromise({
+      try: () => env.UPLOADS.get(key),
+      catch: () => new TelegramSetupFailed({ operation: "avatar.load" }),
+    })
+    if (object === null) return yield* new TelegramSetupFailed({ operation: "avatar.not-found" })
+    return new Uint8Array(
+      yield* Effect.tryPromise({
+        try: () => object.arrayBuffer(),
+        catch: () => new TelegramSetupFailed({ operation: "avatar.read" }),
+      }),
+    )
+  })
+
+  if (workspace.avatarR2Key !== undefined) return yield* loadFromBucket(workspace.avatarR2Key)
+  const generated = yield* Effect.try({
+    try: () => generateDefaultAvatar(seed),
+    catch: () => new TelegramSetupFailed({ operation: "avatar.generate" }),
+  }).pipe(Effect.result)
+  if (Result.isSuccess(generated)) return generated.success
+  return yield* loadFromBucket(env.DEFAULT_COACH_BOT_AVATAR_R2_KEY)
+})
+
 const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
   env: ProvisioningEnv,
   token: string,
   botId: string,
   workspace: CoachBotProvisioningRepo.WorkspaceProfile,
+  coachName: string,
   webhookOrigin: string,
 ) {
   const api = new Api(token)
@@ -75,18 +126,9 @@ const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
     },
     catch: () => new TelegramSetupFailed({ operation: "miniAppUrl.validate" }),
   })
-  const avatarKey = workspace.avatarR2Key ?? env.DEFAULT_COACH_BOT_AVATAR_R2_KEY
-  const avatar = yield* Effect.tryPromise({
-    try: () => env.UPLOADS.get(avatarKey),
-    catch: () => new TelegramSetupFailed({ operation: "avatar.load" }),
-  })
-  if (avatar === null) return yield* new TelegramSetupFailed({ operation: "avatar.not-found" })
-  const avatarBytes = new Uint8Array(
-    yield* Effect.tryPromise({
-      try: () => avatar.arrayBuffer(),
-      catch: () => new TelegramSetupFailed({ operation: "avatar.read" }),
-    }),
-  )
+  // Seeded by the bot id so a re-provisioning of the same bot reproduces the
+  // same avatar rather than re-skinning a profile the coach may already own.
+  const avatarBytes = yield* resolveAvatarBytes(env, workspace, botId)
   const secret = webhookSecret()
 
   yield* telegram("setMyProfilePhoto", () =>
@@ -95,9 +137,11 @@ const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
       photo: new InputFile(avatarBytes, "avatar.jpg"),
     }),
   )
-  yield* telegram("setMyDescription", () => api.setMyDescription(workspace.description ?? ""))
+  yield* telegram("setMyDescription", () =>
+    api.setMyDescription(workspace.description ?? defaultBotDescription(coachName)),
+  )
   yield* telegram("setMyShortDescription", () =>
-    api.setMyShortDescription(workspace.shortDescription ?? ""),
+    api.setMyShortDescription(workspace.shortDescription ?? defaultBotShortDescription(coachName)),
   )
   yield* telegram("setWebhook", () =>
     api.setWebhook(`${webhookOrigin}/telegram/coach/${botId}`, {
@@ -159,6 +203,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       token,
       existing.success.telegramBotId,
       profile,
+      coachDisplayName(user, profile.name),
       webhookOrigin,
     )
     return yield* repo.rotate({
@@ -188,6 +233,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     token,
     String(managedBot.id),
     provisioning.workspace,
+    coachDisplayName(user, provisioning.workspace.name),
     webhookOrigin,
   )
   return yield* repo.complete({
@@ -222,43 +268,4 @@ export const deliverProvisioningNotifications = Effect.fn(
         ),
     { concurrency: 4 },
   )
-})
-
-export const applyCoachBotBranding = Effect.fn("BotWorker.applyCoachBotBranding")(function* (
-  env: ProvisioningEnv,
-  profile: CoachBotBranding.Profile,
-) {
-  const repo = yield* CoachBotProvisioningRepo.Service
-  const credentials = yield* CoachBotCredential.Service
-  const installation = yield* repo.findByWorkspace(profile.workspaceId)
-  const token = yield* credentials.decrypt(installation.encryptedToken)
-  const api = new Api(token)
-  yield* telegram("branding.setMyDescription", () =>
-    api.setMyDescription(profile.description ?? ""),
-  )
-  yield* telegram("branding.setMyShortDescription", () =>
-    api.setMyShortDescription(profile.shortDescription ?? ""),
-  )
-  if (profile.avatar._tag === "Apply") {
-    const avatarKey = profile.avatar.r2Key
-    const avatar = yield* Effect.tryPromise({
-      try: () => env.UPLOADS.get(avatarKey),
-      catch: () => new TelegramSetupFailed({ operation: "branding.avatar.load" }),
-    })
-    if (avatar === null) {
-      return yield* new TelegramSetupFailed({ operation: "branding.avatar.not-found" })
-    }
-    const bytes = new Uint8Array(
-      yield* Effect.tryPromise({
-        try: () => avatar.arrayBuffer(),
-        catch: () => new TelegramSetupFailed({ operation: "branding.avatar.read" }),
-      }),
-    )
-    yield* telegram("branding.setMyProfilePhoto", () =>
-      api.setMyProfilePhoto({
-        type: "static",
-        photo: new InputFile(bytes, "avatar.jpg"),
-      }),
-    )
-  }
 })
