@@ -48,6 +48,9 @@ const unusedOnboardingLayer = Layer.succeed(
       Effect.die("unused"),
     ),
     markUsed: Effect.fn("CoachOnboardingRepo.DeleteTest.markUsed")(() => Effect.die("unused")),
+    recordDelivery: Effect.fn("CoachOnboardingRepo.DeleteTest.recordDelivery")(() =>
+      Effect.die("unused"),
+    ),
     reissue: Effect.fn("CoachOnboardingRepo.DeleteTest.reissue")(() => Effect.die("unused")),
   }),
 )

@@ -139,15 +139,11 @@ export const listAdminWorkspaces = async (
   )
 }
 
-export const createAdminWorkspace = async (
-  initData: string,
-  input: unknown,
-  avatar?: Uint8Array,
-) => {
+export const createAdminWorkspace = async (initData: string, input: unknown, delivery: unknown) => {
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(AdminSurface.Service, (service) =>
-      service.createWorkspace(initData, input, avatar),
+      service.createWorkspace(initData, input, delivery),
     ),
   )
 }

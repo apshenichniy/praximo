@@ -3,6 +3,7 @@ import { CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
 import { AdminRepo, CoachOnboardingRepo, WorkspaceDeletionRepo, WorkspaceRepo } from "@praximo/db"
 import {
   CoachLanguage,
+  CreateInviteDelivery,
   CreateWorkspaceInput,
   DeleteWorkspaceInput,
   TelegramId,
@@ -23,6 +24,8 @@ export interface CreateResult {
   readonly link: string
   readonly expiresAt: string
   readonly delivery: DeliveryStatus
+  /** The full forwardable invite message in the chosen invite language. */
+  readonly message: string
 }
 
 export interface WorkspaceDetail {
@@ -66,15 +69,10 @@ export interface Interface {
   readonly createWorkspace: (
     initData: string,
     input: unknown,
-    avatar?: Uint8Array,
+    delivery: unknown,
   ) => Effect.Effect<
     CreateResult,
-    | AccessDenied
-    | ValidationFailed
-    | IdempotencyConflict
-    | WorkspaceBrandingStorage.InvalidAvatar
-    | WorkspaceBrandingStorage.UploadFailed
-    | LoadFailed
+    AccessDenied | ValidationFailed | IdempotencyConflict | LoadFailed
   >
   readonly resendInvite: (
     initData: string,
@@ -189,6 +187,7 @@ export class DeletionFailed extends Schema.TaggedErrorClass<DeletionFailed>()(
 ) {}
 
 const decodeCreateInput = Schema.decodeUnknownEffect(CreateWorkspaceInput)
+const decodeCreateDelivery = Schema.decodeUnknownEffect(CreateInviteDelivery)
 const decodeUpdateInput = Schema.decodeUnknownEffect(UpdateWorkspaceProfileInput)
 const decodeDeleteInput = Schema.decodeUnknownEffect(DeleteWorkspaceInput)
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId)
@@ -197,14 +196,16 @@ const decodeInviteId = Schema.decodeUnknownEffect(
 )
 const decodeRequestId = Schema.decodeUnknownEffect(Schema.String.check(Schema.isUUID(4)))
 
+// The invite-first workspace may carry no label yet, so the message has a
+// named and an unnamed variant per language.
 const forwardableMessage = (language: CoachLanguage, name: string, link: string): string => {
   switch (language) {
     case "uk":
-      return `Ваш простір Praximo «${name}» готовий.\n\nВідкрийте це одноразове посилання протягом 7 днів, щоб підключити свого бота:\n${link}`
+      return `${name.length === 0 ? "Ваш простір Praximo готовий." : `Ваш простір Praximo «${name}» готовий.`}\n\nВідкрийте це одноразове посилання протягом 7 днів, щоб підключити свого бота:\n${link}`
     case "ru":
-      return `Ваше пространство Praximo «${name}» готово.\n\nОткройте эту одноразовую ссылку в течение 7 дней, чтобы подключить своего бота:\n${link}`
+      return `${name.length === 0 ? "Ваше пространство Praximo готово." : `Ваше пространство Praximo «${name}» готово.`}\n\nОткройте эту одноразовую ссылку в течение 7 дней, чтобы подключить своего бота:\n${link}`
     case "en":
-      return `Your Praximo workspace “${name}” is ready.\n\nOpen this one-time link within 7 days to connect your bot:\n${link}`
+      return `${name.length === 0 ? "Your Praximo workspace is ready." : `Your Praximo workspace “${name}” is ready.`}\n\nOpen this one-time link within 7 days to connect your bot:\n${link}`
   }
 }
 
@@ -346,6 +347,7 @@ export const layer = Layer.effect(
     const buildResult = Effect.fn("AdminSurface.buildResult")(function* (
       aggregate: CoachOnboardingRepo.Aggregate,
       delivery: DeliveryStatus,
+      language: CoachLanguage,
     ) {
       const link = yield* tokens.linkFor(aggregate.invite.code)
       return {
@@ -359,128 +361,102 @@ export const layer = Layer.effect(
         link,
         expiresAt: aggregate.invite.expiresAt.toISOString(),
         delivery,
+        message: forwardableMessage(language, aggregate.workspace.name, link),
       } satisfies CreateResult
     })
 
+    /**
+     * Interim Telegram channel until the prepared share message (#104): the
+     * forwardable message goes to the manager's own chat. A successful send is
+     * remembered on the invite row; the record is best-effort — the message
+     * already left, so a bookkeeping failure must not fail the operation.
+     */
     const deliver = Effect.fn("AdminSurface.deliver")(function* (
       recipient: TelegramId,
       aggregate: CoachOnboardingRepo.Aggregate,
+      language: CoachLanguage,
     ) {
-      const result = yield* buildResult(aggregate, "sent")
-      return yield* sender
-        .sendText(
-          recipient,
-          forwardableMessage(aggregate.owner.language, aggregate.workspace.name, result.link),
-        )
-        .pipe(
-          Effect.as(result),
-          Effect.catchTag("ManagerBotSender.SendFailed", () => buildResult(aggregate, "failed")),
-        )
+      const result = yield* buildResult(aggregate, "sent", language)
+      return yield* sender.sendText(recipient, result.message).pipe(
+        Effect.andThen(
+          onboarding
+            .recordDelivery(aggregate.invite.id, { channel: "telegram", language })
+            .pipe(Effect.ignore),
+        ),
+        Effect.as(result),
+        Effect.catchTag("ManagerBotSender.SendFailed", () =>
+          buildResult(aggregate, "failed", language),
+        ),
+      )
     })
 
+    /**
+     * The lazy create behind the delivery actions (#103): the workspace +
+     * invite come into being on the first action, and a retry of the same
+     * action replays the same aggregate (requestId idempotency) and delivers
+     * again — repeat delivery is the point of a retry, duplication is not.
+     */
     const createWorkspace = Effect.fn("AdminSurface.createWorkspace")(function* (
       rawInitData: string,
       rawInput: unknown,
-      avatar?: Uint8Array,
+      rawDelivery: unknown,
     ) {
       const recipient = yield* verifyAdmin(rawInitData)
       const input = yield* decodeCreateInput(rawInput).pipe(
         Effect.mapError(() => new ValidationFailed()),
       )
-      const inspectedAvatar =
-        avatar === undefined ? undefined : yield* storage.inspectAvatar(avatar)
+      const delivery = yield* decodeCreateDelivery(rawDelivery).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
       const fingerprint = createHash("sha256")
         .update(
           JSON.stringify({
             requestId: input.requestId,
-            name: input.name,
-            coachLanguage: input.coachLanguage,
+            name: input.name ?? null,
+            coachLanguage: input.coachLanguage ?? null,
             description: input.description ?? null,
             shortDescription: input.shortDescription ?? null,
-            avatarDigest: inspectedAvatar?.digest ?? null,
+            avatarDigest: null,
           }),
         )
         .digest("hex")
       const now = new Date(yield* Clock.currentTimeMillis)
-      const dbInput = (avatarR2Key?: string): CoachOnboardingRepo.CreateInput => ({
-        requestId: input.requestId,
-        requestFingerprint: fingerprint,
-        name: input.name,
-        coachLanguage: input.coachLanguage,
-        ...(input.description === undefined ? {} : { description: input.description }),
-        ...(input.shortDescription === undefined
-          ? {}
-          : { shortDescription: input.shortDescription }),
-        ...(avatarR2Key === undefined ? {} : { avatarR2Key }),
-        issuedByTelegramId: recipient,
-        now,
-      })
-      const preflight = yield* onboarding
-        .lookupCreate(dbInput())
+      const outcome = yield* onboarding
+        .createOrGet({
+          requestId: input.requestId,
+          requestFingerprint: fingerprint,
+          ...(input.name === undefined ? {} : { name: input.name }),
+          ...(input.coachLanguage === undefined ? {} : { coachLanguage: input.coachLanguage }),
+          ...(input.description === undefined ? {} : { description: input.description }),
+          ...(input.shortDescription === undefined
+            ? {}
+            : { shortDescription: input.shortDescription }),
+          issuedByTelegramId: recipient,
+          now,
+        })
         .pipe(
           Effect.mapError((error) =>
             error._tag === "CoachOnboardingRepo.IdempotencyConflict"
               ? new IdempotencyConflict()
-              : new LoadFailed({ operation: "createWorkspace.preflight" }),
+              : new LoadFailed({ operation: "createWorkspace" }),
           ),
         )
-      if (preflight !== undefined) return yield* buildResult(preflight.aggregate, "unknown")
 
-      const storedAvatar =
-        avatar === undefined || inspectedAvatar === undefined
-          ? undefined
-          : yield* storage.putInspectedAvatar(input.requestId, avatar, inspectedAvatar)
-      const creation = yield* onboarding.createOrGet(dbInput(storedAvatar?.key)).pipe(Effect.result)
-
-      if (Result.isSuccess(creation)) {
-        const outcome = creation.success
-        if (
-          !outcome.created &&
-          storedAvatar !== undefined &&
-          outcome.aggregate.workspace.avatarR2Key !== storedAvatar.key
-        ) {
-          yield* storage.deleteAvatar(storedAvatar.key).pipe(Effect.ignore)
+      switch (delivery.channel) {
+        case "copy": {
+          // The record *is* the delivery evidence for the copy channel, so
+          // unlike the telegram bookkeeping it must not be best-effort.
+          yield* onboarding
+            .recordDelivery(outcome.aggregate.invite.id, {
+              channel: "copy",
+              language: delivery.language,
+            })
+            .pipe(Effect.mapError(() => new LoadFailed({ operation: "createWorkspace.record" })))
+          return yield* buildResult(outcome.aggregate, "sent", delivery.language)
         }
-        if (!outcome.created) return yield* buildResult(outcome.aggregate, "unknown")
-        return yield* deliver(recipient, outcome.aggregate)
+        case "telegram":
+          return yield* deliver(recipient, outcome.aggregate, delivery.language)
       }
-
-      const reconciled = yield* onboarding
-        .lookupCreate(
-          dbInput(
-            creation.failure._tag === "CoachOnboardingRepo.IdempotencyConflict"
-              ? creation.failure.existingAvatarR2Key
-              : storedAvatar?.key,
-          ),
-        )
-        .pipe(Effect.result)
-      if (Result.isFailure(reconciled)) {
-        if (reconciled.failure._tag === "CoachOnboardingRepo.IdempotencyConflict") {
-          if (
-            storedAvatar !== undefined &&
-            reconciled.failure.existingAvatarR2Key !== storedAvatar.key
-          ) {
-            yield* storage.deleteAvatar(storedAvatar.key).pipe(Effect.ignore)
-          }
-          return yield* new IdempotencyConflict()
-        }
-        return yield* new LoadFailed({ operation: "createWorkspace.reconcile" })
-      }
-      if (Result.isSuccess(reconciled) && reconciled.success !== undefined) {
-        if (
-          storedAvatar !== undefined &&
-          reconciled.success.aggregate.workspace.avatarR2Key !== storedAvatar.key
-        ) {
-          yield* storage.deleteAvatar(storedAvatar.key).pipe(Effect.ignore)
-        }
-        return yield* buildResult(reconciled.success.aggregate, "unknown")
-      }
-      if (storedAvatar !== undefined) {
-        yield* storage.deleteAvatar(storedAvatar.key).pipe(Effect.ignore)
-      }
-      return yield* creation.failure._tag === "CoachOnboardingRepo.IdempotencyConflict"
-        ? new IdempotencyConflict()
-        : new LoadFailed({ operation: "createWorkspace" })
     })
 
     const resendInvite = Effect.fn("AdminSurface.resendInvite")(function* (
@@ -494,7 +470,12 @@ export const layer = Layer.effect(
       const aggregate = yield* onboarding
         .verifyPending(yield* inviteId, new Date(yield* Clock.currentTimeMillis))
         .pipe(Effect.mapError(() => new LoadFailed({ operation: "resendInvite" })))
-      return yield* deliver(recipient, aggregate)
+      // Resend keeps the language the invite last left in.
+      return yield* deliver(
+        recipient,
+        aggregate,
+        aggregate.invite.delivery?.language ?? aggregate.owner.language,
+      )
     })
 
     const applyBranding = Effect.fn("AdminSurface.applyBranding")(function* (
@@ -665,7 +646,7 @@ export const layer = Layer.effect(
               : new LoadFailed({ operation: "reissueInvite" }),
           ),
         )
-      return yield* deliver(recipient, aggregate)
+      return yield* deliver(recipient, aggregate, aggregate.owner.language)
     })
 
     const deleteWorkspace = Effect.fn("AdminSurface.deleteWorkspace")(function* (

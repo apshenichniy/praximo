@@ -15,7 +15,7 @@ import {
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item.tsx"
 import { StatusBadge } from "@/features/admin/components/status-badge.tsx"
 import { WorkspaceAvatar } from "@/features/admin/components/workspace-avatar.tsx"
-import type { BotStatus } from "@/features/admin/formatting.ts"
+import { type BotStatus, displayName } from "@/features/admin/formatting.ts"
 
 export interface WorkspaceListEntry {
   readonly id: string
@@ -38,7 +38,7 @@ export function CreateWorkspaceLink() {
       <span className="border-primary/50 flex size-11 items-center justify-center rounded-full border">
         <HugeiconsIcon icon={AddCircleIcon} size={25} strokeWidth={1.8} />
       </span>
-      Create a workspace
+      Invite a coach
     </Link>
   )
 }
@@ -54,7 +54,7 @@ export function WorkspaceListItem({ workspace }: { readonly workspace: Workspace
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="max-w-full text-base font-semibold">
-          <span className="truncate">{workspace.name}</span>
+          <span className="truncate">{displayName(workspace.name)}</span>
           <StatusBadge status={workspace.botStatus} />
         </ItemTitle>
         {workspace.botUsername === undefined ? null : (
@@ -75,11 +75,11 @@ export function WorkspaceListEmpty() {
   return (
     <Empty className="border-0 p-10">
       <EmptyHeader>
-        <EmptyTitle>No workspaces yet</EmptyTitle>
-        <EmptyDescription>Created workspaces will appear here.</EmptyDescription>
+        <EmptyTitle>No coaches yet</EmptyTitle>
+        <EmptyDescription>Invited coaches will appear here.</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button render={<Link to="/admin/workspaces/new" />}>Create workspace</Button>
+        <Button render={<Link to="/admin/workspaces/new" />}>Invite a coach</Button>
       </EmptyContent>
     </Empty>
   )

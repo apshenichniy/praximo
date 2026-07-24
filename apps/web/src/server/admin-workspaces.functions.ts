@@ -38,55 +38,34 @@ export const loadAdminWorkspaces = createServerFn({ method: "POST" })
     }
   })
 
-export type CreateWorkspaceTransportError =
-  | "validation"
-  | "conflict"
-  | "avatar"
-  | "upload"
-  | "server"
+export type CreateWorkspaceTransportError = "validation" | "conflict" | "server"
 
 export type CreateWorkspaceTransportResult =
   | { readonly ok: true; readonly value: AdminSurface.CreateResult }
   | { readonly ok: false; readonly error: CreateWorkspaceTransportError }
 
-const validateCreateFormData = (input: unknown): FormData => {
-  if (!(input instanceof FormData)) throw notFound()
-  return input
+const validateCreateInvite = (
+  input: unknown,
+): { readonly initData: string; readonly input: unknown; readonly delivery: unknown } => {
+  const validated = validateInitData(input)
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("input" in input) ||
+    !("delivery" in input)
+  ) {
+    throw notFound()
+  }
+  return { ...validated, input: input.input, delivery: input.delivery }
 }
 
-const MaxAvatarBytes = 10 * 1_024 * 1_024
-
-export const createAdminWorkspaceFromForm = createServerFn({ method: "POST" })
-  .validator(validateCreateFormData)
+export const createAdminCoachInvite = createServerFn({ method: "POST" })
+  .validator(validateCreateInvite)
   .handler(async ({ data }): Promise<CreateWorkspaceTransportResult> => {
-    const initData = data.get("initData")
-    const rawInput = data.get("input")
-    const avatar = data.get("avatar")
-    if (typeof initData !== "string" || typeof rawInput !== "string") {
-      return { ok: false, error: "validation" }
-    }
-    if (avatar !== null && !(avatar instanceof File)) {
-      return { ok: false, error: "validation" }
-    }
-    if (avatar instanceof File && avatar.size > MaxAvatarBytes) {
-      return { ok: false, error: "avatar" }
-    }
-
-    let input: unknown
     try {
-      input = JSON.parse(rawInput)
-    } catch {
-      return { ok: false, error: "validation" }
-    }
-
-    try {
-      const avatarBytes =
-        avatar instanceof File && avatar.size > 0
-          ? new Uint8Array(await avatar.arrayBuffer())
-          : undefined
       return {
         ok: true,
-        value: await createAdminWorkspace(initData, input, avatarBytes),
+        value: await createAdminWorkspace(data.initData, data.input, data.delivery),
       }
     } catch (error) {
       if (typeof error !== "object" || error === null || !("_tag" in error)) {
@@ -99,10 +78,6 @@ export const createAdminWorkspaceFromForm = createServerFn({ method: "POST" })
           return { ok: false, error: "validation" }
         case "AdminSurface.IdempotencyConflict":
           return { ok: false, error: "conflict" }
-        case "WorkspaceBrandingStorage.InvalidAvatar":
-          return { ok: false, error: "avatar" }
-        case "WorkspaceBrandingStorage.UploadFailed":
-          return { ok: false, error: "upload" }
         default:
           return { ok: false, error: "server" }
       }
@@ -199,6 +174,13 @@ export const loadAdminWorkspaceAvatar = createServerFn({ method: "POST" })
     }
   })
 
+const validateFormData = (input: unknown): FormData => {
+  if (!(input instanceof FormData)) throw notFound()
+  return input
+}
+
+const MaxAvatarBytes = 10 * 1_024 * 1_024
+
 export type UpdateProfileTransportError = "validation" | "conflict" | "avatar" | "upload" | "server"
 
 export type UpdateProfileTransportResult =
@@ -206,7 +188,7 @@ export type UpdateProfileTransportResult =
   | { readonly ok: false; readonly error: UpdateProfileTransportError }
 
 export const updateAdminWorkspaceProfileFromForm = createServerFn({ method: "POST" })
-  .validator(validateCreateFormData)
+  .validator(validateFormData)
   .handler(async ({ data }): Promise<UpdateProfileTransportResult> => {
     const initData = data.get("initData")
     const workspaceId = data.get("workspaceId")

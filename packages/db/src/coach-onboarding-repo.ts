@@ -5,6 +5,7 @@ import {
   CoachOnboardingInviteCodeLength,
   CoachOnboardingInviteId,
   CoachOnboardingInviteStatus,
+  InviteDeliveryRecord,
   WorkspaceId,
 } from "@praximo/domain"
 import { and, eq, gt, sql } from "drizzle-orm"
@@ -17,8 +18,10 @@ export const InviteTtlMilliseconds = 7 * 24 * 60 * 60 * 1_000
 export interface CreateInput {
   readonly requestId: string
   readonly requestFingerprint: string
-  readonly name: string
-  readonly coachLanguage: CoachLanguage
+  /** Internal label; the workspace row stores "" until the coach names it. */
+  readonly name?: string
+  /** Owner-member language; defaults to "en" until onboarding sets it. */
+  readonly coachLanguage?: CoachLanguage
   readonly avatarR2Key?: string
   readonly description?: string
   readonly shortDescription?: string
@@ -35,12 +38,14 @@ const InviteSchema = Schema.Struct({
   expiresAt: Schema.instanceOf(Date),
   usedAt: Schema.optionalKey(Schema.instanceOf(Date)),
   issuedByTelegramId: Schema.String,
+  delivery: Schema.optionalKey(InviteDeliveryRecord),
 })
 
 const AggregateSchema = Schema.Struct({
   workspace: Schema.Struct({
     id: WorkspaceId,
-    name: Schema.NonEmptyString,
+    // "" is a real value: an unlabeled invite-first workspace.
+    name: Schema.String,
     avatarR2Key: Schema.optionalKey(Schema.NonEmptyString),
     description: Schema.optionalKey(Schema.String),
     shortDescription: Schema.optionalKey(Schema.String),
@@ -88,6 +93,10 @@ export interface Interface {
     id: CoachOnboardingInviteId,
     now: Date,
   ) => Effect.Effect<Aggregate["invite"], InviteUnavailable | QueryFailed>
+  readonly recordDelivery: (
+    id: CoachOnboardingInviteId,
+    delivery: InviteDeliveryRecord,
+  ) => Effect.Effect<void, InviteUnavailable | QueryFailed>
   readonly reissue: (
     input: ReissueInput,
   ) => Effect.Effect<Aggregate, IdempotencyConflict | ReissueUnavailable | QueryFailed>
@@ -234,6 +243,7 @@ export const layer = Layer.effect(
               expiresAt: schema.coachOnboardingInvite.expiresAt,
               usedAt: schema.coachOnboardingInvite.usedAt,
               issuedByTelegramId: schema.coachOnboardingInvite.issuedByTelegramId,
+              delivery: schema.coachOnboardingInvite.delivery,
               name: schema.workspace.name,
               avatarR2Key: schema.workspace.avatarR2Key,
               description: schema.workspace.description,
@@ -281,6 +291,7 @@ export const layer = Layer.effect(
           expiresAt: row.expiresAt,
           ...(row.usedAt === null ? {} : { usedAt: row.usedAt }),
           issuedByTelegramId: row.issuedByTelegramId,
+          ...(row.delivery === null ? {} : { delivery: row.delivery }),
         },
       }).pipe(
         Effect.mapError((cause) => new QueryFailed({ operation: "loadByInviteId.decode", cause })),
@@ -350,7 +361,7 @@ export const layer = Layer.effect(
               )
               values (
                 ${workspaceId},
-                ${input.name},
+                ${input.name ?? ""},
                 ${input.avatarR2Key ?? null},
                 ${input.description ?? null},
                 ${input.shortDescription ?? null}
@@ -370,7 +381,7 @@ export const layer = Layer.effect(
                 ${memberId},
                 "id",
                 'owner',
-                ${input.coachLanguage}::language,
+                ${input.coachLanguage ?? "en"}::language,
                 null
               from inserted_workspace
               returning "id"
@@ -516,6 +527,24 @@ export const layer = Layer.effect(
       return yield* new InviteUnavailable({ id, reason })
     })
 
+    const recordDelivery = Effect.fn("CoachOnboardingRepo.recordDelivery")(function* (
+      id: CoachOnboardingInviteId,
+      delivery: InviteDeliveryRecord,
+    ) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .update(schema.coachOnboardingInvite)
+            .set({ delivery })
+            .where(eq(schema.coachOnboardingInvite.id, id))
+            .returning({ id: schema.coachOnboardingInvite.id }),
+        catch: (cause) => new QueryFailed({ operation: "recordDelivery", cause }),
+      })
+      if (rows.length === 0) {
+        return yield* new InviteUnavailable({ id, reason: "not-found" })
+      }
+    })
+
     const verifyPending = Effect.fn("CoachOnboardingRepo.verifyPending")(function* (
       id: CoachOnboardingInviteId,
       now: Date,
@@ -632,6 +661,7 @@ export const layer = Layer.effect(
       findInvite,
       verifyPending,
       markUsed,
+      recordDelivery,
       reissue,
     })
   }),

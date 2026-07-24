@@ -176,6 +176,10 @@ export const coachOnboardingInvite = pgTable(
     // invite by a single indexed lookup; a collision on insert retries.
     code: text("code").notNull().unique(),
     issuedByTelegramId: text("issued_by_telegram_id").notNull(),
+    // Last delivery of this invite: { channel: telegram|email|copy,
+    // destination?, language }. Null until the first delivery action; feeds the
+    // pending card ("Invited via …") and Resend's message language.
+    delivery: jsonb("delivery"),
     status: coachOnboardingInviteStatusEnum("status").notNull().default("pending"),
     issuedAt: timestamp("issued_at", { withTimezone: true, mode: "date" }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),

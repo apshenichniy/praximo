@@ -1,269 +1,253 @@
-import { revalidateLogic, useForm } from "@tanstack/react-form"
+import { Copy01Icon, Mail01Icon, TelegramIcon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
-import {
-  WorkspaceDescriptionMaxLength,
-  WorkspaceNameMaxLength,
-  WorkspaceShortDescriptionMaxLength,
-} from "@praximo/domain"
+import { WorkspaceNameMaxLength } from "@praximo/domain"
 import { useState } from "react"
+import type { ReactNode } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
-import { Button } from "@/components/ui/button.tsx"
+import { Card } from "@/components/ui/card.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
-import { ActionBar } from "@/features/admin/components/action-bar.tsx"
-import { AvatarEditor, AvatarEditorMessage } from "@/features/admin/components/avatar-editor.tsx"
-import { ConfirmDialog } from "@/features/admin/components/confirm-dialog.tsx"
-import { OptionalHint, TextField, TextareaField } from "@/features/admin/components/form-fields.tsx"
-import { LanguagePicker } from "@/features/admin/components/language-picker.tsx"
-import { WorkspaceCreatedScreen } from "@/features/admin/components/workspace-created.tsx"
-import { notifyHaptic } from "@/features/admin/haptics.ts"
-import { useAvatarPicker } from "@/features/admin/hooks/use-avatar-picker.ts"
-import { useUnsavedChanges } from "@/features/admin/hooks/use-unsaved-changes.ts"
-import { createWorkspaceMutation, workspaceKeys } from "@/features/admin/workspace-queries.ts"
+import { setAdminNotice } from "@/features/admin/admin-notice.ts"
+import { TextField } from "@/features/admin/components/form-fields.tsx"
 import {
-  fieldError,
-  focusFirstInvalidField,
-  optionalLimit,
-  requiredLanguage,
-  requiredName,
-} from "@/features/admin/validation.ts"
-import type { AdminSurface } from "@/server/admin-surface.ts"
+  InviteCopySheet,
+  type InviteLanguage,
+} from "@/features/admin/components/invite-copy-sheet.tsx"
+import { notifyHaptic } from "@/features/admin/haptics.ts"
+import { createCoachInviteMutation } from "@/features/admin/workspace-queries.ts"
 
 export const Route = createFileRoute("/admin/workspaces/new")({
-  component: CreateWorkspacePage,
+  component: InviteCoachPage,
 })
 
 const adminRoute = getRouteApi("/admin")
 
-function CreateWorkspacePage() {
+const errorMessages = {
+  validation: "Something went wrong with this invite. Go back and try again.",
+  conflict: "This invite draft was already used with different details. Go back and reopen it.",
+  server: "The invite could not be created. Check your connection and try again.",
+} as const
+
+/**
+ * Action-first "Invite a coach" screen (#103): one optional internal label and
+ * three delivery actions. The workspace + invite are created lazily on the
+ * first action under a stable requestId, so backing out creates nothing and
+ * repeating an action never duplicates.
+ */
+function InviteCoachPage() {
   const { initData } = adminRoute.useLoaderData()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [submitError, setSubmitError] = useState<string>()
-  const [result, setResult] = useState<AdminSurface.CreateResult>()
-  const avatar = useAvatarPicker()
+  const [requestId] = useState(() => crypto.randomUUID())
+  const [name, setName] = useState("")
+  const [actionError, setActionError] = useState<string>()
+  const [emailNote, setEmailNote] = useState(false)
+  const [copyOpen, setCopyOpen] = useState(false)
+  const [copyError, setCopyError] = useState<string>()
+  const [copyFallback, setCopyFallback] = useState<string>()
 
-  const mutation = useMutation(createWorkspaceMutation(initData, queryClient))
+  const mutation = useMutation(createCoachInviteMutation(initData, queryClient))
+  const pending = mutation.isPending
 
-  const form = useForm({
-    defaultValues: {
-      requestId: crypto.randomUUID(),
-      name: "",
-      coachLanguage: "",
-      description: "",
-      shortDescription: "",
-    },
-    validationLogic: revalidateLogic({ mode: "blur", modeAfterSubmission: "change" }),
-    onSubmit: async ({ value }) => {
-      setSubmitError(undefined)
-      const response = await mutation
-        .mutateAsync({
-          input: value,
-          ...(avatar.file === undefined ? {} : { avatar: avatar.file }),
-        })
-        .catch(() => undefined)
-      if (response === undefined) {
-        setSubmitError("Workspace creation failed. Check your connection and try again.")
-        notifyHaptic("error")
-        return
-      }
-      if (response.ok) {
-        setResult(response.value)
-        notifyHaptic("success")
-        return
-      }
-      const messages = {
-        validation: "Check the highlighted fields and try again.",
-        conflict: "This request was already used with different workspace details.",
-        avatar: "The selected avatar is not a valid normalized JPEG.",
-        upload: "Avatar upload failed. The workspace was not created.",
-        server: "Workspace creation failed. Please try again.",
-      } as const
-      setSubmitError(messages[response.error])
+  const finish = (notice: string) => {
+    setAdminNotice(notice)
+    notifyHaptic("success")
+    void navigate({ to: "/admin" })
+  }
+
+  const sendInTelegram = async () => {
+    setActionError(undefined)
+    setEmailNote(false)
+    const response = await mutation
+      .mutateAsync({
+        input: { requestId, name },
+        delivery: { channel: "telegram", language: "en" },
+      })
+      .catch(() => undefined)
+    if (response === undefined) {
+      setActionError(errorMessages.server)
       notifyHaptic("error")
-    },
-  })
+      return
+    }
+    if (!response.ok) {
+      setActionError(errorMessages[response.error])
+      notifyHaptic("error")
+      return
+    }
+    if (response.value.delivery === "failed") {
+      setActionError(
+        "The invite is ready, but Telegram delivery failed. Tap again — the same invite will be re-sent.",
+      )
+      notifyHaptic("error")
+      return
+    }
+    finish("Invite sent to your Telegram chat — forward it to the coach")
+  }
 
-  const guard = useUnsavedChanges(
-    () => (form.state.isDirty || avatar.touched) && result === undefined,
-  )
+  const copyInvite = async (language: InviteLanguage) => {
+    setCopyError(undefined)
+    const response = await mutation
+      .mutateAsync({ input: { requestId, name }, delivery: { channel: "copy", language } })
+      .catch(() => undefined)
+    if (response === undefined) {
+      setCopyError(errorMessages.server)
+      notifyHaptic("error")
+      return
+    }
+    if (!response.ok) {
+      setCopyError(errorMessages[response.error])
+      notifyHaptic("error")
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(response.value.message)
+    } catch {
+      // Clipboard denied after the async hop — hand the message over for a
+      // direct-gesture copy instead.
+      setCopyFallback(response.value.message)
+      return
+    }
+    finish("Invite copied — paste it to the coach")
+  }
 
-  if (result !== undefined) {
-    return (
-      <WorkspaceCreatedScreen
-        result={result}
-        initData={initData}
-        onResultChange={setResult}
-        onDone={() => {
-          void queryClient.invalidateQueries({ queryKey: workspaceKeys.list() })
-          void navigate({ to: "/admin" })
-        }}
-      />
-    )
+  const copyFallbackDirect = (message: string) => {
+    void navigator.clipboard.writeText(message).catch(() => undefined)
+    finish("Invite copied — paste it to the coach")
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-5 pt-6 pb-32">
-      <TelegramBackButton onBack={guard.requestBack} />
-      <ConfirmDialog
-        open={guard.confirmOpen}
-        onOpenChange={guard.setConfirmOpen}
-        title="Discard workspace draft?"
-        description="The details you entered will be lost."
-        confirmLabel="Discard draft"
-        confirmVariant="destructive"
-        onConfirm={guard.confirmDiscard}
-      />
+    <main className="mx-auto flex min-h-dvh w-full max-w-2xl flex-col px-5 pt-6 pb-10">
+      <TelegramBackButton onBack={() => void navigate({ to: "/admin" })} />
 
-      <header className="mt-7 text-center">
-        <AvatarEditor
-          imageUrl={avatar.previewUrl}
-          fallback="P"
-          disabled={avatar.processing || mutation.isPending}
-          srLabel={avatar.file === undefined ? "Choose avatar" : "Replace avatar"}
-          onSelectFile={(file) => void avatar.choose(file)}
-        />
-        {avatar.file === undefined ? null : (
-          <Button
-            variant="link"
-            size="sm"
-            className="text-muted-foreground mt-3"
-            onClick={avatar.undo}
-          >
-            Remove custom avatar
-          </Button>
-        )}
-        {avatar.processing ? (
-          <AvatarEditorMessage tone="muted">Processing…</AvatarEditorMessage>
-        ) : null}
-        {avatar.error === undefined ? null : (
-          <AvatarEditorMessage tone="destructive">{avatar.error}</AvatarEditorMessage>
-        )}
-
-        <h1 className="mt-7 text-3xl font-semibold tracking-tight">New workspace</h1>
-        <p className="text-muted-foreground mx-auto mt-2 max-w-sm text-sm leading-5">
-          Create the coach profile and a one-time onboarding link.
+      <header className="mt-7">
+        <h1 className="text-3xl font-semibold tracking-tight">Invite a coach</h1>
+        <p className="text-muted-foreground mt-2 text-sm leading-5">
+          They&rsquo;ll set up their own profile during onboarding — you just get the invite to
+          them.
         </p>
       </header>
 
-      <form
-        className="mt-9 space-y-6"
-        onSubmit={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          void form.handleSubmit().then(() => {
-            if (!form.state.isValid) focusFirstInvalidField()
-          })
-        }}
-      >
-        <form.Field name="name" validators={{ onDynamic: ({ value }) => requiredName(value) }}>
-          {(field) => (
-            <TextField
-              label="Workspace name"
-              name={field.name}
-              value={field.state.value}
-              maxLength={WorkspaceNameMaxLength + 1}
-              placeholder="Ada Coaching"
-              error={fieldError(field.state.meta.errors)}
-              onBlur={field.handleBlur}
-              onChange={field.handleChange}
-            />
-          )}
-        </form.Field>
+      <div className="mt-8">
+        <TextField
+          label={
+            <>
+              Coach name <span className="text-muted-foreground font-normal">(optional)</span>
+            </>
+          }
+          name="name"
+          value={name}
+          maxLength={WorkspaceNameMaxLength}
+          placeholder="e.g. Ada Lovelace"
+          error={undefined}
+          onChange={setName}
+          onBlur={() => undefined}
+        />
+        <p className="text-muted-foreground mt-2 text-xs">
+          Only labels the invite in your list until they join.
+        </p>
+      </div>
 
-        <form.Field
-          name="coachLanguage"
-          validators={{ onDynamic: ({ value }) => requiredLanguage(value) }}
-        >
-          {(field) => (
-            <LanguagePicker
-              name={field.name}
-              value={field.state.value}
-              error={fieldError(field.state.meta.errors)}
-              onBlur={field.handleBlur}
-              onChange={field.handleChange}
-            />
-          )}
-        </form.Field>
-
-        <form.Field
-          name="description"
-          validators={{
-            onDynamic: ({ value }) => optionalLimit(WorkspaceDescriptionMaxLength)(value),
+      <h2 className="text-muted-foreground mt-8 text-xs font-semibold tracking-widest uppercase">
+        Send the invite
+      </h2>
+      <Card className="divide-border mt-3 gap-0 divide-y overflow-hidden py-0">
+        <InviteAction
+          icon={<HugeiconsIcon icon={TelegramIcon} size={22} strokeWidth={1.8} />}
+          title="Send in Telegram"
+          subtitle="The bot sends it to your chat — forward it to the coach"
+          disabled={pending}
+          onClick={() => void sendInTelegram()}
+        />
+        <InviteAction
+          icon={<HugeiconsIcon icon={Mail01Icon} size={22} strokeWidth={1.8} />}
+          title="Send by email"
+          subtitle="We'll email them a join link"
+          disabled={pending}
+          onClick={() => {
+            setActionError(undefined)
+            setEmailNote(true)
           }}
-        >
-          {(field) => (
-            <TextareaField
-              label={
-                <>
-                  Description <OptionalHint />
-                </>
-              }
-              name={field.name}
-              value={field.state.value}
-              maxLength={WorkspaceDescriptionMaxLength + 1}
-              counter={WorkspaceDescriptionMaxLength}
-              rows={4}
-              placeholder="What this coach helps with"
-              error={fieldError(field.state.meta.errors)}
-              onBlur={field.handleBlur}
-              onChange={field.handleChange}
-            />
-          )}
-        </form.Field>
-
-        <form.Field
-          name="shortDescription"
-          validators={{
-            onDynamic: ({ value }) => optionalLimit(WorkspaceShortDescriptionMaxLength)(value),
+        />
+        <InviteAction
+          icon={<HugeiconsIcon icon={Copy01Icon} size={22} strokeWidth={1.8} />}
+          title="Copy invite"
+          subtitle="Paste anywhere — WhatsApp, Slack, SMS"
+          disabled={pending}
+          onClick={() => {
+            setActionError(undefined)
+            setEmailNote(false)
+            setCopyError(undefined)
+            setCopyFallback(undefined)
+            setCopyOpen(true)
           }}
-        >
-          {(field) => (
-            <TextareaField
-              label={
-                <>
-                  Short description <OptionalHint />
-                </>
-              }
-              name={field.name}
-              value={field.state.value}
-              maxLength={WorkspaceShortDescriptionMaxLength + 1}
-              counter={WorkspaceShortDescriptionMaxLength}
-              rows={2}
-              placeholder="A short Telegram profile line"
-              error={fieldError(field.state.meta.errors)}
-              onBlur={field.handleBlur}
-              onChange={field.handleChange}
-            />
-          )}
-        </form.Field>
+        />
+      </Card>
 
-        {submitError === undefined ? null : (
-          <Alert variant="destructive" className="bg-destructive/10 border-transparent">
-            <AlertDescription className="text-destructive">{submitError}</AlertDescription>
-          </Alert>
-        )}
+      {emailNote ? (
+        <Alert className="mt-4">
+          <AlertDescription>Email delivery is coming soon.</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <ActionBar>
-          <Button
-            type="submit"
-            size="lg"
-            disabled={mutation.isPending || avatar.processing || avatar.error !== undefined}
-            aria-busy={mutation.isPending || undefined}
-            className="h-13 w-full font-semibold"
-          >
-            {mutation.isPending ? (
-              <>
-                <Spinner /> Creating…
-              </>
-            ) : (
-              "Create workspace"
-            )}
-          </Button>
-        </ActionBar>
-      </form>
+      {actionError === undefined ? null : (
+        <Alert variant="destructive" className="bg-destructive/10 mt-4 border-transparent">
+          <AlertDescription className="text-destructive">{actionError}</AlertDescription>
+        </Alert>
+      )}
+
+      {pending ? (
+        <p className="text-muted-foreground mt-4 flex items-center gap-2 text-sm">
+          <Spinner /> Preparing the invite…
+        </p>
+      ) : null}
+
+      <p className="text-muted-foreground mt-auto border-t pt-4 text-xs leading-5">
+        The link works once and expires in 7 days. You can resend it anytime.
+      </p>
+
+      <InviteCopySheet
+        open={copyOpen}
+        onOpenChange={setCopyOpen}
+        pending={pending}
+        error={copyError}
+        fallbackMessage={copyFallback}
+        onCopy={(language) => void copyInvite(language)}
+        onCopyFallback={copyFallbackDirect}
+      />
     </main>
+  )
+}
+
+function InviteAction({
+  icon,
+  title,
+  subtitle,
+  disabled,
+  onClick,
+}: {
+  readonly icon: ReactNode
+  readonly title: string
+  readonly subtitle: string
+  readonly disabled: boolean
+  readonly onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="hover:bg-muted active:bg-accent/70 flex min-h-[70px] w-full items-center gap-4 px-4 py-3 text-left transition-colors disabled:opacity-60"
+    >
+      <span className="border-primary/50 text-primary flex size-11 shrink-0 items-center justify-center rounded-full border">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block font-medium">{title}</span>
+        <span className="text-muted-foreground block text-xs leading-4">{subtitle}</span>
+      </span>
+    </button>
   )
 }

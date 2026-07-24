@@ -10,6 +10,7 @@ import { useRef, useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
+import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { Button } from "@/components/ui/button.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { ActionBar } from "@/features/admin/components/action-bar.tsx"
@@ -20,7 +21,7 @@ import { TextField, TextareaField } from "@/features/admin/components/form-field
 import { OnboardingSection } from "@/features/admin/components/onboarding-section.tsx"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
 import { StatusSection } from "@/features/admin/components/status-section.tsx"
-import { initials } from "@/features/admin/formatting.ts"
+import { displayName, initials } from "@/features/admin/formatting.ts"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
 import { useAvatarPicker } from "@/features/admin/hooks/use-avatar-picker.ts"
 import { useUnsavedChanges } from "@/features/admin/hooks/use-unsaved-changes.ts"
@@ -246,8 +247,7 @@ function WorkspaceDetailsPage() {
     }
 
     notifyHaptic("success")
-    sessionStorage.setItem(
-      "praximo.workspaceDeleted",
+    setAdminNotice(
       result.value.status === "deleted-farewell-undeliverable"
         ? "Workspace deleted. The coach farewell could not be delivered."
         : "Workspace deleted",
@@ -273,7 +273,7 @@ function WorkspaceDetailsPage() {
       <header className="mt-7 text-center">
         <AvatarEditor
           imageUrl={displayAvatarUrl}
-          fallback={initials(workspace.name)}
+          fallback={initials(workspace.name) || "?"}
           loading={avatar.intent === "keep" && currentAvatar.loading}
           disabled={avatar.processing || update.isPending}
           srLabel={workspace.hasCustomAvatar ? "Replace avatar" : "Choose custom avatar"}
@@ -311,7 +311,9 @@ function WorkspaceDetailsPage() {
             The custom avatar could not be loaded. You can still edit this workspace.
           </AvatarEditorMessage>
         ) : null}
-        <h1 className="mt-6 text-3xl font-semibold tracking-tight">{workspace.name}</h1>
+        <h1 className="mt-6 text-3xl font-semibold tracking-tight">
+          {displayName(workspace.name)}
+        </h1>
         {workspace.botUsername === undefined ? null : (
           <a
             href={`https://t.me/${workspace.botUsername}`}

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto"
 import { describe, expect, it } from "@effect/vitest"
 import { CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
 import {
@@ -19,10 +18,9 @@ import {
   WorkspaceId,
   WorkspaceNotFound,
 } from "@praximo/domain"
-import { ConfigProvider, Effect, Layer, Ref } from "effect"
+import { ConfigProvider, Effect, Layer } from "effect"
 import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import * as TestClock from "effect/testing/TestClock"
-import { encode } from "jpeg-js"
 import { AdminSurface } from "./admin-surface.ts"
 import { WorkspaceBrandingStorage } from "./workspace-branding-storage.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
@@ -103,144 +101,59 @@ const workspaceRepoLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
 
 const testConfig = ConfigProvider.layer(ConfigProvider.fromUnknown({ MANAGER_BOT_TOKEN }))
 
-const onboardingRepoLayer = Layer.succeed(
-  CoachOnboardingRepo.Service,
-  CoachOnboardingRepo.Service.of({
-    lookupCreate: Effect.fn("CoachOnboardingRepo.Test.lookupCreate")(() =>
-      Effect.die("unused in list tests"),
-    ),
-    createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
-      Effect.die("unused in list tests"),
-    ),
-    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
-      Effect.die("resolveCode is bot-only and unused in these tests"),
-    ),
-    findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
-      Effect.die("unused in list tests"),
-    ),
-    verifyPending: Effect.fn("CoachOnboardingRepo.Test.verifyPending")(() =>
-      Effect.die("unused in list tests"),
-    ),
-    markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
-      Effect.die("unused in list tests"),
-    ),
-    reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() =>
-      Effect.die("unused in list tests"),
-    ),
-  }),
-)
+interface RecordedDelivery {
+  readonly id: string
+  readonly delivery: unknown
+}
 
-const successfulOnboardingRepoLayer = Layer.succeed(
-  CoachOnboardingRepo.Service,
-  CoachOnboardingRepo.Service.of({
-    lookupCreate: Effect.fn("CoachOnboardingRepo.Test.lookupCreate")(() =>
-      Effect.succeed(undefined),
-    ),
-    createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
-      Effect.succeed({ aggregate: createdAggregate, created: true }),
-    ),
-    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
-      Effect.die("resolveCode is bot-only and unused in these tests"),
-    ),
-    findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
-      Effect.succeed(createdAggregate),
-    ),
-    verifyPending: Effect.fn("CoachOnboardingRepo.Test.verifyPending")(() =>
-      Effect.succeed(createdAggregate),
-    ),
-    markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
-      Effect.succeed(createdAggregate.invite),
-    ),
-    reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() => Effect.succeed(createdAggregate)),
-  }),
-)
-
-const replayOnboardingRepoLayer = Layer.succeed(
-  CoachOnboardingRepo.Service,
-  CoachOnboardingRepo.Service.of({
-    lookupCreate: Effect.fn("CoachOnboardingRepo.Test.lookupCreate")(() =>
-      Effect.succeed({ aggregate: createdAggregate, created: false }),
-    ),
-    createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
-      Effect.die("replay must not create"),
-    ),
-    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
-      Effect.die("resolveCode is bot-only and unused in these tests"),
-    ),
-    findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
-      Effect.succeed(createdAggregate),
-    ),
-    verifyPending: Effect.fn("CoachOnboardingRepo.Test.verifyPending")(() =>
-      Effect.succeed(createdAggregate),
-    ),
-    markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
-      Effect.succeed(createdAggregate.invite),
-    ),
-    reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() => Effect.succeed(createdAggregate)),
-  }),
-)
-
-const failingOnboardingRepoLayer = Layer.succeed(
-  CoachOnboardingRepo.Service,
-  CoachOnboardingRepo.Service.of({
-    lookupCreate: Effect.fn("CoachOnboardingRepo.Test.lookupCreate")(() =>
-      Effect.succeed(undefined),
-    ),
-    createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
-      Effect.fail(new QueryFailed({ operation: "test", cause: new Error("database failed") })),
-    ),
-    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
-      Effect.die("resolveCode is bot-only and unused in these tests"),
-    ),
-    findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
-      Effect.succeed(createdAggregate),
-    ),
-    verifyPending: Effect.fn("CoachOnboardingRepo.Test.verifyPending")(() =>
-      Effect.succeed(createdAggregate),
-    ),
-    markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
-      Effect.succeed(createdAggregate.invite),
-    ),
-    reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() => Effect.succeed(createdAggregate)),
-  }),
-)
-
-const outcomeUnknownOnboardingRepoLayer = Layer.effect(
-  CoachOnboardingRepo.Service,
-  Effect.gen(function* () {
-    const lookups = yield* Ref.make(0)
-    return CoachOnboardingRepo.Service.of({
-      lookupCreate: Effect.fn("CoachOnboardingRepo.Test.lookupCreate")(function* () {
-        const attempt = yield* Ref.updateAndGet(lookups, (count) => count + 1)
-        if (attempt === 1) return undefined
-        return yield* new QueryFailed({
-          operation: "test.reconcile",
-          cause: new Error("database unavailable"),
-        })
-      }),
-      createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
-        Effect.fail(
-          new QueryFailed({ operation: "test.create", cause: new Error("outcome unknown") }),
-        ),
+/**
+ * A configurable onboarding repo double: `outcome` drives createOrGet, and
+ * every recordDelivery lands in the caller's `recorded` array.
+ */
+const onboardingRepoDouble = (options: {
+  readonly outcome?: Effect.Effect<
+    CoachOnboardingRepo.CreateOutcome,
+    CoachOnboardingRepo.IdempotencyConflict | QueryFailed
+  >
+  readonly recorded?: Array<RecordedDelivery>
+  readonly aggregate?: CoachOnboardingRepo.Aggregate
+}) =>
+  Layer.succeed(
+    CoachOnboardingRepo.Service,
+    CoachOnboardingRepo.Service.of({
+      lookupCreate: Effect.fn("CoachOnboardingRepo.Test.lookupCreate")(() =>
+        Effect.die("the surface must not preflight"),
+      ),
+      createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(
+        () => options.outcome ?? Effect.die("unused in these tests"),
       ),
       resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
         Effect.die("resolveCode is bot-only and unused in these tests"),
       ),
       findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
-        Effect.succeed(createdAggregate),
+        Effect.succeed(options.aggregate ?? createdAggregate),
       ),
       verifyPending: Effect.fn("CoachOnboardingRepo.Test.verifyPending")(() =>
-        Effect.succeed(createdAggregate),
+        Effect.succeed(options.aggregate ?? createdAggregate),
       ),
       markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
-        Effect.succeed(createdAggregate.invite),
+        Effect.succeed((options.aggregate ?? createdAggregate).invite),
       ),
+      recordDelivery: Effect.fn("CoachOnboardingRepo.Test.recordDelivery")((id, delivery) => {
+        options.recorded?.push({ id, delivery })
+        return Effect.void
+      }),
       reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() =>
-        Effect.succeed(createdAggregate),
+        Effect.succeed(options.aggregate ?? createdAggregate),
       ),
-    })
-  }),
-)
+    }),
+  )
+
+const onboardingRepoLayer = onboardingRepoDouble({})
+
+const successfulOnboardingRepoLayer = onboardingRepoDouble({
+  outcome: Effect.succeed({ aggregate: createdAggregate, created: true }),
+})
 
 const unusedDeletionRepoLayer = Layer.succeed(
   WorkspaceDeletionRepo.Service,
@@ -288,23 +201,6 @@ const appLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
       ),
     ),
   )
-
-const createAppLayer = Layer.provideMerge(
-  AdminSurface.layer,
-  Layer.mergeAll(
-    ManagerInitData.layer,
-    adminRepoLayer,
-    workspaceRepoLayer([]),
-    successfulOnboardingRepoLayer,
-    CoachOnboardingToken.testLayer("PraximoMotherBot"),
-    WorkspaceBrandingStorage.testLayer({
-      defaultAvatarKey: "branding/default-coach-avatar.jpg",
-    }),
-    ManagerBotSender.testLayer,
-    CoachBotBranding.testLayer,
-    deletionDependencies,
-  ),
-)
 
 const createLayerWith = (onboardingLayer: Layer.Layer<CoachOnboardingRepo.Service>) =>
   Layer.provideMerge(
@@ -374,48 +270,6 @@ const profileAppLayer = Layer.provideMerge(
   ),
 )
 
-const validAvatar = new Uint8Array(
-  encode({ width: 512, height: 512, data: new Uint8Array(512 * 512 * 4).fill(255) }, 50).data,
-)
-const validAvatarKey = `workspace-branding/cb6bd559-6091-4d69-aeff-2af000354c7f/${createHash("sha256").update(validAvatar).digest("hex")}.jpg`
-
-const conflictingOnboardingRepoLayer = (existingAvatarR2Key: string) =>
-  Layer.effect(
-    CoachOnboardingRepo.Service,
-    Effect.gen(function* () {
-      const lookups = yield* Ref.make(0)
-      const conflict = () =>
-        new CoachOnboardingRepo.IdempotencyConflict({
-          requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-          existingAvatarR2Key,
-        })
-      return CoachOnboardingRepo.Service.of({
-        lookupCreate: Effect.fn("CoachOnboardingRepo.Test.lookupCreate")(function* () {
-          const attempt = yield* Ref.updateAndGet(lookups, (count) => count + 1)
-          return attempt === 1 ? undefined : yield* conflict()
-        }),
-        createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
-          Effect.fail(conflict()),
-        ),
-        resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
-          Effect.die("resolveCode is bot-only and unused in these tests"),
-        ),
-        findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
-          Effect.succeed(createdAggregate),
-        ),
-        verifyPending: Effect.fn("CoachOnboardingRepo.Test.verifyPending")(() =>
-          Effect.succeed(createdAggregate),
-        ),
-        markUsed: Effect.fn("CoachOnboardingRepo.Test.markUsed")(() =>
-          Effect.succeed(createdAggregate.invite),
-        ),
-        reissue: Effect.fn("CoachOnboardingRepo.Test.reissue")(() =>
-          Effect.succeed(createdAggregate),
-        ),
-      })
-    }),
-  )
-
 const nonAdminVerifierLayer = Layer.succeed(
   ManagerInitData.Service,
   ManagerInitData.Service.of({
@@ -478,15 +332,19 @@ describe("AdminSurface", () => {
     }).pipe(Effect.provide(appLayer(workspaceRows)), Effect.provide(testConfig)),
   )
 
-  it.effect("creates the aggregate and sends a coach-language forwardable message", () =>
-    Effect.gen(function* () {
+  it.effect("telegram action: creates, sends the invite-language message, records delivery", () => {
+    const recorded: Array<RecordedDelivery> = []
+    return Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
       const adminSurface = yield* AdminSurface.Service
-      const result = yield* adminSurface.createWorkspace(VALID_INIT_DATA, {
-        requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-        name: "  Ada Coaching  ",
-        coachLanguage: "uk",
-      })
+      const result = yield* adminSurface.createWorkspace(
+        VALID_INIT_DATA,
+        {
+          requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+          name: "  Ada Coaching  ",
+        },
+        { channel: "telegram", language: "uk" },
+      )
       const sender = yield* ManagerBotSender.TestService
 
       expect(result).toMatchObject({
@@ -499,17 +357,107 @@ describe("AdminSurface", () => {
         delivery: "sent",
       })
       expect(result.link).toContain("https://t.me/PraximoMotherBot?start=ws_")
+      expect(result.message).toContain("Ваш простір Praximo")
+      expect(result.message).toContain(result.link)
       expect(yield* sender.sent()).toEqual([
         {
           recipient: adminTelegramId,
           text: expect.stringContaining("Ваш простір Praximo"),
         },
       ])
-    }).pipe(Effect.provide(createAppLayer), Effect.provide(testConfig)),
+      expect(recorded).toEqual([
+        {
+          id: createdAggregate.invite.id,
+          delivery: { channel: "telegram", language: "uk" },
+        },
+      ])
+    }).pipe(
+      Effect.provide(
+        createLayerWith(
+          onboardingRepoDouble({
+            outcome: Effect.succeed({ aggregate: createdAggregate, created: true }),
+            recorded,
+          }),
+        ),
+      ),
+      Effect.provide(testConfig),
+    )
+  })
+
+  it.effect("copy action: records the delivery and returns the message without sending", () => {
+    const recorded: Array<RecordedDelivery> = []
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.createWorkspace(
+        VALID_INIT_DATA,
+        { requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f" },
+        { channel: "copy", language: "en" },
+      )
+      const sender = yield* ManagerBotSender.TestService
+
+      // Unnamed invite: the generic message variant, no «name» placeholder.
+      expect(result.message).toContain("Your Praximo workspace is ready.")
+      expect(result.message).toContain(result.link)
+      expect(yield* sender.sent()).toEqual([])
+      expect(recorded).toEqual([
+        {
+          id: createdAggregate.invite.id,
+          delivery: { channel: "copy", language: "en" },
+        },
+      ])
+    }).pipe(
+      Effect.provide(
+        createLayerWith(
+          onboardingRepoDouble({
+            outcome: Effect.succeed({
+              aggregate: {
+                ...createdAggregate,
+                workspace: { ...createdAggregate.workspace, name: "" },
+              },
+              created: true,
+            }),
+            recorded,
+          }),
+        ),
+      ),
+      Effect.provide(testConfig),
+    )
+  })
+
+  it.effect(
+    "retry of an action replays the aggregate and delivers again, never duplicating",
+    () => {
+      const recorded: Array<RecordedDelivery> = []
+      return Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
+        const adminSurface = yield* AdminSurface.Service
+        const result = yield* adminSurface.createWorkspace(
+          VALID_INIT_DATA,
+          { requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f", name: "Ada Coaching" },
+          { channel: "copy", language: "ru" },
+        )
+
+        expect(result.message).toContain("Ваше пространство Praximo «Ada Coaching» готово.")
+        expect(recorded).toHaveLength(1)
+      }).pipe(
+        Effect.provide(
+          createLayerWith(
+            onboardingRepoDouble({
+              // The repo reports a replay: same requestId, nothing new created.
+              outcome: Effect.succeed({ aggregate: createdAggregate, created: false }),
+              recorded,
+            }),
+          ),
+        ),
+        Effect.provide(testConfig),
+      )
+    },
   )
 
-  it.effect("keeps the committed result and copyable link when Telegram delivery fails", () =>
-    Effect.gen(function* () {
+  it.effect("keeps the committed result and copyable link when Telegram delivery fails", () => {
+    const recorded: Array<RecordedDelivery> = []
+    return Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
       const sender = yield* ManagerBotSender.TestService
       yield* sender.failNextSend(
@@ -519,140 +467,82 @@ describe("AdminSurface", () => {
         }),
       )
       const adminSurface = yield* AdminSurface.Service
-      const result = yield* adminSurface.createWorkspace(VALID_INIT_DATA, {
-        requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-        name: "Ada Coaching",
-        coachLanguage: "uk",
-      })
-
-      expect(result.delivery).toBe("failed")
-      expect(result.link).toContain("?start=")
-    }).pipe(Effect.provide(createAppLayer), Effect.provide(testConfig)),
-  )
-
-  it.effect("returns an idempotent replay without uploading or redelivering the avatar", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
-      const adminSurface = yield* AdminSurface.Service
       const result = yield* adminSurface.createWorkspace(
         VALID_INIT_DATA,
         {
           requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
           name: "Ada Coaching",
-          coachLanguage: "uk",
         },
-        validAvatar,
+        { channel: "telegram", language: "uk" },
       )
-      const storage = yield* WorkspaceBrandingStorage.TestService
-      const sender = yield* ManagerBotSender.TestService
 
-      expect(result.delivery).toBe("unknown")
-      expect(yield* storage.puts()).toEqual([])
-      expect(yield* sender.sent()).toEqual([])
-    }).pipe(Effect.provide(createLayerWith(replayOnboardingRepoLayer)), Effect.provide(testConfig)),
-  )
-
-  it.effect("best-effort deletes an isolated avatar when database creation fails", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
-      const adminSurface = yield* AdminSurface.Service
-      const error = yield* Effect.flip(
-        adminSurface.createWorkspace(
-          VALID_INIT_DATA,
-          {
-            requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-            name: "Ada Coaching",
-            coachLanguage: "uk",
-          },
-          validAvatar,
-        ),
-      )
-      const storage = yield* WorkspaceBrandingStorage.TestService
-      const puts = yield* storage.puts()
-
-      expect(error._tag).toBe("AdminSurface.LoadFailed")
-      expect(puts).toHaveLength(1)
-      expect(yield* storage.deletes()).toEqual([puts[0]?.key])
-    }).pipe(
-      Effect.provide(createLayerWith(failingOnboardingRepoLayer)),
-      Effect.provide(testConfig),
-    ),
-  )
-
-  it.effect("preserves a possibly committed avatar when reconciliation also fails", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
-      const adminSurface = yield* AdminSurface.Service
-      const error = yield* Effect.flip(
-        adminSurface.createWorkspace(
-          VALID_INIT_DATA,
-          {
-            requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-            name: "Ada Coaching",
-            coachLanguage: "uk",
-          },
-          validAvatar,
-        ),
-      )
-      const storage = yield* WorkspaceBrandingStorage.TestService
-
-      expect(error._tag).toBe("AdminSurface.LoadFailed")
-      expect(yield* storage.puts()).toHaveLength(1)
-      expect(yield* storage.deletes()).toEqual([])
-    }).pipe(
-      Effect.provide(createLayerWith(outcomeUnknownOnboardingRepoLayer)),
-      Effect.provide(testConfig),
-    ),
-  )
-
-  it.effect("preserves a winner avatar when a conflicting request uploaded the same key", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
-      const adminSurface = yield* AdminSurface.Service
-      const error = yield* Effect.flip(
-        adminSurface.createWorkspace(
-          VALID_INIT_DATA,
-          {
-            requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-            name: "Conflicting name",
-            coachLanguage: "uk",
-          },
-          validAvatar,
-        ),
-      )
-      const storage = yield* WorkspaceBrandingStorage.TestService
-
-      expect(error._tag).toBe("AdminSurface.IdempotencyConflict")
-      expect(yield* storage.deletes()).toEqual([])
-    }).pipe(
-      Effect.provide(createLayerWith(conflictingOnboardingRepoLayer(validAvatarKey))),
-      Effect.provide(testConfig),
-    ),
-  )
-
-  it.effect("deletes its avatar when a conflict references a different content key", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
-      const adminSurface = yield* AdminSurface.Service
-      const error = yield* Effect.flip(
-        adminSurface.createWorkspace(
-          VALID_INIT_DATA,
-          {
-            requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-            name: "Conflicting avatar",
-            coachLanguage: "uk",
-          },
-          validAvatar,
-        ),
-      )
-      const storage = yield* WorkspaceBrandingStorage.TestService
-
-      expect(error._tag).toBe("AdminSurface.IdempotencyConflict")
-      expect(yield* storage.deletes()).toEqual([validAvatarKey])
+      expect(result.delivery).toBe("failed")
+      expect(result.link).toContain("?start=")
+      // Nothing left the building, so nothing is recorded.
+      expect(recorded).toEqual([])
     }).pipe(
       Effect.provide(
         createLayerWith(
-          conflictingOnboardingRepoLayer("workspace-branding/existing/different.jpg"),
+          onboardingRepoDouble({
+            outcome: Effect.succeed({ aggregate: createdAggregate, created: true }),
+            recorded,
+          }),
+        ),
+      ),
+      Effect.provide(testConfig),
+    )
+  })
+
+  it.effect("rejects an unshippable delivery channel and surfaces an idempotency conflict", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const invalid = yield* Effect.flip(
+        adminSurface.createWorkspace(
+          VALID_INIT_DATA,
+          { requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f" },
+          { channel: "email", language: "en" },
+        ),
+      )
+      expect(invalid._tag).toBe("AdminSurface.ValidationFailed")
+    }).pipe(
+      Effect.provide(
+        createLayerWith(
+          onboardingRepoDouble({
+            outcome: Effect.fail(
+              new CoachOnboardingRepo.IdempotencyConflict({
+                requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+              }),
+            ),
+          }),
+        ),
+      ),
+      Effect.provide(testConfig),
+    ),
+  )
+
+  it.effect("maps a conflicting request id to IdempotencyConflict", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
+      const adminSurface = yield* AdminSurface.Service
+      const conflict = yield* Effect.flip(
+        adminSurface.createWorkspace(
+          VALID_INIT_DATA,
+          { requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f", name: "Different" },
+          { channel: "copy", language: "en" },
+        ),
+      )
+      expect(conflict._tag).toBe("AdminSurface.IdempotencyConflict")
+    }).pipe(
+      Effect.provide(
+        createLayerWith(
+          onboardingRepoDouble({
+            outcome: Effect.fail(
+              new CoachOnboardingRepo.IdempotencyConflict({
+                requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+              }),
+            ),
+          }),
         ),
       ),
       Effect.provide(testConfig),

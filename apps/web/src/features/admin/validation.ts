@@ -9,9 +9,6 @@ export const requiredName = (value: string): string | undefined => {
   return undefined
 }
 
-export const requiredLanguage = (value: string): string | undefined =>
-  value === "en" || value === "uk" || value === "ru" ? undefined : "Choose the coach language"
-
 export const optionalLimit =
   (limit: number) =>
   (value: string): string | undefined =>

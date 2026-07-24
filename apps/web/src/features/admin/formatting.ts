@@ -57,8 +57,5 @@ export const languageLabel = {
   ru: "Русский",
 } as const
 
-export const coachLanguages = [
-  { value: "en", label: "English" },
-  { value: "uk", label: "Українська" },
-  { value: "ru", label: "Русский" },
-] as const
+/** An invite-first workspace may have no label yet; every display site falls back. */
+export const displayName = (name: string): string => (name.length === 0 ? "Unnamed invite" : name)

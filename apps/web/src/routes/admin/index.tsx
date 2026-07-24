@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
+import { takeAdminNotice } from "@/features/admin/admin-notice.ts"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
 import { WorkspaceSearch } from "@/features/admin/components/workspace-search.tsx"
 import {
@@ -24,7 +25,7 @@ function AdminHome() {
   const { initData } = adminRoute.useLoaderData()
   const { data: workspaces } = useSuspenseQuery(adminWorkspaceListQuery(initData))
   const [search, setSearch] = useState("")
-  const [deletionMessage, setDeletionMessage] = useState<string>()
+  const [notice, setNotice] = useState<string>()
   const normalizedSearch = search.trim().toLocaleLowerCase()
   const filteredWorkspaces = useMemo(
     () =>
@@ -39,19 +40,17 @@ function AdminHome() {
   )
 
   useEffect(() => {
-    const message = sessionStorage.getItem("praximo.workspaceDeleted")
-    if (message === null) return
-    sessionStorage.removeItem("praximo.workspaceDeleted")
-    setDeletionMessage(message)
+    const message = takeAdminNotice()
+    if (message !== undefined) setNotice(message)
   }, [])
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
       <AdminHero />
 
-      {deletionMessage === undefined ? null : (
+      {notice === undefined ? null : (
         <Alert className="mt-8">
-          <AlertDescription>{deletionMessage}</AlertDescription>
+          <AlertDescription>{notice}</AlertDescription>
         </Alert>
       )}
 

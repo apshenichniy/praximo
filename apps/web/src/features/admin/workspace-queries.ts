@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query"
 import { queryOptions } from "@tanstack/react-query"
 import {
-  createAdminWorkspaceFromForm,
+  createAdminCoachInvite,
   type CreateWorkspaceTransportResult,
   deleteAdminWorkspaceRequest,
   type DeleteWorkspaceTransportResult,
@@ -34,28 +34,23 @@ export const adminWorkspaceDetailQuery = (initData: string, workspaceId: string)
     retry: false,
   })
 
-export interface CreateWorkspaceMutationInput {
+export interface CreateCoachInviteMutationInput {
   readonly input: {
     readonly requestId: string
     readonly name: string
-    readonly coachLanguage: string
-    readonly description: string
-    readonly shortDescription: string
   }
-  readonly avatar?: File
+  readonly delivery: {
+    readonly channel: "telegram" | "copy"
+    readonly language: "en" | "uk" | "ru"
+  }
 }
 
-export const createWorkspaceMutation = (initData: string, queryClient: QueryClient) => ({
+export const createCoachInviteMutation = (initData: string, queryClient: QueryClient) => ({
   mutationFn: async ({
     input,
-    avatar,
-  }: CreateWorkspaceMutationInput): Promise<CreateWorkspaceTransportResult> => {
-    const data = new FormData()
-    data.set("initData", initData)
-    data.set("input", JSON.stringify(input))
-    if (avatar !== undefined) data.set("avatar", avatar)
-    return createAdminWorkspaceFromForm({ data })
-  },
+    delivery,
+  }: CreateCoachInviteMutationInput): Promise<CreateWorkspaceTransportResult> =>
+    createAdminCoachInvite({ data: { initData, input, delivery } }),
   onSuccess: (result: CreateWorkspaceTransportResult) => {
     if (!result.ok) return
     queryClient.setQueryData<ReadonlyArray<typeof result.value.workspace>>(
