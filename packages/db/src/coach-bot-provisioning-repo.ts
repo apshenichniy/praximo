@@ -1,4 +1,9 @@
-import { CoachOnboardingInviteId, TelegramId, WorkspaceId } from "@praximo/domain"
+import {
+  CoachOnboardingInviteId,
+  type CoachOnboardingInviteStatus,
+  TelegramId,
+  WorkspaceId,
+} from "@praximo/domain"
 import { and, eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
@@ -123,7 +128,7 @@ export class ProvisioningUnavailable extends Schema.TaggedErrorClass<Provisionin
  * `cancelled` is the fence a reset raises against an attempt still in flight.
  */
 const claimable = (
-  invite: { readonly status: string; readonly expiresAt: Date },
+  invite: { readonly status: CoachOnboardingInviteStatus; readonly expiresAt: Date },
   now: Date,
 ): boolean =>
   invite.status === "accepted" ||

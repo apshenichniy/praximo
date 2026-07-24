@@ -620,7 +620,9 @@ export const layer = Layer.effect(
      * compare-and-set the provisioning fence reads — once this wins, a racing
      * attempt can never advance the same invite to `used`. An already-accepted
      * claim is eligible, so a reset does release a claimed workspace, but only
-     * through this deliberate admin gesture and never on its own.
+     * through this deliberate admin gesture and never on its own. An already
+     * terminal predecessor is eligible too, so a coach who declined or was reset
+     * can be invited again rather than being stranded.
      */
     const reissue = Effect.fn("CoachOnboardingRepo.reissue")(function* (input: ReissueInput) {
       const fingerprint = `reissue:${input.workspaceId}:${input.expectedInviteId}`
@@ -673,9 +675,26 @@ export const layer = Layer.effect(
               where
                 "id" = ${input.expectedInviteId}
                 and "workspace_id" = ${input.workspaceId}
-                and "status" in ('pending', 'accepted', 'expired')
+                and "status" in ('pending', 'accepted')
                 and exists (select 1 from eligible_workspace)
               returning "workspace_id"
+            ),
+            -- A predecessor that is already terminal needs no transition, only
+            -- confirmation that it exists — overwriting it would rewrite why it
+            -- ended, turning a coach's decline into an admin reissue. The two
+            -- branches are mutually exclusive: a data-modifying CTE is invisible
+            -- to the rest of the statement, so the second still sees the
+            -- pre-update status and exactly one row reaches the insert.
+            supersedable as (
+              select "workspace_id" from cancelled_previous
+              union all
+              select "workspace_id"
+              from "coach_onboarding_invite"
+              where
+                "id" = ${input.expectedInviteId}
+                and "workspace_id" = ${input.workspaceId}
+                and "status" in ('expired', 'cancelled')
+                and exists (select 1 from eligible_workspace)
             )
             insert into "coach_onboarding_invite" (
               "id",
@@ -696,7 +715,7 @@ export const layer = Layer.effect(
               ${input.issuedByTelegramId},
               ${input.now},
               ${expiresAt}
-            from cancelled_previous
+            from supersedable
             on conflict ("request_id") do nothing
             returning "id"
           `),

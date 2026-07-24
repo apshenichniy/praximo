@@ -401,7 +401,6 @@ describe("AdminSurface", () => {
           {
             id: activeRow.id,
             name: "Ada Coaching",
-            hasCustomAvatar: false,
             botStatus: "connected",
             botUsername: "ada_coach_bot",
             lastActivityAt: hoursBefore(2).toISOString(),

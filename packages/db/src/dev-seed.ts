@@ -317,12 +317,24 @@ export const seedDemoWorkspaces = Effect.fn("DevSeed.seedDemoWorkspaces")(functi
   viewerTelegramId: string,
 ) {
   const { client } = yield* Database.Service
+  /** One insert per table, skipped when this fixture set has nothing for it. */
+  const insertAll = <Row>(
+    table: Parameters<typeof client.insert>[0],
+    rows: ReadonlyArray<Row>,
+    operation: string,
+  ) =>
+    rows.length === 0
+      ? Effect.void
+      : Effect.tryPromise({
+          try: () => client.insert(table).values(rows as never),
+          catch: (cause) => new QueryFailed({ operation, cause }),
+        })
 
-  yield* Effect.tryPromise({
-    try: () =>
-      client.insert(schema.workspace).values(demoWorkspaces.map(({ id, name }) => ({ id, name }))),
-    catch: (cause) => new QueryFailed({ operation: "seedDemoWorkspaces.workspaces", cause }),
-  })
+  yield* insertAll(
+    schema.workspace,
+    demoWorkspaces.map(({ id, name }) => ({ id, name })),
+    "seedDemoWorkspaces.workspaces",
+  )
 
   const members = demoWorkspaces.flatMap((workspace) =>
     workspace.owner === undefined
@@ -349,12 +361,7 @@ export const seedDemoWorkspaces = Effect.fn("DevSeed.seedDemoWorkspaces")(functi
           },
         ],
   )
-  if (members.length > 0) {
-    yield* Effect.tryPromise({
-      try: () => client.insert(schema.member).values(members),
-      catch: (cause) => new QueryFailed({ operation: "seedDemoWorkspaces.members", cause }),
-    })
-  }
+  yield* insertAll(schema.member, members, "seedDemoWorkspaces.members")
 
   const bots = demoWorkspaces.flatMap((workspace) =>
     workspace.bot === undefined
@@ -369,12 +376,7 @@ export const seedDemoWorkspaces = Effect.fn("DevSeed.seedDemoWorkspaces")(functi
           },
         ],
   )
-  if (bots.length > 0) {
-    yield* Effect.tryPromise({
-      try: () => client.insert(schema.bot).values(bots),
-      catch: (cause) => new QueryFailed({ operation: "seedDemoWorkspaces.bots", cause }),
-    })
-  }
+  yield* insertAll(schema.bot, bots, "seedDemoWorkspaces.bots")
 
   const invites = demoWorkspaces.flatMap((workspace, index) =>
     (workspace.invites ?? []).map((invite, inviteIndex) => ({
@@ -402,12 +404,7 @@ export const seedDemoWorkspaces = Effect.fn("DevSeed.seedDemoWorkspaces")(functi
       cancellationReason: invite.cancellationReason ?? null,
     })),
   )
-  if (invites.length > 0) {
-    yield* Effect.tryPromise({
-      try: () => client.insert(schema.coachOnboardingInvite).values(invites),
-      catch: (cause) => new QueryFailed({ operation: "seedDemoWorkspaces.invites", cause }),
-    })
-  }
+  yield* insertAll(schema.coachOnboardingInvite, invites, "seedDemoWorkspaces.invites")
 })
 
 export * as DevSeed from "./dev-seed.ts"

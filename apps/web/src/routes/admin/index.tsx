@@ -1,4 +1,4 @@
-import { useMutation, useSuspenseQuery } from "@tanstack/react-query"
+import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, getRouteApi } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 
@@ -16,12 +16,9 @@ import {
 } from "@/features/admin/components/coach-list.tsx"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
-import {
-  adminWorkspaceListQuery,
-  prepareCoachInviteShareMutation,
-  recordCoachInviteShareMutation,
-} from "@/features/admin/workspace-queries.ts"
-import { loadTelegramWebApp, shareInviteMessage } from "@/lib/telegram.ts"
+import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
+import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
+import { loadTelegramWebApp } from "@/lib/telegram.ts"
 
 export const Route = createFileRoute("/admin/")({ component: AdminHome })
 const adminRoute = getRouteApi("/admin")
@@ -47,11 +44,8 @@ const openInTelegram = async (link: string) => {
 function AdminHome() {
   const { initData } = adminRoute.useLoaderData()
   const { data } = useSuspenseQuery(adminWorkspaceListQuery(initData))
-  const [resendingId, setResendingId] = useState<string>()
   const [copiedId, setCopiedId] = useState<string>()
-
-  const shareMutation = useMutation(prepareCoachInviteShareMutation(initData))
-  const recordShareMutation = useMutation(recordCoachInviteShareMutation(initData))
+  const inviteShare = useInviteShare(initData)
 
   // The server already returns onboarding first and active coaches A→Z; the
   // split here is only about which heading each row lives under.
@@ -81,44 +75,25 @@ function AdminHome() {
   const resend = async (coach: CoachEntry) => {
     const actions = coach.onboarding?.actions
     if (actions === undefined) return
-    const webApp = await loadTelegramWebApp()
-    if (webApp === undefined) {
-      toast.add({ title: "Open this from Telegram to resend the invite.", type: "error" })
-      notifyHaptic("error")
-      return
-    }
 
-    setResendingId(coach.id)
-    try {
-      const outcome = await shareInviteMessage(webApp, {
-        prepare: async () => {
-          const prepared = await shareMutation.mutateAsync({
-            inviteId: actions.id,
-            language: actions.language,
-          })
-          if (!prepared.ok) throw new Error(prepared.error)
-          return prepared.value.preparedMessageId
-        },
-        link: actions.link,
-        message: actions.message,
-      })
-      if (outcome === "dismissed") return
-      // Best-effort bookkeeping: the invite is already out, so a failure here
-      // must not read to the admin as a failed resend.
-      await recordShareMutation
-        .mutateAsync({ inviteId: actions.id, language: actions.language })
-        .catch(() => undefined)
-      notifyHaptic("success")
-      toast.add({
-        title:
-          outcome === "fallback" ? "Opening Telegram to share the invite…" : "Invite sent again",
-        type: "success",
-      })
-    } catch {
-      notifyHaptic("error")
-      toast.add({ title: "Telegram couldn't prepare the invite. Try again.", type: "error" })
-    } finally {
-      setResendingId(undefined)
+    switch (await inviteShare.share({ ...actions, inviteId: actions.id })) {
+      case "dismissed":
+        return
+      case "no-telegram":
+        notifyHaptic("error")
+        toast.add({ title: "Open this from Telegram to resend the invite.", type: "error" })
+        return
+      case "failed":
+        notifyHaptic("error")
+        toast.add({ title: "Telegram couldn't prepare the invite. Try again.", type: "error" })
+        return
+      case "fallback":
+        notifyHaptic("success")
+        toast.add({ title: "Opening Telegram to share the invite…", type: "success" })
+        return
+      case "shared":
+        notifyHaptic("success")
+        toast.add({ title: "Invite sent again", type: "success" })
     }
   }
 
@@ -129,7 +104,10 @@ function AdminHome() {
       await navigator.clipboard.writeText(actions.message)
     } catch {
       notifyHaptic("error")
-      toast.add({ title: "Copy is blocked here — open the coach to copy the link.", type: "error" })
+      toast.add({
+        title: "Copy is blocked here — open the coach to copy the invite.",
+        type: "error",
+      })
       return
     }
     setCopiedId(coach.id)
@@ -161,7 +139,7 @@ function AdminHome() {
                 <OnboardingCoachItem
                   key={coach.id}
                   coach={coach}
-                  resending={resendingId === coach.id}
+                  resending={inviteShare.sharingInviteId === coach.onboarding?.actions?.id}
                   copied={copiedId === coach.id}
                   onResend={(entry) => void resend(entry)}
                   onCopy={(entry) => void copy(entry)}

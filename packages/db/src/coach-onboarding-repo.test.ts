@@ -393,6 +393,54 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
+  it.effect("invites again after a decline, without rewriting why the first one ended", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachOnboardingRepo.Service
+      const { client } = yield* Database.Service
+      const created = yield* repo.createOrGet({
+        requestId: requestId(),
+        requestFingerprint: "declined-then-reinvited",
+        name: "Second Chance Coaching",
+        coachLanguage: CoachLanguage.make("en"),
+        issuedByTelegramId,
+        now: new Date("2026-07-23T18:00:00.000Z"),
+      })
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client
+            .delete(schema.workspace)
+            .where(eq(schema.workspace.id, created.aggregate.workspace.id)),
+        ).pipe(Effect.asVoid),
+      )
+
+      // The coach declined: terminal, and the reason is part of the history.
+      const declinedAt = new Date("2026-07-23T20:00:00.000Z")
+      yield* Effect.promise(() =>
+        client
+          .update(schema.coachOnboardingInvite)
+          .set({
+            status: "cancelled",
+            cancelledAt: declinedAt,
+            cancellationReason: "declined_by_coach",
+          })
+          .where(eq(schema.coachOnboardingInvite.id, created.aggregate.invite.id)),
+      )
+
+      const reissued = yield* repo.reissue({
+        workspaceId: created.aggregate.workspace.id,
+        expectedInviteId: created.aggregate.invite.id,
+        requestId: requestId(),
+        issuedByTelegramId,
+        now: new Date("2026-07-24T18:00:00.000Z"),
+      })
+      expect(reissued.invite.status).toBe("pending")
+
+      const declined = (yield* repo.findInvite(created.aggregate.invite.id)).invite
+      expect(declined.cancellationReason).toBe("declined_by_coach")
+      expect(declined.cancelledAt).toEqual(declinedAt)
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
   it.effect("connects an accepted claim without measuring it against the old expiry", () =>
     Effect.gen(function* () {
       const repo = yield* CoachOnboardingRepo.Service

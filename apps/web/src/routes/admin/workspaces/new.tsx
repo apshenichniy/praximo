@@ -15,12 +15,8 @@ import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
 import { InviteCopySheet } from "@/features/admin/components/invite-copy-sheet.tsx"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
-import {
-  createCoachInviteMutation,
-  prepareCoachInviteShareMutation,
-  recordCoachInviteShareMutation,
-} from "@/features/admin/workspace-queries.ts"
-import { loadTelegramWebApp, shareInviteMessage } from "@/lib/telegram.ts"
+import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
+import { createCoachInviteMutation } from "@/features/admin/workspace-queries.ts"
 
 export const Route = createFileRoute("/admin/workspaces/new")({
   component: InviteCoachPage,
@@ -60,9 +56,8 @@ function InviteCoachPage() {
   const [copyFallback, setCopyFallback] = useState<string>()
 
   const mutation = useMutation(createCoachInviteMutation(initData, queryClient))
-  const shareMutation = useMutation(prepareCoachInviteShareMutation(initData))
-  const recordShareMutation = useMutation(recordCoachInviteShareMutation(initData))
-  const pending = mutation.isPending || shareMutation.isPending
+  const inviteShare = useInviteShare(initData)
+  const pending = mutation.isPending || inviteShare.sharingInviteId !== undefined
 
   const finish = (notice: string) => {
     setAdminNotice(notice)
@@ -98,48 +93,28 @@ function InviteCoachPage() {
     }
     setCreated(true)
 
-    const webApp = await loadTelegramWebApp()
-    if (webApp === undefined) {
-      setActionError("Open this from Telegram to share the invite.")
-      notifyHaptic("error")
-      return
-    }
-
     const { inviteId, link, message } = response.value
-    let outcome
-    try {
-      outcome = await shareInviteMessage(webApp, {
-        prepare: async () => {
-          const prepared = await shareMutation.mutateAsync({
-            inviteId,
-            language: telegramInviteLanguage,
-          })
-          if (!prepared.ok) throw new Error(prepared.error)
-          return prepared.value.preparedMessageId
-        },
-        link,
-        message,
-      })
-    } catch {
-      setActionError("Telegram couldn't prepare the invite. Tap again to retry.")
-      notifyHaptic("error")
-      return
+    switch (
+      await inviteShare.share({ inviteId, link, message, language: telegramInviteLanguage })
+    ) {
+      // A dismissed picker is not a failure: the invite stays pending, nothing
+      // is recorded, and the manager can tap Share again. Leave the screen as is.
+      case "dismissed":
+        return
+      case "no-telegram":
+        setActionError("Open this from Telegram to share the invite.")
+        notifyHaptic("error")
+        return
+      case "failed":
+        setActionError("Telegram couldn't prepare the invite. Tap again to retry.")
+        notifyHaptic("error")
+        return
+      case "fallback":
+        finish("Opening Telegram to share the invite…")
+        return
+      case "shared":
+        finish("Invite shared — the coach can start onboarding")
     }
-
-    // A dismissed picker is not a failure: the invite stays pending, nothing is
-    // recorded, and the manager can tap Share again. Leave the screen untouched.
-    if (outcome === "dismissed") return
-    // The share landed (or the fallback sheet opened): record the delivery so the
-    // pending invite remembers its channel and language. Best-effort bookkeeping —
-    // the invite is already out, so ignore any failure.
-    await recordShareMutation
-      .mutateAsync({ inviteId, language: telegramInviteLanguage })
-      .catch(() => undefined)
-    finish(
-      outcome === "fallback"
-        ? "Opening Telegram to share the invite…"
-        : "Invite shared — the coach can start onboarding",
-    )
   }
 
   const copyInvite = async (language: CoachLanguage) => {

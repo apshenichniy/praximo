@@ -142,7 +142,7 @@ export function OnboardingCoachItem({
             onClick={() => onCopy(coach)}
           >
             <HugeiconsIcon icon={Copy01Icon} size={16} strokeWidth={1.8} />
-            {copied ? "Copied" : "Copy link"}
+            {copied ? "Copied" : "Copy invite"}
           </Button>
         </div>
       )}

@@ -4,6 +4,7 @@ import { AdminRepo, CoachOnboardingRepo, WorkspaceDeletionRepo, WorkspaceRepo } 
 import {
   CoachLanguage,
   type CoachOnboardingInviteCancellationReason,
+  type CoachOnboardingInviteId,
   type CoachOnboardingInviteStatus,
   CreateInviteDelivery,
   CreateWorkspaceInput,
@@ -57,7 +58,7 @@ export type CoachOnboardingStage =
 
 /** The Resend / Copy payload, carried only while the invite is still deliverable. */
 export interface CoachInviteActions {
-  readonly id: string
+  readonly id: CoachOnboardingInviteId
   readonly link: string
   /** The full forwardable message, in the language the invite last left in. */
   readonly message: string
@@ -77,7 +78,6 @@ export interface CoachOnboarding {
 export interface CoachListEntry {
   readonly id: WorkspaceId
   readonly name: string
-  readonly hasCustomAvatar: boolean
   readonly botStatus: WorkspaceRepo.BotConnectionStatus
   readonly botUsername?: string
   readonly lastActivityAt?: string
@@ -416,9 +416,8 @@ export const layer = Layer.effect(
 
     const presentCoach = Effect.fn("AdminSurface.presentCoach")(function* (
       item: WorkspaceRepo.ListItem,
-      now: Date,
+      stage: CoachOnboardingStage | undefined,
     ) {
-      const stage = onboardingStage(item, now)
       const invite = item.invite
       const language = invite?.delivery?.language ?? "en"
       // Resend and Copy only make sense while the link can still be claimed;
@@ -440,7 +439,6 @@ export const layer = Layer.effect(
       return {
         id: item.id,
         name: item.name,
-        hasCustomAvatar: item.hasCustomAvatar,
         botStatus: item.botStatus,
         ...(item.botUsername === undefined ? {} : { botUsername: item.botUsername }),
         ...(item.lastActivityAt === undefined
@@ -518,22 +516,29 @@ export const layer = Layer.effect(
         .list()
         .pipe(Effect.mapError(() => new LoadFailed({ operation: "listWorkspaces" })))
       const now = new Date(yield* Clock.currentTimeMillis)
-      const coaches = yield* Effect.forEach(items, (item) => presentCoach(item, now))
-      const viewerCoach = yield* resolveViewerCoach(items, viewer)
+      const staged = items.map((item) => ({ item, stage: onboardingStage(item, now) }))
 
       // The repo already returns A→Z, which is the order active coaches keep.
       // Incomplete onboarding is pinned above them, newest invite first, so a
       // fresh invite lands where the admin is already looking.
-      const issuedAt = (id: WorkspaceId) =>
-        items.find((item) => item.id === id)?.invite?.issuedAt.getTime() ?? 0
-      const incomplete = coaches.filter((coach) => coach.onboarding !== undefined)
+      const incomplete = staged.filter((entry) => entry.stage !== undefined)
       // In-place is safe and intended: `filter` already handed back a private
       // array, and the ES2022 target has no `toSorted` to copy it again.
       // oxlint-disable-next-line unicorn/no-array-sort
-      const pinned = incomplete.sort((left, right) => issuedAt(right.id) - issuedAt(left.id))
+      const pinned = incomplete.sort(
+        (left, right) =>
+          (right.item.invite?.issuedAt.getTime() ?? 0) -
+          (left.item.invite?.issuedAt.getTime() ?? 0),
+      )
 
+      const coaches = yield* Effect.forEach(
+        [...pinned, ...staged.filter((entry) => entry.stage === undefined)],
+        (entry) => presentCoach(entry.item, entry.stage),
+      )
+
+      const viewerCoach = yield* resolveViewerCoach(items, viewer)
       return {
-        coaches: [...pinned, ...coaches.filter((coach) => coach.onboarding === undefined)],
+        coaches,
         ...(viewerCoach === undefined ? {} : { viewerCoach }),
       } satisfies CoachListResult
     })
