@@ -1,5 +1,6 @@
 import {
   CoachLanguage,
+  CoachOnboardingInviteCode,
   CoachOnboardingInviteId,
   CoachOnboardingInviteStatus,
   Workspace,
@@ -41,6 +42,7 @@ export const Detail = Schema.Struct({
   invite: Schema.optionalKey(
     Schema.Struct({
       id: CoachOnboardingInviteId,
+      code: CoachOnboardingInviteCode,
       status: CoachOnboardingInviteStatus,
       issuedAt: Schema.instanceOf(Date),
       expiresAt: Schema.instanceOf(Date),
@@ -205,6 +207,7 @@ export const layer = Layer.effect(
           client
             .select({
               id: schema.coachOnboardingInvite.id,
+              code: schema.coachOnboardingInvite.code,
               status: schema.coachOnboardingInvite.status,
               issuedAt: schema.coachOnboardingInvite.issuedAt,
               expiresAt: schema.coachOnboardingInvite.expiresAt,
@@ -245,6 +248,7 @@ export const layer = Layer.effect(
           : {
               invite: {
                 id: invite.id,
+                code: invite.code,
                 status: invite.status,
                 issuedAt: invite.issuedAt,
                 expiresAt: invite.expiresAt,

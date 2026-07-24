@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { CoachLanguage } from "@praximo/domain"
+import { CoachLanguage, CoachOnboardingInviteCode, CoachOnboardingInviteCodePattern } from "@praximo/domain"
 import { eq } from "drizzle-orm"
 import { Effect, Layer, Result } from "effect"
 import { CoachOnboardingRepo, InviteTtlMilliseconds } from "./coach-onboarding-repo.ts"
@@ -42,6 +42,11 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
       expect(createdOutcome.created).toBe(true)
       expect(created.owner).toEqual({ language: "uk" })
       expect(created.invite.status).toBe("pending")
+      expect(created.invite.code).toMatch(CoachOnboardingInviteCodePattern)
+      expect(yield* repo.resolveCode(created.invite.code)).toBe(created.invite.id)
+      expect(
+        (yield* Effect.flip(repo.resolveCode(CoachOnboardingInviteCode.make("ZZZZZZZZ"))))._tag,
+      ).toBe("CoachOnboardingRepo.InviteCodeUnresolved")
       expect(created.invite.expiresAt.getTime() - created.invite.issuedAt.getTime()).toBe(
         InviteTtlMilliseconds,
       )
@@ -228,11 +233,19 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
         now: new Date("2026-07-24T18:00:00.000Z"),
       })
       expect(reissued.invite.id).not.toBe(created.aggregate.invite.id)
+      expect(reissued.invite.code).not.toBe(created.aggregate.invite.code)
+      expect(reissued.invite.code).toMatch(CoachOnboardingInviteCodePattern)
       expect(reissued.invite.status).toBe("pending")
       expect(reissued.invite.expiresAt.getTime() - reissued.invite.issuedAt.getTime()).toBe(
         InviteTtlMilliseconds,
       )
       expect((yield* repo.findInvite(created.aggregate.invite.id)).invite.status).toBe("expired")
+      // The new code resolves; the superseded code still resolves to its (now
+      // expired) invite row — reissue expires, it does not delete.
+      expect(yield* repo.resolveCode(reissued.invite.code)).toBe(reissued.invite.id)
+      expect(yield* repo.resolveCode(created.aggregate.invite.code)).toBe(
+        created.aggregate.invite.id,
+      )
 
       const replay = yield* repo.reissue({
         workspaceId: created.aggregate.workspace.id,

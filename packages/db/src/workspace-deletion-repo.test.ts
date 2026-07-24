@@ -84,6 +84,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
       yield* Effect.promise(() =>
         client.insert(schema.coachOnboardingInvite).values({
           id: onboardingInviteId,
+          code: uniqueId("code"),
           workspaceId,
           requestId: crypto.randomUUID(),
           requestFingerprint: uniqueId("fingerprint"),

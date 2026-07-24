@@ -40,6 +40,9 @@ const unusedOnboardingLayer = Layer.succeed(
     createOrGet: Effect.fn("CoachOnboardingRepo.DeleteTest.createOrGet")(() =>
       Effect.die("unused"),
     ),
+    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
+      Effect.die("resolveCode is bot-only and unused in these tests"),
+    ),
     findInvite: Effect.fn("CoachOnboardingRepo.DeleteTest.findInvite")(() => Effect.die("unused")),
     verifyPending: Effect.fn("CoachOnboardingRepo.DeleteTest.verifyPending")(() =>
       Effect.die("unused"),
@@ -154,7 +157,7 @@ describe("AdminSurface workspace deletion", () => {
         unusedOnboardingLayer,
         deletionLayer,
         cancellationLayer,
-        CoachOnboardingToken.testLayer("test-secret", "PraximoMotherBot"),
+        CoachOnboardingToken.testLayer("PraximoMotherBot"),
         WorkspaceBrandingStorage.testLayer({
           defaultAvatarKey: "branding/default-coach-avatar.jpg",
         }),

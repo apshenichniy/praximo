@@ -1,5 +1,8 @@
 import {
   CoachLanguage,
+  CoachOnboardingInviteCode,
+  CoachOnboardingInviteCodeAlphabet,
+  CoachOnboardingInviteCodeLength,
   CoachOnboardingInviteId,
   CoachOnboardingInviteStatus,
   WorkspaceId,
@@ -25,6 +28,7 @@ export interface CreateInput {
 
 const InviteSchema = Schema.Struct({
   id: CoachOnboardingInviteId,
+  code: CoachOnboardingInviteCode,
   workspaceId: WorkspaceId,
   status: CoachOnboardingInviteStatus,
   issuedAt: Schema.instanceOf(Date),
@@ -70,6 +74,9 @@ export interface Interface {
   readonly createOrGet: (
     input: CreateInput,
   ) => Effect.Effect<CreateOutcome, IdempotencyConflict | QueryFailed>
+  readonly resolveCode: (
+    code: CoachOnboardingInviteCode,
+  ) => Effect.Effect<CoachOnboardingInviteId, InviteCodeUnresolved | QueryFailed>
   readonly findInvite: (
     id: CoachOnboardingInviteId,
   ) => Effect.Effect<Aggregate, InviteUnavailable | QueryFailed>
@@ -113,6 +120,20 @@ export class ReissueUnavailable extends Schema.TaggedErrorClass<ReissueUnavailab
   },
 ) {}
 
+/**
+ * A start-param code passed the format filter but maps to no invite row at all —
+ * a made-up code. The caller surfaces the same "invalid link" message as a
+ * malformed parameter. A reissue-superseded code is *not* this case: its row
+ * survives (expired, not deleted), so `resolveCode` still returns its invite id
+ * and provisioning reports it expired.
+ */
+export class InviteCodeUnresolved extends Schema.TaggedErrorClass<InviteCodeUnresolved>()(
+  "CoachOnboardingRepo.InviteCodeUnresolved",
+  {
+    code: CoachOnboardingInviteCode,
+  },
+) {}
+
 const idsFor = (requestId: string) => {
   const compact = requestId.replaceAll("-", "")
   return {
@@ -121,6 +142,75 @@ const idsFor = (requestId: string) => {
     inviteId: CoachOnboardingInviteId.make(`ci_${compact.slice(0, 26)}`),
   }
 }
+
+/**
+ * A fresh start-param code drawn uniformly from the invite-code alphabet.
+ * Rejection sampling discards bytes in the biased tail (>= 240 for a 30-symbol
+ * alphabet) so every symbol is equally likely. Lives here, next to the unique
+ * column and its collision retry, rather than in the platform-neutral domain.
+ */
+export const generateInviteCode = (): CoachOnboardingInviteCode => {
+  const alphabet = CoachOnboardingInviteCodeAlphabet
+  const cutoff = Math.floor(256 / alphabet.length) * alphabet.length
+  let code = ""
+  const bytes = new Uint8Array(CoachOnboardingInviteCodeLength * 2)
+  while (code.length < CoachOnboardingInviteCodeLength) {
+    crypto.getRandomValues(bytes)
+    for (let i = 0; i < bytes.length && code.length < CoachOnboardingInviteCodeLength; i++) {
+      const byte = bytes[i] ?? 0
+      const symbol = alphabet[byte % alphabet.length]
+      if (byte < cutoff && symbol !== undefined) code += symbol
+    }
+  }
+  return CoachOnboardingInviteCode.make(code)
+}
+
+/** How many fresh codes to try before giving up on a run of unique collisions. */
+const CodeCollisionMaxAttempts = 5
+
+/**
+ * A `code` unique-constraint violation. The invite insert is the only statement
+ * on these paths without an `on conflict` clause for its unique columns, so a
+ * 23505 here is always the `code` colliding — the request-id/id conflicts are
+ * absorbed by `do nothing`. Detected so the caller can retry with a fresh code.
+ */
+const isCodeUniqueViolation = (cause: unknown): boolean => {
+  const error = cause as { readonly code?: unknown; readonly constraint?: unknown } | null
+  return (
+    error?.code === "23505" &&
+    (typeof error.constraint !== "string" || error.constraint.includes("code"))
+  )
+}
+
+/**
+ * Run a code-bearing insert, regenerating the code and retrying on the rare
+ * `code` collision. Any other failure (or exhausting the attempts) is returned
+ * as the {@link Result} failure so the caller's idempotency replay still runs.
+ */
+const insertWithFreshCode = <A>(
+  operation: string,
+  run: (code: CoachOnboardingInviteCode) => Promise<A>,
+): Effect.Effect<Result.Result<A, QueryFailed>> =>
+  Effect.gen(function* () {
+    let last: Result.Result<A, QueryFailed> | undefined
+    for (let attempt = 0; attempt < CodeCollisionMaxAttempts; attempt++) {
+      const code = generateInviteCode()
+      last = yield* Effect.tryPromise({
+        try: () => run(code),
+        catch: (cause) => new QueryFailed({ operation, cause }),
+      }).pipe(Effect.result)
+      if (Result.isSuccess(last) || !isCodeUniqueViolation(last.failure.cause)) return last
+    }
+    return (
+      last ??
+      Result.fail(
+        new QueryFailed({
+          operation: `${operation}.code-collision`,
+          cause: new Error("exhausted invite code attempts"),
+        }),
+      )
+    )
+  })
 
 export const layer = Layer.effect(
   Service,
@@ -137,6 +227,7 @@ export const layer = Layer.effect(
           client
             .select({
               inviteId: schema.coachOnboardingInvite.id,
+              code: schema.coachOnboardingInvite.code,
               workspaceId: schema.workspace.id,
               status: schema.coachOnboardingInvite.status,
               issuedAt: schema.coachOnboardingInvite.issuedAt,
@@ -183,6 +274,7 @@ export const layer = Layer.effect(
         },
         invite: {
           id: row.inviteId,
+          code: row.code,
           workspaceId: row.workspaceId,
           status: row.status,
           issuedAt: row.issuedAt,
@@ -246,9 +338,8 @@ export const layer = Layer.effect(
 
       const { workspaceId, memberId, inviteId } = idsFor(input.requestId)
       const expiresAt = new Date(input.now.getTime() + InviteTtlMilliseconds)
-      const inserted = yield* Effect.tryPromise({
-        try: () =>
-          client.execute(sql`
+      const inserted = yield* insertWithFreshCode("createOrGet.transaction", (code) =>
+        client.execute(sql`
             with inserted_workspace as (
               insert into "workspace" (
                 "id",
@@ -286,6 +377,7 @@ export const layer = Layer.effect(
             )
             insert into "coach_onboarding_invite" (
               "id",
+              "code",
               "workspace_id",
               "request_id",
               "request_fingerprint",
@@ -295,6 +387,7 @@ export const layer = Layer.effect(
             )
             select
               ${inviteId},
+              ${code},
               "id",
               ${input.requestId},
               ${input.requestFingerprint},
@@ -304,8 +397,7 @@ export const layer = Layer.effect(
             from inserted_workspace
             returning "id"
           `),
-        catch: (cause) => new QueryFailed({ operation: "createOrGet.transaction", cause }),
-      }).pipe(Effect.result)
+      )
 
       if (Result.isFailure(inserted)) {
         const replay = yield* loadByRequestId(input.requestId)
@@ -342,6 +434,25 @@ export const layer = Layer.effect(
       return aggregate
     })
 
+    const resolveCode = Effect.fn("CoachOnboardingRepo.resolveCode")(function* (
+      code: CoachOnboardingInviteCode,
+    ) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({ id: schema.coachOnboardingInvite.id })
+            .from(schema.coachOnboardingInvite)
+            .where(eq(schema.coachOnboardingInvite.code, code))
+            .limit(1),
+        catch: (cause) => new QueryFailed({ operation: "resolveCode", cause }),
+      })
+      const row = rows[0]
+      if (row === undefined) return yield* new InviteCodeUnresolved({ code })
+      // Status and expiry are the caller's concern (provisioning `prepare`); a
+      // resolvable code always yields its invite id here.
+      return CoachOnboardingInviteId.make(row.id)
+    })
+
     const markUsed = Effect.fn("CoachOnboardingRepo.markUsed")(function* (
       id: CoachOnboardingInviteId,
       now: Date,
@@ -359,6 +470,7 @@ export const layer = Layer.effect(
               ),
             )
             .returning({
+              code: schema.coachOnboardingInvite.code,
               workspaceId: schema.coachOnboardingInvite.workspaceId,
               status: schema.coachOnboardingInvite.status,
               issuedAt: schema.coachOnboardingInvite.issuedAt,
@@ -372,6 +484,7 @@ export const layer = Layer.effect(
       if (row !== undefined) {
         return yield* decodeInvite({
           id,
+          code: row.code,
           workspaceId: row.workspaceId,
           status: row.status,
           issuedAt: row.issuedAt,
@@ -436,9 +549,8 @@ export const layer = Layer.effect(
 
       const inviteId = idsFor(input.requestId).inviteId
       const expiresAt = new Date(input.now.getTime() + InviteTtlMilliseconds)
-      const inserted = yield* Effect.tryPromise({
-        try: () =>
-          client.execute(sql`
+      const inserted = yield* insertWithFreshCode("reissue.transaction", (code) =>
+        client.execute(sql`
             with eligible_workspace as (
               select "workspace"."id"
               from "workspace"
@@ -475,6 +587,7 @@ export const layer = Layer.effect(
             )
             insert into "coach_onboarding_invite" (
               "id",
+              "code",
               "workspace_id",
               "request_id",
               "request_fingerprint",
@@ -484,6 +597,7 @@ export const layer = Layer.effect(
             )
             select
               ${inviteId},
+              ${code},
               "workspace_id",
               ${input.requestId},
               ${fingerprint},
@@ -494,8 +608,7 @@ export const layer = Layer.effect(
             on conflict ("request_id") do nothing
             returning "id"
           `),
-        catch: (cause) => new QueryFailed({ operation: "reissue.transaction", cause }),
-      }).pipe(Effect.result)
+      )
 
       const reconciled = yield* loadByRequestId(input.requestId)
       if (reconciled !== undefined) {
@@ -515,6 +628,7 @@ export const layer = Layer.effect(
     return Service.of({
       lookupCreate,
       createOrGet,
+      resolveCode,
       findInvite,
       verifyPending,
       markUsed,
