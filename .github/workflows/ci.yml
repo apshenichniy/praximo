@@ -13,8 +13,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     # The whole job normally finishes in ~1-1.5 minutes; this is a backstop
-    # against a hung runner/step (observed: bun install stalling for over an
-    # hour with no network-side indication), not a budget for legitimate work.
+    # against a hung step, not a budget for legitimate work.
     timeout-minutes: 6
     steps:
       - uses: actions/checkout@v5
@@ -23,11 +22,13 @@ jobs:
         with:
           bun-version: 1.3.13
 
-      # Dedicated timeout: this step has hung indefinitely on a stalled
-      # registry fetch with no error, well past what a lockfile-only install
-      # ever takes; the job-level timeout above is the remaining backstop.
+      # `@hugeicons-pro/*` resolves to the vendor's own registry (bunfig.toml);
+      # without this token the fetch hangs indefinitely rather than failing
+      # fast, which is what the dedicated timeout below now guards against.
       - run: bun install --frozen-lockfile
         timeout-minutes: 3
+        env:
+          UNIVERSAL_LICENSE_KEY: ${{ secrets.UNIVERSAL_LICENSE_KEY }}
 
       # Typecheck every workspace, then lint the whole tree.
       - run: bun run check
