@@ -4,7 +4,7 @@ import {
   WorkspaceId,
   WorkspaceNotFound,
 } from "@praximo/domain"
-import { and, eq, sql } from "drizzle-orm"
+import { and, eq, type SQL, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
@@ -91,6 +91,7 @@ export interface Interface {
   ) => Effect.Effect<Operation, InvalidTransition | QueryFailed>
   readonly isDeleting: (workspaceId: WorkspaceId) => Effect.Effect<boolean, QueryFailed>
   readonly purgeExpired: (now: Date) => Effect.Effect<number, QueryFailed>
+  readonly reconcileOrphans: () => Effect.Effect<number, QueryFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()(
@@ -104,10 +105,8 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const { client } = yield* Database.Service
 
-    const load = Effect.fn("WorkspaceDeletionRepo.load")(function* (
-      requestId: WorkspaceDeletionRequestId,
-    ) {
-      const rows = yield* Effect.tryPromise({
+    const queryOperations = (where: SQL | undefined, operation: string) =>
+      Effect.tryPromise({
         try: () =>
           client
             .select({
@@ -137,25 +136,65 @@ export const layer = Layer.effect(
                 eq(schema.member.role, "owner"),
               ),
             )
-            .where(eq(schema.workspaceDeletionOperation.requestId, requestId))
+            .where(where)
             .limit(1),
-        catch: (cause) => new QueryFailed({ operation: "WorkspaceDeletionRepo.load", cause }),
+        catch: (cause) => new QueryFailed({ operation, cause }),
       })
-      const row = rows[0]
-      if (row === undefined) return undefined
-      return yield* decodeOperation({
-        ...row,
-        ...(row.completedAt === null ? {} : { completedAt: row.completedAt }),
-        ...(row.expiresAt === null ? {} : { expiresAt: row.expiresAt }),
-        ...(row.workspaceName === null ? {} : { workspaceName: row.workspaceName }),
-        ...(row.coachTelegramId === null ? {} : { coachTelegramId: row.coachTelegramId }),
-        ...(row.coachLanguage === null ? {} : { coachLanguage: row.coachLanguage }),
+
+    const decodeRow = (row: {
+      completedAt: Date | null
+      expiresAt: Date | null
+      workspaceName: string | null
+      coachTelegramId: string | null
+      coachLanguage: string | null
+    }) => {
+      // Spreading `...rest` first and re-adding only the present values keeps the
+      // nullable columns out entirely: the Operation schema marks them optional,
+      // so a literal `null` would fail decoding.
+      const { completedAt, expiresAt, workspaceName, coachTelegramId, coachLanguage, ...rest } = row
+      return decodeOperation({
+        ...rest,
+        ...(completedAt === null ? {} : { completedAt }),
+        ...(expiresAt === null ? {} : { expiresAt }),
+        ...(workspaceName === null ? {} : { workspaceName }),
+        ...(coachTelegramId === null ? {} : { coachTelegramId }),
+        ...(coachLanguage === null ? {} : { coachLanguage }),
       }).pipe(
         Effect.mapError(
           (cause) => new QueryFailed({ operation: "WorkspaceDeletionRepo.load.decode", cause }),
         ),
       )
+    }
+
+    const load = Effect.fn("WorkspaceDeletionRepo.load")(function* (
+      requestId: WorkspaceDeletionRequestId,
+    ) {
+      const rows = yield* queryOperations(
+        eq(schema.workspaceDeletionOperation.requestId, requestId),
+        "WorkspaceDeletionRepo.load",
+      )
+      const row = rows[0]
+      if (row === undefined) return undefined
+      return yield* decodeRow(row)
     })
+
+    // Adopt an in-flight deletion by workspace: the client mints a fresh
+    // requestId on every dialog mount, so a resumed attempt cannot replay by
+    // requestId. The one-prepared-per-workspace index guarantees at most one row.
+    const loadPreparedByWorkspace = Effect.fn("WorkspaceDeletionRepo.loadPreparedByWorkspace")(
+      function* (workspaceId: WorkspaceId) {
+        const rows = yield* queryOperations(
+          and(
+            eq(schema.workspaceDeletionOperation.workspaceId, workspaceId),
+            eq(schema.workspaceDeletionOperation.state, "prepared"),
+          ),
+          "WorkspaceDeletionRepo.loadPreparedByWorkspace",
+        )
+        const row = rows[0]
+        if (row === undefined) return undefined
+        return yield* decodeRow(row)
+      },
+    )
 
     const requireOperation = Effect.fn("WorkspaceDeletionRepo.requireOperation")(function* (
       requestId: WorkspaceDeletionRequestId,
@@ -198,23 +237,13 @@ export const layer = Layer.effect(
         })
         const prepared = yield* load(requestId)
         if (prepared === undefined) {
-          const active = yield* Effect.tryPromise({
-            try: () =>
-              client
-                .select({ requestId: schema.workspaceDeletionOperation.requestId })
-                .from(schema.workspaceDeletionOperation)
-                .where(
-                  and(
-                    eq(schema.workspaceDeletionOperation.workspaceId, workspaceId),
-                    eq(schema.workspaceDeletionOperation.state, "prepared"),
-                  ),
-                )
-                .limit(1),
-            catch: (cause) =>
-              new QueryFailed({ operation: "WorkspaceDeletionRepo.prepare.active", cause }),
-          })
-          if (active.length > 0) return yield* new RequestConflict()
-          return yield* new InvalidTransition({ operation: "prepare" })
+          // The insert was a no-op: an earlier attempt already holds the
+          // one-prepared-per-workspace fence under a different requestId. Adopt
+          // that operation and return it so the caller resumes it to completion
+          // instead of being permanently blocked ("already in progress").
+          const adopted = yield* loadPreparedByWorkspace(workspaceId)
+          if (adopted === undefined) return yield* new InvalidTransition({ operation: "prepare" })
+          return adopted
         }
         if (prepared.workspaceId !== workspaceId) return yield* new RequestConflict()
         return prepared
@@ -401,6 +430,31 @@ export const layer = Layer.effect(
       },
     )
 
+    // A prepared operation whose workspace is already gone can never finalize
+    // (its cascade deletes nothing) and would otherwise linger indefinitely.
+    // finalize deletes the workspace and completes the receipt atomically, so a
+    // still-prepared row with a missing workspace is always a true orphan.
+    const reconcileOrphans: Interface["reconcileOrphans"] = Effect.fn(
+      "WorkspaceDeletionRepo.reconcileOrphans",
+    )(function* () {
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          client.execute(sql`
+            delete from "workspace_deletion_operation" as "op"
+            where
+              "op"."state" = 'prepared'
+              and not exists (
+                select 1 from "workspace"
+                where "workspace"."id" = "op"."workspace_id"
+              )
+            returning "op"."request_id"
+          `),
+        catch: (cause) =>
+          new QueryFailed({ operation: "WorkspaceDeletionRepo.reconcileOrphans", cause }),
+      })
+      return result.rows.length
+    })
+
     return Service.of({
       prepare,
       markPipeline,
@@ -409,6 +463,7 @@ export const layer = Layer.effect(
       finalize,
       isDeleting,
       purgeExpired,
+      reconcileOrphans,
     })
   }),
 )

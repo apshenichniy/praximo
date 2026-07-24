@@ -700,6 +700,11 @@ export const layer = Layer.effect(
           }),
         )
 
+      // prepare may adopt an in-flight operation created under an earlier
+      // requestId (the client mints a fresh one per dialog mount). Drive the
+      // remaining stages by the operation's own requestId, not the client input.
+      const operationRequestId = operation.requestId
+
       if (operation.state === "completed") {
         return {
           status:
@@ -716,7 +721,7 @@ export const layer = Layer.effect(
         }
         operation = yield* deletions
           .markPipeline(
-            input.requestId,
+            operationRequestId,
             WorkspaceRunCancellationResult.guards.Cancelled(cancellation)
               ? "cancelled"
               : "nothing-active",
@@ -733,7 +738,7 @@ export const layer = Layer.effect(
         ) {
           operation = yield* deletions
             .markFarewell(
-              input.requestId,
+              operationRequestId,
               "not-applicable",
               new Date(yield* Clock.currentTimeMillis),
             )
@@ -750,7 +755,7 @@ export const layer = Layer.effect(
           }
           operation = yield* deletions
             .markFarewell(
-              input.requestId,
+              operationRequestId,
               Result.isFailure(farewell) ? "undeliverable" : "sent",
               new Date(yield* Clock.currentTimeMillis),
             )
@@ -767,7 +772,7 @@ export const layer = Layer.effect(
         }
         operation = yield* deletions
           .markBotReleased(
-            input.requestId,
+            operationRequestId,
             CoachBotRelease.Result.guards.Released(released)
               ? "released"
               : CoachBotRelease.Result.guards.AlreadyReleased(released)
@@ -779,7 +784,7 @@ export const layer = Layer.effect(
       }
 
       operation = yield* deletions
-        .finalize(input.requestId, new Date(yield* Clock.currentTimeMillis))
+        .finalize(operationRequestId, new Date(yield* Clock.currentTimeMillis))
         .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "finalize" })))
       yield* runCancellation.kickObjectCleanup()
 
