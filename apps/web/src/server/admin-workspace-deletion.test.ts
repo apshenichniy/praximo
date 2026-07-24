@@ -141,12 +141,13 @@ const deletionRepoDouble = (initial: WorkspaceDeletionRepo.Operation) =>
           yield* roundTrip
           return (yield* Ref.get(row)).operation
         }),
-        claim: Effect.fn("WorkspaceDeletionRepo.Double.claim")(function* () {
+        claim: Effect.fn("WorkspaceDeletionRepo.Double.claim")(function* (_requestId, now) {
           yield* roundTrip
           const driverId = `driver-${yield* Ref.updateAndGet(claims, (count) => count + 1)}`
+          const leaseUntil = new Date(now.getTime() + WorkspaceDeletionRepo.LEASE_DURATION_MS)
           const before = yield* Ref.modify(row, (current) =>
             current.operation.state === "prepared" && current.driverId === undefined
-              ? [current, { ...current, driverId }]
+              ? [current, { ...current, driverId, operation: { ...current.operation, leaseUntil } }]
               : [current, current],
           )
           if (before.operation.state === "prepared" && before.driverId !== undefined) {
@@ -159,9 +160,11 @@ const deletionRepoDouble = (initial: WorkspaceDeletionRepo.Operation) =>
         }),
         release: Effect.fn("WorkspaceDeletionRepo.Double.release")(function* (lease) {
           yield* roundTrip
-          yield* Ref.update(row, (current) =>
-            current.driverId === lease.driverId ? { ...current, driverId: undefined } : current,
-          )
+          yield* Ref.update(row, (current) => {
+            if (current.driverId !== lease.driverId) return current
+            const { leaseUntil: _released, ...operation } = current.operation
+            return { operation, driverId: undefined }
+          })
         }),
         markPipeline: Effect.fn("WorkspaceDeletionRepo.Double.markPipeline")((lease, status, now) =>
           write(lease, { pipelineStatus: status }, now, "markPipeline"),
@@ -197,6 +200,16 @@ const deletionRepoDouble = (initial: WorkspaceDeletionRepo.Operation) =>
       driverRequestIds: Ref.get(driverRequestIds),
     } satisfies DeletionDouble
   })
+
+const unusedCancellationLayer = Layer.succeed(
+  WorkspaceRunCancellation.Service,
+  WorkspaceRunCancellation.Service.of({
+    cancel: Effect.fn("WorkspaceRunCancellation.ReadTest.cancel")(() => Effect.die("unused")),
+    kickObjectCleanup: Effect.fn("WorkspaceRunCancellation.ReadTest.kick")(() =>
+      Effect.die("unused"),
+    ),
+  }),
+)
 
 const pendingOperation: WorkspaceDeletionRepo.Operation = {
   requestId,
@@ -324,6 +337,44 @@ describe("AdminSurface workspace deletion", () => {
         // and finalize execute, both against the adopted operation's requestId.
         expect(yield* deletions.driverRequestIds).toEqual([requestId, requestId])
       }).pipe(Effect.provide(appLayer))
+    }),
+  )
+
+  it.effect("reports the driver lease, not a guess, as the pipeline being driven", () =>
+    Effect.gen(function* () {
+      // Held for another minute by an attempt running somewhere else. The
+      // remaining time is what crosses the wire — an instant would be read
+      // against the client's own clock, which may disagree with the server's.
+      const held = yield* deletionRepoDouble({
+        ...pendingOperation,
+        leaseUntil: new Date(60_000),
+      })
+      const free = yield* deletionRepoDouble(pendingOperation)
+
+      const read = (deletions: { readonly layer: Layer.Layer<WorkspaceDeletionRepo.Service> }) =>
+        Effect.gen(function* () {
+          const admin = yield* AdminSurface.Service
+          return yield* admin.getWorkspaceDeletion("valid", workspaceId)
+        }).pipe(
+          Effect.provide(
+            Layer.provideMerge(
+              AdminSurface.layer,
+              Layer.mergeAll(
+                authLayer,
+                unusedWorkspaceLayer,
+                unusedOnboardingLayer,
+                deletions.layer,
+                unusedCancellationLayer,
+                CoachOnboardingToken.testLayer("PraximoMotherBot"),
+                ManagerBotSender.testLayer,
+                CoachBotRelease.testLayer,
+              ),
+            ),
+          ),
+        )
+
+      expect((yield* read(held))?.drivingLapsesInMs).toBe(60_000)
+      expect((yield* read(free))?.drivingLapsesInMs).toBe(0)
     }),
   )
 

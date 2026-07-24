@@ -38,11 +38,9 @@ const progress = (overrides: Partial<DeletionProgress> = {}): DeletionProgress =
   farewell: "pending",
   botRelease: "pending",
   startedAt: "2026-07-24T10:00:00.000Z",
-  advancedAt: "2026-07-24T10:00:00.000Z",
+  drivingLapsesInMs: 0,
   ...overrides,
 })
-
-const advancedAtMs = new Date("2026-07-24T10:00:00.000Z").getTime()
 
 const labels = (stages: ReadonlyArray<{ readonly label: string }>) =>
   stages.map((stage) => stage.label)
@@ -135,6 +133,16 @@ describe("deletionStages", () => {
     ])
   })
 
+  it("shows the first stage running before the first receipt has been read back", () => {
+    // The attempt is already in flight; the alternative is a blank sheet.
+    expect(states(deletionStages(undefined, true))).toEqual([
+      "running",
+      "pending",
+      "pending",
+      "pending",
+    ])
+  })
+
   it("treats the completed receipt as the purge having landed", () => {
     const done = deletionStages(
       progress({
@@ -172,31 +180,32 @@ describe("deletionHeadline", () => {
 })
 
 describe("deletionAdvancing", () => {
-  it("trusts this screen's own request above anything the receipt says", () => {
-    expect(deletionAdvancing(progress(), true, advancedAtMs + 60 * 60 * 1_000)).toBe(true)
+  it("counts this screen's own request from the moment it is sent", () => {
+    // The receipt is a round trip away; without this the button just pressed
+    // would look idle for the whole first request.
+    expect(deletionAdvancing(undefined, true)).toBe(true)
+    expect(deletionAdvancing(progress(), true)).toBe(true)
   })
 
-  it("reads a stage that landed moments ago as a pipeline someone else is driving", () => {
-    expect(deletionAdvancing(progress(), false, advancedAtMs + 2_000)).toBe(true)
-    expect(deletionAdvancing(progress(), false, advancedAtMs + 60_000)).toBe(false)
-  })
-
-  it("falls back to paused when the client clock disagrees with the server", () => {
-    // A Resume that is safe to decline beats hiding one that is needed.
-    expect(deletionAdvancing(progress(), false, advancedAtMs - 60 * 60 * 1_000)).toBe(false)
+  it("reads a held driver lease as a pipeline someone else is driving", () => {
+    expect(deletionAdvancing(progress({ drivingLapsesInMs: 42_000 }), false)).toBe(true)
+    expect(deletionAdvancing(progress({ drivingLapsesInMs: 0 }), false)).toBe(false)
   })
 
   it("never calls a finished deletion advancing", () => {
-    expect(deletionAdvancing(progress({ state: "completed" }), false, advancedAtMs + 1_000)).toBe(
-      false,
-    )
+    expect(
+      deletionAdvancing(progress({ state: "completed", drivingLapsesInMs: 42_000 }), false),
+    ).toBe(false)
   })
 })
 
 describe("deletionAdvancingLapsesInMs", () => {
-  it("says when the receipt will stop vouching for a moving pipeline", () => {
-    expect(deletionAdvancingLapsesInMs(progress(), advancedAtMs + 5_000)).toBe(15_000)
-    expect(deletionAdvancingLapsesInMs(progress(), advancedAtMs + 60_000)).toBe(0)
-    expect(deletionAdvancingLapsesInMs(progress({ state: "completed" }), advancedAtMs)).toBe(0)
+  it("says when the lease will stop vouching for a moving pipeline", () => {
+    expect(deletionAdvancingLapsesInMs(progress({ drivingLapsesInMs: 15_000 }))).toBe(15_000)
+    expect(deletionAdvancingLapsesInMs(progress())).toBe(0)
+    expect(
+      deletionAdvancingLapsesInMs(progress({ state: "completed", drivingLapsesInMs: 15_000 })),
+    ).toBe(0)
+    expect(deletionAdvancingLapsesInMs(undefined)).toBe(0)
   })
 })

@@ -146,27 +146,32 @@ const botOutcome = {
  * Only one stage can be running, and only while the pipeline is actually being
  * driven: it never advances on its own, so a receipt nobody is working on has a
  * first *pending* stage rather than a spinning one.
+ *
+ * An absent receipt is the first moment of an attempt this screen just started
+ * — the request is in flight and the first read has not landed yet. Nothing has
+ * happened server-side that we know of, so every stage is pending, and the list
+ * shows the first one spinning instead of leaving the sheet blank.
  */
 export const deletionStages = (
-  progress: DeletionProgress,
+  progress: DeletionProgress | undefined,
   running: boolean,
 ): ReadonlyArray<DeletionStage> => {
   const copies: ReadonlyArray<StageCopy> = [
     {
       key: "sessions",
-      outcome: pipelineOutcome[progress.pipeline],
+      outcome: progress === undefined ? undefined : pipelineOutcome[progress.pipeline],
       pending: "Cancel active sessions",
       running: "Cancelling sessions…",
     },
     {
       key: "farewell",
-      outcome: farewellOutcome[progress.farewell],
+      outcome: progress === undefined ? undefined : farewellOutcome[progress.farewell],
       pending: "Send the farewell message",
       running: "Sending the farewell…",
     },
     {
       key: "bot",
-      outcome: botOutcome[progress.botRelease],
+      outcome: progress === undefined ? undefined : botOutcome[progress.botRelease],
       pending: "Release the bot",
       running: "Releasing the bot…",
     },
@@ -174,7 +179,7 @@ export const deletionStages = (
       key: "purge",
       // The cascade and the receipt are completed in one statement, so the
       // operation reaching `completed` is exactly "the data is gone".
-      outcome: progress.state === "completed" ? { label: "Workspace data purged" } : undefined,
+      outcome: progress?.state === "completed" ? { label: "Workspace data purged" } : undefined,
       pending: "Purge workspace data",
       running: "Purging workspace data…",
     },
@@ -200,41 +205,31 @@ export const deletionStages = (
 }
 
 /**
- * How long after a stage lands the pipeline is still assumed to be moving.
- * Every stage is one RPC or Bot API round trip, so a gap this long means the
- * attempt driving it is gone rather than slow.
- */
-const StillAdvancingMs = 20_000
-
-/**
  * Whether the pipeline is being driven right now. Two things can say so: this
- * screen's own request, and — for an attempt started somewhere else, or on a
- * screen reopened while one is still in flight — a stage having landed moments
- * ago. Without the second, a deletion that is visibly progressing would be
- * called "paused" and invite a second, concurrent attempt.
+ * screen's own request — true from the moment it is sent, before any receipt
+ * has come back — and the server's driver lease, which covers an attempt
+ * started somewhere else, or one still in flight on a screen just reopened.
  *
- * The comparison is absolute, so a client clock that disagrees with the server
- * falls back to "not being driven" — which offers a Resume that is safe to
- * decline, rather than hiding one that is needed.
+ * Both halves matter. Without the first, the gap between committing to the
+ * deletion and reading the first receipt looks idle, and the button that was
+ * just pressed sits there as though nothing happened. Without the second, a
+ * deletion somebody else is driving would be called "paused" and invite a
+ * concurrent attempt.
  */
 export const deletionAdvancing = (
-  progress: DeletionProgress,
+  progress: DeletionProgress | undefined,
   ownAttemptRunning: boolean,
-  nowMs: number,
-): boolean => ownAttemptRunning || deletionAdvancingLapsesInMs(progress, nowMs) > 0
+): boolean => ownAttemptRunning || deletionAdvancingLapsesInMs(progress) > 0
 
 /**
  * How long the receipt alone will keep vouching that the pipeline is moving —
- * `0` once it has stopped doing so. A caller that renders `deletionAdvancing`
- * needs this: the verdict changes with the clock rather than with any new data,
- * so nothing will prompt a redraw at the moment it flips unless something is
+ * `0` once nobody holds the lease. A caller that renders `deletionAdvancing`
+ * needs this: the verdict changes with time rather than with any new data, so
+ * nothing will prompt a redraw at the moment it flips unless something is
  * scheduled for exactly then.
  */
-export const deletionAdvancingLapsesInMs = (progress: DeletionProgress, nowMs: number): number => {
-  if (progress.state === "completed") return 0
-  const since = Math.abs(nowMs - new Date(progress.advancedAt).getTime())
-  return since >= StillAdvancingMs ? 0 : StillAdvancingMs - since
-}
+export const deletionAdvancingLapsesInMs = (progress: DeletionProgress | undefined): number =>
+  progress === undefined || progress.state === "completed" ? 0 : progress.drivingLapsesInMs
 
 /**
  * What the progress surface says about itself. The paused wording is the one

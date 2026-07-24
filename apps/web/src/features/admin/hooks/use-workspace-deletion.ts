@@ -49,23 +49,20 @@ export function useWorkspaceDeletion(initData: string, workspaceId: string): Wor
     adminWorkspaceDeletionQuery(initData, workspaceId, { watch: remove.isPending }),
   )
 
-  // A pipeline that goes quiet produces no new data — the polls keep returning
-  // the same receipt, which the query cache rightly treats as nothing to report.
-  // So the moment its last stage stops being recent is scheduled explicitly;
-  // without it the panel would claim to be deleting until something else
-  // happened to redraw it.
+  const progress = receipt ?? undefined
+
+  // A pipeline nobody is driving produces no new data — the polls keep
+  // returning the same receipt, which the query cache rightly treats as nothing
+  // to report. So the moment the lease lapses is scheduled explicitly; without
+  // it the panel would claim to be deleting until something else happened to
+  // redraw it.
   const [, markLapsed] = useState(0)
-  const advancedAt = receipt?.advancedAt
+  const lapsesIn = deletionAdvancingLapsesInMs(progress)
   useEffect(() => {
-    if (receipt === null || remove.isPending) return
-    const lapsesIn = deletionAdvancingLapsesInMs(receipt, Date.now())
-    if (lapsesIn <= 0) return
+    if (remove.isPending || lapsesIn <= 0) return
     const timer = setTimeout(() => markLapsed((tick) => tick + 1), lapsesIn)
     return () => clearTimeout(timer)
-    // The receipt's own identity changes on every poll; its advance time is the
-    // only part of it this schedule depends on.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [advancedAt, remove.isPending])
+  }, [lapsesIn, remove.isPending])
 
   const start = async () => {
     requestId.current ??= crypto.randomUUID()
@@ -94,10 +91,12 @@ export function useWorkspaceDeletion(initData: string, workspaceId: string): Wor
     await router.navigate({ to: "/admin" })
   }
 
-  const progress = receipt ?? undefined
   return {
     progress,
-    advancing: progress !== undefined && deletionAdvancing(progress, remove.isPending, Date.now()),
+    // Our own request counts from the moment it is sent — the first receipt is
+    // a round trip away, and until it lands nothing else would say that the
+    // deletion this screen just committed to is under way.
+    advancing: deletionAdvancing(progress, remove.isPending),
     error,
     start: () => void start(),
   }

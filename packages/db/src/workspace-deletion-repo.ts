@@ -37,6 +37,12 @@ export const Operation = Schema.Struct({
   updatedAt: Schema.instanceOf(Date),
   completedAt: Schema.optionalKey(Schema.instanceOf(Date)),
   expiresAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  /**
+   * When the current driver's claim lapses; absent when nobody holds one. This
+   * is the only honest answer to "is somebody driving this right now" — every
+   * other signal on the receipt records what has already landed.
+   */
+  leaseUntil: Schema.optionalKey(Schema.instanceOf(Date)),
   workspaceName: Schema.optionalKey(Schema.NonEmptyString),
   coachTelegramId: Schema.optionalKey(Schema.NonEmptyString),
   coachLanguage: Schema.optionalKey(CoachLanguage),
@@ -168,6 +174,7 @@ export const layer = Layer.effect(
               updatedAt: schema.workspaceDeletionOperation.updatedAt,
               completedAt: schema.workspaceDeletionOperation.completedAt,
               expiresAt: schema.workspaceDeletionOperation.expiresAt,
+              leaseUntil: schema.workspaceDeletionOperation.leaseUntil,
               workspaceName: schema.workspace.name,
               coachTelegramId: schema.member.telegramUserId,
               coachLanguage: schema.member.language,
@@ -193,6 +200,7 @@ export const layer = Layer.effect(
     const decodeRow = (row: {
       completedAt: Date | null
       expiresAt: Date | null
+      leaseUntil: Date | null
       workspaceName: string | null
       coachTelegramId: string | null
       coachLanguage: string | null
@@ -200,11 +208,20 @@ export const layer = Layer.effect(
       // Spreading `...rest` first and re-adding only the present values keeps the
       // nullable columns out entirely: the Operation schema marks them optional,
       // so a literal `null` would fail decoding.
-      const { completedAt, expiresAt, workspaceName, coachTelegramId, coachLanguage, ...rest } = row
+      const {
+        completedAt,
+        expiresAt,
+        leaseUntil,
+        workspaceName,
+        coachTelegramId,
+        coachLanguage,
+        ...rest
+      } = row
       return decodeOperation({
         ...rest,
         ...(completedAt === null ? {} : { completedAt }),
         ...(expiresAt === null ? {} : { expiresAt }),
+        ...(leaseUntil === null ? {} : { leaseUntil }),
         ...(workspaceName === null ? {} : { workspaceName }),
         ...(coachTelegramId === null ? {} : { coachTelegramId }),
         ...(coachLanguage === null ? {} : { coachLanguage }),

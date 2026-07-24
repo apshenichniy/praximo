@@ -75,9 +75,7 @@ export const adminWorkspaceDeletionQuery = (
       const watching = options?.watch === true
       if (receipt === null || receipt === undefined) return watching ? ActiveDeletionPollMs : false
       if (receipt.state === "completed") return false
-      return watching || deletionAdvancing(receipt, false, Date.now())
-        ? ActiveDeletionPollMs
-        : PausedDeletionPollMs
+      return deletionAdvancing(receipt, watching) ? ActiveDeletionPollMs : PausedDeletionPollMs
     },
   })
 

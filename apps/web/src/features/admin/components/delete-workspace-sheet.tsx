@@ -250,9 +250,10 @@ function ProgressStep({
   return (
     <>
       <SheetHeader {...headline} />
-      {progress === undefined ? null : (
-        <DeletionStageList stages={deletionStages(progress, advancing)} className="mt-6" />
-      )}
+      {/* Rendered before the first receipt too: the attempt is already in
+          flight, and a blank sheet is the one moment this flow would stop
+          accounting for itself. */}
+      <DeletionStageList stages={deletionStages(progress, advancing)} className="mt-6" />
       {error === undefined ? null : (
         <div className="mt-6 flex flex-col gap-3">
           <DeletionError error={error} />

@@ -153,10 +153,8 @@ export interface DeleteResult {
 
 /**
  * The deletion pipeline as the progress sheet reads it (#110): one settled-or-
- * pending status per stage, straight off the operation's own receipt. It is
- * deliberately free of any notion of "currently running" — the server knows
- * only what has landed, and the screen driving an attempt is the one place
- * that can honestly say which stage is in flight.
+ * pending status per stage, straight off the operation's own receipt, plus how
+ * long the current driver's claim still has to run.
  *
  * It survives its own workspace: the receipt is kept for a week after the
  * cascade, so the sheet can watch the last stage complete instead of losing
@@ -172,10 +170,15 @@ export interface DeletionProgress {
   readonly workspaceName?: string
   readonly startedAt: string
   /**
-   * When a stage last landed. The closest thing to "somebody is driving this"
-   * the server has: every stage bumps it, and an abandoned operation stops.
+   * How much longer somebody is driving this operation — `0` when nobody is.
+   * The driver lease answers that outright, so the screen no longer has to
+   * infer it from how recently a stage happened to land.
+   *
+   * It is a duration rather than an instant on purpose: a client whose clock
+   * disagrees with the server's would misread a deadline, and the two mistakes
+   * are not symmetric — calling a live attempt "paused" invites a second one.
    */
-  readonly advancedAt: string
+  readonly drivingLapsesInMs: number
   readonly completedAt?: string
 }
 
@@ -1066,7 +1069,10 @@ export const layer = Layer.effect(
           ? {}
           : { workspaceName: operation.workspaceName }),
         startedAt: operation.createdAt.toISOString(),
-        advancedAt: operation.updatedAt.toISOString(),
+        drivingLapsesInMs:
+          operation.leaseUntil === undefined
+            ? 0
+            : Math.max(0, operation.leaseUntil.getTime() - (yield* Clock.currentTimeMillis)),
         ...(operation.completedAt === undefined
           ? {}
           : { completedAt: operation.completedAt.toISOString() }),
