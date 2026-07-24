@@ -1,5 +1,5 @@
 import { CoachOnboardingToken } from "@praximo/auth"
-import { CoachBotProvisioningRepo } from "@praximo/db"
+import { CoachBotProvisioningRepo, CoachOnboardingRepo } from "@praximo/db"
 import { TelegramId } from "@praximo/domain"
 import { CoachBotBranding, CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Api, InputFile } from "grammy"
@@ -122,8 +122,12 @@ export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(functi
   telegramUserId: number,
 ) {
   const tokens = yield* CoachOnboardingToken.Service
+  const onboarding = yield* CoachOnboardingRepo.Service
   const repo = yield* CoachBotProvisioningRepo.Service
-  const inviteId = yield* tokens.verify(parameter)
+  // The start param carries only the public code: reject junk by format, then
+  // resolve it to an invite id the provisioning repo can advance.
+  const code = yield* tokens.verify(parameter)
+  const inviteId = yield* onboarding.resolveCode(code)
   return yield* repo.prepare(
     inviteId,
     TelegramId.make(String(telegramUserId)),

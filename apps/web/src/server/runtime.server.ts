@@ -18,7 +18,6 @@ interface Env {
   readonly DATABASE_URL: string
   readonly MANAGER_BOT_TOKEN: string
   readonly MANAGER_BOT_USERNAME: string
-  readonly COACH_ONBOARDING_TOKEN_SECRET: string
   readonly DEFAULT_COACH_BOT_AVATAR_R2_KEY: string
   readonly MANAGER_BOT?: ManagerBotSender.RpcClient &
     CoachBotBranding.RpcClient &
@@ -82,10 +81,6 @@ const resolveEnv = async (): Promise<Env> => {
       DATABASE_URL: requireString(process.env.DATABASE_URL, "DATABASE_URL"),
       MANAGER_BOT_TOKEN: requireString(process.env.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
       MANAGER_BOT_USERNAME: requireString(process.env.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
-      COACH_ONBOARDING_TOKEN_SECRET: requireString(
-        process.env.COACH_ONBOARDING_TOKEN_SECRET,
-        "COACH_ONBOARDING_TOKEN_SECRET",
-      ),
       DEFAULT_COACH_BOT_AVATAR_R2_KEY: requireString(
         process.env.DEFAULT_COACH_BOT_AVATAR_R2_KEY,
         "DEFAULT_COACH_BOT_AVATAR_R2_KEY",
@@ -110,10 +105,6 @@ const resolveEnv = async (): Promise<Env> => {
     DATABASE_URL: requireString(workerEnv.DATABASE_URL, "DATABASE_URL"),
     MANAGER_BOT_TOKEN: requireString(workerEnv.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
     MANAGER_BOT_USERNAME: requireString(workerEnv.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
-    COACH_ONBOARDING_TOKEN_SECRET: requireString(
-      workerEnv.COACH_ONBOARDING_TOKEN_SECRET,
-      "COACH_ONBOARDING_TOKEN_SECRET",
-    ),
     DEFAULT_COACH_BOT_AVATAR_R2_KEY: requireString(
       workerEnv.DEFAULT_COACH_BOT_AVATAR_R2_KEY,
       "DEFAULT_COACH_BOT_AVATAR_R2_KEY",

@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
-import { CoachBotProvisioningRepo, Database, WorkspaceRepo } from "@praximo/db"
+import { CoachBotProvisioningRepo, CoachOnboardingRepo, Database, WorkspaceRepo } from "@praximo/db"
 import { TelegramId, WorkspaceId } from "@praximo/domain"
 import {
   BotRegistry,
@@ -26,16 +26,17 @@ export interface Env {
   readonly MANAGER_BOT_TOKEN: string
   readonly MANAGER_BOT_USERNAME: string
   readonly MANAGER_BOT_WEBHOOK_SECRET: string
-  readonly COACH_ONBOARDING_TOKEN_SECRET: string
   readonly COACH_BOT_CREDENTIAL_KEY: string
   readonly DEFAULT_COACH_BOT_AVATAR_R2_KEY: string
   readonly COACH_MINI_APP_URL: string
   readonly UPLOADS: R2Bucket
 }
 
-const DbLive = Layer.mergeAll(WorkspaceRepo.layer, CoachBotProvisioningRepo.layer).pipe(
-  Layer.provide(Database.layer),
-)
+const DbLive = Layer.mergeAll(
+  WorkspaceRepo.layer,
+  CoachBotProvisioningRepo.layer,
+  CoachOnboardingRepo.layer,
+).pipe(Layer.provide(Database.layer))
 const CoachBotDataLive = Layer.mergeAll(DbLive, CoachBotCredential.layer)
 const CoachBotReleaseLayer = Layer.provideMerge(CoachBotReleaseLive.layer, CoachBotDataLive)
 const AppLive = Layer.mergeAll(
@@ -72,7 +73,10 @@ const constantTimeEqual = (received: string, expected: string): boolean => {
 }
 
 const errorText = (tag: string, reason?: string): string => {
-  if (tag === "CoachOnboardingToken.InvalidToken") {
+  if (
+    tag === "CoachOnboardingToken.InvalidToken" ||
+    tag === "CoachOnboardingRepo.InviteCodeUnresolved"
+  ) {
     return "This setup link is invalid. Ask your Praximo administrator for a fresh link."
   }
   if (reason === "expired") {

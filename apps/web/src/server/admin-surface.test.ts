@@ -13,6 +13,7 @@ import {
   AdminId,
   AdminNotFound,
   CoachLanguage,
+  CoachOnboardingInviteCode,
   CoachOnboardingInviteId,
   TelegramId,
   WorkspaceId,
@@ -65,6 +66,7 @@ const createdAggregate: CoachOnboardingRepo.Aggregate = {
   owner: { language: CoachLanguage.make("uk") },
   invite: {
     id: CoachOnboardingInviteId.make("ci_cb6bd55960914d69aeff2af000"),
+    code: CoachOnboardingInviteCode.make("ADA23456"),
     workspaceId: WorkspaceId.make("ws_cb6bd55960914d69aeff2af000354c7f"),
     status: "pending",
     issuedAt: new Date("2026-07-23T12:01:00.000Z"),
@@ -110,6 +112,9 @@ const onboardingRepoLayer = Layer.succeed(
     createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
       Effect.die("unused in list tests"),
     ),
+    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
+      Effect.die("resolveCode is bot-only and unused in these tests"),
+    ),
     findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
       Effect.die("unused in list tests"),
     ),
@@ -134,6 +139,9 @@ const successfulOnboardingRepoLayer = Layer.succeed(
     createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
       Effect.succeed({ aggregate: createdAggregate, created: true }),
     ),
+    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
+      Effect.die("resolveCode is bot-only and unused in these tests"),
+    ),
     findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
       Effect.succeed(createdAggregate),
     ),
@@ -156,6 +164,9 @@ const replayOnboardingRepoLayer = Layer.succeed(
     createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
       Effect.die("replay must not create"),
     ),
+    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
+      Effect.die("resolveCode is bot-only and unused in these tests"),
+    ),
     findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
       Effect.succeed(createdAggregate),
     ),
@@ -177,6 +188,9 @@ const failingOnboardingRepoLayer = Layer.succeed(
     ),
     createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
       Effect.fail(new QueryFailed({ operation: "test", cause: new Error("database failed") })),
+    ),
+    resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
+      Effect.die("resolveCode is bot-only and unused in these tests"),
     ),
     findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
       Effect.succeed(createdAggregate),
@@ -208,6 +222,9 @@ const outcomeUnknownOnboardingRepoLayer = Layer.effect(
         Effect.fail(
           new QueryFailed({ operation: "test.create", cause: new Error("outcome unknown") }),
         ),
+      ),
+      resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
+        Effect.die("resolveCode is bot-only and unused in these tests"),
       ),
       findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
         Effect.succeed(createdAggregate),
@@ -248,7 +265,7 @@ const deletionDependencies = Layer.mergeAll(
 
 const createDependencies = Layer.mergeAll(
   onboardingRepoLayer,
-  CoachOnboardingToken.testLayer("test-secret", "PraximoMotherBot"),
+  CoachOnboardingToken.testLayer("PraximoMotherBot"),
   WorkspaceBrandingStorage.testLayer({
     defaultAvatarKey: "branding/default-coach-avatar.jpg",
   }),
@@ -276,7 +293,7 @@ const createAppLayer = Layer.provideMerge(
     adminRepoLayer,
     workspaceRepoLayer([]),
     successfulOnboardingRepoLayer,
-    CoachOnboardingToken.testLayer("test-secret", "PraximoMotherBot"),
+    CoachOnboardingToken.testLayer("PraximoMotherBot"),
     WorkspaceBrandingStorage.testLayer({
       defaultAvatarKey: "branding/default-coach-avatar.jpg",
     }),
@@ -294,7 +311,7 @@ const createLayerWith = (onboardingLayer: Layer.Layer<CoachOnboardingRepo.Servic
       adminRepoLayer,
       workspaceRepoLayer([]),
       onboardingLayer,
-      CoachOnboardingToken.testLayer("test-secret", "PraximoMotherBot"),
+      CoachOnboardingToken.testLayer("PraximoMotherBot"),
       WorkspaceBrandingStorage.testLayer({
         defaultAvatarKey: "branding/default-coach-avatar.jpg",
       }),
@@ -344,7 +361,7 @@ const profileAppLayer = Layer.provideMerge(
     adminRepoLayer,
     profileWorkspaceRepoLayer,
     successfulOnboardingRepoLayer,
-    CoachOnboardingToken.testLayer("test-secret", "PraximoMotherBot"),
+    CoachOnboardingToken.testLayer("PraximoMotherBot"),
     WorkspaceBrandingStorage.testLayer({
       defaultAvatarKey: "branding/default-coach-avatar.jpg",
     }),
@@ -376,6 +393,9 @@ const conflictingOnboardingRepoLayer = (existingAvatarR2Key: string) =>
         }),
         createOrGet: Effect.fn("CoachOnboardingRepo.Test.createOrGet")(() =>
           Effect.fail(conflict()),
+        ),
+        resolveCode: Effect.fn("CoachOnboardingRepo.Test.resolveCode")(() =>
+          Effect.die("resolveCode is bot-only and unused in these tests"),
         ),
         findInvite: Effect.fn("CoachOnboardingRepo.Test.findInvite")(() =>
           Effect.succeed(createdAggregate),

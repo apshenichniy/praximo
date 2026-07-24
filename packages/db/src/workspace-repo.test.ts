@@ -218,6 +218,7 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
       yield* Effect.promise(() =>
         client.insert(schema.coachOnboardingInvite).values({
           id: inviteId,
+          code: "DETAIL22",
           workspaceId: id,
           requestId: crypto.randomUUID(),
           requestFingerprint: "detail",

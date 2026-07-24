@@ -283,9 +283,7 @@ export const layer = Layer.effect(
         detail.botStatus === "awaiting-setup" && detail.ownerTelegramUserId === undefined
       const link =
         detail.invite !== undefined && inviteStatus === "pending" && canReissue
-          ? yield* tokens
-              .linkFor(detail.invite.id)
-              .pipe(Effect.mapError(() => new LoadFailed({ operation: "getWorkspace.link" })))
+          ? yield* tokens.linkFor(detail.invite.code)
           : undefined
 
       return {
@@ -349,9 +347,7 @@ export const layer = Layer.effect(
       aggregate: CoachOnboardingRepo.Aggregate,
       delivery: DeliveryStatus,
     ) {
-      const link = yield* tokens
-        .linkFor(aggregate.invite.id)
-        .pipe(Effect.mapError(() => new LoadFailed({ operation: "buildInviteLink" })))
+      const link = yield* tokens.linkFor(aggregate.invite.code)
       return {
         workspace: WorkspaceRepo.ListItem.make({
           id: aggregate.workspace.id,

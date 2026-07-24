@@ -5,7 +5,6 @@ const completeEnvironment = {
   DATABASE_URL: "postgres://example",
   MANAGER_BOT_TOKEN: "token",
   MANAGER_BOT_USERNAME: "PraximoMotherBot",
-  COACH_ONBOARDING_TOKEN_SECRET: "secret",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default.jpg",
 }
 

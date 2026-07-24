@@ -172,6 +172,9 @@ export const coachOnboardingInvite = pgTable(
       .references(() => workspace.id, { onDelete: "cascade" }),
     requestId: text("request_id").notNull().unique(),
     requestFingerprint: text("request_fingerprint").notNull(),
+    // The public start-param code (`ws_{code}`). Unique so the bot resolves an
+    // invite by a single indexed lookup; a collision on insert retries.
+    code: text("code").notNull().unique(),
     issuedByTelegramId: text("issued_by_telegram_id").notNull(),
     status: coachOnboardingInviteStatusEnum("status").notNull().default("pending"),
     issuedAt: timestamp("issued_at", { withTimezone: true, mode: "date" }).notNull(),

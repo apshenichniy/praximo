@@ -16,7 +16,6 @@ const env = {
   MANAGER_BOT_TOKEN: "test-token",
   MANAGER_BOT_USERNAME: "PraximoManagerBot",
   MANAGER_BOT_WEBHOOK_SECRET: "test-webhook-secret",
-  COACH_ONBOARDING_TOKEN_SECRET: "test-onboarding-secret",
   COACH_BOT_CREDENTIAL_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default-coach-avatar.jpg",
   COACH_MINI_APP_URL: "https://stage.praximo.io/",
