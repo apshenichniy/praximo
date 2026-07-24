@@ -12,8 +12,7 @@ import {
 } from "@/components/ui/drawer.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { Textarea } from "@/components/ui/textarea.tsx"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group.tsx"
-import { languageOptions } from "@/features/admin/formatting.ts"
+import { InviteLanguageChips } from "@/features/admin/components/invite-language-chips.tsx"
 
 /**
  * Bottom drawer for the Copy channel: pick the invite-message language, then
@@ -57,29 +56,7 @@ export function InviteCopySheet({
         <div className="flex flex-col gap-5 pt-5">
           {fallbackMessage === undefined ? (
             <>
-              <div>
-                <p className="text-sm font-medium">Invite language</p>
-                <ToggleGroup
-                  aria-label="Invite language"
-                  className="mt-2"
-                  value={[language]}
-                  onValueChange={(next) => {
-                    const value = next[0]
-                    if (value === "en" || value === "uk" || value === "ru") setLanguage(value)
-                  }}
-                >
-                  {languageOptions.map((option) => (
-                    <ToggleGroupItem
-                      key={option.value}
-                      value={option.value}
-                      disabled={pending}
-                      className="rounded-full px-4"
-                    >
-                      {option.label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </div>
+              <InviteLanguageChips value={language} disabled={pending} onChange={setLanguage} />
 
               {error === undefined ? null : (
                 <Alert variant="destructive" className="bg-destructive/10 border-transparent">
