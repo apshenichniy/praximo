@@ -1,12 +1,11 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, getRouteApi } from "@tanstack/react-router"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
 import { toast } from "@/components/ui/toast.tsx"
 import { takeAdminNotice } from "@/features/admin/admin-notice.ts"
 import {
-  type CoachEntry,
   ActiveCoachItem,
   CoachListCard,
   CoachListEmpty,
@@ -15,16 +14,11 @@ import {
   ViewerCoachCard,
 } from "@/features/admin/components/coach-list.tsx"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
-import { notifyHaptic } from "@/features/admin/haptics.ts"
-import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
 import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
 import { loadTelegramWebApp } from "@/lib/telegram.ts"
 
 export const Route = createFileRoute("/admin/")({ component: AdminHome })
 const adminRoute = getRouteApi("/admin")
-
-/** How long a row keeps saying "Copied" before falling back to its label. */
-const CopiedFeedbackMilliseconds = 2_000
 
 /**
  * Open a `t.me` link without leaving the Mini App. Outside a Telegram host
@@ -44,8 +38,6 @@ const openInTelegram = async (link: string) => {
 function AdminHome() {
   const { initData } = adminRoute.useLoaderData()
   const { data } = useSuspenseQuery(adminWorkspaceListQuery(initData))
-  const [copiedId, setCopiedId] = useState<string>()
-  const inviteShare = useInviteShare(initData)
 
   // The server already returns onboarding first and active coaches A→Z; the
   // split here is only about which heading each row lives under.
@@ -66,53 +58,6 @@ function AdminHome() {
     // a StrictMode re-run cannot re-read it and would lose the toast entirely.
     setTimeout(() => toast.add({ title: message, type: "success" }), 0)
   }, [])
-
-  /**
-   * Re-deliver a live invite through Telegram's native chat picker — the same
-   * prepared-message path the invite screen uses (#104). The invite itself is
-   * untouched: a dismissed picker changes nothing and the link stays valid.
-   */
-  const resend = async (coach: CoachEntry) => {
-    const actions = coach.onboarding?.actions
-    if (actions === undefined) return
-
-    switch (await inviteShare.share({ ...actions, inviteId: actions.id })) {
-      case "dismissed":
-        return
-      case "no-telegram":
-        notifyHaptic("error")
-        toast.add({ title: "Open this from Telegram to resend the invite.", type: "error" })
-        return
-      case "failed":
-        notifyHaptic("error")
-        toast.add({ title: "Telegram couldn't prepare the invite. Try again.", type: "error" })
-        return
-      case "fallback":
-        notifyHaptic("success")
-        toast.add({ title: "Opening Telegram to share the invite…", type: "success" })
-        return
-      case "shared":
-        notifyHaptic("success")
-        toast.add({ title: "Invite sent again", type: "success" })
-    }
-  }
-
-  const copy = async (coach: CoachEntry) => {
-    const actions = coach.onboarding?.actions
-    if (actions === undefined) return
-    try {
-      await navigator.clipboard.writeText(actions.message)
-    } catch {
-      notifyHaptic("error")
-      toast.add({
-        title: "Copy is blocked here — open the coach to copy the invite.",
-        type: "error",
-      })
-      return
-    }
-    setCopiedId(coach.id)
-    setTimeout(() => setCopiedId(undefined), CopiedFeedbackMilliseconds)
-  }
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
@@ -136,14 +81,7 @@ function AdminHome() {
           <div className="mt-4">
             <CoachListCard>
               {onboarding.map((coach) => (
-                <OnboardingCoachItem
-                  key={coach.id}
-                  coach={coach}
-                  resending={inviteShare.sharingInviteId === coach.onboarding?.actions?.id}
-                  copied={copiedId === coach.id}
-                  onResend={(entry) => void resend(entry)}
-                  onCopy={(entry) => void copy(entry)}
-                />
+                <OnboardingCoachItem key={coach.id} coach={coach} />
               ))}
             </CoachListCard>
           </div>

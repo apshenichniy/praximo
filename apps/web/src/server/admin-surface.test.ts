@@ -488,7 +488,7 @@ describe("AdminSurface", () => {
     }).pipe(Effect.provide(appLayer(stageRows)), Effect.provide(testConfig)),
   )
 
-  it.effect("counts down only while the invite is pending, and offers resend there only", () =>
+  it.effect("counts down only while the invite is still measured by its expiry", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(Date.parse(NOW))
       const adminSurface = yield* AdminSurface.Service
@@ -501,14 +501,14 @@ describe("AdminSurface", () => {
         channel: "telegram",
         expiresAt: hoursAfter(6 * 24).toISOString(),
       })
-      expect(byId.ws_invited?.actions?.link).toContain("?start=ws_ADA23456")
-      // An accepted claim keeps its acceptance time but never an expiry, and it
-      // is past the point where resending the old link would mean anything.
+      // An accepted claim keeps its acceptance time but never an expiry:
+      // acceptance retired the deadline, so there is nothing to count down.
       expect(byId.ws_accepted?.acceptedAt).toBe(hoursBefore(2).toISOString())
       expect(byId.ws_accepted).not.toHaveProperty("expiresAt")
-      expect(byId.ws_accepted?.actions).toBeUndefined()
-      expect(byId.ws_expired?.actions).toBeUndefined()
-      expect(byId.ws_stalled?.actions).toBeUndefined()
+      expect(byId.ws_stalled).not.toHaveProperty("expiresAt")
+      // The list carries no per-row invite payload — actions live on the
+      // details screen (#108), so nothing here mints a link or a message.
+      expect(byId.ws_invited).not.toHaveProperty("actions")
     }).pipe(Effect.provide(appLayer(stageRows)), Effect.provide(testConfig)),
   )
 

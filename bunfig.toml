@@ -1,0 +1,5 @@
+# Hugeicons Pro ships from the vendor's own registry, authenticated with the
+# Universal License Key. The key itself stays in the gitignored root `.env`;
+# only the indirection is committed.
+[install.scopes]
+"@hugeicons-pro" = { token = "$UNIVERSAL_LICENSE_KEY", url = "https://npm.hugeicons.com/" }

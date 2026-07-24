@@ -4,7 +4,6 @@ import { AdminRepo, CoachOnboardingRepo, WorkspaceDeletionRepo, WorkspaceRepo } 
 import {
   CoachLanguage,
   type CoachOnboardingInviteCancellationReason,
-  type CoachOnboardingInviteId,
   type CoachOnboardingInviteStatus,
   CreateInviteDelivery,
   CreateWorkspaceInput,
@@ -56,15 +55,11 @@ export type CoachOnboardingStage =
   | "reset"
   | "not-invited"
 
-/** The Resend / Copy payload, carried only while the invite is still deliverable. */
-export interface CoachInviteActions {
-  readonly id: CoachOnboardingInviteId
-  readonly link: string
-  /** The full forwardable message, in the language the invite last left in. */
-  readonly message: string
-  readonly language: CoachLanguage
-}
-
+/**
+ * The list is a read surface: a row states where the coach stands and links
+ * through to the details screen, which owns Resend / Copy and every other
+ * invite action (#108). Nothing here mints a link or a message per row.
+ */
 export interface CoachOnboarding {
   readonly stage: CoachOnboardingStage
   readonly channel?: InviteDeliveryChannel
@@ -72,7 +67,6 @@ export interface CoachOnboarding {
   readonly expiresAt?: string
   readonly acceptedAt?: string
   readonly cancelledAt?: string
-  readonly actions?: CoachInviteActions
 }
 
 export interface CoachListEntry {
@@ -372,6 +366,44 @@ const onboardingStage = (
   }
 }
 
+/** Project one aggregate row into the row the list renders. */
+const presentCoach = (
+  item: WorkspaceRepo.ListItem,
+  stage: CoachOnboardingStage | undefined,
+): CoachListEntry => {
+  const invite = item.invite
+
+  return {
+    id: item.id,
+    name: item.name,
+    botStatus: item.botStatus,
+    ...(item.botUsername === undefined ? {} : { botUsername: item.botUsername }),
+    ...(item.lastActivityAt === undefined
+      ? {}
+      : { lastActivityAt: item.lastActivityAt.toISOString() }),
+    ...(stage === undefined
+      ? {}
+      : {
+          onboarding: {
+            stage,
+            ...(invite?.delivery === undefined ? {} : { channel: invite.delivery.channel }),
+            // The expiry is carried while the invite is still measured by
+            // it — counting down, or already lapsed. An accepted claim
+            // retired that deadline, so it never travels with one.
+            ...((stage === "invited" || stage === "expired") && invite !== undefined
+              ? { expiresAt: invite.expiresAt.toISOString() }
+              : {}),
+            ...(invite?.acceptedAt === undefined
+              ? {}
+              : { acceptedAt: invite.acceptedAt.toISOString() }),
+            ...(invite?.cancelledAt === undefined
+              ? {}
+              : { cancelledAt: invite.cancelledAt.toISOString() }),
+          },
+        }),
+  }
+}
+
 const deletionFarewell = (language: CoachLanguage, name: string): string => {
   switch (language) {
     case "uk":
@@ -412,60 +444,6 @@ export const layer = Layer.effect(
           ),
         )
       return telegramId
-    })
-
-    const presentCoach = Effect.fn("AdminSurface.presentCoach")(function* (
-      item: WorkspaceRepo.ListItem,
-      stage: CoachOnboardingStage | undefined,
-    ) {
-      const invite = item.invite
-      const language = invite?.delivery?.language ?? "en"
-      // Resend and Copy only make sense while the link can still be claimed;
-      // every other stage renders as status, not as an action.
-      const actions =
-        stage === "invited" && invite !== undefined
-          ? yield* tokens.linkFor(invite.code).pipe(
-              Effect.map(
-                (link): CoachInviteActions => ({
-                  id: invite.id,
-                  link,
-                  message: forwardableMessage(language, item.name, link),
-                  language,
-                }),
-              ),
-            )
-          : undefined
-
-      return {
-        id: item.id,
-        name: item.name,
-        botStatus: item.botStatus,
-        ...(item.botUsername === undefined ? {} : { botUsername: item.botUsername }),
-        ...(item.lastActivityAt === undefined
-          ? {}
-          : { lastActivityAt: item.lastActivityAt.toISOString() }),
-        ...(stage === undefined
-          ? {}
-          : {
-              onboarding: {
-                stage,
-                ...(invite?.delivery === undefined ? {} : { channel: invite.delivery.channel }),
-                // The expiry is carried while the invite is still measured by
-                // it — counting down, or already lapsed. An accepted claim
-                // retired that deadline, so it never travels with one.
-                ...((stage === "invited" || stage === "expired") && invite !== undefined
-                  ? { expiresAt: invite.expiresAt.toISOString() }
-                  : {}),
-                ...(invite?.acceptedAt === undefined
-                  ? {}
-                  : { acceptedAt: invite.acceptedAt.toISOString() }),
-                ...(invite?.cancelledAt === undefined
-                  ? {}
-                  : { cancelledAt: invite.cancelledAt.toISOString() }),
-                ...(actions === undefined ? {} : { actions }),
-              },
-            }),
-      } satisfies CoachListEntry
     })
 
     /**
@@ -531,8 +509,7 @@ export const layer = Layer.effect(
           (left.item.invite?.issuedAt.getTime() ?? 0),
       )
 
-      const coaches = yield* Effect.forEach(
-        [...pinned, ...staged.filter((entry) => entry.stage === undefined)],
+      const coaches = [...pinned, ...staged.filter((entry) => entry.stage === undefined)].map(
         (entry) => presentCoach(entry.item, entry.stage),
       )
 
