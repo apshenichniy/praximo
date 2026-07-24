@@ -106,9 +106,28 @@ export class Service extends Context.Service<Service, Interface>()(
 export class ProvisioningUnavailable extends Schema.TaggedErrorClass<ProvisioningUnavailable>()(
   "CoachBotProvisioningRepo.ProvisioningUnavailable",
   {
-    reason: Schema.Literals(["not-found", "expired", "used", "claimed", "identity-conflict"]),
+    reason: Schema.Literals([
+      "not-found",
+      "expired",
+      "used",
+      "cancelled",
+      "claimed",
+      "identity-conflict",
+    ]),
   },
 ) {}
+
+/**
+ * Whether an invite can still carry a provisioning attempt. An `accepted` claim
+ * has no TTL (#112), so only a `pending` invite is measured against its expiry;
+ * `cancelled` is the fence a reset raises against an attempt still in flight.
+ */
+const claimable = (
+  invite: { readonly status: string; readonly expiresAt: Date },
+  now: Date,
+): boolean =>
+  invite.status === "accepted" ||
+  (invite.status === "pending" && invite.expiresAt.getTime() > now.getTime())
 
 export class InstallationNotFound extends Schema.TaggedErrorClass<InstallationNotFound>()(
   "CoachBotProvisioningRepo.InstallationNotFound",
@@ -244,8 +263,10 @@ export const layer = Layer.effect(
             from "coach_onboarding_invite"
             where
               "id" = ${inviteId}
-              and "status" = 'pending'
-              and "expires_at" > ${now}
+              and (
+                "status" = 'accepted'
+                or ("status" = 'pending' and "expires_at" > ${now})
+              )
             on conflict ("coach_telegram_id", "keyboard_request_id")
             do update set "updated_at" = excluded."updated_at"
           `),
@@ -265,11 +286,7 @@ export const layer = Layer.effect(
         catch: (cause) => new QueryFailed({ operation: "provisioning.prepare.inspect", cause }),
       })
       const invite = inviteRows[0]
-      if (
-        prepared !== undefined &&
-        invite?.status === "pending" &&
-        invite.expiresAt.getTime() > now.getTime()
-      ) {
+      if (prepared !== undefined && invite !== undefined && claimable(invite, now)) {
         return prepared
       }
       return yield* new ProvisioningUnavailable({
@@ -278,9 +295,11 @@ export const layer = Layer.effect(
             ? "not-found"
             : invite.status === "used"
               ? "used"
-              : invite.status === "expired" || invite.expiresAt.getTime() <= now.getTime()
-                ? "expired"
-                : "claimed",
+              : invite.status === "cancelled"
+                ? "cancelled"
+                : invite.status === "expired" || invite.expiresAt.getTime() <= now.getTime()
+                  ? "expired"
+                  : "claimed",
       })
     })
 
@@ -313,8 +332,10 @@ export const layer = Layer.effect(
                 limit 1
               )
               and "candidate"."status" = 'requested'
-              and "invite"."status" = 'pending'
-              and "invite"."expires_at" > ${now}
+              and (
+                "invite"."status" = 'accepted'
+                or ("invite"."status" = 'pending' and "invite"."expires_at" > ${now})
+              )
               and not exists (
                 select 1
                 from "coach_bot_provisioning" as "winner"
@@ -380,7 +401,7 @@ export const layer = Layer.effect(
                 "attempt"."id" = ${input.provisioningId}
                 and "attempt"."status" in ('configuring', 'completed')
                 and (
-                  "invite"."status" = 'pending'
+                  "invite"."status" in ('pending', 'accepted')
                   or "attempt"."status" = 'completed'
                 )
                 and (

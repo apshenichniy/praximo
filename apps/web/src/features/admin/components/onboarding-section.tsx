@@ -33,6 +33,69 @@ function OnboardingNotInvited() {
   )
 }
 
+/**
+ * The invite card's headline, one line per lifecycle state. An accepted claim
+ * deliberately reports when it was claimed rather than when the original link
+ * would have expired — acceptance retires that deadline (#112).
+ */
+const inviteHeading = (
+  invite: NonNullable<Invite>,
+): { readonly title: string; readonly detail: string } => {
+  switch (invite.status) {
+    case "accepted":
+      return {
+        title: "Accepted · setup in progress",
+        detail: `Accepted ${formatTimestamp(invite.acceptedAt, "recently")}. The link no longer expires.`,
+      }
+    case "cancelled":
+      return {
+        title:
+          invite.cancellationReason === "declined_by_coach"
+            ? "Invitation declined"
+            : "Invitation reset",
+        detail: `Cancelled ${formatTimestamp(invite.cancelledAt, "date unavailable")}. The old link no longer works.`,
+      }
+    case "expired":
+      return {
+        title: "Invite expired",
+        detail: `Expired ${formatTimestamp(invite.expiresAt, "date unavailable")}`,
+      }
+    default:
+      return {
+        title: "Current onboarding invite",
+        detail: `Expires ${formatTimestamp(invite.expiresAt, "date unavailable")}`,
+      }
+  }
+}
+
+/**
+ * Reset/reissue is always explicit and always confirmed (#107). Resetting an
+ * *accepted* claim is the one case that takes something away from a coach who
+ * already started, so it says so rather than hiding behind "re-issue".
+ */
+const reissueConfirmation = (
+  invite: NonNullable<Invite>,
+): { readonly label: string; readonly title: string; readonly description?: string } => {
+  switch (invite.status) {
+    case "accepted":
+      return {
+        label: "Reset invite",
+        title: "Reset this coach's setup?",
+        description:
+          "Their claim is released and the link they already opened stops working. They will need the new link to start over.",
+      }
+    case "expired":
+    case "cancelled":
+      return { label: "Issue new link", title: "Issue a new onboarding link?" }
+    default:
+      return {
+        label: "Re-issue link",
+        title: "Re-issue the onboarding link?",
+        description: "The current link will stop working immediately.",
+      }
+  }
+}
+
 function OnboardingActiveInvite({
   invite,
   delivery,
@@ -53,18 +116,13 @@ function OnboardingActiveInvite({
   const [resendConfirmOpen, setResendConfirmOpen] = useState(false)
   const [reissueConfirmOpen, setReissueConfirmOpen] = useState(false)
   const copyController = useCopyLink(invite.link)
-  const expired = invite.status === "expired"
+  const heading = inviteHeading(invite)
+  const reissueCopy = reissueConfirmation(invite)
 
   return (
     <>
-      <p className="text-base font-semibold">
-        {expired ? "Invite expired" : "Current onboarding invite"}
-      </p>
-      <p className="text-muted-foreground mt-2 text-sm">
-        {expired
-          ? `Expired ${formatTimestamp(invite.expiresAt, "date unavailable")}`
-          : `Expires ${formatTimestamp(invite.expiresAt, "date unavailable")}`}
-      </p>
+      <p className="text-base font-semibold">{heading.title}</p>
+      <p className="text-muted-foreground mt-2 text-sm">{heading.detail}</p>
 
       {invite.link === undefined ? null : (
         <>
@@ -126,10 +184,8 @@ function OnboardingActiveInvite({
             <>
               <Spinner /> Issuing…
             </>
-          ) : expired ? (
-            "Issue new link"
           ) : (
-            "Re-issue link"
+            reissueCopy.label
           )}
         </Button>
       ) : null}
@@ -148,9 +204,9 @@ function OnboardingActiveInvite({
       <ConfirmDialog
         open={reissueConfirmOpen}
         onOpenChange={setReissueConfirmOpen}
-        title={expired ? "Issue a new onboarding link?" : "Re-issue the onboarding link?"}
-        description={expired ? undefined : "The current link will stop working immediately."}
-        confirmLabel={expired ? "Issue new link" : "Re-issue link"}
+        title={reissueCopy.title}
+        description={reissueCopy.description}
+        confirmLabel={reissueCopy.label}
         confirmVariant="destructive"
         onConfirm={() => {
           setReissueConfirmOpen(false)

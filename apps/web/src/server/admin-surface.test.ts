@@ -46,12 +46,112 @@ const adminRepoLayer = Layer.succeed(
   }),
 )
 
-const workspaceRows = [
+const NOW = "2026-07-23T12:01:00.000Z"
+const hoursBefore = (hours: number) => new Date(Date.parse(NOW) - hours * 3_600_000)
+const hoursAfter = (hours: number) => new Date(Date.parse(NOW) + hours * 3_600_000)
+
+let inviteSequence = 0
+/** A list-shaped invite with only the fields a given stage actually needs. */
+const listInvite = (overrides: Partial<WorkspaceRepo.ListInvite>): WorkspaceRepo.ListInvite => {
+  inviteSequence += 1
+  return WorkspaceRepo.ListInvite.make({
+    id: CoachOnboardingInviteId.make(`ci_row_${inviteSequence}`),
+    code: CoachOnboardingInviteCode.make("ADA23456"),
+    status: "pending",
+    issuedAt: hoursBefore(1),
+    expiresAt: hoursAfter(6 * 24),
+    ...overrides,
+  })
+}
+
+const activeRow = WorkspaceRepo.ListItem.make({
+  id: WorkspaceId.make("ws_ada"),
+  name: "Ada Coaching",
+  botStatus: "connected",
+  botUsername: "ada_coach_bot",
+  hasCustomAvatar: false,
+  ownerTelegramUserId: "700000001",
+  termsAcceptedAt: hoursBefore(200),
+  lastActivityAt: hoursBefore(2),
+})
+
+const workspaceRows = [activeRow]
+
+/** One row per onboarding stage the coaches list can render. */
+const stageRows: ReadonlyArray<WorkspaceRepo.ListItem> = [
+  activeRow,
   WorkspaceRepo.ListItem.make({
-    id: WorkspaceId.make("ws_ada"),
-    name: "Ada Coaching",
+    id: WorkspaceId.make("ws_invited"),
+    name: "Invited",
+    botStatus: "awaiting-setup",
+    hasCustomAvatar: false,
+    invite: listInvite({ delivery: { channel: "telegram", language: "en" } }),
+  }),
+  WorkspaceRepo.ListItem.make({
+    id: WorkspaceId.make("ws_accepted"),
+    name: "Accepted",
+    botStatus: "awaiting-setup",
+    hasCustomAvatar: false,
+    invite: listInvite({
+      status: "accepted",
+      acceptedAt: hoursBefore(2),
+      acceptedByTelegramId: "800000001",
+    }),
+  }),
+  WorkspaceRepo.ListItem.make({
+    id: WorkspaceId.make("ws_stalled"),
+    name: "Stalled",
+    botStatus: "awaiting-setup",
+    hasCustomAvatar: false,
+    invite: listInvite({
+      status: "accepted",
+      acceptedAt: hoursBefore(48),
+      acceptedByTelegramId: "800000002",
+    }),
+  }),
+  WorkspaceRepo.ListItem.make({
+    id: WorkspaceId.make("ws_bot_connected"),
+    name: "Bot connected",
     botStatus: "connected",
-    botUsername: "ada_coach_bot",
+    botUsername: "connected_bot",
+    hasCustomAvatar: false,
+    ownerTelegramUserId: "800000003",
+    invite: listInvite({ status: "used" }),
+  }),
+  WorkspaceRepo.ListItem.make({
+    id: WorkspaceId.make("ws_expired"),
+    name: "Expired",
+    botStatus: "awaiting-setup",
+    hasCustomAvatar: false,
+    // Still `pending` in the row: expiry is lazy, so the surface derives it.
+    invite: listInvite({ issuedAt: hoursBefore(8 * 24), expiresAt: hoursBefore(24) }),
+  }),
+  WorkspaceRepo.ListItem.make({
+    id: WorkspaceId.make("ws_declined"),
+    name: "Declined",
+    botStatus: "awaiting-setup",
+    hasCustomAvatar: false,
+    invite: listInvite({
+      status: "cancelled",
+      cancelledAt: hoursBefore(30),
+      cancellationReason: "declined_by_coach",
+    }),
+  }),
+  WorkspaceRepo.ListItem.make({
+    id: WorkspaceId.make("ws_reset"),
+    name: "Reset",
+    botStatus: "awaiting-setup",
+    hasCustomAvatar: false,
+    invite: listInvite({
+      status: "cancelled",
+      cancelledAt: hoursBefore(30),
+      cancellationReason: "reset_by_admin",
+    }),
+  }),
+  WorkspaceRepo.ListItem.make({
+    id: WorkspaceId.make("ws_bare"),
+    name: "Never invited",
+    botStatus: "awaiting-setup",
     hasCustomAvatar: false,
   }),
 ]
@@ -296,7 +396,18 @@ describe("AdminSurface", () => {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
       const adminSurface = yield* AdminSurface.Service
 
-      expect(yield* adminSurface.listWorkspaces(VALID_INIT_DATA)).toEqual(workspaceRows)
+      expect(yield* adminSurface.listWorkspaces(VALID_INIT_DATA)).toEqual({
+        coaches: [
+          {
+            id: activeRow.id,
+            name: "Ada Coaching",
+            hasCustomAvatar: false,
+            botStatus: "connected",
+            botUsername: "ada_coach_bot",
+            lastActivityAt: hoursBefore(2).toISOString(),
+          },
+        ],
+      })
     }).pipe(Effect.provide(appLayer(workspaceRows)), Effect.provide(testConfig)),
   )
 
@@ -305,8 +416,182 @@ describe("AdminSurface", () => {
       yield* TestClock.setTime(Date.parse("2026-07-23T12:01:00.000Z"))
       const adminSurface = yield* AdminSurface.Service
 
-      expect(yield* adminSurface.listWorkspaces(VALID_INIT_DATA)).toEqual([])
+      expect(yield* adminSurface.listWorkspaces(VALID_INIT_DATA)).toEqual({ coaches: [] })
     }).pipe(Effect.provide(appLayer([])), Effect.provide(testConfig)),
+  )
+
+  it.effect("pins incomplete onboarding above active coaches, newest invite first", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse(NOW))
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.listWorkspaces(VALID_INIT_DATA)
+
+      expect(result.coaches.map((coach) => coach.id)).toEqual([
+        "ws_fresh",
+        "ws_older",
+        "ws_ada",
+        "ws_zoe",
+      ])
+    }).pipe(
+      Effect.provide(
+        appLayer([
+          // Deliberately supplied in the repo's A→Z order.
+          activeRow,
+          WorkspaceRepo.ListItem.make({
+            id: WorkspaceId.make("ws_fresh"),
+            name: "Fresh invite",
+            botStatus: "awaiting-setup",
+            hasCustomAvatar: false,
+            invite: listInvite({ issuedAt: hoursBefore(1) }),
+          }),
+          WorkspaceRepo.ListItem.make({
+            id: WorkspaceId.make("ws_older"),
+            name: "Older invite",
+            botStatus: "awaiting-setup",
+            hasCustomAvatar: false,
+            invite: listInvite({ issuedAt: hoursBefore(50) }),
+          }),
+          WorkspaceRepo.ListItem.make({
+            id: WorkspaceId.make("ws_zoe"),
+            name: "Zoe Coaching",
+            botStatus: "connected",
+            botUsername: "zoe_bot",
+            hasCustomAvatar: false,
+            termsAcceptedAt: hoursBefore(500),
+          }),
+        ]),
+      ),
+      Effect.provide(testConfig),
+    ),
+  )
+
+  it.effect("reads each onboarding stage off the aggregate", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse(NOW))
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.listWorkspaces(VALID_INIT_DATA)
+      const stages = Object.fromEntries(
+        result.coaches.map((coach) => [coach.id, coach.onboarding?.stage]),
+      )
+
+      expect(stages).toEqual({
+        ws_invited: "invited",
+        ws_accepted: "accepted",
+        ws_stalled: "stalled",
+        ws_bot_connected: "bot-connected",
+        ws_expired: "expired",
+        ws_declined: "declined",
+        ws_reset: "reset",
+        ws_bare: "not-invited",
+        // Terms acceptance is the completion signal: no stage at all.
+        ws_ada: undefined,
+      })
+    }).pipe(Effect.provide(appLayer(stageRows)), Effect.provide(testConfig)),
+  )
+
+  it.effect("counts down only while the invite is pending, and offers resend there only", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse(NOW))
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.listWorkspaces(VALID_INIT_DATA)
+      const byId: Record<string, AdminSurface.CoachOnboarding | undefined> = Object.fromEntries(
+        result.coaches.map((coach) => [coach.id, coach.onboarding]),
+      )
+
+      expect(byId.ws_invited).toMatchObject({
+        channel: "telegram",
+        expiresAt: hoursAfter(6 * 24).toISOString(),
+      })
+      expect(byId.ws_invited?.actions?.link).toContain("?start=ws_ADA23456")
+      // An accepted claim keeps its acceptance time but never an expiry, and it
+      // is past the point where resending the old link would mean anything.
+      expect(byId.ws_accepted?.acceptedAt).toBe(hoursBefore(2).toISOString())
+      expect(byId.ws_accepted).not.toHaveProperty("expiresAt")
+      expect(byId.ws_accepted?.actions).toBeUndefined()
+      expect(byId.ws_expired?.actions).toBeUndefined()
+      expect(byId.ws_stalled?.actions).toBeUndefined()
+    }).pipe(Effect.provide(appLayer(stageRows)), Effect.provide(testConfig)),
+  )
+
+  it.effect("surfaces the viewing admin's own coach claim without a second query", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse(NOW))
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.listWorkspaces(VALID_INIT_DATA)
+
+      expect(result.viewerCoach).toEqual({
+        state: "accepted",
+        workspaceId: "ws_mine",
+        link: "https://t.me/PraximoMotherBot?start=ws_ADA23456",
+      })
+    }).pipe(
+      Effect.provide(
+        appLayer([
+          activeRow,
+          WorkspaceRepo.ListItem.make({
+            id: WorkspaceId.make("ws_mine"),
+            name: "My practice",
+            botStatus: "awaiting-setup",
+            hasCustomAvatar: false,
+            invite: listInvite({
+              status: "accepted",
+              acceptedAt: hoursBefore(3),
+              acceptedByTelegramId: adminTelegramId,
+            }),
+          }),
+        ]),
+      ),
+      Effect.provide(testConfig),
+    ),
+  )
+
+  it.effect("prefers the admin's active bot over an older claim", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse(NOW))
+      const adminSurface = yield* AdminSurface.Service
+      const result = yield* adminSurface.listWorkspaces(VALID_INIT_DATA)
+
+      expect(result.viewerCoach).toEqual({
+        state: "active",
+        workspaceId: "ws_my_bot",
+        link: "https://t.me/my_own_bot",
+      })
+    }).pipe(
+      Effect.provide(
+        appLayer([
+          WorkspaceRepo.ListItem.make({
+            id: WorkspaceId.make("ws_claimed"),
+            name: "Claimed",
+            botStatus: "awaiting-setup",
+            hasCustomAvatar: false,
+            invite: listInvite({
+              status: "accepted",
+              acceptedAt: hoursBefore(3),
+              acceptedByTelegramId: adminTelegramId,
+            }),
+          }),
+          WorkspaceRepo.ListItem.make({
+            id: WorkspaceId.make("ws_my_bot"),
+            name: "My bot",
+            botStatus: "connected",
+            botUsername: "my_own_bot",
+            hasCustomAvatar: false,
+            ownerTelegramUserId: adminTelegramId,
+            termsAcceptedAt: hoursBefore(100),
+          }),
+        ]),
+      ),
+      Effect.provide(testConfig),
+    ),
+  )
+
+  it.effect("leaves the viewer's coach context absent when they are only an admin", () =>
+    Effect.gen(function* () {
+      yield* TestClock.setTime(Date.parse(NOW))
+      const adminSurface = yield* AdminSurface.Service
+
+      expect(yield* adminSurface.listWorkspaces(VALID_INIT_DATA)).not.toHaveProperty("viewerCoach")
+    }).pipe(Effect.provide(appLayer(stageRows)), Effect.provide(testConfig)),
   )
 
   it.effect("denies authentic initData for a Telegram id outside the admin set", () =>
@@ -348,12 +633,7 @@ describe("AdminSurface", () => {
       const sender = yield* ManagerBotSender.TestService
 
       expect(result).toMatchObject({
-        workspace: {
-          id: "ws_cb6bd55960914d69aeff2af000354c7f",
-          name: "Ada Coaching",
-          botStatus: "awaiting-setup",
-          hasCustomAvatar: false,
-        },
+        workspaceId: "ws_cb6bd55960914d69aeff2af000354c7f",
         // Nothing is delivered on create: the manager shares from the Mini App
         // in a follow-up prepare step, and the picker can still be cancelled.
         delivery: "unknown",

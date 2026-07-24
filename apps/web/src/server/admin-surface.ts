@@ -3,9 +3,12 @@ import { CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
 import { AdminRepo, CoachOnboardingRepo, WorkspaceDeletionRepo, WorkspaceRepo } from "@praximo/db"
 import {
   CoachLanguage,
+  type CoachOnboardingInviteCancellationReason,
+  type CoachOnboardingInviteStatus,
   CreateInviteDelivery,
   CreateWorkspaceInput,
   DeleteWorkspaceInput,
+  type InviteDeliveryChannel,
   TelegramId,
   UpdateWorkspaceProfileInput,
   WorkspaceId,
@@ -19,13 +22,83 @@ import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 export type DeliveryStatus = "sent" | "failed" | "unknown"
 
 export interface CreateResult {
-  readonly workspace: WorkspaceRepo.ListItem
+  readonly workspaceId: WorkspaceId
   readonly inviteId: string
   readonly link: string
   readonly expiresAt: string
   readonly delivery: DeliveryStatus
   /** The full forwardable invite message in the chosen invite language. */
   readonly message: string
+}
+
+/**
+ * Where a coach stands on the accepted onboarding lifecycle (#112), as the
+ * coaches list reads it. Every stage but `not-invited` is recoverable state the
+ * admin can act on; an active coach carries no stage at all.
+ *
+ * - `invited` — a live `pending` invite; the only stage with a countdown.
+ * - `accepted` — the claim is exclusive; the invite TTL no longer applies.
+ * - `stalled` — accepted over 24h ago and still incomplete. Informational only:
+ *   it never releases the claim.
+ * - `bot-connected` — provisioning finished, first login + ToS still pending.
+ * - `expired` — an unaccepted invite reached its TTL.
+ * - `declined` / `reset` — terminal cancellation, by the coach or the admin.
+ * - `not-invited` — a workspace with no invite row at all.
+ */
+export type CoachOnboardingStage =
+  | "invited"
+  | "accepted"
+  | "stalled"
+  | "bot-connected"
+  | "expired"
+  | "declined"
+  | "reset"
+  | "not-invited"
+
+/** The Resend / Copy payload, carried only while the invite is still deliverable. */
+export interface CoachInviteActions {
+  readonly id: string
+  readonly link: string
+  /** The full forwardable message, in the language the invite last left in. */
+  readonly message: string
+  readonly language: CoachLanguage
+}
+
+export interface CoachOnboarding {
+  readonly stage: CoachOnboardingStage
+  readonly channel?: InviteDeliveryChannel
+  /** Only ever set while `invited` — an accepted claim shows no countdown. */
+  readonly expiresAt?: string
+  readonly acceptedAt?: string
+  readonly cancelledAt?: string
+  readonly actions?: CoachInviteActions
+}
+
+export interface CoachListEntry {
+  readonly id: WorkspaceId
+  readonly name: string
+  readonly hasCustomAvatar: boolean
+  readonly botStatus: WorkspaceRepo.BotConnectionStatus
+  readonly botUsername?: string
+  readonly lastActivityAt?: string
+  /** Absent exactly when onboarding is complete — an active coach. */
+  readonly onboarding?: CoachOnboarding
+}
+
+/**
+ * The admin's own coach hat, when they wear one. Resolved from the same
+ * aggregate the list is built from, so the contextual action costs no extra
+ * query and no extra entry hop (#107); #106 owns the general role dispatch.
+ */
+export type ViewerCoach =
+  | { readonly state: "accepted"; readonly workspaceId: WorkspaceId; readonly link: string }
+  | { readonly state: "bot-connected"; readonly workspaceId: WorkspaceId; readonly link: string }
+  | { readonly state: "active"; readonly workspaceId: WorkspaceId; readonly link: string }
+
+export interface CoachListResult {
+  /** Incomplete onboarding first (newest invite first), then active coaches A→Z. */
+  readonly coaches: ReadonlyArray<CoachListEntry>
+  readonly viewerCoach?: ViewerCoach
 }
 
 export interface PrepareShareResult {
@@ -49,9 +122,12 @@ export interface WorkspaceDetail {
   readonly lastActivityAt?: string
   readonly invite?: {
     readonly id: string
-    readonly status: "pending" | "used" | "expired"
+    readonly status: CoachOnboardingInviteStatus
     readonly issuedAt: string
     readonly expiresAt: string
+    readonly acceptedAt?: string
+    readonly cancelledAt?: string
+    readonly cancellationReason?: CoachOnboardingInviteCancellationReason
     readonly link?: string
   }
   readonly canReissue: boolean
@@ -70,7 +146,7 @@ export interface DeleteResult {
 export interface Interface {
   readonly listWorkspaces: (
     initData: string,
-  ) => Effect.Effect<ReadonlyArray<WorkspaceRepo.ListItem>, AccessDenied | LoadFailed>
+  ) => Effect.Effect<CoachListResult, AccessDenied | LoadFailed>
   readonly createWorkspace: (
     initData: string,
     input: unknown,
@@ -258,6 +334,44 @@ const startOnboardingLabel: Record<CoachLanguage, string> = {
   en: "Start onboarding",
 }
 
+/**
+ * How long an accepted claim may sit incomplete before the card calls it out.
+ * Informational only — the claim itself never lapses (#112).
+ */
+export const SetupStalledAfterMilliseconds = 24 * 60 * 60 * 1_000
+
+/**
+ * Read the coach's position on the onboarding lifecycle off the aggregate row.
+ * `undefined` means onboarding is complete: terms acceptance is the single
+ * completion signal, so an active coach is never pinned to the top of the list.
+ */
+const onboardingStage = (
+  item: WorkspaceRepo.ListItem,
+  now: Date,
+): CoachOnboardingStage | undefined => {
+  if (item.termsAcceptedAt !== undefined) return undefined
+  // A connected bot outranks whatever the invite row still says: provisioning
+  // has happened, and only the coach's first login plus ToS is outstanding.
+  if (item.botStatus !== "awaiting-setup") return "bot-connected"
+  const invite = item.invite
+  if (invite === undefined) return "not-invited"
+  switch (invite.status) {
+    case "pending":
+      return invite.expiresAt.getTime() <= now.getTime() ? "expired" : "invited"
+    case "accepted":
+      return invite.acceptedAt !== undefined &&
+        now.getTime() - invite.acceptedAt.getTime() >= SetupStalledAfterMilliseconds
+        ? "stalled"
+        : "accepted"
+    case "used":
+      return "bot-connected"
+    case "expired":
+      return "expired"
+    case "cancelled":
+      return invite.cancellationReason === "declined_by_coach" ? "declined" : "reset"
+  }
+}
+
 const deletionFarewell = (language: CoachLanguage, name: string): string => {
   switch (language) {
     case "uk":
@@ -300,14 +414,128 @@ export const layer = Layer.effect(
       return telegramId
     })
 
+    const presentCoach = Effect.fn("AdminSurface.presentCoach")(function* (
+      item: WorkspaceRepo.ListItem,
+      now: Date,
+    ) {
+      const stage = onboardingStage(item, now)
+      const invite = item.invite
+      const language = invite?.delivery?.language ?? "en"
+      // Resend and Copy only make sense while the link can still be claimed;
+      // every other stage renders as status, not as an action.
+      const actions =
+        stage === "invited" && invite !== undefined
+          ? yield* tokens.linkFor(invite.code).pipe(
+              Effect.map(
+                (link): CoachInviteActions => ({
+                  id: invite.id,
+                  link,
+                  message: forwardableMessage(language, item.name, link),
+                  language,
+                }),
+              ),
+            )
+          : undefined
+
+      return {
+        id: item.id,
+        name: item.name,
+        hasCustomAvatar: item.hasCustomAvatar,
+        botStatus: item.botStatus,
+        ...(item.botUsername === undefined ? {} : { botUsername: item.botUsername }),
+        ...(item.lastActivityAt === undefined
+          ? {}
+          : { lastActivityAt: item.lastActivityAt.toISOString() }),
+        ...(stage === undefined
+          ? {}
+          : {
+              onboarding: {
+                stage,
+                ...(invite?.delivery === undefined ? {} : { channel: invite.delivery.channel }),
+                // The expiry is carried while the invite is still measured by
+                // it — counting down, or already lapsed. An accepted claim
+                // retired that deadline, so it never travels with one.
+                ...((stage === "invited" || stage === "expired") && invite !== undefined
+                  ? { expiresAt: invite.expiresAt.toISOString() }
+                  : {}),
+                ...(invite?.acceptedAt === undefined
+                  ? {}
+                  : { acceptedAt: invite.acceptedAt.toISOString() }),
+                ...(invite?.cancelledAt === undefined
+                  ? {}
+                  : { cancelledAt: invite.cancelledAt.toISOString() }),
+                ...(actions === undefined ? {} : { actions }),
+              },
+            }),
+      } satisfies CoachListEntry
+    })
+
+    /**
+     * The admin's own coach hat, if any. An active bot outranks a bot-connected
+     * one, which outranks an unclaimed-but-accepted invite — the most advanced
+     * state is the one worth acting on.
+     */
+    const resolveViewerCoach = Effect.fn("AdminSurface.resolveViewerCoach")(function* (
+      items: ReadonlyArray<WorkspaceRepo.ListItem>,
+      viewer: TelegramId,
+    ) {
+      let accepted: ViewerCoach | undefined
+      let connected: ViewerCoach | undefined
+      for (const item of items) {
+        if (item.ownerTelegramUserId === viewer && item.botUsername !== undefined) {
+          const candidate = {
+            state:
+              item.termsAcceptedAt === undefined ? ("bot-connected" as const) : ("active" as const),
+            workspaceId: item.id,
+            link: `https://t.me/${item.botUsername}`,
+          }
+          if (candidate.state === "active") return candidate
+          connected ??= candidate
+          continue
+        }
+        if (
+          accepted === undefined &&
+          item.invite?.status === "accepted" &&
+          item.invite.acceptedByTelegramId === viewer
+        ) {
+          // The original short code resumes the claim idempotently (#112), so
+          // the deep link is the honest "continue where you left off" target.
+          accepted = {
+            state: "accepted",
+            workspaceId: item.id,
+            link: yield* tokens.linkFor(item.invite.code),
+          }
+        }
+      }
+      return connected ?? accepted
+    })
+
     const listWorkspaces = Effect.fn("AdminSurface.listWorkspaces")(function* (
       rawInitData: string,
     ) {
-      yield* verifyAdmin(rawInitData)
-
-      return yield* workspaces
+      const viewer = yield* verifyAdmin(rawInitData)
+      const items = yield* workspaces
         .list()
         .pipe(Effect.mapError(() => new LoadFailed({ operation: "listWorkspaces" })))
+      const now = new Date(yield* Clock.currentTimeMillis)
+      const coaches = yield* Effect.forEach(items, (item) => presentCoach(item, now))
+      const viewerCoach = yield* resolveViewerCoach(items, viewer)
+
+      // The repo already returns A→Z, which is the order active coaches keep.
+      // Incomplete onboarding is pinned above them, newest invite first, so a
+      // fresh invite lands where the admin is already looking.
+      const issuedAt = (id: WorkspaceId) =>
+        items.find((item) => item.id === id)?.invite?.issuedAt.getTime() ?? 0
+      const incomplete = coaches.filter((coach) => coach.onboarding !== undefined)
+      // In-place is safe and intended: `filter` already handed back a private
+      // array, and the ES2022 target has no `toSorted` to copy it again.
+      // oxlint-disable-next-line unicorn/no-array-sort
+      const pinned = incomplete.sort((left, right) => issuedAt(right.id) - issuedAt(left.id))
+
+      return {
+        coaches: [...pinned, ...coaches.filter((coach) => coach.onboarding === undefined)],
+        ...(viewerCoach === undefined ? {} : { viewerCoach }),
+      } satisfies CoachListResult
     })
 
     const loadWorkspace = Effect.fn("AdminSurface.loadWorkspace")(function* (
@@ -366,6 +594,15 @@ export const layer = Layer.effect(
                 status: inviteStatus,
                 issuedAt: detail.invite.issuedAt.toISOString(),
                 expiresAt: detail.invite.expiresAt.toISOString(),
+                ...(detail.invite.acceptedAt === undefined
+                  ? {}
+                  : { acceptedAt: detail.invite.acceptedAt.toISOString() }),
+                ...(detail.invite.cancelledAt === undefined
+                  ? {}
+                  : { cancelledAt: detail.invite.cancelledAt.toISOString() }),
+                ...(detail.invite.cancellationReason === undefined
+                  ? {}
+                  : { cancellationReason: detail.invite.cancellationReason }),
                 ...(link === undefined ? {} : { link }),
               },
             }),
@@ -400,12 +637,7 @@ export const layer = Layer.effect(
     ) {
       const link = yield* tokens.linkFor(aggregate.invite.code)
       return {
-        workspace: WorkspaceRepo.ListItem.make({
-          id: aggregate.workspace.id,
-          name: aggregate.workspace.name,
-          botStatus: "awaiting-setup",
-          hasCustomAvatar: aggregate.workspace.avatarR2Key !== undefined,
-        }),
+        workspaceId: aggregate.workspace.id,
         inviteId: aggregate.invite.id,
         link,
         expiresAt: aggregate.invite.expiresAt.toISOString(),

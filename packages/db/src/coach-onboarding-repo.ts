@@ -1,5 +1,6 @@
 import {
   CoachLanguage,
+  CoachOnboardingInviteCancellationReason,
   CoachOnboardingInviteCode,
   CoachOnboardingInviteCodeAlphabet,
   CoachOnboardingInviteCodeLength,
@@ -8,7 +9,7 @@ import {
   InviteDeliveryRecord,
   WorkspaceId,
 } from "@praximo/domain"
-import { and, eq, gt, sql } from "drizzle-orm"
+import { and, eq, gt, inArray, or, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Result, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
@@ -36,7 +37,11 @@ const InviteSchema = Schema.Struct({
   status: CoachOnboardingInviteStatus,
   issuedAt: Schema.instanceOf(Date),
   expiresAt: Schema.instanceOf(Date),
+  acceptedAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  acceptedByTelegramId: Schema.optionalKey(Schema.NonEmptyString),
   usedAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  cancelledAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  cancellationReason: Schema.optionalKey(CoachOnboardingInviteCancellationReason),
   issuedByTelegramId: Schema.String,
   delivery: Schema.optionalKey(InviteDeliveryRecord),
 })
@@ -118,7 +123,9 @@ export class InviteUnavailable extends Schema.TaggedErrorClass<InviteUnavailable
   "CoachOnboardingRepo.InviteUnavailable",
   {
     id: CoachOnboardingInviteId,
-    reason: Schema.Literals(["not-found", "expired", "used"]),
+    // `accepted` is unavailable only to the actions that require an unclaimed
+    // invite (resend, share): the claim itself is a healthy state.
+    reason: Schema.Literals(["not-found", "expired", "used", "cancelled", "accepted"]),
   },
 ) {}
 
@@ -133,8 +140,8 @@ export class ReissueUnavailable extends Schema.TaggedErrorClass<ReissueUnavailab
  * A start-param code passed the format filter but maps to no invite row at all —
  * a made-up code. The caller surfaces the same "invalid link" message as a
  * malformed parameter. A reissue-superseded code is *not* this case: its row
- * survives (expired, not deleted), so `resolveCode` still returns its invite id
- * and provisioning reports it expired.
+ * survives (cancelled, not deleted), so `resolveCode` still returns its invite
+ * id and provisioning reports it unavailable.
  */
 export class InviteCodeUnresolved extends Schema.TaggedErrorClass<InviteCodeUnresolved>()(
   "CoachOnboardingRepo.InviteCodeUnresolved",
@@ -142,6 +149,27 @@ export class InviteCodeUnresolved extends Schema.TaggedErrorClass<InviteCodeUnre
     code: CoachOnboardingInviteCode,
   },
 ) {}
+
+/**
+ * Why an invite could not serve an action that needs it claimable. A `pending`
+ * row only reaches here once its TTL has lapsed, so it reads as expired even
+ * before the lazy status write catches up.
+ */
+const unavailableReason = (invite: {
+  readonly status: CoachOnboardingInviteStatus
+}): "expired" | "used" | "cancelled" | "accepted" => {
+  switch (invite.status) {
+    case "used":
+      return "used"
+    case "cancelled":
+      return "cancelled"
+    case "accepted":
+      return "accepted"
+    case "pending":
+    case "expired":
+      return "expired"
+  }
+}
 
 const idsFor = (requestId: string) => {
   const compact = requestId.replaceAll("-", "")
@@ -241,7 +269,11 @@ export const layer = Layer.effect(
               status: schema.coachOnboardingInvite.status,
               issuedAt: schema.coachOnboardingInvite.issuedAt,
               expiresAt: schema.coachOnboardingInvite.expiresAt,
+              acceptedAt: schema.coachOnboardingInvite.acceptedAt,
+              acceptedByTelegramId: schema.coachOnboardingInvite.acceptedByTelegramId,
               usedAt: schema.coachOnboardingInvite.usedAt,
+              cancelledAt: schema.coachOnboardingInvite.cancelledAt,
+              cancellationReason: schema.coachOnboardingInvite.cancellationReason,
               issuedByTelegramId: schema.coachOnboardingInvite.issuedByTelegramId,
               delivery: schema.coachOnboardingInvite.delivery,
               name: schema.workspace.name,
@@ -289,7 +321,15 @@ export const layer = Layer.effect(
           status: row.status,
           issuedAt: row.issuedAt,
           expiresAt: row.expiresAt,
+          ...(row.acceptedAt === null ? {} : { acceptedAt: row.acceptedAt }),
+          ...(row.acceptedByTelegramId === null
+            ? {}
+            : { acceptedByTelegramId: row.acceptedByTelegramId }),
           ...(row.usedAt === null ? {} : { usedAt: row.usedAt }),
+          ...(row.cancelledAt === null ? {} : { cancelledAt: row.cancelledAt }),
+          ...(row.cancellationReason === null
+            ? {}
+            : { cancellationReason: row.cancellationReason }),
           issuedByTelegramId: row.issuedByTelegramId,
           ...(row.delivery === null ? {} : { delivery: row.delivery }),
         },
@@ -464,6 +504,12 @@ export const layer = Layer.effect(
       return CoachOnboardingInviteId.make(row.id)
     })
 
+    /**
+     * The compare-and-set that ends the invite's life on a connected bot. An
+     * `accepted` claim is eligible without an expiry check — acceptance retires
+     * the TTL (#112) — while a `cancelled` row can never win, which is what
+     * fences a reset against a provisioning attempt still in flight.
+     */
     const markUsed = Effect.fn("CoachOnboardingRepo.markUsed")(function* (
       id: CoachOnboardingInviteId,
       now: Date,
@@ -476,8 +522,11 @@ export const layer = Layer.effect(
             .where(
               and(
                 eq(schema.coachOnboardingInvite.id, id),
-                eq(schema.coachOnboardingInvite.status, "pending"),
-                gt(schema.coachOnboardingInvite.expiresAt, now),
+                inArray(schema.coachOnboardingInvite.status, ["pending", "accepted"]),
+                or(
+                  eq(schema.coachOnboardingInvite.status, "accepted"),
+                  gt(schema.coachOnboardingInvite.expiresAt, now),
+                ),
               ),
             )
             .returning({
@@ -486,6 +535,8 @@ export const layer = Layer.effect(
               status: schema.coachOnboardingInvite.status,
               issuedAt: schema.coachOnboardingInvite.issuedAt,
               expiresAt: schema.coachOnboardingInvite.expiresAt,
+              acceptedAt: schema.coachOnboardingInvite.acceptedAt,
+              acceptedByTelegramId: schema.coachOnboardingInvite.acceptedByTelegramId,
               usedAt: schema.coachOnboardingInvite.usedAt,
               issuedByTelegramId: schema.coachOnboardingInvite.issuedByTelegramId,
             }),
@@ -500,6 +551,10 @@ export const layer = Layer.effect(
           status: row.status,
           issuedAt: row.issuedAt,
           expiresAt: row.expiresAt,
+          ...(row.acceptedAt === null ? {} : { acceptedAt: row.acceptedAt }),
+          ...(row.acceptedByTelegramId === null
+            ? {}
+            : { acceptedByTelegramId: row.acceptedByTelegramId }),
           ...(row.usedAt === null ? {} : { usedAt: row.usedAt }),
           issuedByTelegramId: row.issuedByTelegramId,
         }).pipe(
@@ -508,7 +563,7 @@ export const layer = Layer.effect(
       }
 
       const aggregate = yield* findInvite(id)
-      const reason = aggregate.invite.status === "used" ? "used" : "expired"
+      const reason = unavailableReason(aggregate.invite)
       if (reason === "expired" && aggregate.invite.status === "pending") {
         yield* Effect.tryPromise({
           try: () =>
@@ -550,18 +605,23 @@ export const layer = Layer.effect(
       now: Date,
     ) {
       const aggregate = yield* findInvite(id)
-      if (aggregate.invite.status === "used") {
-        return yield* new InviteUnavailable({ id, reason: "used" })
-      }
       if (
-        aggregate.invite.status === "expired" ||
+        aggregate.invite.status !== "pending" ||
         aggregate.invite.expiresAt.getTime() <= now.getTime()
       ) {
-        return yield* new InviteUnavailable({ id, reason: "expired" })
+        return yield* new InviteUnavailable({ id, reason: unavailableReason(aggregate.invite) })
       }
       return aggregate
     })
 
+    /**
+     * Admin reset/reissue (#107). The previous invite is *cancelled*, not
+     * expired: cancellation is the explicit, typed end of a claim, and it is the
+     * compare-and-set the provisioning fence reads — once this wins, a racing
+     * attempt can never advance the same invite to `used`. An already-accepted
+     * claim is eligible, so a reset does release a claimed workspace, but only
+     * through this deliberate admin gesture and never on its own.
+     */
     const reissue = Effect.fn("CoachOnboardingRepo.reissue")(function* (input: ReissueInput) {
       const fingerprint = `reissue:${input.workspaceId}:${input.expectedInviteId}`
       const replay = yield* loadByRequestId(input.requestId)
@@ -597,20 +657,23 @@ export const layer = Layer.effect(
                 )
                 and not exists (
                   select 1
-                  from "coach_onboarding_invite" as "newer_pending"
+                  from "coach_onboarding_invite" as "newer_claimable"
                   where
-                    "newer_pending"."workspace_id" = "workspace"."id"
-                    and "newer_pending"."status" = 'pending'
-                    and "newer_pending"."id" <> ${input.expectedInviteId}
+                    "newer_claimable"."workspace_id" = "workspace"."id"
+                    and "newer_claimable"."status" in ('pending', 'accepted')
+                    and "newer_claimable"."id" <> ${input.expectedInviteId}
                 )
             ),
-            expired_previous as (
+            cancelled_previous as (
               update "coach_onboarding_invite"
-              set "status" = 'expired'
+              set
+                "status" = 'cancelled',
+                "cancelled_at" = ${input.now},
+                "cancellation_reason" = 'reissued'
               where
                 "id" = ${input.expectedInviteId}
                 and "workspace_id" = ${input.workspaceId}
-                and "status" in ('pending', 'expired')
+                and "status" in ('pending', 'accepted', 'expired')
                 and exists (select 1 from eligible_workspace)
               returning "workspace_id"
             )
@@ -633,7 +696,7 @@ export const layer = Layer.effect(
               ${input.issuedByTelegramId},
               ${input.now},
               ${expiresAt}
-            from expired_previous
+            from cancelled_previous
             on conflict ("request_id") do nothing
             returning "id"
           `),

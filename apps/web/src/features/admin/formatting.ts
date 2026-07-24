@@ -43,6 +43,30 @@ export const formatRelativeTime = (value: string): string => {
   return "just now"
 }
 
+const MinuteMs = 60 * 1_000
+const HourMs = 60 * MinuteMs
+const DayMs = 24 * HourMs
+
+/**
+ * The pending-invite countdown — "expires in 6d" / "expires in 5h". Days while
+ * more than a day remains, hours below that, and a plain "expires today" in the
+ * last hour, where a minute count would read as false precision. Only ever
+ * shown for a `pending` invite: an accepted claim has no expiry (#112).
+ */
+export const formatExpiresIn = (value: string): string => {
+  const remaining = new Date(value).getTime() - Date.now()
+  if (remaining <= 0) return "expired"
+  if (remaining >= DayMs) return `expires in ${Math.floor(remaining / DayMs)}d`
+  if (remaining >= HourMs) return `expires in ${Math.floor(remaining / HourMs)}h`
+  return "expires today"
+}
+
+export const channelLabel = {
+  telegram: "Telegram",
+  email: "email",
+  copy: "a copied link",
+} as const
+
 export const statusLabel = {
   "awaiting-setup": "Awaiting setup",
   connected: "Connected",

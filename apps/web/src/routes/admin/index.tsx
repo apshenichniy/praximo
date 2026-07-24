@@ -1,41 +1,66 @@
-import { useSuspenseQuery } from "@tanstack/react-query"
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, getRouteApi } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
 import { toast } from "@/components/ui/toast.tsx"
 import { takeAdminNotice } from "@/features/admin/admin-notice.ts"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
-import { WorkspaceSearch } from "@/features/admin/components/workspace-search.tsx"
 import {
-  CreateWorkspaceLink,
-  WorkspaceListCard,
-  WorkspaceListEmpty,
-  WorkspaceListItem,
-  WorkspaceListNoMatches,
-} from "@/features/admin/components/workspace-list.tsx"
-import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
+  type CoachEntry,
+  ActiveCoachItem,
+  CoachListCard,
+  CoachListEmpty,
+  InviteCoachLink,
+  OnboardingCoachItem,
+  ViewerCoachCard,
+} from "@/features/admin/components/coach-list.tsx"
+import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
+import { notifyHaptic } from "@/features/admin/haptics.ts"
+import {
+  adminWorkspaceListQuery,
+  prepareCoachInviteShareMutation,
+  recordCoachInviteShareMutation,
+} from "@/features/admin/workspace-queries.ts"
+import { loadTelegramWebApp, shareInviteMessage } from "@/lib/telegram.ts"
 
 export const Route = createFileRoute("/admin/")({ component: AdminHome })
 const adminRoute = getRouteApi("/admin")
+
+/** How long a row keeps saying "Copied" before falling back to its label. */
+const CopiedFeedbackMilliseconds = 2_000
+
+/**
+ * Open a `t.me` link without leaving the Mini App. Outside a Telegram host
+ * (local browser development) there is no bridge, so the link opens normally.
+ */
+const openInTelegram = async (link: string) => {
+  const webApp = await loadTelegramWebApp()
+  if (webApp === undefined) {
+    window.open(link, "_blank", "noopener,noreferrer")
+    return
+  }
+  webApp.openTelegramLink(link)
+}
 
 // Admin copy is English-only (admin-surface.md): the admin is the solo operator,
 // so the trilingual machinery that serves coaches never reaches these routes.
 function AdminHome() {
   const { initData } = adminRoute.useLoaderData()
-  const { data: workspaces } = useSuspenseQuery(adminWorkspaceListQuery(initData))
-  const [search, setSearch] = useState("")
-  const normalizedSearch = search.trim().toLocaleLowerCase()
-  const filteredWorkspaces = useMemo(
-    () =>
-      normalizedSearch
-        ? workspaces.filter(
-            (workspace) =>
-              workspace.name.toLocaleLowerCase().includes(normalizedSearch) ||
-              workspace.botUsername?.toLocaleLowerCase().includes(normalizedSearch),
-          )
-        : workspaces,
-    [normalizedSearch, workspaces],
+  const { data } = useSuspenseQuery(adminWorkspaceListQuery(initData))
+  const [resendingId, setResendingId] = useState<string>()
+  const [copiedId, setCopiedId] = useState<string>()
+
+  const shareMutation = useMutation(prepareCoachInviteShareMutation(initData))
+  const recordShareMutation = useMutation(recordCoachInviteShareMutation(initData))
+
+  // The server already returns onboarding first and active coaches A→Z; the
+  // split here is only about which heading each row lives under.
+  const { onboarding, active } = useMemo(
+    () => ({
+      onboarding: data.coaches.filter((coach) => coach.onboarding !== undefined),
+      active: data.coaches.filter((coach) => coach.onboarding === undefined),
+    }),
+    [data.coaches],
   )
 
   useEffect(() => {
@@ -48,29 +73,119 @@ function AdminHome() {
     setTimeout(() => toast.add({ title: message, type: "success" }), 0)
   }, [])
 
+  /**
+   * Re-deliver a live invite through Telegram's native chat picker — the same
+   * prepared-message path the invite screen uses (#104). The invite itself is
+   * untouched: a dismissed picker changes nothing and the link stays valid.
+   */
+  const resend = async (coach: CoachEntry) => {
+    const actions = coach.onboarding?.actions
+    if (actions === undefined) return
+    const webApp = await loadTelegramWebApp()
+    if (webApp === undefined) {
+      toast.add({ title: "Open this from Telegram to resend the invite.", type: "error" })
+      notifyHaptic("error")
+      return
+    }
+
+    setResendingId(coach.id)
+    try {
+      const outcome = await shareInviteMessage(webApp, {
+        prepare: async () => {
+          const prepared = await shareMutation.mutateAsync({
+            inviteId: actions.id,
+            language: actions.language,
+          })
+          if (!prepared.ok) throw new Error(prepared.error)
+          return prepared.value.preparedMessageId
+        },
+        link: actions.link,
+        message: actions.message,
+      })
+      if (outcome === "dismissed") return
+      // Best-effort bookkeeping: the invite is already out, so a failure here
+      // must not read to the admin as a failed resend.
+      await recordShareMutation
+        .mutateAsync({ inviteId: actions.id, language: actions.language })
+        .catch(() => undefined)
+      notifyHaptic("success")
+      toast.add({
+        title:
+          outcome === "fallback" ? "Opening Telegram to share the invite…" : "Invite sent again",
+        type: "success",
+      })
+    } catch {
+      notifyHaptic("error")
+      toast.add({ title: "Telegram couldn't prepare the invite. Try again.", type: "error" })
+    } finally {
+      setResendingId(undefined)
+    }
+  }
+
+  const copy = async (coach: CoachEntry) => {
+    const actions = coach.onboarding?.actions
+    if (actions === undefined) return
+    try {
+      await navigator.clipboard.writeText(actions.message)
+    } catch {
+      notifyHaptic("error")
+      toast.add({ title: "Copy is blocked here — open the coach to copy the link.", type: "error" })
+      return
+    }
+    setCopiedId(coach.id)
+    setTimeout(() => setCopiedId(undefined), CopiedFeedbackMilliseconds)
+  }
+
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
       <AdminHero />
 
-      <div className="mt-10">
-        <WorkspaceSearch value={search} onChange={setSearch} />
-      </div>
+      {data.viewerCoach === undefined ? null : (
+        <div className="mt-10">
+          <ViewerCoachCard
+            viewerCoach={data.viewerCoach}
+            onOpen={(link) => void openInTelegram(link)}
+          />
+        </div>
+      )}
 
-      <Section className="mt-10" aria-labelledby="workspaces-heading">
-        <SectionTitle id="workspaces-heading">Workspaces</SectionTitle>
+      {onboarding.length === 0 ? null : (
+        <Section className="mt-10" aria-labelledby="onboarding-heading">
+          <SectionTitle id="onboarding-heading">Setting up</SectionTitle>
+          <p className="text-muted-foreground mt-2 px-1 text-sm">
+            Invites and coaches who haven&rsquo;t finished onboarding.
+          </p>
+          <div className="mt-4">
+            <CoachListCard>
+              {onboarding.map((coach) => (
+                <OnboardingCoachItem
+                  key={coach.id}
+                  coach={coach}
+                  resending={resendingId === coach.id}
+                  copied={copiedId === coach.id}
+                  onResend={(entry) => void resend(entry)}
+                  onCopy={(entry) => void copy(entry)}
+                />
+              ))}
+            </CoachListCard>
+          </div>
+        </Section>
+      )}
+
+      <Section
+        className={onboarding.length === 0 ? "mt-10" : undefined}
+        aria-labelledby="coaches-heading"
+      >
+        <SectionTitle id="coaches-heading">Coaches</SectionTitle>
         <div className="mt-4">
-          <WorkspaceListCard>
-            <CreateWorkspaceLink />
-            {workspaces.length === 0 ? (
-              <WorkspaceListEmpty />
-            ) : filteredWorkspaces.length === 0 ? (
-              <WorkspaceListNoMatches query={search.trim()} onClear={() => setSearch("")} />
+          <CoachListCard>
+            <InviteCoachLink />
+            {data.coaches.length === 0 ? (
+              <CoachListEmpty />
             ) : (
-              filteredWorkspaces.map((workspace) => (
-                <WorkspaceListItem key={workspace.id} workspace={workspace} />
-              ))
+              active.map((coach) => <ActiveCoachItem key={coach.id} coach={coach} />)
             )}
-          </WorkspaceListCard>
+          </CoachListCard>
         </div>
       </Section>
     </main>
