@@ -5,6 +5,7 @@ import {
   type Env,
   handleCoachBotBrandingRpc,
   handleCoachBotReleaseRpc,
+  handleManagerInlineInviteRpc,
   handleManagerTextRpc,
   handleRequest,
   handleScheduled,
@@ -30,6 +31,13 @@ export default class BotWorker
 
   sendManagerText(recipient: TelegramId, text: string): Promise<ManagerBotSender.RpcResult> {
     return handleManagerTextRpc(this.env, recipient, text)
+  }
+
+  prepareManagerInlineInvite(
+    recipient: TelegramId,
+    invite: ManagerBotSender.InlineInvite,
+  ): Promise<ManagerBotSender.PrepareRpcResult> {
+    return handleManagerInlineInviteRpc(this.env, recipient, invite)
   }
 
   applyCoachBotBranding(profile: CoachBotBranding.Profile): Promise<CoachBotBranding.RpcResult> {

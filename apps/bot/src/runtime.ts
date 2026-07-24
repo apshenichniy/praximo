@@ -236,6 +236,23 @@ export const sendManagerText = Effect.fn("BotWorker.sendManagerText")(function* 
   )
 })
 
+export const prepareManagerInlineInvite = Effect.fn("BotWorker.prepareManagerInlineInvite")(
+  function* (recipient: TelegramId, invite: ManagerBotSender.InlineInvite) {
+    const sender = yield* ManagerBotSender.Service
+    return yield* sender.prepareInlineInvite(recipient, invite).pipe(
+      Effect.match({
+        onFailure: (failure) =>
+          ManagerBotSender.PrepareRpcResult.cases.Failed.make({
+            recipient: failure.recipient,
+            category: failure.category,
+          }),
+        onSuccess: (prepared) =>
+          ManagerBotSender.PrepareRpcResult.cases.Prepared.make({ id: prepared.id }),
+      }),
+    )
+  },
+)
+
 export const releaseCoachBot = Effect.fn("BotWorker.releaseCoachBot")(function* (
   workspaceId: WorkspaceId,
 ) {
@@ -263,6 +280,13 @@ export const handleManagerTextRpc = (
   text: string,
 ): Promise<ManagerBotSender.RpcResult> =>
   getRuntime(env).runPromise(sendManagerText(recipient, text))
+
+export const handleManagerInlineInviteRpc = (
+  env: Env,
+  recipient: TelegramId,
+  invite: ManagerBotSender.InlineInvite,
+): Promise<ManagerBotSender.PrepareRpcResult> =>
+  getRuntime(env).runPromise(prepareManagerInlineInvite(recipient, invite))
 
 export const handleCoachBotBrandingRpc = (
   env: Env,

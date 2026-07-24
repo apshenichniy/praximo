@@ -8,6 +8,9 @@ import {
   type DeleteWorkspaceTransportResult,
   loadAdminWorkspace,
   loadAdminWorkspaces,
+  prepareAdminCoachInviteShare,
+  type PrepareShareTransportResult,
+  recordAdminCoachInviteShare,
   reissueAdminWorkspaceInvite,
   retryAdminWorkspaceProfileBranding,
   updateAdminWorkspaceProfileFromForm,
@@ -62,6 +65,27 @@ export const createCoachInviteMutation = (initData: string, queryClient: QueryCl
     )
     void queryClient.invalidateQueries({ queryKey: workspaceKeys.list() })
   },
+})
+
+export const prepareCoachInviteShareMutation = (initData: string) => ({
+  mutationFn: async ({
+    inviteId,
+    language,
+  }: {
+    readonly inviteId: string
+    readonly language: CreateInviteDelivery["language"]
+  }): Promise<PrepareShareTransportResult> =>
+    prepareAdminCoachInviteShare({ data: { initData, inviteId, language } }),
+})
+
+export const recordCoachInviteShareMutation = (initData: string) => ({
+  mutationFn: async ({
+    inviteId,
+    language,
+  }: {
+    readonly inviteId: string
+    readonly language: CreateInviteDelivery["language"]
+  }) => recordAdminCoachInviteShare({ data: { initData, inviteId, language } }),
 })
 
 const updateWorkspaceCaches = (

@@ -7,6 +7,8 @@ import {
   getAdminWorkspace,
   getAdminWorkspaceAvatar,
   listAdminWorkspaces,
+  prepareAdminInviteShareMessage,
+  recordAdminInviteShare,
   reissueAdminWorkspaceInvite as reissueAdminWorkspaceInviteRuntime,
   resendAdminWorkspaceInvite as resendAdminWorkspaceInviteRuntime,
   retryAdminWorkspaceBranding,
@@ -81,6 +83,81 @@ export const createAdminCoachInvite = createServerFn({ method: "POST" })
         default:
           return { ok: false, error: "server" }
       }
+    }
+  })
+
+export type PrepareShareTransportError = "validation" | "retryable" | "server"
+
+export type PrepareShareTransportResult =
+  | { readonly ok: true; readonly value: AdminSurface.PrepareShareResult }
+  | { readonly ok: false; readonly error: PrepareShareTransportError }
+
+const validatePrepareShare = (
+  input: unknown,
+): { readonly initData: string; readonly inviteId: string; readonly language: string } => {
+  const validated = validateInitData(input)
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("inviteId" in input) ||
+    typeof input.inviteId !== "string" ||
+    !("language" in input) ||
+    typeof input.language !== "string"
+  ) {
+    throw notFound()
+  }
+  return { ...validated, inviteId: input.inviteId, language: input.language }
+}
+
+export const prepareAdminCoachInviteShare = createServerFn({ method: "POST" })
+  .validator(validatePrepareShare)
+  .handler(async ({ data }): Promise<PrepareShareTransportResult> => {
+    try {
+      return {
+        ok: true,
+        value: await prepareAdminInviteShareMessage(data.initData, data.inviteId, data.language),
+      }
+    } catch (error) {
+      if (typeof error !== "object" || error === null || !("_tag" in error)) {
+        return { ok: false, error: "server" }
+      }
+      switch (error._tag) {
+        case "AdminSurface.AccessDenied":
+          throw notFound()
+        case "AdminSurface.ValidationFailed":
+          return { ok: false, error: "validation" }
+        case "AdminSurface.SharePreparationFailed":
+          return { ok: false, error: "retryable" }
+        default:
+          return { ok: false, error: "server" }
+      }
+    }
+  })
+
+export type RecordShareTransportResult = { readonly ok: boolean }
+
+/**
+ * Post-share bookkeeping: the Mini App calls this once the chat picker confirms
+ * a send (or the pre-8.0 fallback opens). It is best-effort — the invite is
+ * already out — so failures resolve to `{ ok: false }` for the client to ignore
+ * rather than surfacing as an error.
+ */
+export const recordAdminCoachInviteShare = createServerFn({ method: "POST" })
+  .validator(validatePrepareShare)
+  .handler(async ({ data }): Promise<RecordShareTransportResult> => {
+    try {
+      await recordAdminInviteShare(data.initData, data.inviteId, data.language)
+      return { ok: true }
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "_tag" in error &&
+        error._tag === "AdminSurface.AccessDenied"
+      ) {
+        throw notFound()
+      }
+      return { ok: false }
     }
   })
 

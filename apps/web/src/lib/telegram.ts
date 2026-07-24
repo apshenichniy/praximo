@@ -32,6 +32,15 @@ export interface TelegramWebApp {
    * minimizes or closes the app; that is host behavior and stays available.
    */
   disableVerticalSwipes: () => void
+  /**
+   * Opens the native chat picker to forward a bot-prepared inline message
+   * (Bot API 8.0). `preparedMessageId` comes from `savePreparedInlineMessage`.
+   * The optional callback reports whether the message was sent — `false` when
+   * the manager dismisses the picker.
+   */
+  shareMessage: (preparedMessageId: string, callback?: (sent: boolean) => void) => void
+  /** Opens a `t.me` link inside Telegram without closing the Mini App. */
+  openTelegramLink: (url: string) => void
   readonly BackButton: TelegramBackButton
   readonly HapticFeedback?: {
     readonly notificationOccurred: (type: "error" | "success" | "warning") => void
@@ -147,4 +156,50 @@ export const enterFullscreen = (
   onFullscreenChanged()
 
   return () => webApp.offEvent("fullscreenChanged", onFullscreenChanged)
+}
+
+/** `WebApp.shareMessage` and the prepared-inline-message flow are Bot API 8.0. */
+export const SHARE_MESSAGE_MIN_VERSION = "8.0"
+
+export type ShareInviteOutcome = "shared" | "dismissed" | "fallback"
+
+export interface ShareInviteOptions {
+  /**
+   * Mints a fresh, short-lived prepared inline message and yields its id. Called
+   * lazily and only on 8.0+ hosts — prepared messages expire quickly, so the id
+   * must be requested at share time, never ahead of it.
+   */
+  readonly prepare: () => Promise<string>
+  /** The one-time onboarding deep link — the URL of the pre-8.0 share fallback. */
+  readonly link: string
+  /** The forwardable message body (ends with the link); the pre-8.0 fallback text. */
+  readonly message: string
+}
+
+/**
+ * Share a coach invite through Telegram. On Bot API 8.0+ this prepares a
+ * bot-authored inline message and opens the native chat picker, so the coach
+ * receives the bot's message with a working button. On older clients it falls
+ * back to `t.me/share/url`, which sends the invite as the manager's own plain
+ * text. The deep link is the URL and the prose (minus its trailing link) is the
+ * text, so the link is not duplicated. Pure aside from the injected `webApp`.
+ */
+export const shareInviteMessage = async (
+  webApp: TelegramWebApp,
+  options: ShareInviteOptions,
+): Promise<ShareInviteOutcome> => {
+  if (!webApp.isVersionAtLeast(SHARE_MESSAGE_MIN_VERSION)) {
+    const body = options.message.endsWith(options.link)
+      ? options.message.slice(0, options.message.length - options.link.length).trimEnd()
+      : options.message
+    webApp.openTelegramLink(
+      `https://t.me/share/url?url=${encodeURIComponent(options.link)}&text=${encodeURIComponent(body)}`,
+    )
+    return "fallback"
+  }
+
+  const preparedMessageId = await options.prepare()
+  return new Promise<ShareInviteOutcome>((resolve) => {
+    webApp.shareMessage(preparedMessageId, (sent) => resolve(sent ? "shared" : "dismissed"))
+  })
 }
