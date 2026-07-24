@@ -82,7 +82,7 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
       render={<Link to="/admin/workspaces/$workspaceId" params={{ workspaceId: coach.id }} />}
       className="active:bg-accent/70 h-16 gap-3.5 rounded-none border-0 px-4 py-0"
     >
-      <ItemMedia>
+      <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
         <WorkspaceAvatar name={coach.name} className="size-[38px]" />
       </ItemMedia>
       <ItemContent className="min-w-0 gap-0.5">
@@ -147,7 +147,7 @@ export function ViewerCoachCard({
         render={<button type="button" onClick={() => onOpen(viewerCoach.link)} />}
         className="hover:bg-muted active:bg-accent/70 w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
       >
-        <ItemMedia>
+        <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
           <span className="border-primary/50 text-primary flex size-[38px] items-center justify-center rounded-full border">
             <HugeiconsIcon icon={UserSharingIcon} size={20} strokeWidth={1.8} />
           </span>
