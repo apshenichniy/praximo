@@ -171,6 +171,11 @@ export interface DeletionProgress {
   /** The label the workspace carried; absent once the cascade has removed it. */
   readonly workspaceName?: string
   readonly startedAt: string
+  /**
+   * When a stage last landed. The closest thing to "somebody is driving this"
+   * the server has: every stage bumps it, and an abandoned operation stops.
+   */
+  readonly advancedAt: string
   readonly completedAt?: string
 }
 
@@ -1033,6 +1038,7 @@ export const layer = Layer.effect(
           ? {}
           : { workspaceName: operation.workspaceName }),
         startedAt: operation.createdAt.toISOString(),
+        advancedAt: operation.updatedAt.toISOString(),
         ...(operation.completedAt === undefined
           ? {}
           : { completedAt: operation.completedAt.toISOString() }),

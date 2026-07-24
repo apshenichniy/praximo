@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
-import { createFileRoute, getRouteApi, useRouter } from "@tanstack/react-router"
+import { createFileRoute, getRouteApi } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import { useRef, useState } from "react"
 
@@ -23,19 +23,18 @@ import { LabelSettingsSection } from "@/features/admin/components/label-settings
 import { OnboardingStepsSection } from "@/features/admin/components/onboarding-steps.tsx"
 import { WorkspaceDetailHeader } from "@/features/admin/components/workspace-detail-header.tsx"
 import { WorkspaceDetailSkeleton } from "@/features/admin/components/workspace-detail-skeleton.tsx"
-import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
+import { useWorkspaceDeletion } from "@/features/admin/hooks/use-workspace-deletion.ts"
 import {
   detailVariant,
   reissueCopy,
   type WorkspaceDetail,
 } from "@/features/admin/workspace-detail.ts"
-import { type DeletionProgress, deletionCardCopy } from "@/features/admin/workspace-deletion.ts"
+import { deletionCardCopy } from "@/features/admin/workspace-deletion.ts"
 import {
   adminWorkspaceDeletionQuery,
   adminWorkspaceDetailQuery,
-  deleteWorkspaceMutation,
   reissueWorkspaceInviteMutation,
 } from "@/features/admin/workspace-queries.ts"
 import { openTelegramLink } from "@/lib/telegram.ts"
@@ -69,78 +68,6 @@ export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
 
 const adminRoute = getRouteApi("/admin")
 
-const deleteMessages = {
-  validation: "The deletion request is invalid. Close this and start again.",
-  conflict: "Another deletion of this workspace is already running. Try again in a moment.",
-  retryable: "A step could not be completed. Nothing was lost — try again to finish the deletion.",
-  blocked:
-    "The connected bot could not be released. The workspace was kept; contact support before retrying.",
-  server: "Deletion failed. The workspace was kept; try again.",
-} as const
-
-interface WorkspaceDeletion {
-  readonly progress: DeletionProgress | undefined
-  readonly running: boolean
-  readonly error: string | undefined
-  readonly start: () => void
-}
-
-/**
- * The deletion pipeline, driven from one place (#110). The request is minted
- * once per workspace and reused for every attempt, so an interrupted deletion
- * resumes the same operation rather than opening a second one; the server
- * adopts an operation started by an earlier session in the same way.
- *
- * Progress is read from the server's own receipt rather than guessed from the
- * request's lifetime, and polled only while an attempt is actually in flight —
- * a receipt with nobody driving it is paused, not slow.
- */
-function useWorkspaceDeletion(initData: string, workspaceId: string): WorkspaceDeletion {
-  const queryClient = useQueryClient()
-  const router = useRouter()
-  const remove = useMutation(deleteWorkspaceMutation(initData, queryClient))
-  const requestId = useRef<string | undefined>(undefined)
-  const [error, setError] = useState<string>()
-
-  const { data: receipt } = useSuspenseQuery(
-    adminWorkspaceDeletionQuery(initData, workspaceId, { watch: remove.isPending }),
-  )
-
-  const start = async () => {
-    requestId.current ??= crypto.randomUUID()
-    setError(undefined)
-    const result = await remove
-      .mutateAsync({ workspaceId, requestId: requestId.current })
-      .catch(() => undefined)
-
-    if (result === undefined) {
-      setError("Deletion failed. Check your connection and try again.")
-      notifyHaptic("error")
-      return
-    }
-    if (!result.ok) {
-      setError(deleteMessages[result.error])
-      notifyHaptic("error")
-      return
-    }
-
-    notifyHaptic("success")
-    setAdminNotice(
-      result.value.status === "deleted-farewell-undeliverable"
-        ? "Workspace deleted. The coach farewell could not be delivered."
-        : "Workspace deleted",
-    )
-    await router.navigate({ to: "/admin" })
-  }
-
-  return {
-    progress: receipt ?? undefined,
-    running: remove.isPending,
-    error,
-    start: () => void start(),
-  }
-}
-
 /**
  * Two screens behind one route (#108). Which one a coach gets is not a local
  * guess: the server hands back the same onboarding stage the list rows carry,
@@ -171,14 +98,15 @@ function WorkspaceDetailsPage() {
         workspace={workspace}
         onOpenBot={(link) => void openTelegramLink(link)}
       />
-      {progress !== undefined && progress.state === "prepared" ? (
+      {progress === undefined ? null : (
         <WorkspaceDeletionPanel
           progress={progress}
-          running={deletion.running}
+          advancing={deletion.advancing}
           error={deletion.error}
           onResume={deletion.start}
         />
-      ) : detailVariant(workspace) === "active" ? (
+      )}
+      {progress !== undefined ? null : detailVariant(workspace) === "active" ? (
         <ActiveWorkspace
           workspace={workspace}
           initData={initData}
@@ -195,7 +123,7 @@ function WorkspaceDetailsPage() {
         workspace={workspace}
         open={deleteOpen}
         progress={progress}
-        running={deletion.running}
+        advancing={deletion.advancing}
         error={deletion.error}
         onOpenChange={setDeleteOpen}
         onConfirm={deletion.start}

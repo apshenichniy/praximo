@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 
-import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import {
   Drawer,
@@ -9,8 +8,11 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer.tsx"
-import { Spinner } from "@/components/ui/spinner.tsx"
-import { DeletionStageList } from "@/features/admin/components/deletion-stages.tsx"
+import {
+  DeletionActionButton,
+  DeletionError,
+  DeletionStageList,
+} from "@/features/admin/components/deletion-progress.tsx"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
 import type { WorkspaceDetail } from "@/features/admin/workspace-detail.ts"
 import {
@@ -27,11 +29,6 @@ import {
 const ArmingSeconds = 3
 
 const sheetPadding = "px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
-// The one filled destructive surface in the admin app. The theme's destructive
-// is a light red, so the label goes dark on it — the same dark-on-light shape
-// the primary button already has, and the only combination that carries
-// readable contrast at this size.
-const filledDestructive = "bg-destructive text-background hover:bg-destructive/90"
 
 type Phase = "consequences" | "arm" | "progress"
 
@@ -56,7 +53,7 @@ export function DeleteWorkspaceSheet({
   workspace,
   open,
   progress,
-  running,
+  advancing,
   error,
   onOpenChange,
   onConfirm,
@@ -65,7 +62,7 @@ export function DeleteWorkspaceSheet({
   readonly open: boolean
   /** The server's own account of the pipeline, once an attempt has started. */
   readonly progress: DeletionProgress | undefined
-  readonly running: boolean
+  readonly advancing: boolean
   readonly error: string | undefined
   readonly onOpenChange: (open: boolean) => void
   readonly onConfirm: () => void
@@ -97,7 +94,7 @@ export function DeleteWorkspaceSheet({
         {gate === "light" ? (
           <LightConfirm
             workspace={workspace}
-            running={running}
+            advancing={advancing}
             error={error}
             onCancel={() => onOpenChange(false)}
             onConfirm={onConfirm}
@@ -111,7 +108,12 @@ export function DeleteWorkspaceSheet({
         ) : phase === "arm" ? (
           <ArmingStep key={armToken} onKeep={() => onOpenChange(false)} onConfirm={confirm} />
         ) : (
-          <ProgressStep progress={progress} running={running} error={error} onRetry={onConfirm} />
+          <ProgressStep
+            progress={progress}
+            advancing={advancing}
+            error={error}
+            onRetry={onConfirm}
+          />
         )}
       </DrawerContent>
     </Drawer>
@@ -184,7 +186,7 @@ function ArmingStep({
   readonly onKeep: () => void
   readonly onConfirm: () => void
 }) {
-  const remaining = useArmingCountdown(ArmingSeconds)
+  const remaining = useArmingCountdown()
 
   return (
     <>
@@ -196,7 +198,7 @@ function ArmingStep({
         <Button
           size="lg"
           disabled={remaining > 0}
-          className={`h-13 w-full text-base font-semibold ${filledDestructive}`}
+          className="bg-destructive text-background hover:bg-destructive/90 h-13 w-full text-base font-semibold"
           onClick={onConfirm}
         >
           {remaining > 0 ? `Yes, delete everything (${remaining})` : "Yes, delete everything"}
@@ -220,8 +222,8 @@ function ArmingStep({
  * is remounted every time it is entered, and there is no way to inherit an
  * elapsed countdown from a previous visit.
  */
-function useArmingCountdown(seconds: number): number {
-  const [remaining, setRemaining] = useState(seconds)
+function useArmingCountdown(): number {
+  const [remaining, setRemaining] = useState(ArmingSeconds)
 
   useEffect(() => {
     if (remaining <= 0) return
@@ -234,75 +236,47 @@ function useArmingCountdown(seconds: number): number {
 
 function ProgressStep({
   progress,
-  running,
+  advancing,
   error,
   onRetry,
 }: {
   readonly progress: DeletionProgress | undefined
-  readonly running: boolean
+  readonly advancing: boolean
   readonly error: string | undefined
   readonly onRetry: () => void
 }) {
-  // Until the first receipt arrives there is nothing the server has confirmed,
-  // so the sheet says it is starting rather than inventing stage outcomes.
-  if (progress === undefined) {
-    return (
-      <>
-        <SheetHeader
-          title="Deleting workspace…"
-          description="You can close this — deletion continues in the background."
-        />
-        <div className="text-muted-foreground mt-6 flex items-center gap-3 text-sm">
-          <Spinner className="text-primary size-[18px]" /> Starting the deletion…
-        </div>
-        <DeletionError error={error} onRetry={onRetry} />
-      </>
-    )
-  }
+  const headline = deletionHeadline(progress, advancing)
 
-  const headline = deletionHeadline(progress, running)
   return (
     <>
-      <SheetHeader title={headline.title} description={headline.description} />
-      <DeletionStageList stages={deletionStages(progress, running)} className="mt-6" />
-      <DeletionError error={error} onRetry={onRetry} />
+      <SheetHeader {...headline} />
+      {progress === undefined ? null : (
+        <DeletionStageList stages={deletionStages(progress, advancing)} className="mt-6" />
+      )}
+      {error === undefined ? null : (
+        <div className="mt-6 flex flex-col gap-3">
+          <DeletionError error={error} />
+          <DeletionActionButton
+            label="Resume deletion"
+            running={advancing}
+            retry
+            onClick={onRetry}
+          />
+        </div>
+      )}
     </>
-  )
-}
-
-function DeletionError({
-  error,
-  onRetry,
-}: {
-  readonly error: string | undefined
-  readonly onRetry: () => void
-}) {
-  if (error === undefined) return null
-  return (
-    <div className="mt-6 flex flex-col gap-3">
-      <Alert variant="destructive" className="bg-destructive/10 border-transparent">
-        <AlertDescription className="text-destructive">{error}</AlertDescription>
-      </Alert>
-      <Button
-        size="lg"
-        className={`h-13 w-full text-base font-semibold ${filledDestructive}`}
-        onClick={onRetry}
-      >
-        Try again
-      </Button>
-    </div>
   )
 }
 
 function LightConfirm({
   workspace,
-  running,
+  advancing,
   error,
   onCancel,
   onConfirm,
 }: {
   readonly workspace: WorkspaceDetail
-  readonly running: boolean
+  readonly advancing: boolean
   readonly error: string | undefined
   readonly onCancel: () => void
   readonly onConfirm: () => void
@@ -311,32 +285,21 @@ function LightConfirm({
     <>
       <SheetHeader {...lightConfirmCopy(workspace)} />
       {error === undefined ? null : (
-        <Alert variant="destructive" className="bg-destructive/10 mt-5 border-transparent">
-          <AlertDescription className="text-destructive">{error}</AlertDescription>
-        </Alert>
+        <div className="mt-5">
+          <DeletionError error={error} />
+        </div>
       )}
       <div className="mt-7 flex flex-col gap-2">
-        <Button
-          size="lg"
-          disabled={running}
-          aria-busy={running || undefined}
-          className={`h-13 w-full text-base font-semibold ${filledDestructive}`}
+        <DeletionActionButton
+          label="Delete workspace"
+          running={advancing}
+          retry={error !== undefined}
           onClick={onConfirm}
-        >
-          {running ? (
-            <>
-              <Spinner /> Deleting…
-            </>
-          ) : error === undefined ? (
-            "Delete workspace"
-          ) : (
-            "Try again"
-          )}
-        </Button>
+        />
         <Button
           variant="secondary"
           size="lg"
-          disabled={running}
+          disabled={advancing}
           className="h-13 w-full text-base font-semibold"
           onClick={onCancel}
         >

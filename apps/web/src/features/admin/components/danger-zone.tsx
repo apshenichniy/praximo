@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button.tsx"
 import { Card, CardContent } from "@/components/ui/card.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
-import type { DeletionCardCopy } from "@/features/admin/workspace-deletion.ts"
+import type { DeletionHeadline } from "@/features/admin/workspace-deletion.ts"
 
 /** The one place on the details screen where an action cannot be taken back. */
 export function DangerZone({ children }: { readonly children: ReactNode }) {
@@ -89,7 +89,7 @@ export function DeleteWorkspaceCard({
   copy,
   onOpen,
 }: {
-  readonly copy: DeletionCardCopy
+  readonly copy: DeletionHeadline
   readonly onOpen: () => void
 }) {
   return (
@@ -98,7 +98,7 @@ export function DeleteWorkspaceCard({
       description={copy.description}
       action={
         <Button variant="destructive" size="lg" className="mt-5 font-semibold" onClick={onOpen}>
-          {copy.action}
+          Delete workspace
         </Button>
       }
     />

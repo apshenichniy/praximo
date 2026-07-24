@@ -1,8 +1,12 @@
-import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
+import { Link } from "@tanstack/react-router"
+
 import { Button } from "@/components/ui/button.tsx"
 import { Card, CardContent } from "@/components/ui/card.tsx"
-import { Spinner } from "@/components/ui/spinner.tsx"
-import { DeletionStageList } from "@/features/admin/components/deletion-stages.tsx"
+import {
+  DeletionActionButton,
+  DeletionError,
+  DeletionStageList,
+} from "@/features/admin/components/deletion-progress.tsx"
 import { Section } from "@/features/admin/components/section.tsx"
 import {
   type DeletionProgress,
@@ -19,19 +23,21 @@ import {
  * It is also where an interrupted deletion is picked up. Nothing is offered
  * except finishing — the confirmation already happened, the bot may already be
  * released, and the only wrong outcome now is a workspace left half-deleted.
+ * Resume appears only when the pipeline has actually stopped: while stages are
+ * still landing, a second button would only start a second attempt.
  */
 export function WorkspaceDeletionPanel({
   progress,
-  running,
+  advancing,
   error,
   onResume,
 }: {
   readonly progress: DeletionProgress
-  readonly running: boolean
+  readonly advancing: boolean
   readonly error: string | undefined
   readonly onResume: () => void
 }) {
-  const headline = deletionHeadline(progress, running)
+  const headline = deletionHeadline(progress, advancing)
 
   return (
     <Section aria-labelledby="deletion-heading">
@@ -42,31 +48,34 @@ export function WorkspaceDeletionPanel({
           </h2>
           <p className="text-muted-foreground mt-2 text-sm leading-5">{headline.description}</p>
 
-          <DeletionStageList stages={deletionStages(progress, running)} className="mt-5" />
+          <DeletionStageList stages={deletionStages(progress, advancing)} className="mt-5" />
 
           {error === undefined ? null : (
-            <Alert variant="destructive" className="bg-destructive/10 mt-5 border-transparent">
-              <AlertDescription className="text-destructive">{error}</AlertDescription>
-            </Alert>
+            <div className="mt-5">
+              <DeletionError error={error} />
+            </div>
           )}
 
-          <Button
-            size="lg"
-            disabled={running}
-            aria-busy={running || undefined}
-            className="bg-destructive text-background hover:bg-destructive/90 mt-5 w-full font-semibold"
-            onClick={onResume}
-          >
-            {running ? (
-              <>
-                <Spinner /> Deleting…
-              </>
-            ) : error === undefined ? (
-              "Resume deletion"
-            ) : (
-              "Try again"
-            )}
-          </Button>
+          {progress.state === "completed" ? (
+            // Reached by watching an attempt started elsewhere finish. The
+            // workspace no longer exists, so the only honest offer is the list.
+            <Button
+              variant="secondary"
+              size="lg"
+              className="mt-5 w-full font-semibold"
+              render={<Link to="/admin" />}
+            >
+              Back to coaches
+            </Button>
+          ) : advancing && error === undefined ? null : (
+            <DeletionActionButton
+              label="Resume deletion"
+              running={false}
+              retry={error !== undefined}
+              className="mt-5"
+              onClick={onResume}
+            />
+          )}
         </CardContent>
       </Card>
     </Section>

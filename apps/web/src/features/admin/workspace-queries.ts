@@ -1,6 +1,7 @@
 import type { CreateInviteDelivery } from "@praximo/domain"
 import type { QueryClient } from "@tanstack/react-query"
 import { queryOptions } from "@tanstack/react-query"
+import { deletionAdvancing } from "@/features/admin/workspace-deletion.ts"
 import {
   createAdminCoachInvite,
   type CreateInviteTransportResult,
@@ -44,13 +45,21 @@ export const adminWorkspaceDetailQuery = (initData: string, workspaceId: string)
  * rather than as a page refreshing, slow enough that a pipeline dominated by
  * two Telegram round-trips is not polled dozens of times per stage.
  */
-const DeletionPollMs = 800
+const ActiveDeletionPollMs = 800
 
 /**
- * The deletion receipt for one workspace (#110). Polling is opt-in rather than
- * derived from the data: a receipt that sits `prepared` with nobody driving it
- * is a *paused* deletion, and a screen showing it as paused has nothing to wait
- * for. Only a screen actually driving the pipeline asks to watch it.
+ * A deletion nobody is driving can still change — another session may resume
+ * it — so it is watched, just not at the pace of one that is moving. This is
+ * also what re-renders the screen when the pipeline goes quiet, so a stalled
+ * attempt starts reading as paused within a few seconds rather than looking
+ * busy until the admin navigates away.
+ */
+const PausedDeletionPollMs = 4_000
+
+/**
+ * The deletion receipt for one workspace (#110). While no receipt exists there
+ * is nothing to poll, so an ordinary workspace costs exactly one read; the
+ * cadence past that follows what the receipt itself says is happening.
  */
 export const adminWorkspaceDeletionQuery = (
   initData: string,
@@ -61,7 +70,15 @@ export const adminWorkspaceDeletionQuery = (
     queryKey: workspaceKeys.deletion(workspaceId),
     queryFn: () => loadAdminWorkspaceDeletion({ data: { initData, workspaceId } }),
     retry: false,
-    refetchInterval: options?.watch === true ? DeletionPollMs : false,
+    refetchInterval: (query) => {
+      const receipt = query.state.data
+      const watching = options?.watch === true
+      if (receipt === null || receipt === undefined) return watching ? ActiveDeletionPollMs : false
+      if (receipt.state === "completed") return false
+      return watching || deletionAdvancing(receipt, false, Date.now())
+        ? ActiveDeletionPollMs
+        : PausedDeletionPollMs
+    },
   })
 
 export interface CreateCoachInviteMutationInput {
