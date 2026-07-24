@@ -1,8 +1,9 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
-import { createFileRoute, getRouteApi } from "@tanstack/react-router"
-import { useEffect, useMemo } from "react"
+import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
+import { useCallback, useEffect, useMemo } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
+import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import { toast } from "@/components/ui/toast.tsx"
 import { takeAdminNotice } from "@/features/admin/admin-notice.ts"
 import {
@@ -24,6 +25,8 @@ const adminRoute = getRouteApi("/admin")
 function AdminHome() {
   const { initData } = adminRoute.useLoaderData()
   const { data } = useSuspenseQuery(adminWorkspaceListQuery(initData))
+  const navigate = useNavigate()
+  const openInvite = useCallback(() => void navigate({ to: "/admin/workspaces/new" }), [navigate])
 
   // The server already returns onboarding first and active coaches A→Z; the
   // split here is only about which heading each row lives under.
@@ -81,7 +84,16 @@ function AdminHome() {
         <SectionTitle id="coaches-heading">Coaches</SectionTitle>
         <div className="mt-4">
           <CoachListCard>
-            <InviteCoachLink />
+            {/* Inviting is the screen's action, not one of its rows: as a row
+                it sat below however many coaches happened to be onboarding,
+                which is the one thing here that should never move. The host's
+                bottom button gives it a fixed place outside the scroll; a
+                browser with no Telegram host keeps the row. */}
+            <TelegramMainButton
+              text="Invite a coach"
+              onClick={openInvite}
+              fallback={<InviteCoachLink />}
+            />
             {data.coaches.length === 0 ? (
               <CoachListEmpty />
             ) : (

@@ -87,6 +87,8 @@ Re-seeding is the only mechanism: edit `ADMIN_TELEGRAM_IDS` and re-run the seed.
 
 ### Invite a coach
 
+The entry point is the coaches list's **native Telegram MainButton**, not a row in the list. Inviting is the screen's one action, and as a row it sat below however many coaches happened to be onboarding — the position of the primary action would then depend on other people's onboarding state. The host button sits outside the scroll area, so it keeps one place whatever the list does; a browser with no Telegram host (local development) keeps the in-list row as the fallback.
+
 The screen collects exactly one optional field — the **internal label** (the coach's name as the admin knows it), used to identify the pending invite in the list. Everything else the coach provides themselves during onboarding: language, bot branding, profile.
 
 Three **delivery actions**; tapping one creates the workspace (`awaiting setup`) + invite lazily and delivers in the same gesture:
