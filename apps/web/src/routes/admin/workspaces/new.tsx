@@ -11,11 +11,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
 import { Card } from "@/components/ui/card.tsx"
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
+import { toast } from "@/components/ui/toast.tsx"
 import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
 import { InviteCopySheet } from "@/features/admin/components/invite-copy-sheet.tsx"
+import { InviteEmailSheet } from "@/features/admin/components/invite-email-sheet.tsx"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
+import { sendCoachInviteEmail } from "@/features/admin/invite-email.ts"
 import { createCoachInviteMutation } from "@/features/admin/workspace-queries.ts"
 
 export const Route = createFileRoute("/admin/workspaces/new")({
@@ -50,7 +53,7 @@ function InviteCoachPage() {
   // produce an idempotency conflict on the next tap.
   const [created, setCreated] = useState(false)
   const [actionError, setActionError] = useState<string>()
-  const [emailNote, setEmailNote] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
   const [copyError, setCopyError] = useState<string>()
   const [copyFallback, setCopyFallback] = useState<string>()
@@ -74,7 +77,6 @@ function InviteCoachPage() {
    */
   const sendInTelegram = async () => {
     setActionError(undefined)
-    setEmailNote(false)
     const response = await mutation
       .mutateAsync({
         input: { requestId, name },
@@ -115,6 +117,25 @@ function InviteCoachPage() {
       case "shared":
         finish("Invite shared — the coach can start onboarding")
     }
+  }
+
+  /**
+   * The email channel's whole flow, waiting on its sender (#105). Everything
+   * the manager sees is real; the delivery behind it is not yet, so the sheet
+   * closes and says so rather than pretending an invite went out. Nothing is
+   * created — no workspace, no invite, no delivery — which is why this path
+   * never touches the create mutation.
+   */
+  const sendByEmail = async (delivery: {
+    readonly email: string
+    readonly language: CoachLanguage
+  }) => {
+    const notice = await sendCoachInviteEmail({ requestId, name, ...delivery })
+    setEmailOpen(false)
+    notifyHaptic("warning")
+    // Toasted rather than shown in the sheet: the sheet is gone by then, and
+    // the answer belongs to the screen the manager is left looking at.
+    toast.add({ title: notice, type: "info" })
   }
 
   const copyInvite = async (language: CoachLanguage) => {
@@ -206,7 +227,7 @@ function InviteCoachPage() {
           disabled={pending}
           onClick={() => {
             setActionError(undefined)
-            setEmailNote(true)
+            setEmailOpen(true)
           }}
         />
         <InviteAction
@@ -216,19 +237,12 @@ function InviteCoachPage() {
           disabled={pending}
           onClick={() => {
             setActionError(undefined)
-            setEmailNote(false)
             setCopyError(undefined)
             setCopyFallback(undefined)
             setCopyOpen(true)
           }}
         />
       </Card>
-
-      {emailNote ? (
-        <Alert className="mt-4">
-          <AlertDescription>Email delivery is coming soon.</AlertDescription>
-        </Alert>
-      ) : null}
 
       {actionError === undefined ? null : (
         <Alert variant="destructive" className="bg-destructive/10 mt-4 border-transparent">
@@ -245,6 +259,12 @@ function InviteCoachPage() {
       <p className="text-muted-foreground mt-auto border-t pt-4 text-xs leading-5">
         The link works once and expires in 7 days. You can resend it anytime.
       </p>
+
+      <InviteEmailSheet
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        onSend={(delivery) => void sendByEmail(delivery)}
+      />
 
       <InviteCopySheet
         open={copyOpen}

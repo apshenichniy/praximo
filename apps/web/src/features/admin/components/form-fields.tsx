@@ -16,6 +16,13 @@ interface CommonFieldProps {
   readonly counter?: number
   readonly placeholder?: string
   readonly disabled?: boolean
+  /**
+   * Left alone for ordinary text. `email` is what puts the "@" key on a phone
+   * keyboard — the browser's own validation stays off, since the field reports
+   * its own errors.
+   */
+  readonly type?: "text" | "email"
+  readonly autoComplete?: string
 }
 
 function FieldHeading({
@@ -52,6 +59,8 @@ export function TextField({
   counter,
   placeholder,
   disabled,
+  type,
+  autoComplete,
 }: CommonFieldProps) {
   const id = useId()
   return (
@@ -60,6 +69,8 @@ export function TextField({
       <Input
         id={id}
         name={name}
+        type={type}
+        autoComplete={autoComplete}
         value={value}
         maxLength={maxLength}
         placeholder={placeholder}
