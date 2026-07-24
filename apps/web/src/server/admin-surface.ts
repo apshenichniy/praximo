@@ -892,41 +892,19 @@ export const layer = Layer.effect(
       return yield* deliver(recipient, aggregate, aggregate.owner.language)
     })
 
-    const deleteWorkspace = Effect.fn("AdminSurface.deleteWorkspace")(function* (
-      rawInitData: string,
-      rawWorkspaceId: string,
-      rawInput: unknown,
+    /**
+     * The stages, run by the one attempt that holds the operation's lease. Each
+     * stage reads its status from the receipt and marks it before moving on, so
+     * a resumed attempt skips whatever already happened; the lease is what keeps
+     * a second attempt from reading the same `pending` and repeating the side
+     * effect — a coach must not be told goodbye twice.
+     */
+    const driveDeletion = Effect.fn("AdminSurface.driveDeletion")(function* (
+      workspaceId: WorkspaceId,
+      lease: WorkspaceDeletionRepo.Lease,
+      claimed: WorkspaceDeletionRepo.Operation,
     ) {
-      yield* verifyAdmin(rawInitData)
-      const workspaceId = yield* decodeWorkspaceId(rawWorkspaceId).pipe(
-        Effect.mapError(() => new ValidationFailed()),
-      )
-      const input = yield* decodeDeleteInput(rawInput).pipe(
-        Effect.mapError(() => new ValidationFailed()),
-      )
-      let operation = yield* deletions
-        .prepare(workspaceId, input.requestId, new Date(yield* Clock.currentTimeMillis))
-        .pipe(
-          Effect.mapError((error) =>
-            error._tag === "WorkspaceDeletionRepo.RequestConflict"
-              ? new DeletionConflict()
-              : new LoadFailed({ operation: "deleteWorkspace.prepare" }),
-          ),
-        )
-
-      // prepare may adopt an in-flight operation created under an earlier
-      // requestId (the client mints a fresh one per dialog mount). Drive the
-      // remaining stages by the operation's own requestId, not the client input.
-      const operationRequestId = operation.requestId
-
-      if (operation.state === "completed") {
-        return {
-          status:
-            operation.farewellStatus === "undeliverable"
-              ? "deleted-farewell-undeliverable"
-              : "deleted",
-        } satisfies DeleteResult
-      }
+      let operation = claimed
 
       if (operation.pipelineStatus === "pending") {
         const cancellation = yield* runCancellation.cancel(workspaceId)
@@ -935,7 +913,7 @@ export const layer = Layer.effect(
         }
         operation = yield* deletions
           .markPipeline(
-            operationRequestId,
+            lease,
             WorkspaceRunCancellationResult.guards.Cancelled(cancellation)
               ? "cancelled"
               : "nothing-active",
@@ -951,11 +929,7 @@ export const layer = Layer.effect(
           operation.workspaceName === undefined
         ) {
           operation = yield* deletions
-            .markFarewell(
-              operationRequestId,
-              "not-applicable",
-              new Date(yield* Clock.currentTimeMillis),
-            )
+            .markFarewell(lease, "not-applicable", new Date(yield* Clock.currentTimeMillis))
             .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "farewell" })))
         } else {
           const recipient = yield* Schema.decodeUnknownEffect(TelegramId)(
@@ -969,7 +943,7 @@ export const layer = Layer.effect(
           }
           operation = yield* deletions
             .markFarewell(
-              operationRequestId,
+              lease,
               Result.isFailure(farewell) ? "undeliverable" : "sent",
               new Date(yield* Clock.currentTimeMillis),
             )
@@ -986,7 +960,7 @@ export const layer = Layer.effect(
         }
         operation = yield* deletions
           .markBotReleased(
-            operationRequestId,
+            lease,
             CoachBotRelease.Result.guards.Released(released)
               ? "released"
               : CoachBotRelease.Result.guards.AlreadyReleased(released)
@@ -998,7 +972,7 @@ export const layer = Layer.effect(
       }
 
       operation = yield* deletions
-        .finalize(operationRequestId, new Date(yield* Clock.currentTimeMillis))
+        .finalize(lease, new Date(yield* Clock.currentTimeMillis))
         .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "finalize" })))
       yield* runCancellation.kickObjectCleanup()
 
@@ -1008,6 +982,60 @@ export const layer = Layer.effect(
             ? "deleted-farewell-undeliverable"
             : "deleted",
       } satisfies DeleteResult
+    })
+
+    const deleteWorkspace = Effect.fn("AdminSurface.deleteWorkspace")(function* (
+      rawInitData: string,
+      rawWorkspaceId: string,
+      rawInput: unknown,
+    ) {
+      yield* verifyAdmin(rawInitData)
+      const workspaceId = yield* decodeWorkspaceId(rawWorkspaceId).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
+      const input = yield* decodeDeleteInput(rawInput).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
+      const prepared = yield* deletions
+        .prepare(workspaceId, input.requestId, new Date(yield* Clock.currentTimeMillis))
+        .pipe(
+          Effect.mapError((error) =>
+            error._tag === "WorkspaceDeletionRepo.RequestConflict"
+              ? new DeletionConflict()
+              : new LoadFailed({ operation: "deleteWorkspace.prepare" }),
+          ),
+        )
+
+      // prepare may adopt an in-flight operation created under an earlier
+      // requestId (the client mints a fresh one per dialog mount). Claim by the
+      // operation's own requestId, not the client input, so both the first
+      // attempt and a resumed one contend for the same lease.
+      const { lease, operation } = yield* deletions
+        .claim(prepared.requestId, new Date(yield* Clock.currentTimeMillis))
+        .pipe(
+          Effect.mapError((error) =>
+            error._tag === "WorkspaceDeletionRepo.LeaseHeld"
+              ? new DeletionConflict()
+              : new LoadFailed({ operation: "deleteWorkspace.claim" }),
+          ),
+        )
+
+      // Replay of a finished deletion: nothing was claimed and nothing is run.
+      if (operation.state === "completed") {
+        return {
+          status:
+            operation.farewellStatus === "undeliverable"
+              ? "deleted-farewell-undeliverable"
+              : "deleted",
+        } satisfies DeleteResult
+      }
+
+      // Hand the lease back on every exit — success, failure, or interruption —
+      // so a retry after a failed stage is not stuck behind its own dead
+      // attempt. Only a process that dies outright leaves it to the TTL.
+      return yield* driveDeletion(workspaceId, lease, operation).pipe(
+        Effect.ensuring(deletions.release(lease).pipe(Effect.ignore)),
+      )
     })
 
     /**
