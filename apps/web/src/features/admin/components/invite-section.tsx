@@ -11,28 +11,14 @@ import { formatDate, formatExpiresIn } from "@/features/admin/formatting.ts"
 import { useCopyLink } from "@/features/admin/hooks/use-copy-link.ts"
 import {
   inviteChannel,
-  inviteHeadline,
+  inviteExplanation,
   type WorkspaceDetail,
 } from "@/features/admin/workspace-detail.ts"
-import { cn } from "@/lib/utils.ts"
-
-const toneClass = {
-  amber: "text-amber-300",
-  sky: "text-sky-300",
-  emerald: "text-emerald-300",
-  muted: "text-muted-foreground",
-} as const
-
-const dotClass = {
-  amber: "bg-amber-300",
-  sky: "bg-sky-300",
-  emerald: "bg-emerald-300",
-  muted: "bg-muted-foreground/60",
-} as const
 
 /**
- * The pending screen's centrepiece: where this invite stands, what it is made
- * of, and the two ways to get it in front of the coach again.
+ * The pending screen's centrepiece: what this invite is made of and the two ways
+ * to get it in front of the coach again. Where it *stands* is the header's job —
+ * this card explains that state rather than restating it.
  *
  * Resend goes through the same native chat picker the invite screen uses
  * (#104) rather than mailing the link to the admin's own chat — one delivery
@@ -60,7 +46,6 @@ export function InviteSection({
   }
 }) {
   const invite = workspace.invite
-  const headline = inviteHeadline(workspace)
   const copyController = useCopyLink(invite?.link)
 
   return (
@@ -69,19 +54,7 @@ export function InviteSection({
 
       <Card size="sm" className="mt-4">
         <CardContent>
-          <p
-            className={cn(
-              "flex items-center gap-2 text-base font-semibold",
-              toneClass[headline.tone],
-            )}
-          >
-            <span
-              aria-hidden="true"
-              className={cn("size-1.5 shrink-0 rounded-full", dotClass[headline.tone])}
-            />
-            {headline.title}
-          </p>
-          <p className="text-muted-foreground mt-2 text-sm leading-5">{headline.detail}</p>
+          <p className="text-sm leading-5">{inviteExplanation(workspace)}</p>
 
           {invite?.link === undefined ? null : (
             <>

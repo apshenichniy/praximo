@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  detailSubtitle,
+  detailStatus,
   detailVariant,
   inviteChannel,
-  inviteHeadline,
+  inviteExplanation,
   onboardingSteps,
   reissueCopy,
   type WorkspaceDetail,
@@ -42,55 +42,85 @@ describe("detailVariant", () => {
   })
 })
 
-describe("detailSubtitle", () => {
-  it("distinguishes moving, stopped, and never-started onboarding", () => {
-    expect(detailSubtitle(workspace({}))).toBe("Active coach")
-    expect(detailSubtitle(workspace({ onboarding: "invited" }))).toBe("Onboarding in progress")
-    expect(detailSubtitle(workspace({ onboarding: "expired" }))).toBe("Onboarding stopped")
-    expect(detailSubtitle(workspace({ onboarding: "not-invited" }))).toBe("No invite yet")
+describe("detailStatus", () => {
+  it("names a coach exactly as the list row names them", () => {
+    expect(detailStatus(workspace({ onboarding: "invited" }))).toMatchObject({
+      label: "Invited",
+      tone: "amber",
+    })
+    expect(detailStatus(workspace({ onboarding: "stalled" }))).toMatchObject({
+      label: "Setup stalled",
+      tone: "amber",
+    })
+  })
+
+  it("falls back to the bot's connection once onboarding is complete", () => {
+    expect(detailStatus(workspace({ botStatus: "connected" }))).toMatchObject({
+      label: "Connected",
+      tone: "emerald",
+    })
+    expect(detailStatus(workspace({ botStatus: "needs-relink" }))).toMatchObject({
+      label: "Needs re-link",
+      tone: "rose",
+    })
+  })
+
+  it("carries an icon for every state it can report", () => {
+    const stages: ReadonlyArray<AdminSurface.CoachOnboardingStage> = [
+      "invited",
+      "accepted",
+      "stalled",
+      "bot-connected",
+      "expired",
+      "declined",
+      "reset",
+      "not-invited",
+    ]
+    for (const stage of stages) {
+      expect(detailStatus(workspace({ onboarding: stage })).icon).toBeDefined()
+    }
+    expect(detailStatus(workspace({ botStatus: "connected" })).icon).toBeDefined()
   })
 })
 
-describe("inviteHeadline", () => {
+describe("inviteExplanation", () => {
   it("counts down only while the invite is still measured by its expiry", () => {
-    const sent = inviteHeadline(
+    const sent = inviteExplanation(
       workspace({
         onboarding: "invited",
         invite: invite({ expiresAt: new Date(Date.now() + 3.5 * 86_400_000).toISOString() }),
       }),
     )
 
-    expect(sent.title).toBe("Invite sent")
-    expect(sent.detail).toContain("expires in 3d")
+    expect(sent).toContain("expires in 3d")
   })
 
   it("says the deadline is gone once the claim is accepted (#112)", () => {
-    const accepted = inviteHeadline(
+    const accepted = inviteExplanation(
       workspace({
         onboarding: "accepted",
         invite: invite({ status: "accepted", acceptedAt: "2026-07-21T10:00:00.000Z" }),
       }),
     )
 
-    expect(accepted.title).toBe("Link opened")
-    expect(accepted.detail).toContain("no longer expires")
-    expect(accepted.detail).not.toContain("expires in")
+    expect(accepted).toContain("no longer expires")
+    expect(accepted).not.toContain("expires in")
   })
 
-  it("names every terminal end differently, so history is not flattened", () => {
-    const titles = (["expired", "declined", "reset", "not-invited"] as const).map(
-      (stage) => inviteHeadline(workspace({ onboarding: stage, invite: invite() })).title,
+  it("explains every terminal end differently, so history is not flattened", () => {
+    const texts = (["expired", "declined", "reset", "not-invited"] as const).map((stage) =>
+      inviteExplanation(workspace({ onboarding: stage, invite: invite() })),
     )
 
-    expect(new Set(titles).size).toBe(titles.length)
+    expect(new Set(texts).size).toBe(texts.length)
   })
 
   it("survives an invite whose timestamps the payload never carried", () => {
-    const headline = inviteHeadline(workspace({ onboarding: "declined" }))
+    const text = inviteExplanation(workspace({ onboarding: "declined" }))
 
-    expect(headline.detail).toContain("declined")
-    expect(headline.detail).not.toContain("undefined")
-    expect(headline.detail).not.toContain("Invalid Date")
+    expect(text).toContain("declined")
+    expect(text).not.toContain("undefined")
+    expect(text).not.toContain("Invalid Date")
   })
 })
 

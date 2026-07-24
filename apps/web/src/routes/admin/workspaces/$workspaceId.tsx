@@ -20,11 +20,11 @@ import { InviteSection } from "@/features/admin/components/invite-section.tsx"
 import { LabelSettingsSection } from "@/features/admin/components/label-settings-section.tsx"
 import { OnboardingStepsSection } from "@/features/admin/components/onboarding-steps.tsx"
 import { WorkspaceDetailHeader } from "@/features/admin/components/workspace-detail-header.tsx"
+import { WorkspaceDetailSkeleton } from "@/features/admin/components/workspace-detail-skeleton.tsx"
 import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
 import {
-  detailSubtitle,
   detailVariant,
   reissueCopy,
   type WorkspaceDetail,
@@ -37,6 +37,19 @@ import {
 import { openTelegramLink } from "@/lib/telegram.ts"
 
 export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
+  // Loaded here rather than only by the component's suspense query, so the
+  // router has the coach in hand before it swaps screens. Combined with the
+  // app-wide `defaultPreload: "intent"`, a tap that follows a touch-down has
+  // usually already fetched, and nothing pending is shown at all.
+  loader: ({ context, params }) =>
+    context.queryClient.ensureQueryData(
+      adminWorkspaceDetailQuery(context.initData, params.workspaceId),
+    ),
+  // Only worth a skeleton once the wait is perceptible; below that the flash
+  // costs more than it explains.
+  pendingMs: 150,
+  pendingMinMs: 300,
+  pendingComponent: WorkspaceDetailSkeleton,
   component: WorkspaceDetailsPage,
 })
 
@@ -87,9 +100,7 @@ function ActiveWorkspace({
   return (
     <>
       <WorkspaceDetailHeader
-        name={workspace.name}
-        botUsername={workspace.botUsername}
-        subtitle={detailSubtitle(workspace)}
+        workspace={workspace}
         onOpenBot={(link) => void openTelegramLink(link)}
       />
       <CoachStatusSection workspace={workspace} />
@@ -174,9 +185,7 @@ function OnboardingWorkspace({
   return (
     <>
       <WorkspaceDetailHeader
-        name={workspace.name}
-        botUsername={workspace.botUsername}
-        subtitle={detailSubtitle(workspace)}
+        workspace={workspace}
         onOpenBot={(link) => void openTelegramLink(link)}
       />
       <InviteSection

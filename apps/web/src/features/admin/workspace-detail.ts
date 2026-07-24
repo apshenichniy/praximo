@@ -1,3 +1,14 @@
+import {
+  Alert02Icon,
+  CheckmarkCircle02Icon,
+  Clock01Icon,
+  HourglassIcon,
+  ProgressIcon,
+  SentIcon,
+} from "@hugeicons-pro/core-stroke-rounded"
+import type { IconSvgElement } from "@hugeicons/react"
+
+import { type CoachStateTone, stageState } from "@/features/admin/coach-progress.ts"
 import { channelLabel, formatExpiresIn, formatRelativeTime } from "@/features/admin/formatting.ts"
 import type { AdminSurface } from "@/server/admin-surface.ts"
 
@@ -12,98 +23,76 @@ export type DetailInvite = NonNullable<WorkspaceDetail["invite"]>
 export const detailVariant = (workspace: WorkspaceDetail): "onboarding" | "active" =>
   workspace.onboarding === undefined ? "active" : "onboarding"
 
-/**
- * The headline of the invite card, one line per lifecycle stage. Two rules hold
- * across all of them: the timestamp always names the event the title names, and
- * an accepted claim never shows a countdown — acceptance retires the seven-day
- * TTL (#112), so a deadline there would be a lie.
- */
-export interface InviteHeadline {
-  readonly title: string
-  readonly detail: string
-  /** Matches the list row's tone vocabulary, so both surfaces read alike. */
-  readonly tone: "amber" | "sky" | "emerald" | "muted"
-}
-
 const since = (value: string | undefined, fallback: string): string =>
   value === undefined ? fallback : formatRelativeTime(value)
 
-export const inviteHeadline = (workspace: WorkspaceDetail): InviteHeadline => {
+/**
+ * What the invite card says in prose. It deliberately carries no title of its
+ * own: the header already names the state in one word, and repeating that word
+ * directly underneath would read as two statuses rather than one explained.
+ *
+ * One rule holds across every stage — an accepted claim never shows a countdown,
+ * because acceptance retires the seven-day TTL (#112) and a deadline there
+ * would be a lie.
+ */
+export const inviteExplanation = (workspace: WorkspaceDetail): string => {
   const invite = workspace.invite
   switch (workspace.onboarding) {
     case "invited":
-      return {
-        title: "Invite sent",
-        detail:
-          invite?.expiresAt === undefined
-            ? "The link is live and single-use."
-            : `The link is live and ${formatExpiresIn(invite.expiresAt)}.`,
-        tone: "amber",
-      }
+      return invite?.expiresAt === undefined
+        ? "The link is live and single-use."
+        : `The link is live and ${formatExpiresIn(invite.expiresAt)}.`
     case "accepted":
-      return {
-        title: "Link opened",
-        detail: `The coach claimed this invite ${since(invite?.acceptedAt, "recently")} and is setting up their bot. The link no longer expires.`,
-        tone: "sky",
-      }
+      return `The coach claimed this invite ${since(invite?.acceptedAt, "recently")} and is setting up their bot. The link no longer expires.`
     case "stalled":
-      return {
-        title: "Setup stalled",
-        detail: `Opened ${since(invite?.acceptedAt, "over a day ago")} and still unfinished. The claim is held — reset it below to hand the workspace to someone else.`,
-        tone: "amber",
-      }
+      return `Opened ${since(invite?.acceptedAt, "over a day ago")} and still unfinished. The claim is held — reset it below to hand the workspace to someone else.`
     case "bot-connected":
-      return {
-        title: "Bot connected",
-        detail:
-          "The coach's bot is live. Onboarding completes when they sign in and accept the terms.",
-        tone: "sky",
-      }
+      return "The coach's bot is live. Onboarding completes when they sign in and accept the terms."
     case "expired":
-      return {
-        title: "Invite expired",
-        detail: `The link lapsed ${since(invite?.expiresAt, "some time ago")} without being opened.`,
-        tone: "muted",
-      }
+      return `The link lapsed ${since(invite?.expiresAt, "some time ago")} without being opened.`
     case "declined":
-      return {
-        title: "Invite declined",
-        detail: `The coach declined ${since(invite?.cancelledAt, "earlier")}. Issue a new link if that was a mistake.`,
-        tone: "muted",
-      }
+      return `The coach declined ${since(invite?.cancelledAt, "earlier")}. Issue a new link if that was a mistake.`
     case "reset":
-      return {
-        title: "Invite reset",
-        detail: `Reset ${since(invite?.cancelledAt, "earlier")}. The old link no longer works.`,
-        tone: "muted",
-      }
+      return `Reset ${since(invite?.cancelledAt, "earlier")}. The old link no longer works.`
     default:
-      return {
-        title: "No invite yet",
-        detail:
-          "This workspace has never been invited. Delete it, or invite a coach from the list.",
-        tone: "muted",
-      }
+      return "This workspace has never been invited. Delete it, or invite a coach from the list."
   }
 }
 
 /**
- * The one line under the coach's name. It reports whether onboarding is moving,
- * has stopped, or never started — a distinction "Onboarding in progress" would
- * paper over on a workspace nobody has actually been invited to.
+ * The status line under the coach's name. Its word and tone come from the same
+ * vocabulary the list rows use, so a coach cannot be called one thing on the
+ * list and another on their own screen; the icon is added here because a
+ * details header is a focal element, where a list is a scanning surface.
  */
-export const detailSubtitle = (workspace: WorkspaceDetail): string => {
-  switch (workspace.onboarding) {
-    case undefined:
-      return "Active coach"
-    case "not-invited":
-      return "No invite yet"
-    case "expired":
-    case "declined":
-    case "reset":
-      return "Onboarding stopped"
-    default:
-      return "Onboarding in progress"
+export interface DetailStatus {
+  readonly label: string
+  readonly tone: CoachStateTone
+  readonly icon: IconSvgElement
+}
+
+const stageIcon = {
+  invited: SentIcon,
+  accepted: ProgressIcon,
+  stalled: HourglassIcon,
+  "bot-connected": ProgressIcon,
+  expired: Clock01Icon,
+  declined: Alert02Icon,
+  reset: Alert02Icon,
+  "not-invited": Alert02Icon,
+} as const satisfies Record<AdminSurface.CoachOnboardingStage, IconSvgElement>
+
+const botStatusIcon = {
+  "awaiting-setup": HourglassIcon,
+  connected: CheckmarkCircle02Icon,
+  "needs-relink": Alert02Icon,
+} as const satisfies Record<WorkspaceDetail["botStatus"], IconSvgElement>
+
+export const detailStatus = (workspace: WorkspaceDetail): DetailStatus => {
+  const stage = workspace.onboarding
+  return {
+    ...stageState(stage, workspace.botStatus),
+    icon: stage === undefined ? botStatusIcon[workspace.botStatus] : stageIcon[stage],
   }
 }
 
