@@ -14,11 +14,15 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty.tsx"
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item.tsx"
-import { onboardingDescription, viewerCoachAction } from "@/features/admin/coach-progress.ts"
-import { CoachStageBadge } from "@/features/admin/components/coach-stage-badge.tsx"
-import { StatusBadge } from "@/features/admin/components/status-badge.tsx"
+import {
+  type CoachStateTone,
+  coachRowState,
+  coachRowTime,
+  viewerCoachAction,
+} from "@/features/admin/coach-progress.ts"
 import { WorkspaceAvatar } from "@/features/admin/components/workspace-avatar.tsx"
-import { displayName, formatRelativeTime } from "@/features/admin/formatting.ts"
+import { displayName } from "@/features/admin/formatting.ts"
+import { cn } from "@/lib/utils.ts"
 import type { AdminSurface } from "@/server/admin-surface.ts"
 
 export type CoachEntry = AdminSurface.CoachListEntry
@@ -32,98 +36,79 @@ export function InviteCoachLink() {
   return (
     <Link
       to="/admin/workspaces/new"
-      className="text-primary hover:bg-muted active:bg-accent/70 flex min-h-[70px] w-full items-center gap-4 px-4 text-left font-medium transition-colors"
+      className="text-primary hover:bg-muted active:bg-accent/70 flex h-16 w-full items-center gap-3.5 px-4 text-left font-semibold transition-colors"
     >
-      <span className="border-primary/50 flex size-11 items-center justify-center rounded-full border">
-        <HugeiconsIcon icon={AddMaleIcon} size={24} strokeWidth={1.8} />
+      <span className="border-primary/50 flex size-[38px] items-center justify-center rounded-full border">
+        <HugeiconsIcon icon={AddMaleIcon} size={22} strokeWidth={1.8} />
       </span>
       Invite a coach
     </Link>
   )
 }
 
-function CoachRowLink({
-  coach,
-  badge,
-  description,
-}: {
-  readonly coach: CoachEntry
-  readonly badge: ReactNode
-  readonly description: ReactNode
-}) {
+const toneClass = {
+  amber: "text-amber-300",
+  sky: "text-sky-300",
+  emerald: "text-emerald-300",
+  rose: "text-rose-300",
+  muted: "text-muted-foreground",
+} as const satisfies Record<CoachStateTone, string>
+
+const dotClass = {
+  amber: "bg-amber-300",
+  sky: "bg-sky-300",
+  emerald: "bg-emerald-300",
+  rose: "bg-rose-300",
+  muted: "bg-muted-foreground/60",
+} as const satisfies Record<CoachStateTone, string>
+
+/**
+ * One row shape for every coach, onboarding or active, at one fixed height — a
+ * scanning surface reads faster when nothing about a row's size means anything.
+ *
+ * The state is a coloured word rather than a badge: a badge would be the only
+ * element on this screen carrying its own border and fill, and the word already
+ * says the whole state, so the tone is there to speed up finding it, not to
+ * carry it. Weight does the work the badge used to: the name leads on size, the
+ * state word is the only semibold thing in the meta line, and the timestamp
+ * sits behind it at normal weight.
+ */
+export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
+  const state = coachRowState(coach)
+  const time = coachRowTime(coach)
+
   return (
     <Item
       render={<Link to="/admin/workspaces/$workspaceId" params={{ workspaceId: coach.id }} />}
-      className="active:bg-accent/70 min-h-[78px] items-start rounded-none border-0 pt-4"
+      className="active:bg-accent/70 h-16 gap-3.5 rounded-none border-0 px-4 py-0"
     >
       <ItemMedia>
-        <WorkspaceAvatar name={coach.name} />
+        <WorkspaceAvatar name={coach.name} className="size-[38px]" />
       </ItemMedia>
-      <ItemContent className="min-w-0 gap-1.5">
-        <ItemTitle className="max-w-full text-base font-semibold">
-          <span className="truncate">{displayName(coach.name)}</span>
-          {badge}
+      <ItemContent className="min-w-0 gap-0.5">
+        <ItemTitle className="block truncate text-[15px] font-semibold">
+          {displayName(coach.name)}
         </ItemTitle>
-        {description}
+        <ItemDescription className="flex min-w-0 items-center text-[13px] leading-[18px]">
+          <span
+            aria-hidden="true"
+            className={cn("mr-[7px] size-1.5 shrink-0 rounded-full", dotClass[state.tone])}
+          />
+          <span className={cn("shrink-0 font-semibold", toneClass[state.tone])}>{state.label}</span>
+          {time === undefined ? null : (
+            // The gap is a margin, not a leading space: JSX would collapse the
+            // space and leave the separator glued to the state word.
+            <span className="text-muted-foreground ml-1.5 truncate font-normal">{`· ${time}`}</span>
+          )}
+        </ItemDescription>
       </ItemContent>
       <HugeiconsIcon
         icon={ArrowRight01Icon}
         size={20}
         strokeWidth={2}
-        className="text-muted-foreground/60 mt-1 shrink-0"
+        className="text-muted-foreground/60 shrink-0"
       />
     </Item>
-  )
-}
-
-/**
- * A coach whose onboarding is still incomplete. The row reports where they
- * stand and links through; Resend and Copy live on the details screen (#108),
- * so a long pinned list stays scannable instead of becoming a wall of buttons.
- */
-export function OnboardingCoachItem({ coach }: { readonly coach: CoachEntry }) {
-  const onboarding = coach.onboarding
-  if (onboarding === undefined) return null
-
-  return (
-    <CoachRowLink
-      coach={coach}
-      badge={<CoachStageBadge stage={onboarding.stage} />}
-      description={
-        <ItemDescription className="text-[13px] leading-5">
-          {onboardingDescription(onboarding)}
-        </ItemDescription>
-      }
-    />
-  )
-}
-
-/**
- * An onboarded coach. The practice counts are deliberate placeholders until the
- * aggregates land (#113) — em dashes, not zeros, so an empty practice and an
- * unbuilt metric never look alike.
- */
-export function ActiveCoachItem({ coach }: { readonly coach: CoachEntry }) {
-  return (
-    <CoachRowLink
-      coach={coach}
-      badge={<StatusBadge status={coach.botStatus} />}
-      description={
-        <>
-          <ItemDescription className="truncate text-[13px] leading-5">
-            {coach.botUsername === undefined ? "Bot username pending" : `@${coach.botUsername}`}
-          </ItemDescription>
-          <ItemDescription className="text-[13px] leading-5">
-            {coach.lastActivityAt === undefined
-              ? "No activity yet"
-              : `active ${formatRelativeTime(coach.lastActivityAt)}`}
-          </ItemDescription>
-          <p className="text-muted-foreground/45 text-xs" title="Practice counts are not built yet">
-            &mdash; clients &middot; &mdash; sessions
-          </p>
-        </>
-      }
-    />
   )
 }
 
@@ -160,16 +145,18 @@ export function ViewerCoachCard({
     <Card className="gap-0 overflow-hidden py-0">
       <Item
         render={<button type="button" onClick={() => onOpen(viewerCoach.link)} />}
-        className="hover:bg-muted active:bg-accent/70 min-h-[70px] w-full rounded-none border-0 text-left transition-colors"
+        className="hover:bg-muted active:bg-accent/70 w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
       >
         <ItemMedia>
-          <span className="border-primary/50 text-primary flex size-11 items-center justify-center rounded-full border">
-            <HugeiconsIcon icon={UserSharingIcon} size={22} strokeWidth={1.8} />
+          <span className="border-primary/50 text-primary flex size-[38px] items-center justify-center rounded-full border">
+            <HugeiconsIcon icon={UserSharingIcon} size={20} strokeWidth={1.8} />
           </span>
         </ItemMedia>
-        <ItemContent className="min-w-0">
-          <ItemTitle className="font-medium">{action.title}</ItemTitle>
-          <ItemDescription className="text-xs leading-4">{action.subtitle}</ItemDescription>
+        <ItemContent className="min-w-0 gap-0.5">
+          <ItemTitle className="text-[15px] font-semibold">{action.title}</ItemTitle>
+          <ItemDescription className="text-[13px] leading-[18px]">
+            {action.subtitle}
+          </ItemDescription>
         </ItemContent>
         <HugeiconsIcon
           icon={ArrowRight01Icon}

@@ -6,11 +6,10 @@ import { AdminHero } from "@/components/admin-hero.tsx"
 import { toast } from "@/components/ui/toast.tsx"
 import { takeAdminNotice } from "@/features/admin/admin-notice.ts"
 import {
-  ActiveCoachItem,
   CoachListCard,
   CoachListEmpty,
+  CoachRow,
   InviteCoachLink,
-  OnboardingCoachItem,
   ViewerCoachCard,
 } from "@/features/admin/components/coach-list.tsx"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
@@ -81,7 +80,7 @@ function AdminHome() {
           <div className="mt-4">
             <CoachListCard>
               {onboarding.map((coach) => (
-                <OnboardingCoachItem key={coach.id} coach={coach} />
+                <CoachRow key={coach.id} coach={coach} />
               ))}
             </CoachListCard>
           </div>
@@ -99,7 +98,7 @@ function AdminHome() {
             {data.coaches.length === 0 ? (
               <CoachListEmpty />
             ) : (
-              active.map((coach) => <ActiveCoachItem key={coach.id} coach={coach} />)
+              active.map((coach) => <CoachRow key={coach.id} coach={coach} />)
             )}
           </CoachListCard>
         </div>
