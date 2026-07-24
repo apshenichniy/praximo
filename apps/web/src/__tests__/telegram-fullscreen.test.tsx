@@ -43,6 +43,7 @@ const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => 
   setBackgroundColor: vi.fn(),
   setBottomBarColor: vi.fn(),
   requestFullscreen: vi.fn(),
+  disableVerticalSwipes: vi.fn(),
   BackButton: fakeBackButton(),
   onEvent: vi.fn(),
   offEvent: vi.fn(),
@@ -94,6 +95,13 @@ describe("enterFullscreen", () => {
     // Syncs the initial state once, up front.
     expect(onChange).toHaveBeenCalledOnce()
 
+    // Swipe-to-minimize is disabled alongside fullscreen on 8.0+ hosts,
+    // and before `ready()` like the rest of the host bridge calls.
+    expect(webApp.disableVerticalSwipes).toHaveBeenCalledOnce()
+    expect(vi.mocked(webApp.disableVerticalSwipes).mock.invocationCallOrder[0]).toBeLessThan(
+      readyOrder,
+    )
+
     detach?.()
     expect(webApp.offEvent).toHaveBeenCalledWith("fullscreenChanged", onChange)
   })
@@ -106,9 +114,28 @@ describe("enterFullscreen", () => {
 
     expect(webApp.expand).toHaveBeenCalledOnce()
     expect(webApp.requestFullscreen).not.toHaveBeenCalled()
+    expect(webApp.disableVerticalSwipes).not.toHaveBeenCalled()
     expect(webApp.onEvent).not.toHaveBeenCalled()
     expect(onChange).not.toHaveBeenCalled()
     expect(detach).toBeUndefined()
+  })
+
+  it("disables vertical swipes on 7.7–7.x hosts without requesting fullscreen", () => {
+    const webApp = fakeWebApp({
+      version: "7.10",
+      isVersionAtLeast: (version) => version !== "8.0",
+    })
+    const onChange = vi.fn()
+
+    enterFullscreen(webApp, onChange)
+
+    expect(webApp.disableVerticalSwipes).toHaveBeenCalledOnce()
+    const [readyOrder = Number.POSITIVE_INFINITY] = vi.mocked(webApp.ready).mock.invocationCallOrder
+    expect(vi.mocked(webApp.disableVerticalSwipes).mock.invocationCallOrder[0]).toBeLessThan(
+      readyOrder,
+    )
+    expect(webApp.expand).toHaveBeenCalledOnce()
+    expect(webApp.requestFullscreen).not.toHaveBeenCalled()
   })
 
   it("uses only host color methods supported by the reported Bot API version", () => {
@@ -121,6 +148,7 @@ describe("enterFullscreen", () => {
     expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_DARK_COLOR)
     expect(webApp.setHeaderColor).not.toHaveBeenCalled()
     expect(webApp.setBottomBarColor).not.toHaveBeenCalled()
+    expect(webApp.disableVerticalSwipes).not.toHaveBeenCalled()
   })
 })
 

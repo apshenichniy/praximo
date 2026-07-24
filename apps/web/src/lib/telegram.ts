@@ -26,6 +26,12 @@ export interface TelegramWebApp {
   setBottomBarColor: (color: string) => void
   /** Requests true fullscreen — Bot API 8.0; a no-op on older clients. */
   requestFullscreen: () => void
+  /**
+   * Stops vertical swipes on the webview content from minimizing the Mini App
+   * (BotFather-style) — Bot API 7.7. Swiping the native Telegram header still
+   * minimizes or closes the app; that is host behavior and stays available.
+   */
+  disableVerticalSwipes: () => void
   readonly BackButton: TelegramBackButton
   readonly HapticFeedback?: {
     readonly notificationOccurred: (type: "error" | "success" | "warning") => void
@@ -95,11 +101,14 @@ export const attachBackButton = (webApp: TelegramWebApp, onBack: () => void): ((
 export const FULLSCREEN_MIN_VERSION = "8.0"
 export const CUSTOM_HEADER_COLOR_MIN_VERSION = "6.9"
 export const BOTTOM_BAR_COLOR_MIN_VERSION = "7.10"
+export const VERTICAL_SWIPES_MIN_VERSION = "7.7"
 
 /**
- * Paint Telegram-owned surfaces before hiding its native loading placeholder.
- * The page stylesheet cannot reach the host header or its overscroll regions,
- * so these bridge calls must precede `ready()`.
+ * Paint Telegram-owned surfaces and pin the swipe behavior before hiding the
+ * native loading placeholder. The page stylesheet cannot reach the host header
+ * or its overscroll regions, and CSS cannot reach the host swipe container
+ * either, so these bridge calls must precede `ready()`. Pre-7.7 clients keep
+ * the default swipe-to-minimize behavior — the method is never called there.
  */
 export const revealTelegramWebApp = (webApp: TelegramWebApp): void => {
   webApp.setBackgroundColor(APP_DARK_COLOR)
@@ -109,6 +118,9 @@ export const revealTelegramWebApp = (webApp: TelegramWebApp): void => {
   }
   if (webApp.isVersionAtLeast(BOTTOM_BAR_COLOR_MIN_VERSION)) {
     webApp.setBottomBarColor(APP_DARK_COLOR)
+  }
+  if (webApp.isVersionAtLeast(VERTICAL_SWIPES_MIN_VERSION)) {
+    webApp.disableVerticalSwipes()
   }
 
   webApp.ready()
