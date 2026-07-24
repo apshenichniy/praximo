@@ -125,7 +125,6 @@ export default Alchemy.Stack(
         // Native RPC, not public HTTP: admin operations use this narrow
         // capability to send through the bot-owned manager-bot transport.
         MANAGER_BOT: bot,
-        UPLOADS: bucket,
         DATABASE_URL: branch.connectionUri,
         // The manager bot's token, held as a stack secret (ADR 0004): the admin
         // route validates its Mini App `initData` by HMAC against this same token
@@ -134,7 +133,6 @@ export default Alchemy.Stack(
         // for outbound delivery; per-coach tokens remain runtime database data.
         MANAGER_BOT_TOKEN: managerBotToken,
         MANAGER_BOT_USERNAME: managerBotUsername,
-        DEFAULT_COACH_BOT_AVATAR_R2_KEY: defaultCoachBotAvatarR2Key,
       },
     })
 

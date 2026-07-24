@@ -32,15 +32,25 @@ const botTones = {
 } as const satisfies Record<AdminSurface.CoachListEntry["botStatus"], CoachStateTone>
 
 /**
- * The row's state word. A coach who finished onboarding is described by their
- * bot's connection; everyone else by where they stand on the invite lifecycle.
- * The word carries the whole state on its own — the tone only makes it faster
- * to find, so a row still reads correctly with the colour ignored.
+ * The state word for a coach, wherever they are shown. A coach who finished
+ * onboarding is described by their bot's connection; everyone else by where
+ * they stand on the invite lifecycle. The word carries the whole state on its
+ * own — the tone only makes it faster to find, so it still reads correctly with
+ * the colour ignored.
+ *
+ * The list and the details header both call this, so the two surfaces cannot
+ * end up naming the same state differently.
  */
+export const stageState = (
+  stage: AdminSurface.CoachOnboardingStage | undefined,
+  botStatus: AdminSurface.CoachListEntry["botStatus"],
+): CoachRowState =>
+  stage === undefined
+    ? { label: statusLabel[botStatus], tone: botTones[botStatus] }
+    : onboardingStates[stage]
+
 export const coachRowState = (coach: AdminSurface.CoachListEntry): CoachRowState =>
-  coach.onboarding === undefined
-    ? { label: statusLabel[coach.botStatus], tone: botTones[coach.botStatus] }
-    : onboardingStates[coach.onboarding.stage]
+  stageState(coach.onboarding?.stage, coach.botStatus)
 
 const relative = (value: string | undefined): string | undefined =>
   value === undefined ? undefined : formatRelativeTime(value)

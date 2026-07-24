@@ -9,14 +9,13 @@ import {
   CreateWorkspaceInput,
   DeleteWorkspaceInput,
   type InviteDeliveryChannel,
+  RenameWorkspaceInput,
   TelegramId,
-  UpdateWorkspaceProfileInput,
   WorkspaceId,
   WorkspaceRunCancellationResult,
 } from "@praximo/domain"
-import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
+import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { Clock, Context, DateTime, Effect, Layer, Result, Schema } from "effect"
-import { WorkspaceBrandingStorage } from "./workspace-branding-storage.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
 export type DeliveryStatus = "sent" | "failed" | "unknown"
@@ -100,37 +99,46 @@ export interface PrepareShareResult {
   readonly preparedMessageId: string
 }
 
+/**
+ * The details screen's read model (#108). It is status-first: everything here
+ * either says where the coach stands or names the one thing the admin still
+ * owns — the internal label. Bot branding is absent by design; the coach owns
+ * their bot's identity and rebrands from their side.
+ *
+ * `onboarding` is the same stage the list rows carry, so both surfaces agree on
+ * what a coach's state is called. Its absence is the variant switch: a coach
+ * with no stage has finished onboarding and gets the active screen.
+ */
 export interface WorkspaceDetail {
   readonly id: WorkspaceId
   readonly name: string
-  readonly description?: string
-  readonly shortDescription?: string
-  readonly hasCustomAvatar: boolean
   readonly createdAt: string
   readonly updatedAt: string
   readonly coachLanguage?: CoachLanguage
   readonly botStatus: WorkspaceRepo.BotConnectionStatus
   readonly botUsername?: string
+  /** Onboarding completion — terms acceptance, or the owner member's creation. */
+  readonly joinedAt?: string
   readonly termsAcceptedAt?: string
   readonly lastLoginAt?: string
   readonly lastActivityAt?: string
+  readonly onboarding?: CoachOnboardingStage
   readonly invite?: {
     readonly id: string
     readonly status: CoachOnboardingInviteStatus
+    readonly channel?: InviteDeliveryChannel
     readonly issuedAt: string
     readonly expiresAt: string
     readonly acceptedAt?: string
     readonly cancelledAt?: string
     readonly cancellationReason?: CoachOnboardingInviteCancellationReason
+    /** Minted only while the invite is still claimable — the copy/share source. */
     readonly link?: string
+    /** The forwardable message a resend shares, in the invite's own language. */
+    readonly message?: string
+    readonly language?: CoachLanguage
   }
   readonly canReissue: boolean
-}
-
-export interface UpdateProfileResult {
-  readonly workspace: WorkspaceDetail
-  readonly status: "saved" | "saved-branding-failed"
-  readonly retryAvatar: boolean
 }
 
 export interface DeleteResult {
@@ -162,40 +170,15 @@ export interface Interface {
     inviteId: string,
     language: unknown,
   ) => Effect.Effect<void, AccessDenied | ValidationFailed | LoadFailed>
-  readonly resendInvite: (
-    initData: string,
-    inviteId: string,
-  ) => Effect.Effect<CreateResult, AccessDenied | LoadFailed>
   readonly getWorkspace: (
     initData: string,
     workspaceId: string,
   ) => Effect.Effect<WorkspaceDetail, AccessDenied | LoadFailed>
-  readonly getWorkspaceAvatar: (
-    initData: string,
-    workspaceId: string,
-  ) => Effect.Effect<
-    WorkspaceBrandingStorage.LoadedAvatar,
-    AccessDenied | AvatarUnavailable | LoadFailed
-  >
-  readonly updateWorkspaceProfile: (
+  readonly renameWorkspace: (
     initData: string,
     workspaceId: string,
     input: unknown,
-    avatar?: Uint8Array,
-  ) => Effect.Effect<
-    UpdateProfileResult,
-    | AccessDenied
-    | ValidationFailed
-    | ProfileConflict
-    | WorkspaceBrandingStorage.InvalidAvatar
-    | WorkspaceBrandingStorage.UploadFailed
-    | LoadFailed
-  >
-  readonly retryWorkspaceBranding: (
-    initData: string,
-    workspaceId: string,
-    retryAvatar: boolean,
-  ) => Effect.Effect<UpdateProfileResult, AccessDenied | LoadFailed>
+  ) => Effect.Effect<WorkspaceDetail, AccessDenied | ValidationFailed | RenameConflict | LoadFailed>
   readonly reissueWorkspaceInvite: (
     initData: string,
     workspaceId: string,
@@ -239,8 +222,9 @@ export class IdempotencyConflict extends Schema.TaggedErrorClass<IdempotencyConf
   {},
 ) {}
 
-export class ProfileConflict extends Schema.TaggedErrorClass<ProfileConflict>()(
-  "AdminSurface.ProfileConflict",
+/** The label was renamed elsewhere since this screen loaded (#108). */
+export class RenameConflict extends Schema.TaggedErrorClass<RenameConflict>()(
+  "AdminSurface.RenameConflict",
   {},
 ) {}
 
@@ -256,11 +240,6 @@ export class ReissueUnavailable extends Schema.TaggedErrorClass<ReissueUnavailab
  */
 export class SharePreparationFailed extends Schema.TaggedErrorClass<SharePreparationFailed>()(
   "AdminSurface.SharePreparationFailed",
-  {},
-) {}
-
-export class AvatarUnavailable extends Schema.TaggedErrorClass<AvatarUnavailable>()(
-  "AdminSurface.AvatarUnavailable",
   {},
 ) {}
 
@@ -287,7 +266,7 @@ export class DeletionFailed extends Schema.TaggedErrorClass<DeletionFailed>()(
 const decodeCreateInput = Schema.decodeUnknownEffect(CreateWorkspaceInput)
 const decodeCreateDelivery = Schema.decodeUnknownEffect(CreateInviteDelivery)
 const decodeCoachLanguage = Schema.decodeUnknownEffect(CoachLanguage)
-const decodeUpdateInput = Schema.decodeUnknownEffect(UpdateWorkspaceProfileInput)
+const decodeRenameInput = Schema.decodeUnknownEffect(RenameWorkspaceInput)
 const decodeDeleteInput = Schema.decodeUnknownEffect(DeleteWorkspaceInput)
 const decodeWorkspaceId = Schema.decodeUnknownEffect(WorkspaceId)
 const decodeInviteId = Schema.decodeUnknownEffect(
@@ -335,14 +314,22 @@ const startOnboardingLabel: Record<CoachLanguage, string> = {
 export const SetupStalledAfterMilliseconds = 24 * 60 * 60 * 1_000
 
 /**
+ * The three facts a lifecycle stage is read from. Structural rather than tied
+ * to `ListItem`, so the list and the details screen — which project different
+ * aggregates — cannot drift on what a coach's state is called (#108).
+ */
+interface OnboardingFacts {
+  readonly termsAcceptedAt?: Date
+  readonly botStatus: WorkspaceRepo.BotConnectionStatus
+  readonly invite?: WorkspaceRepo.ListInvite
+}
+
+/**
  * Read the coach's position on the onboarding lifecycle off the aggregate row.
  * `undefined` means onboarding is complete: terms acceptance is the single
  * completion signal, so an active coach is never pinned to the top of the list.
  */
-const onboardingStage = (
-  item: WorkspaceRepo.ListItem,
-  now: Date,
-): CoachOnboardingStage | undefined => {
+const onboardingStage = (item: OnboardingFacts, now: Date): CoachOnboardingStage | undefined => {
   if (item.termsAcceptedAt !== undefined) return undefined
   // A connected bot outranks whatever the invite row still says: provisioning
   // has happened, and only the coach's first login plus ToS is outstanding.
@@ -423,9 +410,7 @@ export const layer = Layer.effect(
     const workspaces = yield* WorkspaceRepo.Service
     const onboarding = yield* CoachOnboardingRepo.Service
     const tokens = yield* CoachOnboardingToken.Service
-    const storage = yield* WorkspaceBrandingStorage.Service
     const sender = yield* ManagerBotSender.Service
-    const botBranding = yield* CoachBotBranding.Service
     const deletions = yield* WorkspaceDeletionRepo.Service
     const runCancellation = yield* WorkspaceRunCancellation.Service
     const botRelease = yield* CoachBotRelease.Service
@@ -545,20 +530,21 @@ export const layer = Layer.effect(
         detail.invite !== undefined && inviteStatus === "pending" && canReissue
           ? yield* tokens.linkFor(detail.invite.code)
           : undefined
+      // A resend re-delivers the *same* invite, so it keeps the language that
+      // invite last left in; English is the fallback the invite screen defaults
+      // to when nothing was recorded.
+      const language = detail.invite?.delivery?.language ?? "en"
+      const stage = onboardingStage(detail, now)
 
       return {
         id: detail.id,
         name: detail.name,
-        ...(detail.description === undefined ? {} : { description: detail.description }),
-        ...(detail.shortDescription === undefined
-          ? {}
-          : { shortDescription: detail.shortDescription }),
-        hasCustomAvatar: detail.avatarR2Key !== undefined,
         createdAt: detail.createdAt.toISOString(),
         updatedAt: detail.updatedAt.toISOString(),
         ...(detail.coachLanguage === undefined ? {} : { coachLanguage: detail.coachLanguage }),
         botStatus: detail.botStatus,
         ...(detail.botUsername === undefined ? {} : { botUsername: detail.botUsername }),
+        ...(detail.joinedAt === undefined ? {} : { joinedAt: detail.joinedAt.toISOString() }),
         ...(detail.termsAcceptedAt === undefined
           ? {}
           : { termsAcceptedAt: detail.termsAcceptedAt.toISOString() }),
@@ -568,12 +554,16 @@ export const layer = Layer.effect(
         ...(detail.lastActivityAt === undefined
           ? {}
           : { lastActivityAt: detail.lastActivityAt.toISOString() }),
+        ...(stage === undefined ? {} : { onboarding: stage }),
         ...(detail.invite === undefined || inviteStatus === undefined
           ? {}
           : {
               invite: {
                 id: detail.invite.id,
                 status: inviteStatus,
+                ...(detail.invite.delivery === undefined
+                  ? {}
+                  : { channel: detail.invite.delivery.channel }),
                 issuedAt: detail.invite.issuedAt.toISOString(),
                 expiresAt: detail.invite.expiresAt.toISOString(),
                 ...(detail.invite.acceptedAt === undefined
@@ -585,7 +575,13 @@ export const layer = Layer.effect(
                 ...(detail.invite.cancellationReason === undefined
                   ? {}
                   : { cancellationReason: detail.invite.cancellationReason }),
-                ...(link === undefined ? {} : { link }),
+                ...(link === undefined
+                  ? {}
+                  : {
+                      link,
+                      message: forwardableMessage(language, detail.name, link),
+                      language,
+                    }),
               },
             }),
         canReissue,
@@ -598,18 +594,6 @@ export const layer = Layer.effect(
     ) {
       yield* verifyAdmin(rawInitData)
       return yield* presentWorkspace(yield* loadWorkspace(rawWorkspaceId))
-    })
-
-    const getWorkspaceAvatar = Effect.fn("AdminSurface.getWorkspaceAvatar")(function* (
-      rawInitData: string,
-      rawWorkspaceId: string,
-    ) {
-      yield* verifyAdmin(rawInitData)
-      const detail = yield* loadWorkspace(rawWorkspaceId)
-      if (detail.avatarR2Key === undefined) return yield* new AvatarUnavailable()
-      return yield* storage
-        .getAvatar(detail.avatarR2Key)
-        .pipe(Effect.mapError(() => new AvatarUnavailable()))
     })
 
     const buildResult = Effect.fn("AdminSurface.buildResult")(function* (
@@ -791,160 +775,45 @@ export const layer = Layer.effect(
         .pipe(Effect.ignore)
     })
 
-    const resendInvite = Effect.fn("AdminSurface.resendInvite")(function* (
-      rawInitData: string,
-      rawInviteId: string,
-    ) {
-      const recipient = yield* verifyAdmin(rawInitData)
-      const inviteId = Schema.decodeUnknownEffect(
-        Schema.NonEmptyString.pipe(Schema.brand("CoachOnboardingInviteId")),
-      )(rawInviteId).pipe(Effect.mapError(() => new LoadFailed({ operation: "resendInvite" })))
-      const aggregate = yield* onboarding
-        .verifyPending(yield* inviteId, new Date(yield* Clock.currentTimeMillis))
-        .pipe(Effect.mapError(() => new LoadFailed({ operation: "resendInvite" })))
-      // Resend keeps the language the invite last left in.
-      return yield* deliver(
-        recipient,
-        aggregate,
-        aggregate.invite.delivery?.language ?? aggregate.owner.language,
-      )
-    })
-
-    const applyBranding = Effect.fn("AdminSurface.applyBranding")(function* (
-      detail: WorkspaceRepo.Detail,
-      retryAvatar: boolean,
-    ) {
-      if (detail.botStatus !== "connected") return "saved" as const
-      const avatar = retryAvatar
-        ? CoachBotBranding.AvatarUpdate.cases.Apply.make({
-            r2Key: yield* storage.resolveAvatarKey(detail.avatarR2Key),
-          })
-        : CoachBotBranding.AvatarUpdate.cases.Keep.make({})
-      return yield* botBranding
-        .apply({
-          workspaceId: detail.id,
-          ...(detail.description === undefined ? {} : { description: detail.description }),
-          ...(detail.shortDescription === undefined
-            ? {}
-            : { shortDescription: detail.shortDescription }),
-          avatar,
-        })
-        .pipe(
-          Effect.as("saved" as const),
-          Effect.catchTag("CoachBotBranding.ApplyFailed", () =>
-            Effect.succeed("saved-branding-failed" as const),
-          ),
-        )
-    })
-
-    const updateWorkspaceProfile = Effect.fn("AdminSurface.updateWorkspaceProfile")(function* (
+    /**
+     * Rename the internal label — the only workspace field an admin writes
+     * (#108). Optimistic concurrency is carried by `expectedUpdatedAt`: a stale
+     * screen is refused rather than silently overwriting a concurrent rename.
+     * A losing write is reconciled first, so a retry of a request that actually
+     * landed reports success instead of a phantom conflict.
+     */
+    const renameWorkspace = Effect.fn("AdminSurface.renameWorkspace")(function* (
       rawInitData: string,
       rawWorkspaceId: string,
       rawInput: unknown,
-      avatar?: Uint8Array,
     ) {
       yield* verifyAdmin(rawInitData)
       const workspaceId = yield* decodeWorkspaceId(rawWorkspaceId).pipe(
         Effect.mapError(() => new ValidationFailed()),
       )
-      const input = yield* decodeUpdateInput(rawInput).pipe(
+      const input = yield* decodeRenameInput(rawInput).pipe(
         Effect.mapError(() => new ValidationFailed()),
       )
-      if ((input.avatarIntent === "replace") !== (avatar !== undefined)) {
-        return yield* new ValidationFailed()
-      }
-      const existing = yield* workspaces
-        .getDetail(workspaceId)
-        .pipe(Effect.mapError(() => new LoadFailed({ operation: "updateProfile.load" })))
-      const storedAvatar =
-        input.avatarIntent === "replace" && avatar !== undefined
-          ? yield* storage.putAvatar(input.requestId, avatar)
-          : undefined
-      const nextAvatarKey =
-        input.avatarIntent === "keep"
-          ? existing.avatarR2Key
-          : input.avatarIntent === "replace"
-            ? storedAvatar?.key
-            : undefined
       const expectedUpdatedAt = DateTime.toDate(input.expectedUpdatedAt)
-      const updateTime = new Date(
+      // The version column is the concurrency token, so the new value must be
+      // strictly newer than the one the client held even if the clock is not.
+      const renameTime = new Date(
         Math.max(yield* Clock.currentTimeMillis, expectedUpdatedAt.getTime() + 1),
       )
-      const update = yield* workspaces
-        .updateProfile({
-          id: workspaceId,
-          expectedUpdatedAt,
-          name: input.name,
-          ...(input.description === undefined ? {} : { description: input.description }),
-          ...(input.shortDescription === undefined
-            ? {}
-            : { shortDescription: input.shortDescription }),
-          ...(nextAvatarKey === undefined ? {} : { avatarR2Key: nextAvatarKey }),
-          now: updateTime,
-        })
+      const renamed = yield* workspaces
+        .rename({ id: workspaceId, expectedUpdatedAt, name: input.name, now: renameTime })
         .pipe(Effect.result)
 
-      let updated: WorkspaceRepo.Detail
-      if (Result.isFailure(update)) {
-        const reconciliation = yield* workspaces.getDetail(workspaceId).pipe(Effect.result)
-        const reconciled =
-          Result.isSuccess(reconciliation) &&
-          reconciliation.success.name === input.name &&
-          reconciliation.success.description === input.description &&
-          reconciliation.success.shortDescription === input.shortDescription &&
-          reconciliation.success.avatarR2Key === nextAvatarKey
-            ? reconciliation.success
-            : undefined
-        if (reconciled !== undefined) {
-          updated = reconciled
-        } else {
-          if (
-            storedAvatar !== undefined &&
-            (Result.isFailure(reconciliation) ||
-              reconciliation.success.avatarR2Key !== storedAvatar.key)
-          ) {
-            if (Result.isSuccess(reconciliation)) {
-              yield* storage.deleteAvatar(storedAvatar.key).pipe(Effect.ignore)
-            }
-          }
-          if (update.failure._tag === "WorkspaceRepo.UpdateConflict") {
-            return yield* new ProfileConflict()
-          }
-          return yield* new LoadFailed({ operation: "updateProfile.save" })
-        }
-      } else {
-        updated = update.success
-      }
+      if (Result.isSuccess(renamed)) return yield* presentWorkspace(renamed.success)
 
-      if (
-        existing.avatarR2Key !== undefined &&
-        existing.avatarR2Key !== updated.avatarR2Key &&
-        input.avatarIntent !== "keep"
-      ) {
-        yield* storage.deleteAvatar(existing.avatarR2Key).pipe(Effect.ignore)
+      const reconciliation = yield* workspaces.getDetail(workspaceId).pipe(Effect.result)
+      if (Result.isSuccess(reconciliation) && reconciliation.success.name === input.name) {
+        return yield* presentWorkspace(reconciliation.success)
       }
-      const retryAvatar = input.avatarIntent !== "keep"
-      const status = yield* applyBranding(updated, retryAvatar)
-      return {
-        workspace: yield* presentWorkspace(updated),
-        status,
-        retryAvatar,
-      } satisfies UpdateProfileResult
-    })
-
-    const retryWorkspaceBranding = Effect.fn("AdminSurface.retryWorkspaceBranding")(function* (
-      rawInitData: string,
-      rawWorkspaceId: string,
-      retryAvatar: boolean,
-    ) {
-      yield* verifyAdmin(rawInitData)
-      const detail = yield* loadWorkspace(rawWorkspaceId)
-      const status = yield* applyBranding(detail, retryAvatar)
-      return {
-        workspace: yield* presentWorkspace(detail),
-        status,
-        retryAvatar,
-      } satisfies UpdateProfileResult
+      if (renamed.failure._tag === "WorkspaceRepo.UpdateConflict") {
+        return yield* new RenameConflict()
+      }
+      return yield* new LoadFailed({ operation: "renameWorkspace" })
     })
 
     const reissueWorkspaceInvite = Effect.fn("AdminSurface.reissueWorkspaceInvite")(function* (
@@ -1114,11 +983,8 @@ export const layer = Layer.effect(
       createWorkspace,
       prepareInviteShareMessage,
       recordInviteShare,
-      resendInvite,
       getWorkspace,
-      getWorkspaceAvatar,
-      updateWorkspaceProfile,
-      retryWorkspaceBranding,
+      renameWorkspace,
       reissueWorkspaceInvite,
       deleteWorkspace,
     })

@@ -78,9 +78,9 @@ Re-seeding is the only mechanism: edit `ADMIN_TELEGRAM_IDS` and re-run the seed.
 |---|---|---|
 | **Invite a coach** | Mini App action-first screen | Optional internal label; workspace + invite are created **lazily on the first delivery action** (idempotent by `requestId`); three channels: Telegram share, email (stub in MVP, [#105](https://github.com/apshenichniy/praximo/issues/105)), copy. See [Invite a coach](#invite-a-coach). |
 | **List + status** | Mini App coaches list / details | Bot connection (`awaiting setup`→`connected`→`needs re-link`), coach language, bot username, terms-accepted, and the dates below. |
-| **Resend / re-issue invite** | Mini App action | Resend re-delivers the current pending invite over any channel; re-issue mints a fresh single-use code (TTL 7 days), **annuls the previous one**, updates the `invited` date. There is **no separate revoke** — stale invites die by expiry, re-issue, or deletion. |
+| **Resend / re-issue invite** | Mini App details screen | Resend re-delivers the current *pending* invite through the same prepared-message share the invite screen uses ([#104](https://github.com/apshenichniy/praximo/issues/104)), with Copy link beside it; the retired "bot messages the admin's own chat" path is gone. Re-issue mints a fresh single-use code (TTL 7 days), **annuls the previous one**, updates the `invited` date. Its copy names what it costs, as [#108](https://github.com/apshenichniy/praximo/issues/108) requires: "Reset setup" against an **accepted** claim (the coach loses progress), "Reset invite" against a live `pending` one (the link already sent stops working), "Issue a new link" against a terminal one. Placement follows the same reading — the first two sit in the danger zone, the third beside the invite it repairs, since burying plain recovery under a red heading would misname the safest action on the screen. There is **no separate revoke** — stale invites die by expiry, re-issue, or deletion. |
 | **Rename internal label** | Mini App details → Settings | The label is **admin-only** — never shown to the coach or clients; after onboarding the list defaults to the coach's Telegram name, the label wins when set. The bot's Telegram identity is the coach's property. |
-| ~~**Edit profile**~~ | — | **Removed by the redesign** ([#108](https://github.com/apshenichniy/praximo/issues/108)): the coach owns their bot's branding. Provisioning sets a generated default (initial-on-gradient avatar + templated description); rebranding is coach-side only. |
+| ~~**Edit profile**~~ | — | **Removed by the redesign** ([#108](https://github.com/apshenichniy/praximo/issues/108)): the coach owns their bot's branding. Provisioning sets a generated default (gradient avatar + templated description); rebranding is coach-side only. |
 | **Delete** | Mini App action → two-step button confirm | Irreversible hard cascade; see [Delete flow](#delete-flow). |
 
 **Block / unblock is not a distinct MVP state.** "A coach stops working in the system" is expressed as **delete** in MVP. A richer block semantics (kill-switch that suspends without deleting) is post-MVP — see the map's Out of scope.
@@ -104,10 +104,14 @@ The platform default is one private R2 object per stage, addressed by
 reference that default at provisioning time; the object is not copied into each
 workspace.
 
-> **Redesign note ([#108](https://github.com/apshenichniy/praximo/issues/108)):** since the admin no longer uploads
-> avatars, *every* bot gets default branding at provisioning — upgraded from the single static object to a
-> **generated initial-on-gradient avatar** plus a templated description ("Coaching with {coach} · powered by
-> Praximo"). The static R2 default and the tooling below remain as the fallback when generation is unavailable.
+> **Redesign note ([#108](https://github.com/apshenichniy/praximo/issues/108), shipped):** since the admin no longer
+> uploads avatars, *every* bot gets default branding at provisioning — upgraded from the single static object to a
+> **generated gradient avatar** (a 512×512 JPEG written pixel-by-pixel in the bot Worker, since workerd has no
+> canvas; the palette is picked from a hash of the bot id, so a re-provisioning reproduces the same avatar) plus a
+> templated description ("Coaching with {coach} · powered by Praximo"). The design's *initial*-on-gradient monogram
+> is **not** shipped: rendering a glyph without a canvas or a font rasterizer is a disproportionate amount of
+> hand-rolled code for a mark the coach is expected to replace. The static R2 default and the tooling below remain
+> as the fallback when generation itself fails, and a workspace that still carries a stored avatar key keeps it.
 
 Replace it with:
 

@@ -14,23 +14,10 @@ import {
 } from "@/features/admin/components/coach-list.tsx"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
 import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
-import { loadTelegramWebApp } from "@/lib/telegram.ts"
+import { openTelegramLink } from "@/lib/telegram.ts"
 
 export const Route = createFileRoute("/admin/")({ component: AdminHome })
 const adminRoute = getRouteApi("/admin")
-
-/**
- * Open a `t.me` link without leaving the Mini App. Outside a Telegram host
- * (local browser development) there is no bridge, so the link opens normally.
- */
-const openInTelegram = async (link: string) => {
-  const webApp = await loadTelegramWebApp()
-  if (webApp === undefined) {
-    window.open(link, "_blank", "noopener,noreferrer")
-    return
-  }
-  webApp.openTelegramLink(link)
-}
 
 // Admin copy is English-only (admin-surface.md): the admin is the solo operator,
 // so the trilingual machinery that serves coaches never reaches these routes.
@@ -66,7 +53,7 @@ function AdminHome() {
         <div className="mt-10">
           <ViewerCoachCard
             viewerCoach={data.viewerCoach}
-            onOpen={(link) => void openInTelegram(link)}
+            onOpen={(link) => void openTelegramLink(link)}
           />
         </div>
       )}

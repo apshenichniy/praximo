@@ -3,7 +3,7 @@ import { DateTime, Effect, Schema } from "effect"
 import {
   CreateInviteDelivery,
   CreateWorkspaceInput,
-  UpdateWorkspaceProfileInput,
+  RenameWorkspaceInput,
 } from "./workspace-create.ts"
 
 const decode = Schema.decodeUnknownEffect(CreateWorkspaceInput)
@@ -105,42 +105,37 @@ describe("CreateInviteDelivery", () => {
   )
 })
 
-describe("UpdateWorkspaceProfileInput", () => {
-  const decodeUpdate = Schema.decodeUnknownEffect(UpdateWorkspaceProfileInput)
+describe("RenameWorkspaceInput", () => {
+  const decodeRename = Schema.decodeUnknownEffect(RenameWorkspaceInput)
 
-  it.effect("normalizes editable fields and preserves explicit avatar intent", () =>
+  it.effect("trims the internal label and keeps the concurrency check", () =>
     Effect.gen(function* () {
-      const input = yield* decodeUpdate({
+      const input = yield* decodeRename({
         requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
         expectedUpdatedAt: "2026-07-23T12:01:00.000Z",
         name: "  Ada Coaching  ",
-        description: "   ",
-        shortDescription: "  Calm, useful coaching  ",
-        avatarIntent: "reset",
       })
 
       expect(input).toEqual({
         requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
         expectedUpdatedAt: DateTime.fromDateUnsafe(new Date("2026-07-23T12:01:00.000Z")),
         name: "Ada Coaching",
-        shortDescription: "Calm, useful coaching",
-        avatarIntent: "reset",
       })
     }),
   )
 
-  it.effect("rejects malformed versions, request ids, and avatar intents", () =>
+  it.effect("rejects malformed versions, request ids, and empty labels", () =>
     Effect.gen(function* () {
       const base = {
         requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
         expectedUpdatedAt: "2026-07-23T12:01:00.000Z",
         name: "Ada Coaching",
-        avatarIntent: "keep",
       }
 
-      yield* Effect.flip(decodeUpdate({ ...base, requestId: "not-a-uuid" }))
-      yield* Effect.flip(decodeUpdate({ ...base, expectedUpdatedAt: "yesterday" }))
-      yield* Effect.flip(decodeUpdate({ ...base, avatarIntent: "remove" }))
+      yield* Effect.flip(decodeRename({ ...base, requestId: "not-a-uuid" }))
+      yield* Effect.flip(decodeRename({ ...base, expectedUpdatedAt: "yesterday" }))
+      yield* Effect.flip(decodeRename({ ...base, name: "   " }))
+      yield* Effect.flip(decodeRename({ ...base, name: "a".repeat(65) }))
     }),
   )
 })

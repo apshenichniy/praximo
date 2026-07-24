@@ -3,7 +3,6 @@ import { useId } from "react"
 
 import { Field, FieldError, FieldLabel } from "@/components/ui/field.tsx"
 import { Input } from "@/components/ui/input.tsx"
-import { Textarea } from "@/components/ui/textarea.tsx"
 
 interface CommonFieldProps {
   readonly label: ReactNode
@@ -74,43 +73,4 @@ export function TextField({
       {error === undefined ? null : <FieldError id={`${id}-error`}>{error}</FieldError>}
     </Field>
   )
-}
-
-export function TextareaField({
-  label,
-  name,
-  value,
-  onChange,
-  onBlur,
-  error,
-  maxLength,
-  counter,
-  placeholder,
-  rows,
-}: CommonFieldProps & { readonly rows: number }) {
-  const id = useId()
-  return (
-    <Field data-invalid={error === undefined ? undefined : true}>
-      <FieldHeading htmlFor={id} label={label} value={value} counter={counter} />
-      <Textarea
-        id={id}
-        name={name}
-        value={value}
-        maxLength={maxLength}
-        rows={rows}
-        placeholder={placeholder}
-        aria-invalid={error === undefined ? undefined : true}
-        aria-describedby={error === undefined ? undefined : `${id}-error`}
-        onBlur={onBlur}
-        onChange={(event) => onChange(event.target.value)}
-        className="field-sizing-fixed rounded-2xl px-4 py-3 text-base"
-      />
-      {error === undefined ? null : <FieldError id={`${id}-error`}>{error}</FieldError>}
-    </Field>
-  )
-}
-
-/** Muted "(optional)" suffix for field labels. */
-export function OptionalHint() {
-  return <span className="text-muted-foreground font-normal">(optional)</span>
 }

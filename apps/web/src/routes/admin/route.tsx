@@ -17,15 +17,18 @@ export const Route = createFileRoute("/admin")({
   pendingMinMs: 200,
   pendingComponent: AdminLoading,
   notFoundComponent: AdminNotFound,
+  // Resolved in `beforeLoad` rather than in the loader so child routes can
+  // prefetch their own data: a loader's return value is private to its match,
+  // but whatever `beforeLoad` returns joins the context every child sees.
+  beforeLoad: async () => ({ initData: await resolveAdminInitData() }),
   loader: async ({ context }) => {
-    const initData = await resolveAdminInitData()
     await context.queryClient.fetchQuery({
-      ...adminWorkspaceListQuery(initData),
+      ...adminWorkspaceListQuery(context.initData),
       // Re-run both HMAC and the DB admin gate on every route entry. Returning
       // cached data here could expose a list after access was revoked.
       staleTime: 0,
     })
-    return { initData }
+    return { initData: context.initData }
   },
   component: AdminLayout,
 })

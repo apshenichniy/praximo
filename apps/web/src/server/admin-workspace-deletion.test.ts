@@ -10,10 +10,9 @@ import {
   WorkspaceId,
   WorkspaceRunCancellationResult,
 } from "@praximo/domain"
-import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
+import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { Effect, Layer, Ref } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
-import { WorkspaceBrandingStorage } from "./workspace-branding-storage.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
 const workspaceId = WorkspaceId.make("ws_delete_test")
@@ -27,7 +26,7 @@ const unusedWorkspaceLayer = Layer.succeed(
     findById: Effect.fn("WorkspaceRepo.DeleteTest.findById")(() => Effect.die("unused")),
     list: Effect.fn("WorkspaceRepo.DeleteTest.list")(() => Effect.die("unused")),
     getDetail: Effect.fn("WorkspaceRepo.DeleteTest.getDetail")(() => Effect.die("unused")),
-    updateProfile: Effect.fn("WorkspaceRepo.DeleteTest.updateProfile")(() => Effect.die("unused")),
+    rename: Effect.fn("WorkspaceRepo.DeleteTest.rename")(() => Effect.die("unused")),
   }),
 )
 
@@ -164,11 +163,7 @@ describe("AdminSurface workspace deletion", () => {
         deletionLayer,
         cancellationLayer,
         CoachOnboardingToken.testLayer("PraximoMotherBot"),
-        WorkspaceBrandingStorage.testLayer({
-          defaultAvatarKey: "branding/default-coach-avatar.jpg",
-        }),
         ManagerBotSender.testLayer,
-        CoachBotBranding.testLayer,
         CoachBotRelease.testLayer,
       )
       const appLayer = Layer.provideMerge(AdminSurface.layer, dependencies)
@@ -284,11 +279,7 @@ describe("AdminSurface workspace deletion", () => {
         deletionLayer,
         cancellationLayer,
         CoachOnboardingToken.testLayer("PraximoMotherBot"),
-        WorkspaceBrandingStorage.testLayer({
-          defaultAvatarKey: "branding/default-coach-avatar.jpg",
-        }),
         ManagerBotSender.testLayer,
-        CoachBotBranding.testLayer,
         CoachBotRelease.testLayer,
       )
       const appLayer = Layer.provideMerge(AdminSurface.layer, dependencies)

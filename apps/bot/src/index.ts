@@ -1,9 +1,8 @@
 import { WorkerEntrypoint } from "cloudflare:workers"
 import { TelegramId, WorkspaceId } from "@praximo/domain"
-import { CoachBotBranding, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
+import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import {
   type Env,
-  handleCoachBotBrandingRpc,
   handleCoachBotReleaseRpc,
   handleManagerInlineInviteRpc,
   handleManagerTextRpc,
@@ -19,7 +18,7 @@ import {
  */
 export default class BotWorker
   extends WorkerEntrypoint<Env>
-  implements ManagerBotSender.RpcClient, CoachBotBranding.RpcClient, CoachBotRelease.RpcClient
+  implements ManagerBotSender.RpcClient, CoachBotRelease.RpcClient
 {
   override fetch(request: Request): Promise<Response> {
     return handleRequest(request, this.env)
@@ -38,10 +37,6 @@ export default class BotWorker
     invite: ManagerBotSender.InlineInvite,
   ): Promise<ManagerBotSender.PrepareRpcResult> {
     return handleManagerInlineInviteRpc(this.env, recipient, invite)
-  }
-
-  applyCoachBotBranding(profile: CoachBotBranding.Profile): Promise<CoachBotBranding.RpcResult> {
-    return handleCoachBotBrandingRpc(this.env, profile)
   }
 
   releaseCoachBot(workspaceId: WorkspaceId): Promise<CoachBotRelease.Result> {

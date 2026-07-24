@@ -23,10 +23,9 @@ export {
   CreateWorkspaceRequestId,
   InviteDeliveryChannel,
   InviteDeliveryRecord,
-  UpdateWorkspaceProfileInput,
-  WorkspaceAvatarIntent,
+  RenameWorkspaceInput,
   WorkspaceDescriptionMaxLength,
   WorkspaceNameMaxLength,
-  WorkspaceProfileRequestId,
+  WorkspaceRenameRequestId,
   WorkspaceShortDescriptionMaxLength,
 } from "./workspace-create.ts"

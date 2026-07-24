@@ -5,14 +5,11 @@ import {
   createAdminWorkspace,
   deleteAdminWorkspace,
   getAdminWorkspace,
-  getAdminWorkspaceAvatar,
   listAdminWorkspaces,
   prepareAdminInviteShareMessage,
   recordAdminInviteShare,
   reissueAdminWorkspaceInvite as reissueAdminWorkspaceInviteRuntime,
-  resendAdminWorkspaceInvite as resendAdminWorkspaceInviteRuntime,
-  retryAdminWorkspaceBranding,
-  updateAdminWorkspaceProfile,
+  renameAdminWorkspace as renameAdminWorkspaceRuntime,
 } from "./runtime.server.ts"
 import type { AdminSurface } from "./admin-surface.ts"
 
@@ -161,43 +158,6 @@ export const recordAdminCoachInviteShare = createServerFn({ method: "POST" })
     }
   })
 
-const validateResend = (
-  input: unknown,
-): { readonly initData: string; readonly inviteId: string } => {
-  if (
-    typeof input !== "object" ||
-    input === null ||
-    !("initData" in input) ||
-    typeof input.initData !== "string" ||
-    !("inviteId" in input) ||
-    typeof input.inviteId !== "string"
-  ) {
-    throw notFound()
-  }
-  return { initData: input.initData, inviteId: input.inviteId }
-}
-
-export const resendAdminWorkspaceInvite = createServerFn({ method: "POST" })
-  .validator(validateResend)
-  .handler(async ({ data }): Promise<CreateInviteTransportResult> => {
-    try {
-      return {
-        ok: true,
-        value: await resendAdminWorkspaceInviteRuntime(data.initData, data.inviteId),
-      }
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "AdminSurface.AccessDenied"
-      ) {
-        throw notFound()
-      }
-      return { ok: false, error: "server" }
-    }
-  })
-
 const validateWorkspaceRequest = (
   input: unknown,
 ): { readonly initData: string; readonly workspaceId: string } => {
@@ -224,80 +184,28 @@ export const loadAdminWorkspace = createServerFn({ method: "POST" })
     }
   })
 
-export type AvatarTransportResult =
-  | { readonly ok: true; readonly contentType: string; readonly base64: string }
-  | { readonly ok: false }
+export type RenameTransportError = "validation" | "conflict" | "server"
 
-export const loadAdminWorkspaceAvatar = createServerFn({ method: "POST" })
-  .validator(validateWorkspaceRequest)
-  .handler(async ({ data }): Promise<AvatarTransportResult> => {
-    try {
-      const avatar = await getAdminWorkspaceAvatar(data.initData, data.workspaceId)
-      return {
-        ok: true,
-        contentType: avatar.contentType,
-        base64: Buffer.from(avatar.bytes).toString("base64"),
-      }
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "AdminSurface.AccessDenied"
-      ) {
-        throw notFound()
-      }
-      return { ok: false }
-    }
-  })
+export type RenameTransportResult =
+  | { readonly ok: true; readonly value: AdminSurface.WorkspaceDetail }
+  | { readonly ok: false; readonly error: RenameTransportError }
 
-const validateFormData = (input: unknown): FormData => {
-  if (!(input instanceof FormData)) throw notFound()
-  return input
+const validateRename = (
+  input: unknown,
+): { readonly initData: string; readonly workspaceId: string; readonly input: unknown } => {
+  const validated = validateWorkspaceRequest(input)
+  if (typeof input !== "object" || input === null || !("input" in input)) throw notFound()
+  return { ...validated, input: input.input }
 }
 
-const MaxAvatarBytes = 10 * 1_024 * 1_024
-
-export type UpdateProfileTransportError = "validation" | "conflict" | "avatar" | "upload" | "server"
-
-export type UpdateProfileTransportResult =
-  | { readonly ok: true; readonly value: AdminSurface.UpdateProfileResult }
-  | { readonly ok: false; readonly error: UpdateProfileTransportError }
-
-export const updateAdminWorkspaceProfileFromForm = createServerFn({ method: "POST" })
-  .validator(validateFormData)
-  .handler(async ({ data }): Promise<UpdateProfileTransportResult> => {
-    const initData = data.get("initData")
-    const workspaceId = data.get("workspaceId")
-    const rawInput = data.get("input")
-    const avatar = data.get("avatar")
-    if (
-      typeof initData !== "string" ||
-      typeof workspaceId !== "string" ||
-      typeof rawInput !== "string" ||
-      (avatar !== null && !(avatar instanceof File))
-    ) {
-      return { ok: false, error: "validation" }
-    }
-    if (avatar instanceof File && avatar.size > MaxAvatarBytes) {
-      return { ok: false, error: "avatar" }
-    }
-
-    let input: unknown
+/** The internal label is the only workspace field an admin still writes (#108). */
+export const renameAdminWorkspace = createServerFn({ method: "POST" })
+  .validator(validateRename)
+  .handler(async ({ data }): Promise<RenameTransportResult> => {
     try {
-      input = JSON.parse(rawInput)
-    } catch {
-      return { ok: false, error: "validation" }
-    }
-
-    try {
-      const avatarBytes =
-        avatar instanceof File && avatar.size > 0
-          ? new Uint8Array(await avatar.arrayBuffer())
-          : undefined
       return {
         ok: true,
-        value: await updateAdminWorkspaceProfile(initData, workspaceId, input, avatarBytes),
+        value: await renameAdminWorkspaceRuntime(data.initData, data.workspaceId, data.input),
       }
     } catch (error) {
       if (typeof error !== "object" || error === null || !("_tag" in error)) {
@@ -308,51 +216,11 @@ export const updateAdminWorkspaceProfileFromForm = createServerFn({ method: "POS
           throw notFound()
         case "AdminSurface.ValidationFailed":
           return { ok: false, error: "validation" }
-        case "AdminSurface.ProfileConflict":
+        case "AdminSurface.RenameConflict":
           return { ok: false, error: "conflict" }
-        case "WorkspaceBrandingStorage.InvalidAvatar":
-          return { ok: false, error: "avatar" }
-        case "WorkspaceBrandingStorage.UploadFailed":
-          return { ok: false, error: "upload" }
         default:
           return { ok: false, error: "server" }
       }
-    }
-  })
-
-const validateBrandingRetry = (
-  input: unknown,
-): { readonly initData: string; readonly workspaceId: string; readonly retryAvatar: boolean } => {
-  const validated = validateWorkspaceRequest(input)
-  if (
-    typeof input !== "object" ||
-    input === null ||
-    !("retryAvatar" in input) ||
-    typeof input.retryAvatar !== "boolean"
-  ) {
-    throw notFound()
-  }
-  return { ...validated, retryAvatar: input.retryAvatar }
-}
-
-export const retryAdminWorkspaceProfileBranding = createServerFn({ method: "POST" })
-  .validator(validateBrandingRetry)
-  .handler(async ({ data }): Promise<UpdateProfileTransportResult> => {
-    try {
-      return {
-        ok: true,
-        value: await retryAdminWorkspaceBranding(data.initData, data.workspaceId, data.retryAvatar),
-      }
-    } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "AdminSurface.AccessDenied"
-      ) {
-        throw notFound()
-      }
-      return { ok: false, error: "server" }
     }
   })
 
