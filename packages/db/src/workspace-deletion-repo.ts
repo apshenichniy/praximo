@@ -4,7 +4,7 @@ import {
   WorkspaceId,
   WorkspaceNotFound,
 } from "@praximo/domain"
-import { and, eq, type SQL, sql } from "drizzle-orm"
+import { and, desc, eq, type SQL, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
@@ -37,19 +37,26 @@ export const Operation = Schema.Struct({
   updatedAt: Schema.instanceOf(Date),
   completedAt: Schema.optionalKey(Schema.instanceOf(Date)),
   expiresAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  /**
+   * When the current driver's claim lapses; absent when nobody holds one. This
+   * is the only honest answer to "is somebody driving this right now" — every
+   * other signal on the receipt records what has already landed.
+   */
+  leaseUntil: Schema.optionalKey(Schema.instanceOf(Date)),
   workspaceName: Schema.optionalKey(Schema.NonEmptyString),
   coachTelegramId: Schema.optionalKey(Schema.NonEmptyString),
   coachLanguage: Schema.optionalKey(CoachLanguage),
 })
 export interface Operation extends Schema.Schema.Type<typeof Operation> {}
 
-export class NameMismatch extends Schema.TaggedErrorClass<NameMismatch>()(
-  "WorkspaceDeletionRepo.NameMismatch",
+export class RequestConflict extends Schema.TaggedErrorClass<RequestConflict>()(
+  "WorkspaceDeletionRepo.RequestConflict",
   {},
 ) {}
 
-export class RequestConflict extends Schema.TaggedErrorClass<RequestConflict>()(
-  "WorkspaceDeletionRepo.RequestConflict",
+/** Another attempt is driving this operation and its lease has not expired. */
+export class LeaseHeld extends Schema.TaggedErrorClass<LeaseHeld>()(
+  "WorkspaceDeletionRepo.LeaseHeld",
   {},
 ) {}
 
@@ -60,39 +67,84 @@ export class InvalidTransition extends Schema.TaggedErrorClass<InvalidTransition
   },
 ) {}
 
+/**
+ * Proof that the holder is the single driver of an operation. Every write to
+ * the receipt is fenced on it, so a stage cannot be advanced without one — and
+ * an attempt that lost the lease to a later claim can no longer write at all.
+ */
+export interface Lease {
+  readonly requestId: WorkspaceDeletionRequestId
+  readonly driverId: string
+}
+
+/**
+ * The claimed operation, read back *after* the claim landed: stage decisions
+ * must be made on post-claim state, never on the snapshot `prepare` returned.
+ *
+ * `lease` is only meaningful while `operation.state` is `"prepared"`. A
+ * completed operation has nothing left to drive, so it is handed back
+ * unclaimed rather than reported as contested; the lease then fences nothing
+ * and `release` is a no-op.
+ */
+export interface Claim {
+  readonly lease: Lease
+  readonly operation: Operation
+}
+
 export interface Interface {
   readonly prepare: (
     workspaceId: WorkspaceId,
     requestId: WorkspaceDeletionRequestId,
-    confirmationName: string,
     now: Date,
   ) => Effect.Effect<
     Operation,
-    WorkspaceNotFound | NameMismatch | RequestConflict | InvalidTransition | QueryFailed
+    WorkspaceNotFound | RequestConflict | InvalidTransition | QueryFailed
   >
-  readonly markPipeline: (
+  readonly claim: (
     requestId: WorkspaceDeletionRequestId,
+    now: Date,
+  ) => Effect.Effect<Claim, LeaseHeld | InvalidTransition | QueryFailed>
+  readonly release: (lease: Lease) => Effect.Effect<void, QueryFailed>
+  readonly markPipeline: (
+    lease: Lease,
     status: Exclude<PipelineStatus, "pending">,
     now: Date,
   ) => Effect.Effect<Operation, InvalidTransition | QueryFailed>
   readonly markFarewell: (
-    requestId: WorkspaceDeletionRequestId,
+    lease: Lease,
     status: Exclude<FarewellStatus, "pending">,
     now: Date,
   ) => Effect.Effect<Operation, InvalidTransition | QueryFailed>
   readonly markBotReleased: (
-    requestId: WorkspaceDeletionRequestId,
+    lease: Lease,
     status: Exclude<BotReleaseStatus, "pending">,
     now: Date,
   ) => Effect.Effect<Operation, InvalidTransition | QueryFailed>
   readonly finalize: (
-    requestId: WorkspaceDeletionRequestId,
+    lease: Lease,
     now: Date,
   ) => Effect.Effect<Operation, InvalidTransition | QueryFailed>
-  readonly isDeleting: (workspaceId: WorkspaceId) => Effect.Effect<boolean, QueryFailed>
+  /**
+   * The workspace's own deletion receipt, prepared or completed. It outlives
+   * the workspace by design — the progress surface keeps reading it after the
+   * cascade has removed everything else (#110).
+   */
+  readonly findByWorkspace: (
+    workspaceId: WorkspaceId,
+  ) => Effect.Effect<Operation | undefined, QueryFailed>
+  /** Every workspace with a deletion still in flight, for the list's badge. */
+  readonly listPrepared: () => Effect.Effect<ReadonlyArray<WorkspaceId>, QueryFailed>
   readonly purgeExpired: (now: Date) => Effect.Effect<number, QueryFailed>
   readonly reconcileOrphans: () => Effect.Effect<number, QueryFailed>
 }
+
+/**
+ * How long a claim keeps other attempts out. Long enough to cover the whole
+ * pipeline (LiveKit cancellation plus two Telegram round trips) and short
+ * enough that an attempt killed mid-flight unblocks the coach quickly; every
+ * attempt that survives to return also releases its lease immediately.
+ */
+export const LEASE_DURATION_MS = 60 * 1_000
 
 export class Service extends Context.Service<Service, Interface>()(
   "@praximo/db/WorkspaceDeletionRepo",
@@ -105,6 +157,8 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const { client } = yield* Database.Service
 
+    // Newest first so a workspace lookup lands on its live receipt: the unique
+    // index allows one prepared operation, but completed ones linger for a week.
     const queryOperations = (where: SQL | undefined, operation: string) =>
       Effect.tryPromise({
         try: () =>
@@ -120,6 +174,7 @@ export const layer = Layer.effect(
               updatedAt: schema.workspaceDeletionOperation.updatedAt,
               completedAt: schema.workspaceDeletionOperation.completedAt,
               expiresAt: schema.workspaceDeletionOperation.expiresAt,
+              leaseUntil: schema.workspaceDeletionOperation.leaseUntil,
               workspaceName: schema.workspace.name,
               coachTelegramId: schema.member.telegramUserId,
               coachLanguage: schema.member.language,
@@ -137,6 +192,7 @@ export const layer = Layer.effect(
               ),
             )
             .where(where)
+            .orderBy(desc(schema.workspaceDeletionOperation.createdAt))
             .limit(1),
         catch: (cause) => new QueryFailed({ operation, cause }),
       })
@@ -144,6 +200,7 @@ export const layer = Layer.effect(
     const decodeRow = (row: {
       completedAt: Date | null
       expiresAt: Date | null
+      leaseUntil: Date | null
       workspaceName: string | null
       coachTelegramId: string | null
       coachLanguage: string | null
@@ -151,11 +208,20 @@ export const layer = Layer.effect(
       // Spreading `...rest` first and re-adding only the present values keeps the
       // nullable columns out entirely: the Operation schema marks them optional,
       // so a literal `null` would fail decoding.
-      const { completedAt, expiresAt, workspaceName, coachTelegramId, coachLanguage, ...rest } = row
+      const {
+        completedAt,
+        expiresAt,
+        leaseUntil,
+        workspaceName,
+        coachTelegramId,
+        coachLanguage,
+        ...rest
+      } = row
       return decodeOperation({
         ...rest,
         ...(completedAt === null ? {} : { completedAt }),
         ...(expiresAt === null ? {} : { expiresAt }),
+        ...(leaseUntil === null ? {} : { leaseUntil }),
         ...(workspaceName === null ? {} : { workspaceName }),
         ...(coachTelegramId === null ? {} : { coachTelegramId }),
         ...(coachLanguage === null ? {} : { coachLanguage }),
@@ -206,7 +272,7 @@ export const layer = Layer.effect(
     })
 
     const prepare: Interface["prepare"] = Effect.fn("WorkspaceDeletionRepo.prepare")(
-      function* (workspaceId, requestId, confirmationName, now) {
+      function* (workspaceId, requestId, now) {
         const replay = yield* load(requestId)
         if (replay !== undefined) {
           if (replay.workspaceId !== workspaceId) return yield* new RequestConflict()
@@ -216,15 +282,13 @@ export const layer = Layer.effect(
         const workspaceRows = yield* Effect.tryPromise({
           try: () =>
             client
-              .select({ name: schema.workspace.name })
+              .select({ id: schema.workspace.id })
               .from(schema.workspace)
               .where(eq(schema.workspace.id, workspaceId))
               .limit(1),
           catch: (cause) => new QueryFailed({ operation: "WorkspaceDeletionRepo.prepare", cause }),
         })
-        const workspace = workspaceRows[0]
-        if (workspace === undefined) return yield* new WorkspaceNotFound({ id: workspaceId })
-        if (workspace.name !== confirmationName) return yield* new NameMismatch()
+        if (workspaceRows[0] === undefined) return yield* new WorkspaceNotFound({ id: workspaceId })
 
         yield* Effect.tryPromise({
           try: () =>
@@ -250,8 +314,70 @@ export const layer = Layer.effect(
       },
     )
 
+    /**
+     * Claim the operation for one driver. The conditional UPDATE is the fence:
+     * concurrent attempts both issue it, exactly one matches a row, and the
+     * loser cannot proceed to any stage — so it cannot repeat a side effect the
+     * winner is about to perform.
+     */
+    const claim: Interface["claim"] = Effect.fn("WorkspaceDeletionRepo.claim")(
+      function* (requestId, now) {
+        const driverId = crypto.randomUUID()
+        const lease: Lease = { requestId, driverId }
+        const claimed = yield* Effect.tryPromise({
+          try: () =>
+            client
+              .update(schema.workspaceDeletionOperation)
+              .set({
+                driverId,
+                leaseUntil: new Date(now.getTime() + LEASE_DURATION_MS),
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(schema.workspaceDeletionOperation.requestId, requestId),
+                  eq(schema.workspaceDeletionOperation.state, "prepared"),
+                  sql`(
+                    ${schema.workspaceDeletionOperation.driverId} is null
+                    or ${schema.workspaceDeletionOperation.leaseUntil} is null
+                    or ${schema.workspaceDeletionOperation.leaseUntil} <= ${now}
+                  )`,
+                ),
+              )
+              .returning({ requestId: schema.workspaceDeletionOperation.requestId }),
+          catch: (cause) => new QueryFailed({ operation: "WorkspaceDeletionRepo.claim", cause }),
+        })
+
+        const current = yield* load(requestId)
+        if (current === undefined) return yield* new InvalidTransition({ operation: "claim" })
+        // Nothing matched and the operation is still prepared: a live lease.
+        if (claimed.length === 0 && current.state === "prepared") return yield* new LeaseHeld()
+        return { lease, operation: current }
+      },
+    )
+
+    // Only ever clears this driver's own lease, so a release arriving after the
+    // lease expired and was re-claimed cannot unlock the new driver's work.
+    const release: Interface["release"] = Effect.fn("WorkspaceDeletionRepo.release")(
+      function* (lease) {
+        yield* Effect.tryPromise({
+          try: () =>
+            client
+              .update(schema.workspaceDeletionOperation)
+              .set({ driverId: null, leaseUntil: null })
+              .where(
+                and(
+                  eq(schema.workspaceDeletionOperation.requestId, lease.requestId),
+                  eq(schema.workspaceDeletionOperation.driverId, lease.driverId),
+                ),
+              ),
+          catch: (cause) => new QueryFailed({ operation: "WorkspaceDeletionRepo.release", cause }),
+        })
+      },
+    )
+
     const updateStatus = Effect.fn("WorkspaceDeletionRepo.updateStatus")(function* (
-      requestId: WorkspaceDeletionRequestId,
+      lease: Lease,
       values: Partial<{
         pipelineStatus: PipelineStatus
         farewellStatus: FarewellStatus
@@ -260,38 +386,42 @@ export const layer = Layer.effect(
       now: Date,
       operation: string,
     ) {
-      yield* Effect.tryPromise({
+      const updated = yield* Effect.tryPromise({
         try: () =>
           client
             .update(schema.workspaceDeletionOperation)
             .set({ ...values, updatedAt: now })
             .where(
               and(
-                eq(schema.workspaceDeletionOperation.requestId, requestId),
+                eq(schema.workspaceDeletionOperation.requestId, lease.requestId),
                 eq(schema.workspaceDeletionOperation.state, "prepared"),
+                eq(schema.workspaceDeletionOperation.driverId, lease.driverId),
               ),
-            ),
+            )
+            .returning({ requestId: schema.workspaceDeletionOperation.requestId }),
         catch: (cause) => new QueryFailed({ operation, cause }),
       })
-      return yield* requireOperation(requestId, operation)
+      // A driver whose lease was taken over mid-flight writes nothing and is
+      // told so, rather than clobbering the current driver's statuses.
+      if (updated.length === 0) return yield* new InvalidTransition({ operation })
+      return yield* requireOperation(lease.requestId, operation)
     })
 
     const markPipeline: Interface["markPipeline"] = Effect.fn("WorkspaceDeletionRepo.markPipeline")(
-      (requestId, status, now) =>
-        updateStatus(requestId, { pipelineStatus: status }, now, "markPipeline"),
+      (lease, status, now) => updateStatus(lease, { pipelineStatus: status }, now, "markPipeline"),
     )
     const markFarewell: Interface["markFarewell"] = Effect.fn("WorkspaceDeletionRepo.markFarewell")(
-      (requestId, status, now) =>
-        updateStatus(requestId, { farewellStatus: status }, now, "markFarewell"),
+      (lease, status, now) => updateStatus(lease, { farewellStatus: status }, now, "markFarewell"),
     )
     const markBotReleased: Interface["markBotReleased"] = Effect.fn(
       "WorkspaceDeletionRepo.markBotReleased",
-    )((requestId, status, now) =>
-      updateStatus(requestId, { botReleaseStatus: status }, now, "markBotReleased"),
+    )((lease, status, now) =>
+      updateStatus(lease, { botReleaseStatus: status }, now, "markBotReleased"),
     )
 
     const finalize: Interface["finalize"] = Effect.fn("WorkspaceDeletionRepo.finalize")(
-      function* (requestId, now) {
+      function* (lease, now) {
+        const { requestId, driverId } = lease
         const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1_000)
         const result = yield* Effect.tryPromise({
           try: () =>
@@ -302,6 +432,7 @@ export const layer = Layer.effect(
                 where
                   "request_id" = ${requestId}
                   and "state" = 'prepared'
+                  and "driver_id" = ${driverId}
                   and "pipeline_status" <> 'pending'
                   and "farewell_status" <> 'pending'
                   and "bot_release_status" <> 'pending'
@@ -393,24 +524,30 @@ export const layer = Layer.effect(
       },
     )
 
-    const isDeleting: Interface["isDeleting"] = Effect.fn("WorkspaceDeletionRepo.isDeleting")(
-      function* (workspaceId) {
+    const findByWorkspace: Interface["findByWorkspace"] = Effect.fn(
+      "WorkspaceDeletionRepo.findByWorkspace",
+    )(function* (workspaceId) {
+      const rows = yield* queryOperations(
+        eq(schema.workspaceDeletionOperation.workspaceId, workspaceId),
+        "WorkspaceDeletionRepo.findByWorkspace",
+      )
+      const row = rows[0]
+      if (row === undefined) return undefined
+      return yield* decodeRow(row)
+    })
+
+    const listPrepared: Interface["listPrepared"] = Effect.fn("WorkspaceDeletionRepo.listPrepared")(
+      function* () {
         const rows = yield* Effect.tryPromise({
           try: () =>
             client
-              .select({ requestId: schema.workspaceDeletionOperation.requestId })
+              .select({ workspaceId: schema.workspaceDeletionOperation.workspaceId })
               .from(schema.workspaceDeletionOperation)
-              .where(
-                and(
-                  eq(schema.workspaceDeletionOperation.workspaceId, workspaceId),
-                  eq(schema.workspaceDeletionOperation.state, "prepared"),
-                ),
-              )
-              .limit(1),
+              .where(eq(schema.workspaceDeletionOperation.state, "prepared")),
           catch: (cause) =>
-            new QueryFailed({ operation: "WorkspaceDeletionRepo.isDeleting", cause }),
+            new QueryFailed({ operation: "WorkspaceDeletionRepo.listPrepared", cause }),
         })
-        return rows.length > 0
+        return rows.map((row) => WorkspaceId.make(row.workspaceId))
       },
     )
 
@@ -457,11 +594,14 @@ export const layer = Layer.effect(
 
     return Service.of({
       prepare,
+      claim,
+      release,
       markPipeline,
       markFarewell,
       markBotReleased,
       finalize,
-      isDeleting,
+      findByWorkspace,
+      listPrepared,
       purgeExpired,
       reconcileOrphans,
     })

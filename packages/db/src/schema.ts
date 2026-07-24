@@ -133,6 +133,11 @@ export const workspaceDeletionOperation = pgTable(
     farewellStatus: text("farewell_status").notNull().default("pending"),
     botReleaseStatus: text("bot_release_status").notNull().default("pending"),
     state: text("state").notNull().default("prepared"),
+    // Single-driver lease. `driver_id` is a token minted per deleteWorkspace
+    // invocation, not the client's requestId: that one is reused across retries
+    // and shared by a double submit, so it cannot tell two attempts apart.
+    driverId: text("driver_id"),
+    leaseUntil: timestamp("lease_until", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true, mode: "date" }),

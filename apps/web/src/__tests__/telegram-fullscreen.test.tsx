@@ -7,14 +7,16 @@ import { AdminShell } from "@/components/admin-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import {
   attachBackButton,
+  attachMainButton,
   enterFullscreen,
   readTelegramInitData,
   revealTelegramWebApp,
   shareInviteMessage,
   type TelegramBackButton,
+  type TelegramMainButton,
   type TelegramWebApp,
 } from "@/lib/telegram.ts"
-import { APP_DARK_COLOR } from "@/lib/theme.ts"
+import { APP_DARK_COLOR, APP_ON_PRIMARY_COLOR, APP_PRIMARY_COLOR } from "@/lib/theme.ts"
 
 // The fullscreen requirement (mini-app.md: opens fullscreen via Bot API 8.0
 // `requestFullscreen`, with `fullscreenChanged` handling + safe-area insets)
@@ -33,6 +35,19 @@ const fakeBackButton = (): TelegramBackButton => {
   return backButton
 }
 
+const fakeMainButton = (): TelegramMainButton => {
+  const mainButton: TelegramMainButton = {
+    isVisible: false,
+    setText: vi.fn(() => mainButton),
+    setParams: vi.fn(() => mainButton),
+    show: vi.fn(() => mainButton),
+    hide: vi.fn(() => mainButton),
+    onClick: vi.fn(() => mainButton),
+    offClick: vi.fn(() => mainButton),
+  }
+  return mainButton
+}
+
 const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => ({
   initData: "signed-init-data",
   version: "8.0",
@@ -48,6 +63,7 @@ const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => 
   shareMessage: vi.fn(),
   openTelegramLink: vi.fn(),
   BackButton: fakeBackButton(),
+  MainButton: fakeMainButton(),
   onEvent: vi.fn(),
   offEvent: vi.fn(),
   ...overrides,
@@ -72,6 +88,34 @@ describe("Telegram admin adapters", () => {
     detach()
     expect(webApp.BackButton.offClick).toHaveBeenCalledWith(onBack)
     expect(webApp.BackButton.hide).toHaveBeenCalledOnce()
+  })
+
+  it("hands the screen's action to the host MainButton in the app's own palette", () => {
+    const webApp = fakeWebApp()
+    const onClick = vi.fn()
+
+    const detach = attachMainButton(webApp, "Invite a coach", onClick)
+
+    expect(webApp.MainButton.setParams).toHaveBeenCalledWith({
+      color: APP_PRIMARY_COLOR,
+      text_color: APP_ON_PRIMARY_COLOR,
+    })
+    expect(webApp.MainButton.setText).toHaveBeenCalledWith("Invite a coach")
+    expect(webApp.MainButton.onClick).toHaveBeenCalledWith(onClick)
+    expect(webApp.MainButton.show).toHaveBeenCalledOnce()
+
+    detach()
+    expect(webApp.MainButton.offClick).toHaveBeenCalledWith(onClick)
+    expect(webApp.MainButton.hide).toHaveBeenCalledOnce()
+  })
+
+  it("leaves a pre-6.1 host its own button colors rather than styling it halfway", () => {
+    const webApp = fakeWebApp({ version: "6.0", isVersionAtLeast: () => false })
+
+    attachMainButton(webApp, "Invite a coach", vi.fn())
+
+    expect(webApp.MainButton.setParams).not.toHaveBeenCalled()
+    expect(webApp.MainButton.show).toHaveBeenCalledOnce()
   })
 })
 

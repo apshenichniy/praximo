@@ -76,6 +76,12 @@ export interface CoachListEntry {
   readonly lastActivityAt?: string
   /** Absent exactly when onboarding is complete — an active coach. */
   readonly onboarding?: CoachOnboarding
+  /**
+   * A deletion is in flight for this coach (#110). It outranks every other
+   * state the row could report: nothing else about a workspace being purged is
+   * worth acting on, and the row's only remaining job is to offer a resume.
+   */
+  readonly deleting?: true
 }
 
 /**
@@ -145,6 +151,37 @@ export interface DeleteResult {
   readonly status: "deleted" | "deleted-farewell-undeliverable"
 }
 
+/**
+ * The deletion pipeline as the progress sheet reads it (#110): one settled-or-
+ * pending status per stage, straight off the operation's own receipt, plus how
+ * long the current driver's claim still has to run.
+ *
+ * It survives its own workspace: the receipt is kept for a week after the
+ * cascade, so the sheet can watch the last stage complete instead of losing
+ * the screen the moment the workspace row disappears.
+ */
+export interface DeletionProgress {
+  readonly workspaceId: WorkspaceId
+  readonly state: "prepared" | "completed"
+  readonly pipeline: WorkspaceDeletionRepo.PipelineStatus
+  readonly farewell: WorkspaceDeletionRepo.FarewellStatus
+  readonly botRelease: WorkspaceDeletionRepo.BotReleaseStatus
+  /** The label the workspace carried; absent once the cascade has removed it. */
+  readonly workspaceName?: string
+  readonly startedAt: string
+  /**
+   * How much longer somebody is driving this operation — `0` when nobody is.
+   * The driver lease answers that outright, so the screen no longer has to
+   * infer it from how recently a stage happened to land.
+   *
+   * It is a duration rather than an instant on purpose: a client whose clock
+   * disagrees with the server's would misread a deadline, and the two mistakes
+   * are not symmetric — calling a live attempt "paused" invites a second one.
+   */
+  readonly drivingLapsesInMs: number
+  readonly completedAt?: string
+}
+
 export interface Interface {
   readonly listWorkspaces: (
     initData: string,
@@ -193,12 +230,15 @@ export interface Interface {
     DeleteResult,
     | AccessDenied
     | ValidationFailed
-    | DeleteConfirmationMismatch
     | DeletionConflict
     | DeletionRetryable
     | DeletionFailed
     | LoadFailed
   >
+  readonly getWorkspaceDeletion: (
+    initData: string,
+    workspaceId: string,
+  ) => Effect.Effect<DeletionProgress | undefined, AccessDenied | LoadFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/web/AdminSurface") {}
@@ -240,11 +280,6 @@ export class ReissueUnavailable extends Schema.TaggedErrorClass<ReissueUnavailab
  */
 export class SharePreparationFailed extends Schema.TaggedErrorClass<SharePreparationFailed>()(
   "AdminSurface.SharePreparationFailed",
-  {},
-) {}
-
-export class DeleteConfirmationMismatch extends Schema.TaggedErrorClass<DeleteConfirmationMismatch>()(
-  "AdminSurface.DeleteConfirmationMismatch",
   {},
 ) {}
 
@@ -357,6 +392,7 @@ const onboardingStage = (item: OnboardingFacts, now: Date): CoachOnboardingStage
 const presentCoach = (
   item: WorkspaceRepo.ListItem,
   stage: CoachOnboardingStage | undefined,
+  deleting: boolean,
 ): CoachListEntry => {
   const invite = item.invite
 
@@ -364,6 +400,7 @@ const presentCoach = (
     id: item.id,
     name: item.name,
     botStatus: item.botStatus,
+    ...(deleting ? { deleting: true as const } : {}),
     ...(item.botUsername === undefined ? {} : { botUsername: item.botUsername }),
     ...(item.lastActivityAt === undefined
       ? {}
@@ -494,8 +531,16 @@ export const layer = Layer.effect(
           (left.item.invite?.issuedAt.getTime() ?? 0),
       )
 
+      // One query for the whole list rather than one per row: a deletion in
+      // flight is rare, so the common answer is an empty set.
+      const deleting = new Set(
+        yield* deletions
+          .listPrepared()
+          .pipe(Effect.mapError(() => new LoadFailed({ operation: "listWorkspaces.deleting" }))),
+      )
+
       const coaches = [...pinned, ...staged.filter((entry) => entry.stage === undefined)].map(
-        (entry) => presentCoach(entry.item, entry.stage),
+        (entry) => presentCoach(entry.item, entry.stage, deleting.has(entry.item.id)),
       )
 
       const viewerCoach = yield* resolveViewerCoach(items, viewer)
@@ -850,51 +895,19 @@ export const layer = Layer.effect(
       return yield* deliver(recipient, aggregate, aggregate.owner.language)
     })
 
-    const deleteWorkspace = Effect.fn("AdminSurface.deleteWorkspace")(function* (
-      rawInitData: string,
-      rawWorkspaceId: string,
-      rawInput: unknown,
+    /**
+     * The stages, run by the one attempt that holds the operation's lease. Each
+     * stage reads its status from the receipt and marks it before moving on, so
+     * a resumed attempt skips whatever already happened; the lease is what keeps
+     * a second attempt from reading the same `pending` and repeating the side
+     * effect — a coach must not be told goodbye twice.
+     */
+    const driveDeletion = Effect.fn("AdminSurface.driveDeletion")(function* (
+      workspaceId: WorkspaceId,
+      lease: WorkspaceDeletionRepo.Lease,
+      claimed: WorkspaceDeletionRepo.Operation,
     ) {
-      yield* verifyAdmin(rawInitData)
-      const workspaceId = yield* decodeWorkspaceId(rawWorkspaceId).pipe(
-        Effect.mapError(() => new ValidationFailed()),
-      )
-      const input = yield* decodeDeleteInput(rawInput).pipe(
-        Effect.mapError(() => new ValidationFailed()),
-      )
-      let operation = yield* deletions
-        .prepare(
-          workspaceId,
-          input.requestId,
-          input.confirmationName,
-          new Date(yield* Clock.currentTimeMillis),
-        )
-        .pipe(
-          Effect.mapError((error) => {
-            switch (error._tag) {
-              case "WorkspaceDeletionRepo.NameMismatch":
-                return new DeleteConfirmationMismatch()
-              case "WorkspaceDeletionRepo.RequestConflict":
-                return new DeletionConflict()
-              default:
-                return new LoadFailed({ operation: "deleteWorkspace.prepare" })
-            }
-          }),
-        )
-
-      // prepare may adopt an in-flight operation created under an earlier
-      // requestId (the client mints a fresh one per dialog mount). Drive the
-      // remaining stages by the operation's own requestId, not the client input.
-      const operationRequestId = operation.requestId
-
-      if (operation.state === "completed") {
-        return {
-          status:
-            operation.farewellStatus === "undeliverable"
-              ? "deleted-farewell-undeliverable"
-              : "deleted",
-        } satisfies DeleteResult
-      }
+      let operation = claimed
 
       if (operation.pipelineStatus === "pending") {
         const cancellation = yield* runCancellation.cancel(workspaceId)
@@ -903,7 +916,7 @@ export const layer = Layer.effect(
         }
         operation = yield* deletions
           .markPipeline(
-            operationRequestId,
+            lease,
             WorkspaceRunCancellationResult.guards.Cancelled(cancellation)
               ? "cancelled"
               : "nothing-active",
@@ -919,11 +932,7 @@ export const layer = Layer.effect(
           operation.workspaceName === undefined
         ) {
           operation = yield* deletions
-            .markFarewell(
-              operationRequestId,
-              "not-applicable",
-              new Date(yield* Clock.currentTimeMillis),
-            )
+            .markFarewell(lease, "not-applicable", new Date(yield* Clock.currentTimeMillis))
             .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "farewell" })))
         } else {
           const recipient = yield* Schema.decodeUnknownEffect(TelegramId)(
@@ -937,7 +946,7 @@ export const layer = Layer.effect(
           }
           operation = yield* deletions
             .markFarewell(
-              operationRequestId,
+              lease,
               Result.isFailure(farewell) ? "undeliverable" : "sent",
               new Date(yield* Clock.currentTimeMillis),
             )
@@ -954,7 +963,7 @@ export const layer = Layer.effect(
         }
         operation = yield* deletions
           .markBotReleased(
-            operationRequestId,
+            lease,
             CoachBotRelease.Result.guards.Released(released)
               ? "released"
               : CoachBotRelease.Result.guards.AlreadyReleased(released)
@@ -966,7 +975,7 @@ export const layer = Layer.effect(
       }
 
       operation = yield* deletions
-        .finalize(operationRequestId, new Date(yield* Clock.currentTimeMillis))
+        .finalize(lease, new Date(yield* Clock.currentTimeMillis))
         .pipe(Effect.mapError(() => new DeletionRetryable({ operation: "finalize" })))
       yield* runCancellation.kickObjectCleanup()
 
@@ -978,6 +987,98 @@ export const layer = Layer.effect(
       } satisfies DeleteResult
     })
 
+    const deleteWorkspace = Effect.fn("AdminSurface.deleteWorkspace")(function* (
+      rawInitData: string,
+      rawWorkspaceId: string,
+      rawInput: unknown,
+    ) {
+      yield* verifyAdmin(rawInitData)
+      const workspaceId = yield* decodeWorkspaceId(rawWorkspaceId).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
+      const input = yield* decodeDeleteInput(rawInput).pipe(
+        Effect.mapError(() => new ValidationFailed()),
+      )
+      const prepared = yield* deletions
+        .prepare(workspaceId, input.requestId, new Date(yield* Clock.currentTimeMillis))
+        .pipe(
+          Effect.mapError((error) =>
+            error._tag === "WorkspaceDeletionRepo.RequestConflict"
+              ? new DeletionConflict()
+              : new LoadFailed({ operation: "deleteWorkspace.prepare" }),
+          ),
+        )
+
+      // prepare may adopt an in-flight operation created under an earlier
+      // requestId (the client mints a fresh one per dialog mount). Claim by the
+      // operation's own requestId, not the client input, so both the first
+      // attempt and a resumed one contend for the same lease.
+      const { lease, operation } = yield* deletions
+        .claim(prepared.requestId, new Date(yield* Clock.currentTimeMillis))
+        .pipe(
+          Effect.mapError((error) =>
+            error._tag === "WorkspaceDeletionRepo.LeaseHeld"
+              ? new DeletionConflict()
+              : new LoadFailed({ operation: "deleteWorkspace.claim" }),
+          ),
+        )
+
+      // Replay of a finished deletion: nothing was claimed and nothing is run.
+      if (operation.state === "completed") {
+        return {
+          status:
+            operation.farewellStatus === "undeliverable"
+              ? "deleted-farewell-undeliverable"
+              : "deleted",
+        } satisfies DeleteResult
+      }
+
+      // Hand the lease back on every exit — success, failure, or interruption —
+      // so a retry after a failed stage is not stuck behind its own dead
+      // attempt. Only a process that dies outright leaves it to the TTL.
+      return yield* driveDeletion(workspaceId, lease, operation).pipe(
+        Effect.ensuring(deletions.release(lease).pipe(Effect.ignore)),
+      )
+    })
+
+    /**
+     * What the progress sheet and the resume panel read. `undefined` is the
+     * ordinary answer — a workspace nobody has ever tried to delete — and the
+     * caller treats it as "nothing in flight" rather than as an error.
+     */
+    const getWorkspaceDeletion = Effect.fn("AdminSurface.getWorkspaceDeletion")(function* (
+      rawInitData: string,
+      rawWorkspaceId: string,
+    ) {
+      yield* verifyAdmin(rawInitData)
+      const workspaceId = yield* decodeWorkspaceId(rawWorkspaceId).pipe(
+        Effect.mapError(() => new LoadFailed({ operation: "getWorkspaceDeletion" })),
+      )
+      const operation = yield* deletions
+        .findByWorkspace(workspaceId)
+        .pipe(Effect.mapError(() => new LoadFailed({ operation: "getWorkspaceDeletion" })))
+      if (operation === undefined) return undefined
+
+      return {
+        workspaceId: operation.workspaceId,
+        state: operation.state,
+        pipeline: operation.pipelineStatus,
+        farewell: operation.farewellStatus,
+        botRelease: operation.botReleaseStatus,
+        ...(operation.workspaceName === undefined
+          ? {}
+          : { workspaceName: operation.workspaceName }),
+        startedAt: operation.createdAt.toISOString(),
+        drivingLapsesInMs:
+          operation.leaseUntil === undefined
+            ? 0
+            : Math.max(0, operation.leaseUntil.getTime() - (yield* Clock.currentTimeMillis)),
+        ...(operation.completedAt === undefined
+          ? {}
+          : { completedAt: operation.completedAt.toISOString() }),
+      } satisfies DeletionProgress
+    })
+
     return Service.of({
       listWorkspaces,
       createWorkspace,
@@ -987,6 +1088,7 @@ export const layer = Layer.effect(
       renameWorkspace,
       reissueWorkspaceInvite,
       deleteWorkspace,
+      getWorkspaceDeletion,
     })
   }),
 )

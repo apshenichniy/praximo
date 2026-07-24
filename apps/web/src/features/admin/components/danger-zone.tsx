@@ -1,21 +1,10 @@
 import type { ReactNode } from "react"
 
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { Card, CardContent } from "@/components/ui/card.tsx"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field.tsx"
-import { Input } from "@/components/ui/input.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
-import { displayName } from "@/features/admin/formatting.ts"
+import type { DeletionHeadline } from "@/features/admin/workspace-deletion.ts"
 
 /** The one place on the details screen where an action cannot be taken back. */
 export function DangerZone({ children }: { readonly children: ReactNode }) {
@@ -91,83 +80,27 @@ export function ResetInviteCard({
   )
 }
 
+/**
+ * The entry to the deletion gate (#110). The card carries no confirmation of
+ * its own — the sheet it opens is the whole safety mechanism — so its only job
+ * is to say plainly what is behind the button before it is pressed.
+ */
 export function DeleteWorkspaceCard({
-  workspaceName,
-  open,
-  confirmationName,
-  error,
-  pending,
-  onOpenChange,
-  onConfirmationNameChange,
-  onDelete,
+  copy,
+  onOpen,
 }: {
-  readonly workspaceName: string
-  readonly open: boolean
-  readonly confirmationName: string
-  readonly error: string | undefined
-  readonly pending: boolean
-  readonly onOpenChange: (open: boolean) => void
-  readonly onConfirmationNameChange: (value: string) => void
-  readonly onDelete: () => void
+  readonly copy: DeletionHeadline
+  readonly onOpen: () => void
 }) {
   return (
-    <>
-      <DangerCard
-        title="Delete workspace permanently"
-        description="Deletes the workspace, its clients, sessions, transcripts, artifacts, and custom uploads. This cannot be undone."
-        action={
-          <Button
-            variant="destructive"
-            size="lg"
-            className="mt-5 font-semibold"
-            onClick={() => onOpenChange(true)}
-          >
-            Delete workspace
-          </Button>
-        }
-      />
-
-      <AlertDialog open={open} onOpenChange={onOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{displayName(workspaceName)}”?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently deletes all workspace data. To confirm, enter the workspace name
-              exactly as shown.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <Field data-invalid={error === undefined ? undefined : true}>
-            <FieldLabel htmlFor="delete-confirmation-name">Workspace name</FieldLabel>
-            <Input
-              id="delete-confirmation-name"
-              value={confirmationName}
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              aria-invalid={error === undefined ? undefined : true}
-              onChange={(event) => onConfirmationNameChange(event.target.value)}
-            />
-            {error === undefined ? null : <FieldError>{error}</FieldError>}
-          </Field>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-            <Button
-              variant="destructive"
-              disabled={pending || confirmationName !== workspaceName}
-              aria-busy={pending || undefined}
-              onClick={onDelete}
-            >
-              {pending ? (
-                <>
-                  <Spinner /> Deleting…
-                </>
-              ) : (
-                "Delete permanently"
-              )}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+    <DangerCard
+      title={copy.title}
+      description={copy.description}
+      action={
+        <Button variant="destructive" size="lg" className="mt-5 font-semibold" onClick={onOpen}>
+          Delete workspace
+        </Button>
+      }
+    />
   )
 }

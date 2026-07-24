@@ -3,7 +3,7 @@
 // purpose — every method here is exercised by the fullscreen flow below; widen
 // it only when a screen needs more.
 
-import { APP_DARK_COLOR } from "@/lib/theme.ts"
+import { APP_DARK_COLOR, APP_ON_PRIMARY_COLOR, APP_PRIMARY_COLOR } from "@/lib/theme.ts"
 
 export interface TelegramWebApp {
   /** Signed launch credential sent to the server for validation. */
@@ -42,6 +42,7 @@ export interface TelegramWebApp {
   /** Opens a `t.me` link inside Telegram without closing the Mini App. */
   openTelegramLink: (url: string) => void
   readonly BackButton: TelegramBackButton
+  readonly MainButton: TelegramMainButton
   readonly HapticFeedback?: {
     readonly notificationOccurred: (type: "error" | "success" | "warning") => void
   }
@@ -55,6 +56,19 @@ export interface TelegramBackButton {
   hide: () => TelegramBackButton
   onClick: (handler: () => void) => TelegramBackButton
   offClick: (handler: () => void) => TelegramBackButton
+}
+
+export interface TelegramMainButton {
+  readonly isVisible: boolean
+  setText: (text: string) => TelegramMainButton
+  setParams: (params: {
+    readonly color?: string
+    readonly text_color?: string
+  }) => TelegramMainButton
+  show: () => TelegramMainButton
+  hide: () => TelegramMainButton
+  onClick: (handler: () => void) => TelegramMainButton
+  offClick: (handler: () => void) => TelegramMainButton
 }
 
 declare global {
@@ -111,6 +125,36 @@ export const attachBackButton = (webApp: TelegramWebApp, onBack: () => void): ((
 
   return () => {
     webApp.BackButton.offClick(onBack).hide()
+  }
+}
+
+/** `MainButton.setParams` is Bot API 6.1; the button itself predates it. */
+export const MAIN_BUTTON_PARAMS_MIN_VERSION = "6.1"
+
+/**
+ * Hand a screen's primary action to the host's own bottom button. It sits
+ * outside the scroll area, so the action keeps one fixed place no matter how
+ * much the list above it grows — which is the whole reason to prefer it to a
+ * row inside the list.
+ *
+ * The app's own palette is applied where the host allows it: this is a dark app
+ * whose primary is a near-white surface, and inheriting the client's blue accent
+ * would make the one button Telegram draws for us the only foreign thing on the
+ * screen. Pre-6.1 hosts keep their theme colors rather than being left with a
+ * button we styled halfway.
+ */
+export const attachMainButton = (
+  webApp: TelegramWebApp,
+  text: string,
+  onClick: () => void,
+): (() => void) => {
+  if (webApp.isVersionAtLeast(MAIN_BUTTON_PARAMS_MIN_VERSION)) {
+    webApp.MainButton.setParams({ color: APP_PRIMARY_COLOR, text_color: APP_ON_PRIMARY_COLOR })
+  }
+  webApp.MainButton.setText(text).onClick(onClick).show()
+
+  return () => {
+    webApp.MainButton.offClick(onClick).hide()
   }
 }
 

@@ -1,12 +1,14 @@
 import type { CreateInviteDelivery } from "@praximo/domain"
 import type { QueryClient } from "@tanstack/react-query"
 import { queryOptions } from "@tanstack/react-query"
+import { deletionAdvancing } from "@/features/admin/workspace-deletion.ts"
 import {
   createAdminCoachInvite,
   type CreateInviteTransportResult,
   deleteAdminWorkspaceRequest,
   type DeleteWorkspaceTransportResult,
   loadAdminWorkspace,
+  loadAdminWorkspaceDeletion,
   loadAdminWorkspaces,
   prepareAdminCoachInviteShare,
   type PrepareShareTransportResult,
@@ -21,6 +23,7 @@ export const workspaceKeys = {
   all: ["admin", "workspaces"] as const,
   list: () => [...workspaceKeys.all, "list"] as const,
   detail: (workspaceId: string) => [...workspaceKeys.all, "detail", workspaceId] as const,
+  deletion: (workspaceId: string) => [...workspaceKeys.all, "deletion", workspaceId] as const,
 }
 
 export const adminWorkspaceListQuery = (initData: string) =>
@@ -35,6 +38,45 @@ export const adminWorkspaceDetailQuery = (initData: string, workspaceId: string)
     queryKey: workspaceKeys.detail(workspaceId),
     queryFn: () => loadAdminWorkspace({ data: { initData, workspaceId } }),
     retry: false,
+  })
+
+/**
+ * Fast enough that a stage settling reads as the sheet reacting to the server
+ * rather than as a page refreshing, slow enough that a pipeline dominated by
+ * two Telegram round-trips is not polled dozens of times per stage.
+ */
+const ActiveDeletionPollMs = 800
+
+/**
+ * A deletion nobody is driving can still change — another session may resume
+ * it — so it is watched, just not at the pace of one that is moving. This is
+ * also what re-renders the screen when the pipeline goes quiet, so a stalled
+ * attempt starts reading as paused within a few seconds rather than looking
+ * busy until the admin navigates away.
+ */
+const PausedDeletionPollMs = 4_000
+
+/**
+ * The deletion receipt for one workspace (#110). While no receipt exists there
+ * is nothing to poll, so an ordinary workspace costs exactly one read; the
+ * cadence past that follows what the receipt itself says is happening.
+ */
+export const adminWorkspaceDeletionQuery = (
+  initData: string,
+  workspaceId: string,
+  options?: { readonly watch?: boolean },
+) =>
+  queryOptions({
+    queryKey: workspaceKeys.deletion(workspaceId),
+    queryFn: () => loadAdminWorkspaceDeletion({ data: { initData, workspaceId } }),
+    retry: false,
+    refetchInterval: (query) => {
+      const receipt = query.state.data
+      const watching = options?.watch === true
+      if (receipt === null || receipt === undefined) return watching ? ActiveDeletionPollMs : false
+      if (receipt.state === "completed") return false
+      return deletionAdvancing(receipt, watching) ? ActiveDeletionPollMs : PausedDeletionPollMs
+    },
   })
 
 export interface CreateCoachInviteMutationInput {
@@ -133,15 +175,20 @@ export const deleteWorkspaceMutation = (initData: string, queryClient: QueryClie
   mutationFn: ({
     workspaceId,
     requestId,
-    confirmationName,
   }: {
     readonly workspaceId: string
     readonly requestId: string
-    readonly confirmationName: string
   }): Promise<DeleteWorkspaceTransportResult> =>
-    deleteAdminWorkspaceRequest({
-      data: { initData, workspaceId, requestId, confirmationName },
-    }),
+    deleteAdminWorkspaceRequest({ data: { initData, workspaceId, requestId } }),
+  onSettled: (
+    _result: DeleteWorkspaceTransportResult | undefined,
+    _error: unknown,
+    variables: { readonly workspaceId: string },
+  ) => {
+    // Whatever the attempt did — finished, stalled on a stage, or died — the
+    // receipt is the only honest account of it, so it is refetched either way.
+    void queryClient.invalidateQueries({ queryKey: workspaceKeys.deletion(variables.workspaceId) })
+  },
   onSuccess: (
     result: DeleteWorkspaceTransportResult,
     variables: { readonly workspaceId: string },

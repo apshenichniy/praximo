@@ -49,8 +49,16 @@ export const stageState = (
     ? { label: statusLabel[botStatus], tone: botTones[botStatus] }
     : onboardingStates[stage]
 
+/**
+ * A deletion in flight outranks every other state (#110): the row's own future
+ * is being removed, so where the coach stood on onboarding stopped mattering
+ * the moment it started. Rose rather than muted — an interrupted deletion is
+ * the one row on this screen that wants a hand.
+ */
 export const coachRowState = (coach: AdminSurface.CoachListEntry): CoachRowState =>
-  stageState(coach.onboarding?.stage, coach.botStatus)
+  coach.deleting === true
+    ? { label: "Deleting…", tone: "rose" }
+    : stageState(coach.onboarding?.stage, coach.botStatus)
 
 const relative = (value: string | undefined): string | undefined =>
   value === undefined ? undefined : formatRelativeTime(value)
@@ -69,6 +77,9 @@ const prefixed = (noun: string, value: string | undefined): string | undefined =
  * timestamp name its own.
  */
 export const coachRowTime = (coach: AdminSurface.CoachListEntry): string | undefined => {
+  // A deleting row has one thing to say and a Resume beside it; a timestamp
+  // from the life the workspace is losing would only compete with both.
+  if (coach.deleting === true) return undefined
   const onboarding = coach.onboarding
   if (onboarding === undefined) {
     return coach.lastActivityAt === undefined

@@ -185,3 +185,12 @@ export const deleteAdminWorkspace = async (
     ),
   )
 }
+
+export const getAdminWorkspaceDeletion = async (initData: string, workspaceId: string) => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(AdminSurface.Service, (service) =>
+      service.getWorkspaceDeletion(initData, workspaceId),
+    ),
+  )
+}

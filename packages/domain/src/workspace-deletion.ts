@@ -6,9 +6,14 @@ export const WorkspaceDeletionRequestId = Schema.String.check(Schema.isUUID(4)).
 )
 export type WorkspaceDeletionRequestId = typeof WorkspaceDeletionRequestId.Type
 
+/**
+ * A deletion attempt carries nothing but its own identity (#110). The gesture
+ * that authorises it — two sheets and an armed countdown — happens on the
+ * client; replaying the same `requestId` resumes that one attempt rather than
+ * starting a second, which is what makes an interrupted deletion resumable.
+ */
 export const DeleteWorkspaceInput = Schema.Struct({
   requestId: WorkspaceDeletionRequestId,
-  confirmationName: Schema.String,
 })
 export interface DeleteWorkspaceInput extends Schema.Schema.Type<typeof DeleteWorkspaceInput> {}
 
