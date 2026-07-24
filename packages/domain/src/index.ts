@@ -17,8 +17,11 @@ export {
 } from "./workspace-deletion.ts"
 export {
   CoachLanguage,
+  CreateInviteDelivery,
   CreateWorkspaceInput,
   CreateWorkspaceRequestId,
+  InviteDeliveryChannel,
+  InviteDeliveryRecord,
   UpdateWorkspaceProfileInput,
   WorkspaceAvatarIntent,
   WorkspaceDescriptionMaxLength,

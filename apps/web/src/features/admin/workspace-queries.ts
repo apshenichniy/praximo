@@ -1,8 +1,9 @@
+import type { CreateInviteDelivery } from "@praximo/domain"
 import type { QueryClient } from "@tanstack/react-query"
 import { queryOptions } from "@tanstack/react-query"
 import {
-  createAdminWorkspaceFromForm,
-  type CreateWorkspaceTransportResult,
+  createAdminCoachInvite,
+  type CreateInviteTransportResult,
   deleteAdminWorkspaceRequest,
   type DeleteWorkspaceTransportResult,
   loadAdminWorkspace,
@@ -34,29 +35,21 @@ export const adminWorkspaceDetailQuery = (initData: string, workspaceId: string)
     retry: false,
   })
 
-export interface CreateWorkspaceMutationInput {
+export interface CreateCoachInviteMutationInput {
   readonly input: {
     readonly requestId: string
     readonly name: string
-    readonly coachLanguage: string
-    readonly description: string
-    readonly shortDescription: string
   }
-  readonly avatar?: File
+  readonly delivery: CreateInviteDelivery
 }
 
-export const createWorkspaceMutation = (initData: string, queryClient: QueryClient) => ({
+export const createCoachInviteMutation = (initData: string, queryClient: QueryClient) => ({
   mutationFn: async ({
     input,
-    avatar,
-  }: CreateWorkspaceMutationInput): Promise<CreateWorkspaceTransportResult> => {
-    const data = new FormData()
-    data.set("initData", initData)
-    data.set("input", JSON.stringify(input))
-    if (avatar !== undefined) data.set("avatar", avatar)
-    return createAdminWorkspaceFromForm({ data })
-  },
-  onSuccess: (result: CreateWorkspaceTransportResult) => {
+    delivery,
+  }: CreateCoachInviteMutationInput): Promise<CreateInviteTransportResult> =>
+    createAdminCoachInvite({ data: { initData, input, delivery } }),
+  onSuccess: (result: CreateInviteTransportResult) => {
     if (!result.ok) return
     queryClient.setQueryData<ReadonlyArray<typeof result.value.workspace>>(
       workspaceKeys.list(),

@@ -17,7 +17,8 @@ export type BotConnectionStatus = typeof BotConnectionStatus.Type
 
 export const ListItem = Schema.Struct({
   id: WorkspaceId,
-  name: Schema.NonEmptyString,
+  // "" is a real value: an invite-first workspace not yet labeled or claimed.
+  name: Schema.String,
   botStatus: BotConnectionStatus,
   botUsername: Schema.optionalKey(Schema.NonEmptyString),
   hasCustomAvatar: Schema.Boolean,
@@ -26,7 +27,7 @@ export interface ListItem extends Schema.Schema.Type<typeof ListItem> {}
 
 export const Detail = Schema.Struct({
   id: WorkspaceId,
-  name: Schema.NonEmptyString,
+  name: Schema.String,
   avatarR2Key: Schema.optionalKey(Schema.NonEmptyString),
   description: Schema.optionalKey(Schema.String),
   shortDescription: Schema.optionalKey(Schema.String),

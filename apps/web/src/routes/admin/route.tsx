@@ -4,6 +4,7 @@ import { AdminLoading } from "@/components/admin-loading.tsx"
 import { AdminNotFound } from "@/components/admin-not-found.tsx"
 import { AdminShell } from "@/components/admin-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
+import { Toaster } from "@/components/ui/toast.tsx"
 import { resolveAdminInitData } from "@/features/admin/admin-init-data.ts"
 import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
 
@@ -33,7 +34,9 @@ function AdminLayout() {
   return (
     <AdminShell>
       <TelegramFullscreen />
-      <Outlet />
+      <Toaster>
+        <Outlet />
+      </Toaster>
     </AdminShell>
   )
 }

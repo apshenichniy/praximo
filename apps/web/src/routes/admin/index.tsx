@@ -3,7 +3,8 @@ import { createFileRoute, getRouteApi } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
-import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
+import { toast } from "@/components/ui/toast.tsx"
+import { takeAdminNotice } from "@/features/admin/admin-notice.ts"
 import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
 import { WorkspaceSearch } from "@/features/admin/components/workspace-search.tsx"
 import {
@@ -24,7 +25,6 @@ function AdminHome() {
   const { initData } = adminRoute.useLoaderData()
   const { data: workspaces } = useSuspenseQuery(adminWorkspaceListQuery(initData))
   const [search, setSearch] = useState("")
-  const [deletionMessage, setDeletionMessage] = useState<string>()
   const normalizedSearch = search.trim().toLocaleLowerCase()
   const filteredWorkspaces = useMemo(
     () =>
@@ -39,21 +39,18 @@ function AdminHome() {
   )
 
   useEffect(() => {
-    const message = sessionStorage.getItem("praximo.workspaceDeleted")
-    if (message === null) return
-    sessionStorage.removeItem("praximo.workspaceDeleted")
-    setDeletionMessage(message)
+    const message = takeAdminNotice()
+    if (message === undefined) return
+    // Deferred a tick: on a fresh page load this child effect runs before the
+    // layout's Toaster has subscribed, and an immediate add would be dropped.
+    // Deliberately not cancelled on cleanup — the notice is consumed above, so
+    // a StrictMode re-run cannot re-read it and would lose the toast entirely.
+    setTimeout(() => toast.add({ title: message, type: "success" }), 0)
   }, [])
 
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
       <AdminHero />
-
-      {deletionMessage === undefined ? null : (
-        <Alert className="mt-8">
-          <AlertDescription>{deletionMessage}</AlertDescription>
-        </Alert>
-      )}
 
       <div className="mt-10">
         <WorkspaceSearch value={search} onChange={setSearch} />

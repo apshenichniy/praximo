@@ -3,6 +3,7 @@ import {
   CoachLanguage,
   CoachOnboardingInviteCode,
   CoachOnboardingInviteCodePattern,
+  CoachOnboardingInviteId,
 } from "@praximo/domain"
 import { eq } from "drizzle-orm"
 import { Effect, Layer, Result } from "effect"
@@ -138,6 +139,57 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
       expect((yield* repo.findInvite(expiredOutcome.aggregate.invite.id)).invite.status).toBe(
         "expired",
       )
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("creates unnamed workspaces and records the last delivery on the invite", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachOnboardingRepo.Service
+      const { client } = yield* Database.Service
+      const outcome = yield* repo.createOrGet({
+        requestId: requestId(),
+        requestFingerprint: "unnamed-invite",
+        issuedByTelegramId,
+        now: new Date("2026-07-24T10:00:00.000Z"),
+      })
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client
+            .delete(schema.workspace)
+            .where(eq(schema.workspace.id, outcome.aggregate.workspace.id)),
+        ).pipe(Effect.asVoid),
+      )
+
+      expect(outcome.aggregate.workspace.name).toBe("")
+      expect(outcome.aggregate.owner.language).toBe("en")
+      expect(outcome.aggregate.invite.delivery).toBeUndefined()
+
+      yield* repo.recordDelivery(outcome.aggregate.invite.id, {
+        channel: "copy",
+        language: CoachLanguage.make("uk"),
+      })
+      const recorded = yield* repo.findInvite(outcome.aggregate.invite.id)
+      expect(recorded.invite.delivery).toEqual({ channel: "copy", language: "uk" })
+
+      yield* repo.recordDelivery(outcome.aggregate.invite.id, {
+        channel: "telegram",
+        language: CoachLanguage.make("en"),
+      })
+      expect((yield* repo.findInvite(outcome.aggregate.invite.id)).invite.delivery).toEqual({
+        channel: "telegram",
+        language: "en",
+      })
+
+      const missing = yield* Effect.flip(
+        repo.recordDelivery(CoachOnboardingInviteId.make("ci_00000000000000000000000000"), {
+          channel: "copy",
+          language: CoachLanguage.make("en"),
+        }),
+      )
+      expect(missing).toMatchObject({
+        _tag: "CoachOnboardingRepo.InviteUnavailable",
+        reason: "not-found",
+      })
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
