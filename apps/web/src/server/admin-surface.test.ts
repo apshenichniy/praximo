@@ -267,6 +267,8 @@ const unusedDeletionRepoLayer = Layer.succeed(
   WorkspaceDeletionRepo.Service,
   WorkspaceDeletionRepo.Service.of({
     prepare: Effect.fn("WorkspaceDeletionRepo.Test.prepare")(() => Effect.die("unused")),
+    claim: Effect.fn("WorkspaceDeletionRepo.Test.claim")(() => Effect.die("unused")),
+    release: Effect.fn("WorkspaceDeletionRepo.Test.release")(() => Effect.die("unused")),
     markPipeline: Effect.fn("WorkspaceDeletionRepo.Test.markPipeline")(() => Effect.die("unused")),
     markFarewell: Effect.fn("WorkspaceDeletionRepo.Test.markFarewell")(() => Effect.die("unused")),
     markBotReleased: Effect.fn("WorkspaceDeletionRepo.Test.markBotReleased")(() =>
