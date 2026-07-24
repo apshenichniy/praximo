@@ -79,7 +79,10 @@ const errorText = (tag: string, reason?: string): string => {
   ) {
     return "This setup link is invalid. Ask your Praximo administrator for a fresh link."
   }
-  if (reason === "expired") {
+  if (reason === "expired" || reason === "cancelled") {
+    // A cancelled invite reads as expired on purpose: the coach only needs to
+    // know the link is dead and where a fresh one comes from, not that an
+    // administrator reset it.
     return "This setup link has expired. Ask your Praximo administrator to reissue it."
   }
   if (reason === "used" || reason === "claimed") {

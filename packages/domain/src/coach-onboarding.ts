@@ -5,8 +5,33 @@ export const CoachOnboardingInviteId = Schema.NonEmptyString.pipe(
 )
 export type CoachOnboardingInviteId = typeof CoachOnboardingInviteId.Type
 
-export const CoachOnboardingInviteStatus = Schema.Literals(["pending", "used", "expired"])
+/**
+ * The invite's own lifecycle, deliberately separate from provisioning and from
+ * onboarding completion (#112). `accepted` is the exclusive claim taken by the
+ * first valid `/start`: it never auto-expires, so the seven-day TTL only ever
+ * applies to a `pending` invite. `used` is set when the coach bot connects.
+ */
+export const CoachOnboardingInviteStatus = Schema.Literals([
+  "pending",
+  "accepted",
+  "used",
+  "expired",
+  "cancelled",
+])
 export type CoachOnboardingInviteStatus = typeof CoachOnboardingInviteStatus.Type
+
+/**
+ * Why a still-claimable invite was cancelled. Terminal in every case — the old
+ * code never resolves again. `reset_by_admin` and `reissued` differ only in
+ * whether a replacement invite was minted in the same gesture.
+ */
+export const CoachOnboardingInviteCancellationReason = Schema.Literals([
+  "declined_by_coach",
+  "reset_by_admin",
+  "reissued",
+])
+export type CoachOnboardingInviteCancellationReason =
+  typeof CoachOnboardingInviteCancellationReason.Type
 
 /**
  * The public start-param code carried by `t.me/{bot}?start=ws_{code}`. A base32

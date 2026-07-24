@@ -170,7 +170,9 @@ export const runReset = async (config: ResetConfig): Promise<void> => {
         if (step === "admins") {
           yield* seedAdmins(adminTelegramIds)
         } else {
-          yield* seedDemoWorkspaces()
+          // Fixtures are issued by — and one is claimed by — the first seeded
+          // admin, so the admin-as-coach action has something to point at.
+          yield* seedDemoWorkspaces(new Date(), adminTelegramIds[0] ?? "700000000")
         }
       }
     }).pipe(

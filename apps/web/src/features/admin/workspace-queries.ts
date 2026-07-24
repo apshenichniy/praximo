@@ -54,15 +54,8 @@ export const createCoachInviteMutation = (initData: string, queryClient: QueryCl
     createAdminCoachInvite({ data: { initData, input, delivery } }),
   onSuccess: (result: CreateInviteTransportResult) => {
     if (!result.ok) return
-    queryClient.setQueryData<ReadonlyArray<typeof result.value.workspace>>(
-      workspaceKeys.list(),
-      (current = []) => {
-        const withoutCreated = current.filter(
-          (workspace) => workspace.id !== result.value.workspace.id,
-        )
-        return [...withoutCreated, result.value.workspace]
-      },
-    )
+    // The pending card is derived server-side from the whole aggregate, so the
+    // list is refetched rather than patched with a half-shaped optimistic row.
     void queryClient.invalidateQueries({ queryKey: workspaceKeys.list() })
   },
 })
@@ -93,22 +86,7 @@ const updateWorkspaceCaches = (
   workspace: AdminSurface.WorkspaceDetail,
 ) => {
   queryClient.setQueryData(workspaceKeys.detail(workspace.id), workspace)
-  queryClient.setQueryData<ReadonlyArray<AdminSurface.CreateResult["workspace"]>>(
-    workspaceKeys.list(),
-    (current) =>
-      current?.map((item) => {
-        if (item.id !== workspace.id) return item
-        const updated = {
-          id: item.id,
-          name: workspace.name,
-          botStatus: workspace.botStatus,
-          hasCustomAvatar: workspace.hasCustomAvatar,
-        }
-        return workspace.botUsername === undefined
-          ? updated
-          : { ...updated, botUsername: workspace.botUsername }
-      }),
-  )
+  void queryClient.invalidateQueries({ queryKey: workspaceKeys.list() })
 }
 
 export interface UpdateWorkspaceProfileMutationInput {
@@ -198,9 +176,16 @@ export const deleteWorkspaceMutation = (initData: string, queryClient: QueryClie
   ) => {
     if (!result.ok) return
     queryClient.removeQueries({ queryKey: workspaceKeys.detail(variables.workspaceId) })
-    queryClient.setQueryData<ReadonlyArray<AdminSurface.CreateResult["workspace"]>>(
-      workspaceKeys.list(),
-      (current) => current?.filter((workspace) => workspace.id !== variables.workspaceId),
+    // Drop the deleted row immediately so the list does not flash it back while
+    // the refetch is in flight.
+    queryClient.setQueryData<AdminSurface.CoachListResult>(workspaceKeys.list(), (current) =>
+      current === undefined
+        ? current
+        : {
+            ...current,
+            coaches: current.coaches.filter((coach) => coach.id !== variables.workspaceId),
+          },
     )
+    void queryClient.invalidateQueries({ queryKey: workspaceKeys.list() })
   },
 })

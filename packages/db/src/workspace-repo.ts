@@ -1,8 +1,10 @@
 import {
   CoachLanguage,
+  CoachOnboardingInviteCancellationReason,
   CoachOnboardingInviteCode,
   CoachOnboardingInviteId,
   CoachOnboardingInviteStatus,
+  InviteDeliveryRecord,
   Workspace,
   WorkspaceId,
   WorkspaceNotFound,
@@ -15,6 +17,26 @@ import * as schema from "./schema.ts"
 export const BotConnectionStatus = Schema.Literals(["awaiting-setup", "connected", "needs-relink"])
 export type BotConnectionStatus = typeof BotConnectionStatus.Type
 
+/**
+ * The onboarding state the coaches list renders from (#107): the invite's own
+ * lifecycle plus the two facts that outlive it — the connected bot and the
+ * coach's terms acceptance. Everything the list shows is derived from these, so
+ * the surface never issues a follow-up query per row.
+ */
+export const ListInvite = Schema.Struct({
+  id: CoachOnboardingInviteId,
+  code: CoachOnboardingInviteCode,
+  status: CoachOnboardingInviteStatus,
+  issuedAt: Schema.instanceOf(Date),
+  expiresAt: Schema.instanceOf(Date),
+  acceptedAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  acceptedByTelegramId: Schema.optionalKey(Schema.NonEmptyString),
+  cancelledAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  cancellationReason: Schema.optionalKey(CoachOnboardingInviteCancellationReason),
+  delivery: Schema.optionalKey(InviteDeliveryRecord),
+})
+export interface ListInvite extends Schema.Schema.Type<typeof ListInvite> {}
+
 export const ListItem = Schema.Struct({
   id: WorkspaceId,
   // "" is a real value: an invite-first workspace not yet labeled or claimed.
@@ -22,6 +44,11 @@ export const ListItem = Schema.Struct({
   botStatus: BotConnectionStatus,
   botUsername: Schema.optionalKey(Schema.NonEmptyString),
   hasCustomAvatar: Schema.Boolean,
+  /** Bound only once the coach's bot connects — not at invite acceptance. */
+  ownerTelegramUserId: Schema.optionalKey(Schema.NonEmptyString),
+  termsAcceptedAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  lastActivityAt: Schema.optionalKey(Schema.instanceOf(Date)),
+  invite: Schema.optionalKey(ListInvite),
 })
 export interface ListItem extends Schema.Schema.Type<typeof ListItem> {}
 
@@ -40,15 +67,7 @@ export const Detail = Schema.Struct({
   lastActivityAt: Schema.optionalKey(Schema.instanceOf(Date)),
   botStatus: BotConnectionStatus,
   botUsername: Schema.optionalKey(Schema.NonEmptyString),
-  invite: Schema.optionalKey(
-    Schema.Struct({
-      id: CoachOnboardingInviteId,
-      code: CoachOnboardingInviteCode,
-      status: CoachOnboardingInviteStatus,
-      issuedAt: Schema.instanceOf(Date),
-      expiresAt: Schema.instanceOf(Date),
-    }),
-  ),
+  invite: Schema.optionalKey(ListInvite),
 })
 export interface Detail extends Schema.Schema.Type<typeof Detail> {}
 
@@ -86,6 +105,17 @@ export class UpdateConflict extends Schema.TaggedErrorClass<UpdateConflict>()(
   },
 ) {}
 
+/**
+ * `bot.connection_status` is snake_case in Postgres and kebab-case in the
+ * domain; a missing bot row reads as the pre-provisioning state.
+ */
+const botConnectionStatus = (value: string | null): BotConnectionStatus =>
+  value === null || value === "awaiting_setup"
+    ? "awaiting-setup"
+    : value === "needs_relink"
+      ? "needs-relink"
+      : "connected"
+
 const decodeWorkspace = Schema.decodeUnknownEffect(Workspace)
 const decodeList = Schema.decodeUnknownEffect(Schema.Array(ListItem))
 const decodeDetail = Schema.decodeUnknownEffect(Detail)
@@ -121,6 +151,47 @@ export const layer = Layer.effect(
       return workspace
     })
 
+    /**
+     * The owner member and the newest invite are one-per-workspace *in intent*
+     * but not by constraint, so both are ranked and joined at rank 1 rather than
+     * joined directly — a stray second row would otherwise silently duplicate a
+     * coach in the list. Ranking keeps the whole aggregate in a single query.
+     */
+    const rankedOwner = client
+      .select({
+        workspaceId: schema.member.workspaceId,
+        telegramUserId: schema.member.telegramUserId,
+        termsAcceptedAt: schema.member.termsAcceptedAt,
+        lastActivityAt: schema.member.lastActivityAt,
+        rank: sql<number>`row_number() over (
+          partition by ${schema.member.workspaceId} order by ${schema.member.createdAt} asc
+        )`.as("owner_rank"),
+      })
+      .from(schema.member)
+      .where(eq(schema.member.role, "owner"))
+      .as("ranked_owner")
+
+    const rankedInvite = client
+      .select({
+        workspaceId: schema.coachOnboardingInvite.workspaceId,
+        id: schema.coachOnboardingInvite.id,
+        code: schema.coachOnboardingInvite.code,
+        status: schema.coachOnboardingInvite.status,
+        issuedAt: schema.coachOnboardingInvite.issuedAt,
+        expiresAt: schema.coachOnboardingInvite.expiresAt,
+        acceptedAt: schema.coachOnboardingInvite.acceptedAt,
+        acceptedByTelegramId: schema.coachOnboardingInvite.acceptedByTelegramId,
+        cancelledAt: schema.coachOnboardingInvite.cancelledAt,
+        cancellationReason: schema.coachOnboardingInvite.cancellationReason,
+        delivery: schema.coachOnboardingInvite.delivery,
+        rank: sql<number>`row_number() over (
+          partition by ${schema.coachOnboardingInvite.workspaceId}
+          order by ${schema.coachOnboardingInvite.issuedAt} desc
+        )`.as("invite_rank"),
+      })
+      .from(schema.coachOnboardingInvite)
+      .as("ranked_invite")
+
     const list = Effect.fn("WorkspaceRepo.list")(function* () {
       const rows = yield* Effect.tryPromise({
         try: () =>
@@ -131,35 +202,70 @@ export const layer = Layer.effect(
               connectionStatus: schema.bot.connectionStatus,
               botUsername: schema.bot.username,
               avatarR2Key: schema.workspace.avatarR2Key,
+              ownerTelegramUserId: rankedOwner.telegramUserId,
+              termsAcceptedAt: rankedOwner.termsAcceptedAt,
+              lastActivityAt: rankedOwner.lastActivityAt,
+              inviteId: rankedInvite.id,
+              inviteCode: rankedInvite.code,
+              inviteStatus: rankedInvite.status,
+              inviteIssuedAt: rankedInvite.issuedAt,
+              inviteExpiresAt: rankedInvite.expiresAt,
+              inviteAcceptedAt: rankedInvite.acceptedAt,
+              inviteAcceptedByTelegramId: rankedInvite.acceptedByTelegramId,
+              inviteCancelledAt: rankedInvite.cancelledAt,
+              inviteCancellationReason: rankedInvite.cancellationReason,
+              inviteDelivery: rankedInvite.delivery,
             })
             .from(schema.workspace)
             .leftJoin(schema.bot, eq(schema.bot.workspaceId, schema.workspace.id))
+            .leftJoin(
+              rankedOwner,
+              and(eq(rankedOwner.workspaceId, schema.workspace.id), eq(rankedOwner.rank, 1)),
+            )
+            .leftJoin(
+              rankedInvite,
+              and(eq(rankedInvite.workspaceId, schema.workspace.id), eq(rankedInvite.rank, 1)),
+            )
             .orderBy(asc(schema.workspace.name)),
         catch: (cause) => new QueryFailed({ operation: "list", cause }),
       })
 
-      const listItems = rows.map((row) => {
-        const item: {
-          id: string
-          name: string
-          botStatus: string
-          botUsername?: string
-          hasCustomAvatar: boolean
-        } = {
-          id: row.id,
-          name: row.name,
-          botStatus:
-            row.connectionStatus === null || row.connectionStatus === "awaiting_setup"
-              ? "awaiting-setup"
-              : row.connectionStatus === "needs_relink"
-                ? "needs-relink"
-                : row.connectionStatus,
-          hasCustomAvatar: row.avatarR2Key !== null,
-        }
-
-        if (row.botUsername !== null) item.botUsername = row.botUsername
-        return item
-      })
+      const listItems = rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        botStatus: botConnectionStatus(row.connectionStatus),
+        ...(row.botUsername === null ? {} : { botUsername: row.botUsername }),
+        hasCustomAvatar: row.avatarR2Key !== null,
+        ...(row.ownerTelegramUserId === null
+          ? {}
+          : { ownerTelegramUserId: row.ownerTelegramUserId }),
+        ...(row.termsAcceptedAt === null ? {} : { termsAcceptedAt: row.termsAcceptedAt }),
+        ...(row.lastActivityAt === null ? {} : { lastActivityAt: row.lastActivityAt }),
+        ...(row.inviteId === null ||
+        row.inviteCode === null ||
+        row.inviteStatus === null ||
+        row.inviteIssuedAt === null ||
+        row.inviteExpiresAt === null
+          ? {}
+          : {
+              invite: {
+                id: row.inviteId,
+                code: row.inviteCode,
+                status: row.inviteStatus,
+                issuedAt: row.inviteIssuedAt,
+                expiresAt: row.inviteExpiresAt,
+                ...(row.inviteAcceptedAt === null ? {} : { acceptedAt: row.inviteAcceptedAt }),
+                ...(row.inviteAcceptedByTelegramId === null
+                  ? {}
+                  : { acceptedByTelegramId: row.inviteAcceptedByTelegramId }),
+                ...(row.inviteCancelledAt === null ? {} : { cancelledAt: row.inviteCancelledAt }),
+                ...(row.inviteCancellationReason === null
+                  ? {}
+                  : { cancellationReason: row.inviteCancellationReason }),
+                ...(row.inviteDelivery === null ? {} : { delivery: row.inviteDelivery }),
+              },
+            }),
+      }))
 
       return yield* decodeList(listItems).pipe(
         Effect.mapError((cause) => new QueryFailed({ operation: "list.decode", cause })),
@@ -212,6 +318,11 @@ export const layer = Layer.effect(
               status: schema.coachOnboardingInvite.status,
               issuedAt: schema.coachOnboardingInvite.issuedAt,
               expiresAt: schema.coachOnboardingInvite.expiresAt,
+              acceptedAt: schema.coachOnboardingInvite.acceptedAt,
+              acceptedByTelegramId: schema.coachOnboardingInvite.acceptedByTelegramId,
+              cancelledAt: schema.coachOnboardingInvite.cancelledAt,
+              cancellationReason: schema.coachOnboardingInvite.cancellationReason,
+              delivery: schema.coachOnboardingInvite.delivery,
             })
             .from(schema.coachOnboardingInvite)
             .where(eq(schema.coachOnboardingInvite.workspaceId, id))
@@ -220,12 +331,6 @@ export const layer = Layer.effect(
         catch: (cause) => new QueryFailed({ operation: "getDetail.invite", cause }),
       })
       const invite = inviteRows[0]
-      const botStatus: BotConnectionStatus =
-        row.connectionStatus === null || row.connectionStatus === "awaiting_setup"
-          ? "awaiting-setup"
-          : row.connectionStatus === "needs_relink"
-            ? "needs-relink"
-            : "connected"
 
       return yield* decodeDetail({
         id: row.id,
@@ -242,7 +347,7 @@ export const layer = Layer.effect(
         ...(row.termsAcceptedAt === null ? {} : { termsAcceptedAt: row.termsAcceptedAt }),
         ...(row.lastLoginAt === null ? {} : { lastLoginAt: row.lastLoginAt }),
         ...(row.lastActivityAt === null ? {} : { lastActivityAt: row.lastActivityAt }),
-        botStatus,
+        botStatus: botConnectionStatus(row.connectionStatus),
         ...(row.botUsername === null ? {} : { botUsername: row.botUsername }),
         ...(invite === undefined
           ? {}
@@ -253,6 +358,15 @@ export const layer = Layer.effect(
                 status: invite.status,
                 issuedAt: invite.issuedAt,
                 expiresAt: invite.expiresAt,
+                ...(invite.acceptedAt === null ? {} : { acceptedAt: invite.acceptedAt }),
+                ...(invite.acceptedByTelegramId === null
+                  ? {}
+                  : { acceptedByTelegramId: invite.acceptedByTelegramId }),
+                ...(invite.cancelledAt === null ? {} : { cancelledAt: invite.cancelledAt }),
+                ...(invite.cancellationReason === null
+                  ? {}
+                  : { cancellationReason: invite.cancellationReason }),
+                ...(invite.delivery === null ? {} : { delivery: invite.delivery }),
               },
             }),
       }).pipe(Effect.mapError((cause) => new QueryFailed({ operation: "getDetail.decode", cause })))

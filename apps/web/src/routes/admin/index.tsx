@@ -1,41 +1,51 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, getRouteApi } from "@tanstack/react-router"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
 import { toast } from "@/components/ui/toast.tsx"
 import { takeAdminNotice } from "@/features/admin/admin-notice.ts"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
-import { WorkspaceSearch } from "@/features/admin/components/workspace-search.tsx"
 import {
-  CreateWorkspaceLink,
-  WorkspaceListCard,
-  WorkspaceListEmpty,
-  WorkspaceListItem,
-  WorkspaceListNoMatches,
-} from "@/features/admin/components/workspace-list.tsx"
+  CoachListCard,
+  CoachListEmpty,
+  CoachRow,
+  InviteCoachLink,
+  ViewerCoachCard,
+} from "@/features/admin/components/coach-list.tsx"
+import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
 import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
+import { loadTelegramWebApp } from "@/lib/telegram.ts"
 
 export const Route = createFileRoute("/admin/")({ component: AdminHome })
 const adminRoute = getRouteApi("/admin")
+
+/**
+ * Open a `t.me` link without leaving the Mini App. Outside a Telegram host
+ * (local browser development) there is no bridge, so the link opens normally.
+ */
+const openInTelegram = async (link: string) => {
+  const webApp = await loadTelegramWebApp()
+  if (webApp === undefined) {
+    window.open(link, "_blank", "noopener,noreferrer")
+    return
+  }
+  webApp.openTelegramLink(link)
+}
 
 // Admin copy is English-only (admin-surface.md): the admin is the solo operator,
 // so the trilingual machinery that serves coaches never reaches these routes.
 function AdminHome() {
   const { initData } = adminRoute.useLoaderData()
-  const { data: workspaces } = useSuspenseQuery(adminWorkspaceListQuery(initData))
-  const [search, setSearch] = useState("")
-  const normalizedSearch = search.trim().toLocaleLowerCase()
-  const filteredWorkspaces = useMemo(
-    () =>
-      normalizedSearch
-        ? workspaces.filter(
-            (workspace) =>
-              workspace.name.toLocaleLowerCase().includes(normalizedSearch) ||
-              workspace.botUsername?.toLocaleLowerCase().includes(normalizedSearch),
-          )
-        : workspaces,
-    [normalizedSearch, workspaces],
+  const { data } = useSuspenseQuery(adminWorkspaceListQuery(initData))
+
+  // The server already returns onboarding first and active coaches A→Z; the
+  // split here is only about which heading each row lives under.
+  const { onboarding, active } = useMemo(
+    () => ({
+      onboarding: data.coaches.filter((coach) => coach.onboarding !== undefined),
+      active: data.coaches.filter((coach) => coach.onboarding === undefined),
+    }),
+    [data.coaches],
   )
 
   useEffect(() => {
@@ -52,25 +62,45 @@ function AdminHome() {
     <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
       <AdminHero />
 
-      <div className="mt-10">
-        <WorkspaceSearch value={search} onChange={setSearch} />
-      </div>
+      {data.viewerCoach === undefined ? null : (
+        <div className="mt-10">
+          <ViewerCoachCard
+            viewerCoach={data.viewerCoach}
+            onOpen={(link) => void openInTelegram(link)}
+          />
+        </div>
+      )}
 
-      <Section className="mt-10" aria-labelledby="workspaces-heading">
-        <SectionTitle id="workspaces-heading">Workspaces</SectionTitle>
+      {onboarding.length === 0 ? null : (
+        <Section className="mt-10" aria-labelledby="onboarding-heading">
+          <SectionTitle id="onboarding-heading">Setting up</SectionTitle>
+          <p className="text-muted-foreground mt-2 px-1 text-sm">
+            Invites and coaches who haven&rsquo;t finished onboarding.
+          </p>
+          <div className="mt-4">
+            <CoachListCard>
+              {onboarding.map((coach) => (
+                <CoachRow key={coach.id} coach={coach} />
+              ))}
+            </CoachListCard>
+          </div>
+        </Section>
+      )}
+
+      <Section
+        className={onboarding.length === 0 ? "mt-10" : undefined}
+        aria-labelledby="coaches-heading"
+      >
+        <SectionTitle id="coaches-heading">Coaches</SectionTitle>
         <div className="mt-4">
-          <WorkspaceListCard>
-            <CreateWorkspaceLink />
-            {workspaces.length === 0 ? (
-              <WorkspaceListEmpty />
-            ) : filteredWorkspaces.length === 0 ? (
-              <WorkspaceListNoMatches query={search.trim()} onClear={() => setSearch("")} />
+          <CoachListCard>
+            <InviteCoachLink />
+            {data.coaches.length === 0 ? (
+              <CoachListEmpty />
             ) : (
-              filteredWorkspaces.map((workspace) => (
-                <WorkspaceListItem key={workspace.id} workspace={workspace} />
-              ))
+              active.map((coach) => <CoachRow key={coach.id} coach={coach} />)
             )}
-          </WorkspaceListCard>
+          </CoachListCard>
         </div>
       </Section>
     </main>

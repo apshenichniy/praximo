@@ -1,0 +1,2 @@
+DROP INDEX "coach_onboarding_invite_one_pending_per_workspace_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "coach_onboarding_invite_one_pending_per_workspace_idx" ON "coach_onboarding_invite" ("workspace_id") WHERE "status" in ('pending', 'accepted');

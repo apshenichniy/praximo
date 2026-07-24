@@ -71,9 +71,16 @@ export const inviteStatusEnum = pgEnum("invite_status", ["pending", "accepted", 
 
 export const coachOnboardingInviteStatusEnum = pgEnum("coach_onboarding_invite_status", [
   "pending",
+  "accepted",
   "used",
   "expired",
+  "cancelled",
 ])
+
+export const coachOnboardingInviteCancellationReasonEnum = pgEnum(
+  "coach_onboarding_invite_cancellation_reason",
+  ["declined_by_coach", "reset_by_admin", "reissued"],
+)
 
 export const coachBotProvisioningStatusEnum = pgEnum("coach_bot_provisioning_status", [
   "requested",
@@ -183,13 +190,24 @@ export const coachOnboardingInvite = pgTable(
     status: coachOnboardingInviteStatusEnum("status").notNull().default("pending"),
     issuedAt: timestamp("issued_at", { withTimezone: true, mode: "date" }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    // The exclusive claim taken by the first valid `/start` (#112). The coach's
+    // Telegram identity lands here well before `member.telegram_user_id`, which
+    // is only bound once their bot actually connects.
+    acceptedByTelegramId: text("accepted_by_telegram_id"),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true, mode: "date" }),
     usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true, mode: "date" }),
+    cancellationReason: coachOnboardingInviteCancellationReasonEnum("cancellation_reason"),
   },
   (t) => [
     index("coach_onboarding_invite_workspace_id_idx").on(t.workspaceId),
+    // At most one claimable invite per workspace: an accepted claim occupies the
+    // same slot a pending one did, so a reissue must cancel before it inserts.
+    // Split from the enum migration on purpose — Postgres refuses to use a value
+    // added by `ALTER TYPE ... ADD VALUE` inside the same transaction.
     uniqueIndex("coach_onboarding_invite_one_pending_per_workspace_idx")
       .on(t.workspaceId)
-      .where(sql`${t.status} = 'pending'`),
+      .where(sql`${t.status} in ('pending', 'accepted')`),
   ],
 )
 

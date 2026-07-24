@@ -5,6 +5,7 @@ export {
   CoachOnboardingInviteCodeAlphabet,
   CoachOnboardingInviteCodeLength,
   CoachOnboardingInviteCodePattern,
+  CoachOnboardingInviteCancellationReason,
   CoachOnboardingInviteId,
   CoachOnboardingInviteStatus,
 } from "./coach-onboarding.ts"

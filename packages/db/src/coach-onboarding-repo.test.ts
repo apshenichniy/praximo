@@ -295,9 +295,12 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
       expect(reissued.invite.expiresAt.getTime() - reissued.invite.issuedAt.getTime()).toBe(
         InviteTtlMilliseconds,
       )
-      expect((yield* repo.findInvite(created.aggregate.invite.id)).invite.status).toBe("expired")
+      const superseded = (yield* repo.findInvite(created.aggregate.invite.id)).invite
+      expect(superseded.status).toBe("cancelled")
+      expect(superseded.cancellationReason).toBe("reissued")
+      expect(superseded.cancelledAt).toEqual(new Date("2026-07-24T18:00:00.000Z"))
       // The new code resolves; the superseded code still resolves to its (now
-      // expired) invite row — reissue expires, it does not delete.
+      // cancelled) invite row — reissue cancels, it does not delete.
       expect(yield* repo.resolveCode(reissued.invite.code)).toBe(reissued.invite.id)
       expect(yield* repo.resolveCode(created.aggregate.invite.code)).toBe(
         created.aggregate.invite.id,
@@ -326,6 +329,155 @@ describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
         (yield* repo.verifyPending(reissued.invite.id, new Date("2026-07-24T18:00:03.000Z"))).invite
           .id,
       ).toBe(reissued.invite.id)
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("resets an accepted claim and fences the provisioning attempt behind it", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachOnboardingRepo.Service
+      const { client } = yield* Database.Service
+      const created = yield* repo.createOrGet({
+        requestId: requestId(),
+        requestFingerprint: "reset-accepted",
+        name: "Reset Coaching",
+        coachLanguage: CoachLanguage.make("en"),
+        issuedByTelegramId,
+        now: new Date("2026-07-23T18:00:00.000Z"),
+      })
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client
+            .delete(schema.workspace)
+            .where(eq(schema.workspace.id, created.aggregate.workspace.id)),
+        ).pipe(Effect.asVoid),
+      )
+
+      // Stand in for the `/start` acceptance transition #106 owns.
+      yield* Effect.promise(() =>
+        client
+          .update(schema.coachOnboardingInvite)
+          .set({
+            status: "accepted",
+            acceptedByTelegramId: "800000009",
+            acceptedAt: new Date("2026-07-23T19:00:00.000Z"),
+          })
+          .where(eq(schema.coachOnboardingInvite.id, created.aggregate.invite.id)),
+      )
+
+      const reissued = yield* repo.reissue({
+        workspaceId: created.aggregate.workspace.id,
+        expectedInviteId: created.aggregate.invite.id,
+        requestId: requestId(),
+        issuedByTelegramId,
+        now: new Date("2026-07-24T18:00:00.000Z"),
+      })
+      const reset = (yield* repo.findInvite(created.aggregate.invite.id)).invite
+      expect(reset.status).toBe("cancelled")
+      expect(reset.cancellationReason).toBe("reissued")
+      // The claimant is kept: the card can still say who held the workspace.
+      expect(reset.acceptedByTelegramId).toBe("800000009")
+
+      // The fence: a provisioning attempt that was still in flight against the
+      // reset invite can never reach `used`, whichever order the two arrive in.
+      const raced = yield* Effect.flip(
+        repo.markUsed(created.aggregate.invite.id, new Date("2026-07-24T18:00:01.000Z")),
+      )
+      expect(raced).toMatchObject({
+        _tag: "CoachOnboardingRepo.InviteUnavailable",
+        reason: "cancelled",
+      })
+      // The replacement is unaffected and still claimable.
+      expect(
+        (yield* repo.markUsed(reissued.invite.id, new Date("2026-07-24T18:00:02.000Z"))).status,
+      ).toBe("used")
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("invites again after a decline, without rewriting why the first one ended", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachOnboardingRepo.Service
+      const { client } = yield* Database.Service
+      const created = yield* repo.createOrGet({
+        requestId: requestId(),
+        requestFingerprint: "declined-then-reinvited",
+        name: "Second Chance Coaching",
+        coachLanguage: CoachLanguage.make("en"),
+        issuedByTelegramId,
+        now: new Date("2026-07-23T18:00:00.000Z"),
+      })
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client
+            .delete(schema.workspace)
+            .where(eq(schema.workspace.id, created.aggregate.workspace.id)),
+        ).pipe(Effect.asVoid),
+      )
+
+      // The coach declined: terminal, and the reason is part of the history.
+      const declinedAt = new Date("2026-07-23T20:00:00.000Z")
+      yield* Effect.promise(() =>
+        client
+          .update(schema.coachOnboardingInvite)
+          .set({
+            status: "cancelled",
+            cancelledAt: declinedAt,
+            cancellationReason: "declined_by_coach",
+          })
+          .where(eq(schema.coachOnboardingInvite.id, created.aggregate.invite.id)),
+      )
+
+      const reissued = yield* repo.reissue({
+        workspaceId: created.aggregate.workspace.id,
+        expectedInviteId: created.aggregate.invite.id,
+        requestId: requestId(),
+        issuedByTelegramId,
+        now: new Date("2026-07-24T18:00:00.000Z"),
+      })
+      expect(reissued.invite.status).toBe("pending")
+
+      const declined = (yield* repo.findInvite(created.aggregate.invite.id)).invite
+      expect(declined.cancellationReason).toBe("declined_by_coach")
+      expect(declined.cancelledAt).toEqual(declinedAt)
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("connects an accepted claim without measuring it against the old expiry", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachOnboardingRepo.Service
+      const { client } = yield* Database.Service
+      const created = yield* repo.createOrGet({
+        requestId: requestId(),
+        requestFingerprint: "accepted-no-ttl",
+        name: "Patient Coaching",
+        coachLanguage: CoachLanguage.make("en"),
+        issuedByTelegramId,
+        now: new Date("2026-07-23T18:00:00.000Z"),
+      })
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client
+            .delete(schema.workspace)
+            .where(eq(schema.workspace.id, created.aggregate.workspace.id)),
+        ).pipe(Effect.asVoid),
+      )
+      yield* Effect.promise(() =>
+        client
+          .update(schema.coachOnboardingInvite)
+          .set({
+            status: "accepted",
+            acceptedByTelegramId: "800000010",
+            acceptedAt: new Date("2026-07-23T19:00:00.000Z"),
+          })
+          .where(eq(schema.coachOnboardingInvite.id, created.aggregate.invite.id)),
+      )
+
+      // Well past the original seven-day window: acceptance retired it (#112).
+      const used = yield* repo.markUsed(
+        created.aggregate.invite.id,
+        new Date("2026-08-30T18:00:00.000Z"),
+      )
+      expect(used.status).toBe("used")
+      expect(used.acceptedByTelegramId).toBe("800000010")
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 

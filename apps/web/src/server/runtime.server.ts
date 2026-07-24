@@ -132,7 +132,7 @@ const getRuntime = () => (runtimePromise ??= resolveEnv().then(runtimeFromEnv))
 
 export const listAdminWorkspaces = async (
   initData: string,
-): Promise<ReadonlyArray<WorkspaceRepo.ListItem>> => {
+): Promise<AdminSurface.CoachListResult> => {
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(AdminSurface.Service, (service) => service.listWorkspaces(initData)),

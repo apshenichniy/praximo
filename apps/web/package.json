@@ -12,6 +12,7 @@
   "dependencies": {
     "@base-ui/react": "catalog:",
     "@fontsource-variable/nunito-sans": "catalog:",
+    "@hugeicons-pro/core-stroke-rounded": "catalog:",
     "@hugeicons/core-free-icons": "catalog:",
     "@hugeicons/react": "catalog:",
     "@praximo/auth": "workspace:*",

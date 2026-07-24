@@ -175,6 +175,106 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
+  it.effect("carries onboarding state on the list rows, newest invite winning", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkspaceRepo.Service
+      const { client } = yield* Database.Service
+      const reissued = WorkspaceId.make(uniqueId("ws_reissued"))
+      const activeCoach = WorkspaceId.make(uniqueId("ws_active_coach"))
+      const ids = [reissued, activeCoach]
+      const suffix = uniqueId("x")
+        .slice(-6)
+        .toUpperCase()
+        .replaceAll(/[^A-Z2-9]/g, "2")
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client.delete(schema.workspace).where(inArray(schema.workspace.id, ids)),
+        ).pipe(Effect.asVoid),
+      )
+
+      yield* Effect.promise(() =>
+        client.insert(schema.workspace).values([
+          { id: reissued, name: "E Reissued" },
+          { id: activeCoach, name: "F Active" },
+        ]),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.member).values([
+          { id: uniqueId("mem_reissued"), workspaceId: reissued, role: "owner", language: "en" },
+          {
+            id: uniqueId("mem_active"),
+            workspaceId: activeCoach,
+            role: "owner",
+            language: "en",
+            telegramUserId: "800000042",
+            termsAcceptedAt: new Date("2026-07-01T10:00:00.000Z"),
+            lastActivityAt: new Date("2026-07-24T10:00:00.000Z"),
+          },
+        ]),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.coachOnboardingInvite).values([
+          {
+            id: uniqueId("ci_old"),
+            code: `AA${suffix}`,
+            workspaceId: reissued,
+            requestId: crypto.randomUUID(),
+            requestFingerprint: "old",
+            issuedByTelegramId: "100000001",
+            status: "cancelled",
+            issuedAt: new Date("2026-07-20T10:00:00.000Z"),
+            expiresAt: new Date("2026-07-27T10:00:00.000Z"),
+            acceptedByTelegramId: "800000043",
+            acceptedAt: new Date("2026-07-21T10:00:00.000Z"),
+            cancelledAt: new Date("2026-07-22T10:00:00.000Z"),
+            cancellationReason: "reissued",
+          },
+          {
+            id: uniqueId("ci_new"),
+            code: `BB${suffix}`,
+            workspaceId: reissued,
+            requestId: crypto.randomUUID(),
+            requestFingerprint: "new",
+            issuedByTelegramId: "100000001",
+            status: "pending",
+            delivery: { channel: "email", language: "ru" },
+            issuedAt: new Date("2026-07-22T10:00:00.000Z"),
+            expiresAt: new Date("2026-07-29T10:00:00.000Z"),
+          },
+        ]),
+      )
+
+      const listed = (yield* repo.list()).filter((item) => ids.includes(item.id))
+
+      expect(listed).toEqual([
+        {
+          id: reissued,
+          name: "E Reissued",
+          botStatus: "awaiting-setup",
+          hasCustomAvatar: false,
+          // The superseded invite is history; the live one is what the list reads.
+          invite: {
+            id: expect.stringContaining("ci_new") as string,
+            code: `BB${suffix}`,
+            status: "pending",
+            issuedAt: new Date("2026-07-22T10:00:00.000Z"),
+            expiresAt: new Date("2026-07-29T10:00:00.000Z"),
+            delivery: { channel: "email", language: "ru" },
+          },
+        },
+        {
+          id: activeCoach,
+          name: "F Active",
+          botStatus: "awaiting-setup",
+          hasCustomAvatar: false,
+          ownerTelegramUserId: "800000042",
+          termsAcceptedAt: new Date("2026-07-01T10:00:00.000Z"),
+          lastActivityAt: new Date("2026-07-24T10:00:00.000Z"),
+        },
+      ])
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
   it.effect("loads the complete detail projection and protects profile updates by version", () =>
     Effect.gen(function* () {
       const repo = yield* WorkspaceRepo.Service

@@ -155,12 +155,19 @@ The manager bot proactively notifies the admin of the events that the Mini App c
 
 A repo-level script (e.g. `bun run db:reset`) supports MVP development: it **refuses to run against `prod`** (hardcoded stage guard, [ADR 0003](../adr/0003-alchemy-iac-structure.md) stages `dev_<user>` / `prod`), recreates/clears the dev Neon branch, runs Drizzle migrations, and **seeds the admins** from the root `.env` (`ADMIN_TELEGRAM_IDS`, a comma-separated list of one or more positive decimal Telegram ids — [#85](https://github.com/apshenichniy/praximo/issues/85)). Whitespace around ids is ignored; empty or malformed entries abort before the database is reset. This is dev tooling, not an operation of the admin surface itself, and it is the sole way an admin flag is granted in MVP.
 
-`bun run db:reset --demo` performs the same guarded reset and additionally
-seeds three deterministic workspace-list fixtures: **Praximo Lab** (no owner or
-bot), **North Star Coaching** (owner plus Awaiting Setup bot connection), and **Quiet Harbor**
-(owner plus a username-bearing bot that needs re-linking). The ordinary command
-never creates workspaces. Demo bot tokens are always absent; no fixture pretends
-to be connected to Telegram.
+`bun run db:reset --demo` performs the same guarded reset and additionally seeds
+deterministic coaches-list fixtures covering **every onboarding stage the list
+can render** ([#107](https://github.com/apshenichniy/praximo/issues/107)):
+invited over each of the three channels, an invite inside its last day, an
+accepted claim, a stalled one, a connected bot awaiting activation, an expired
+invite, a coach decline, an admin reset, a reissue with its cancelled
+predecessor, two active coaches (`connected` and `needs re-link`), a workspace
+that was never invited, and one claim held by the seeding admin so the
+admin-as-coach action has something to point at. Timestamps are relative to the
+seed run, so countdowns stay truthful. The ordinary command never creates
+workspaces. **Demo bot tokens are always absent** — a fixture may carry
+`connected`, because the list has to show active coaches, but none of them can
+reach Telegram. Every fixture is removable through the admin UI.
 
 ## Explicitly out of MVP
 
