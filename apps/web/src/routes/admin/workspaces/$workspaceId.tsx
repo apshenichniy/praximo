@@ -1,5 +1,3 @@
-import { CameraAdd01Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 import { revalidateLogic, useForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute, getRouteApi, useRouter } from "@tanstack/react-router"
@@ -8,10 +6,25 @@ import {
   WorkspaceNameMaxLength,
   WorkspaceShortDescriptionMaxLength,
 } from "@praximo/domain"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
-import { AvatarProcessingError, normalizeAvatarFile } from "@/features/admin/avatar-normalizer.ts"
+import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
+import { Button } from "@/components/ui/button.tsx"
+import { Spinner } from "@/components/ui/spinner.tsx"
+import { ActionBar } from "@/features/admin/components/action-bar.tsx"
+import { AvatarEditor, AvatarEditorMessage } from "@/features/admin/components/avatar-editor.tsx"
+import { ConfirmDialog } from "@/features/admin/components/confirm-dialog.tsx"
+import { DangerZone } from "@/features/admin/components/danger-zone.tsx"
+import { TextField, TextareaField } from "@/features/admin/components/form-fields.tsx"
+import { OnboardingSection } from "@/features/admin/components/onboarding-section.tsx"
+import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
+import { StatusSection } from "@/features/admin/components/status-section.tsx"
+import { initials } from "@/features/admin/formatting.ts"
+import { notifyHaptic } from "@/features/admin/haptics.ts"
+import { useAvatarPicker } from "@/features/admin/hooks/use-avatar-picker.ts"
+import { useUnsavedChanges } from "@/features/admin/hooks/use-unsaved-changes.ts"
+import { useWorkspaceAvatar } from "@/features/admin/hooks/use-workspace-avatar.ts"
 import {
   adminWorkspaceDetailQuery,
   deleteWorkspaceMutation,
@@ -20,20 +33,12 @@ import {
   updateWorkspaceProfileMutation,
 } from "@/features/admin/workspace-queries.ts"
 import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog.tsx"
-import { Input } from "@/components/ui/input.tsx"
-import { loadTelegramWebApp } from "@/lib/telegram.ts"
-import {
-  loadAdminWorkspaceAvatar,
-  resendAdminWorkspaceInvite,
-} from "@/server/admin-workspaces.functions.ts"
+  fieldError,
+  focusFirstInvalidField,
+  optionalLimit,
+  requiredName,
+} from "@/features/admin/validation.ts"
+import { resendAdminWorkspaceInvite } from "@/server/admin-workspaces.functions.ts"
 import type { AdminSurface } from "@/server/admin-surface.ts"
 
 export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
@@ -41,59 +46,6 @@ export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
 })
 
 const adminRoute = getRouteApi("/admin")
-const inputClassName =
-  "bg-card ring-border focus:ring-primary/60 w-full rounded-2xl px-4 py-3.5 text-base ring-1 outline-none transition-shadow focus:ring-2"
-
-const requiredName = (value: string): string | undefined => {
-  const normalized = value.trim()
-  if (normalized.length === 0) return "Workspace name is required"
-  if (normalized.length > WorkspaceNameMaxLength) {
-    return `Use ${WorkspaceNameMaxLength} characters or fewer`
-  }
-  return undefined
-}
-
-const optionalLimit =
-  (limit: number) =>
-  (value: string): string | undefined =>
-    value.trim().length > limit ? `Use ${limit} characters or fewer` : undefined
-
-const fieldError = (errors: ReadonlyArray<unknown>): string | undefined => {
-  const first = errors[0]
-  return typeof first === "string" ? first : undefined
-}
-
-const formatTimestamp = (value: string | undefined, empty: string): string =>
-  value === undefined
-    ? empty
-    : new Intl.DateTimeFormat("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      }).format(new Date(value))
-
-const statusLabel = {
-  "awaiting-setup": "Awaiting setup",
-  connected: "Connected",
-  "needs-relink": "Needs re-link",
-} as const
-
-const languageLabel = {
-  en: "English",
-  uk: "Українська",
-  ru: "Русский",
-} as const
-
-const initials = (name: string): string =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("")
 
 function WorkspaceDetailsPage() {
   const { workspaceId } = Route.useParams()
@@ -101,13 +53,7 @@ function WorkspaceDetailsPage() {
   const queryClient = useQueryClient()
   const router = useRouter()
   const { data: workspace } = useSuspenseQuery(adminWorkspaceDetailQuery(initData, workspaceId))
-  const [avatarFile, setAvatarFile] = useState<File>()
-  const [avatarIntent, setAvatarIntent] = useState<"keep" | "replace" | "reset">("keep")
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string>()
-  const [currentAvatarUrl, setCurrentAvatarUrl] = useState<string>()
-  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false)
-  const [avatarError, setAvatarError] = useState<string>()
-  const [processingAvatar, setProcessingAvatar] = useState(false)
+
   const [avatarRevision, setAvatarRevision] = useState(0)
   const [saveMessage, setSaveMessage] = useState<string>()
   const [saveError, setSaveError] = useState<string>()
@@ -118,6 +64,14 @@ function WorkspaceDetailsPage() {
   const [deleteError, setDeleteError] = useState<string>()
   const reissueRequestId = useRef<string | undefined>(undefined)
   const deleteRequestId = useRef<string | undefined>(undefined)
+
+  const avatar = useAvatarPicker({ onChange: () => setSaveMessage(undefined) })
+  const currentAvatar = useWorkspaceAvatar({
+    initData,
+    workspaceId,
+    hasCustomAvatar: workspace.hasCustomAvatar,
+    revision: avatarRevision,
+  })
 
   const update = useMutation(updateWorkspaceProfileMutation(initData, queryClient))
   const retryBranding = useMutation(retryWorkspaceBrandingMutation(initData, queryClient))
@@ -149,13 +103,14 @@ function WorkspaceDetailsPage() {
             name: value.name,
             description: value.description,
             shortDescription: value.shortDescription,
-            avatarIntent,
+            avatarIntent: avatar.intent,
           },
-          ...(avatarFile === undefined ? {} : { avatar: avatarFile }),
+          ...(avatar.file === undefined ? {} : { avatar: avatar.file }),
         })
         .catch(() => undefined)
       if (response === undefined) {
         setSaveError("Saving failed. Check your connection and try again.")
+        notifyHaptic("error")
         return
       }
       if (!response.ok) {
@@ -167,6 +122,7 @@ function WorkspaceDetailsPage() {
           server: "Saving failed. Please try again.",
         } as const
         setSaveError(messages[response.error])
+        notifyHaptic("error")
         return
       }
 
@@ -176,117 +132,27 @@ function WorkspaceDetailsPage() {
         description: saved.description ?? "",
         shortDescription: saved.shortDescription ?? "",
       })
-      if (avatarPreviewUrl !== undefined) URL.revokeObjectURL(avatarPreviewUrl)
-      setAvatarFile(undefined)
-      setAvatarPreviewUrl(undefined)
-      setAvatarIntent("keep")
+      avatar.undo()
       setRetryAvatar(response.value.retryAvatar)
       setAvatarRevision((revision) => revision + 1)
-      setSaveMessage(
-        response.value.status === "saved"
-          ? "Changes saved"
-          : "Changes saved, but Telegram update failed",
-      )
+      if (response.value.status === "saved") {
+        setSaveMessage("Changes saved")
+        notifyHaptic("success")
+      } else {
+        setSaveMessage("Changes saved, but Telegram update failed")
+        notifyHaptic("warning")
+      }
     },
   })
 
-  const isDirty = () => form.state.isDirty || avatarIntent !== "keep"
-  const goBack = useCallback(() => {
-    if (isDirty() && !window.confirm("Discard changes?")) return
-    router.history.back()
-  }, [avatarIntent, form, router])
-
-  useEffect(() => {
-    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!isDirty()) return
-      event.preventDefault()
-    }
-    window.addEventListener("beforeunload", warnBeforeUnload)
-    return () => window.removeEventListener("beforeunload", warnBeforeUnload)
-  }, [avatarIntent, form])
-
-  useEffect(() => {
-    let cancelled = false
-    let objectUrl: string | undefined
-    setAvatarLoadFailed(false)
-    setCurrentAvatarUrl(undefined)
-    if (!workspace.hasCustomAvatar) return
-
-    void loadAdminWorkspaceAvatar({ data: { initData, workspaceId } }).then((result) => {
-      if (cancelled) return
-      if (!result.ok) {
-        setAvatarLoadFailed(true)
-        return
-      }
-      const binary = atob(result.base64)
-      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
-      objectUrl = URL.createObjectURL(new Blob([bytes], { type: result.contentType }))
-      setCurrentAvatarUrl(objectUrl)
-    })
-
-    return () => {
-      cancelled = true
-      if (objectUrl !== undefined) URL.revokeObjectURL(objectUrl)
-    }
-  }, [avatarRevision, initData, workspace.hasCustomAvatar, workspaceId])
-
-  useEffect(
-    () => () => {
-      if (avatarPreviewUrl !== undefined) URL.revokeObjectURL(avatarPreviewUrl)
-    },
-    [avatarPreviewUrl],
-  )
-
-  const chooseAvatar = async (file: File | undefined) => {
-    if (file === undefined) return
-    setAvatarError(undefined)
-    setProcessingAvatar(true)
-    setSaveMessage(undefined)
-    try {
-      const normalized = await normalizeAvatarFile(file)
-      if (avatarPreviewUrl !== undefined) URL.revokeObjectURL(avatarPreviewUrl)
-      setAvatarFile(normalized.file)
-      setAvatarPreviewUrl(URL.createObjectURL(normalized.file))
-      setAvatarIntent("replace")
-    } catch (error) {
-      setAvatarFile(undefined)
-      setAvatarPreviewUrl(undefined)
-      setAvatarIntent("keep")
-      setAvatarError(
-        error instanceof AvatarProcessingError && error.reason === "size"
-          ? "Choose an image up to 10 MB."
-          : error instanceof AvatarProcessingError && error.reason === "type"
-            ? "Choose a JPEG, PNG, or WebP image."
-            : "This image could not be processed.",
-      )
-    } finally {
-      setProcessingAvatar(false)
-    }
-  }
-
-  const resetAvatar = () => {
-    if (avatarPreviewUrl !== undefined) URL.revokeObjectURL(avatarPreviewUrl)
-    setAvatarFile(undefined)
-    setAvatarPreviewUrl(undefined)
-    setAvatarIntent("reset")
-    setAvatarError(undefined)
-    setSaveMessage(undefined)
-  }
-
-  const undoAvatar = () => {
-    if (avatarPreviewUrl !== undefined) URL.revokeObjectURL(avatarPreviewUrl)
-    setAvatarFile(undefined)
-    setAvatarPreviewUrl(undefined)
-    setAvatarIntent("keep")
-    setAvatarError(undefined)
-  }
+  const guard = useUnsavedChanges(() => form.state.isDirty || avatar.intent !== "keep")
 
   const displayAvatarUrl =
-    avatarIntent === "replace"
-      ? avatarPreviewUrl
-      : avatarIntent === "reset"
+    avatar.intent === "replace"
+      ? avatar.previewUrl
+      : avatar.intent === "reset"
         ? undefined
-        : currentAvatarUrl
+        : currentAvatar.url
 
   const reloadProfile = () => {
     setSaveError(undefined)
@@ -298,10 +164,7 @@ function WorkspaceDetailsPage() {
           description: current.description ?? "",
           shortDescription: current.shortDescription ?? "",
         })
-        if (avatarPreviewUrl !== undefined) URL.revokeObjectURL(avatarPreviewUrl)
-        setAvatarIntent("keep")
-        setAvatarFile(undefined)
-        setAvatarPreviewUrl(undefined)
+        avatar.undo()
       })
       .catch(() => setSaveError("The current profile could not be reloaded."))
   }
@@ -331,17 +194,8 @@ function WorkspaceDetailsPage() {
           link: inviteResult.link,
         }
 
-  const rotateInvite = () => {
+  const reissueInvite = () => {
     if (currentInvite === undefined) return
-    if (
-      !window.confirm(
-        currentInvite.status === "expired"
-          ? "Issue a new onboarding link?"
-          : "Re-issue the onboarding link? The current link will stop working immediately.",
-      )
-    ) {
-      return
-    }
     reissueRequestId.current ??= crypto.randomUUID()
     void reissue
       .mutateAsync({
@@ -356,6 +210,11 @@ function WorkspaceDetailsPage() {
       })
   }
 
+  const resendInvite = () => {
+    if (currentInvite === undefined) return
+    resend.mutate(currentInvite.id)
+  }
+
   const deleteWorkspace = async () => {
     deleteRequestId.current ??= crypto.randomUUID()
     setDeleteError(undefined)
@@ -368,6 +227,7 @@ function WorkspaceDetailsPage() {
       .catch(() => undefined)
     if (result === undefined) {
       setDeleteError("Deletion failed. Check your connection and try again.")
+      notifyHaptic("error")
       return
     }
     if (!result.ok) {
@@ -381,9 +241,11 @@ function WorkspaceDetailsPage() {
         server: "Deletion failed. The workspace was kept; try again.",
       } as const
       setDeleteError(messages[result.error])
+      notifyHaptic("error")
       return
     }
 
+    notifyHaptic("success")
     sessionStorage.setItem(
       "praximo.workspaceDeleted",
       result.value.status === "deleted-farewell-undeliverable"
@@ -393,69 +255,71 @@ function WorkspaceDetailsPage() {
     await router.navigate({ to: "/admin" })
   }
 
+  const clearSaveMessage = () => setSaveMessage(undefined)
+
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-6 pb-32">
-      <TelegramBackButton onBack={goBack} />
+      <TelegramBackButton onBack={guard.requestBack} />
+      <ConfirmDialog
+        open={guard.confirmOpen}
+        onOpenChange={guard.setConfirmOpen}
+        title="Discard changes?"
+        description="Unsaved profile changes will be lost."
+        confirmLabel="Discard changes"
+        confirmVariant="destructive"
+        onConfirm={guard.confirmDiscard}
+      />
 
       <header className="mt-7 text-center">
-        <label className="group relative mx-auto block size-24 cursor-pointer">
-          <span className="admin-avatar ring-border flex size-24 items-center justify-center overflow-hidden rounded-full text-2xl font-bold ring-1">
-            {displayAvatarUrl === undefined ? (
-              initials(workspace.name)
-            ) : (
-              <img
-                src={displayAvatarUrl}
-                alt="Workspace avatar"
-                className="size-full object-cover"
-              />
-            )}
-          </span>
-          <span className="bg-primary text-primary-foreground absolute right-0 bottom-0 flex size-9 items-center justify-center rounded-full ring-4 ring-background">
-            <HugeiconsIcon icon={CameraAdd01Icon} size={19} strokeWidth={2} />
-          </span>
-          <span className="sr-only">
-            {workspace.hasCustomAvatar ? "Replace avatar" : "Choose custom avatar"}
-          </span>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            className="sr-only"
-            disabled={processingAvatar || update.isPending}
-            onChange={(event) => {
-              void chooseAvatar(event.target.files?.[0])
-              event.target.value = ""
-            }}
-          />
-        </label>
-        <div className="mt-3 flex justify-center gap-4 text-sm">
-          {avatarIntent !== "keep" ? (
-            <button type="button" onClick={undoAvatar} className="text-muted-foreground">
+        <AvatarEditor
+          imageUrl={displayAvatarUrl}
+          fallback={initials(workspace.name)}
+          loading={avatar.intent === "keep" && currentAvatar.loading}
+          disabled={avatar.processing || update.isPending}
+          srLabel={workspace.hasCustomAvatar ? "Replace avatar" : "Choose custom avatar"}
+          onSelectFile={(file) => void avatar.choose(file)}
+        />
+        <div className="mt-1 flex justify-center">
+          {avatar.intent !== "keep" ? (
+            <Button
+              variant="link"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={avatar.undo}
+            >
               Undo avatar change
-            </button>
+            </Button>
           ) : workspace.hasCustomAvatar ? (
-            <button type="button" onClick={resetAvatar} className="text-muted-foreground">
+            <Button
+              variant="link"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={avatar.reset}
+            >
               Reset to Praximo default
-            </button>
+            </Button>
           ) : null}
         </div>
-        {processingAvatar ? (
-          <p className="text-muted-foreground mt-3 text-sm">Processing…</p>
+        {avatar.processing ? (
+          <AvatarEditorMessage tone="muted">Processing…</AvatarEditorMessage>
         ) : null}
-        {avatarError ? <p className="text-destructive mt-3 text-sm">{avatarError}</p> : null}
-        {avatarLoadFailed ? (
-          <p className="text-amber-200 mt-3 text-sm">
+        {avatar.error === undefined ? null : (
+          <AvatarEditorMessage tone="destructive">{avatar.error}</AvatarEditorMessage>
+        )}
+        {currentAvatar.failed ? (
+          <AvatarEditorMessage tone="warning">
             The custom avatar could not be loaded. You can still edit this workspace.
-          </p>
+          </AvatarEditorMessage>
         ) : null}
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">{workspace.name}</h1>
-        {workspace.botUsername ? (
+        {workspace.botUsername === undefined ? null : (
           <a
             href={`https://t.me/${workspace.botUsername}`}
             className="text-muted-foreground mt-2 inline-block"
           >
             @{workspace.botUsername}
           </a>
-        ) : null}
+        )}
       </header>
 
       <form
@@ -464,41 +328,28 @@ function WorkspaceDetailsPage() {
           event.preventDefault()
           event.stopPropagation()
           void form.handleSubmit().then(() => {
-            if (!form.state.isValid) {
-              document.querySelector<HTMLElement>("[aria-invalid='true']")?.focus()
-            }
+            if (!form.state.isValid) focusFirstInvalidField()
           })
         }}
       >
-        <section className="space-y-6" aria-labelledby="profile-heading">
-          <h2 id="profile-heading" className="px-1 text-2xl font-semibold tracking-tight">
-            Profile
-          </h2>
+        <Section className="mt-0 space-y-6" aria-labelledby="profile-heading">
+          <SectionTitle id="profile-heading">Profile</SectionTitle>
 
           <form.Field name="name" validators={{ onDynamic: ({ value }) => requiredName(value) }}>
-            {(field) => {
-              const error = fieldError(field.state.meta.errors)
-              return (
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium">Workspace name</span>
-                  <input
-                    name={field.name}
-                    value={field.state.value}
-                    maxLength={65}
-                    aria-invalid={error === undefined ? undefined : true}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => {
-                      field.handleChange(event.target.value)
-                      setSaveMessage(undefined)
-                    }}
-                    className={inputClassName}
-                  />
-                  {error ? (
-                    <span className="text-destructive mt-2 block text-sm">{error}</span>
-                  ) : null}
-                </label>
-              )
-            }}
+            {(field) => (
+              <TextField
+                label="Workspace name"
+                name={field.name}
+                value={field.state.value}
+                maxLength={WorkspaceNameMaxLength + 1}
+                error={fieldError(field.state.meta.errors)}
+                onBlur={field.handleBlur}
+                onChange={(value) => {
+                  field.handleChange(value)
+                  clearSaveMessage()
+                }}
+              />
+            )}
           </form.Field>
 
           <form.Field
@@ -507,35 +358,22 @@ function WorkspaceDetailsPage() {
               onDynamic: ({ value }) => optionalLimit(WorkspaceDescriptionMaxLength)(value),
             }}
           >
-            {(field) => {
-              const error = fieldError(field.state.meta.errors)
-              return (
-                <label className="block">
-                  <span className="mb-2 flex justify-between text-sm font-medium">
-                    <span>Description</span>
-                    <span className="text-muted-foreground font-normal">
-                      {field.state.value.length}/512
-                    </span>
-                  </span>
-                  <textarea
-                    name={field.name}
-                    value={field.state.value}
-                    maxLength={513}
-                    rows={4}
-                    aria-invalid={error === undefined ? undefined : true}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => {
-                      field.handleChange(event.target.value)
-                      setSaveMessage(undefined)
-                    }}
-                    className={`${inputClassName} resize-none`}
-                  />
-                  {error ? (
-                    <span className="text-destructive mt-2 block text-sm">{error}</span>
-                  ) : null}
-                </label>
-              )
-            }}
+            {(field) => (
+              <TextareaField
+                label="Description"
+                name={field.name}
+                value={field.state.value}
+                maxLength={WorkspaceDescriptionMaxLength + 1}
+                counter={WorkspaceDescriptionMaxLength}
+                rows={4}
+                error={fieldError(field.state.meta.errors)}
+                onBlur={field.handleBlur}
+                onChange={(value) => {
+                  field.handleChange(value)
+                  clearSaveMessage()
+                }}
+              />
+            )}
           </form.Field>
 
           <form.Field
@@ -544,56 +382,34 @@ function WorkspaceDetailsPage() {
               onDynamic: ({ value }) => optionalLimit(WorkspaceShortDescriptionMaxLength)(value),
             }}
           >
-            {(field) => {
-              const error = fieldError(field.state.meta.errors)
-              return (
-                <label className="block">
-                  <span className="mb-2 flex justify-between text-sm font-medium">
-                    <span>Short description</span>
-                    <span className="text-muted-foreground font-normal">
-                      {field.state.value.length}/120
-                    </span>
-                  </span>
-                  <textarea
-                    name={field.name}
-                    value={field.state.value}
-                    maxLength={121}
-                    rows={2}
-                    aria-invalid={error === undefined ? undefined : true}
-                    onBlur={field.handleBlur}
-                    onChange={(event) => {
-                      field.handleChange(event.target.value)
-                      setSaveMessage(undefined)
-                    }}
-                    className={`${inputClassName} resize-none`}
-                  />
-                  {error ? (
-                    <span className="text-destructive mt-2 block text-sm">{error}</span>
-                  ) : null}
-                </label>
-              )
-            }}
+            {(field) => (
+              <TextareaField
+                label="Short description"
+                name={field.name}
+                value={field.state.value}
+                maxLength={WorkspaceShortDescriptionMaxLength + 1}
+                counter={WorkspaceShortDescriptionMaxLength}
+                rows={2}
+                error={fieldError(field.state.meta.errors)}
+                onBlur={field.handleBlur}
+                onChange={(value) => {
+                  field.handleChange(value)
+                  clearSaveMessage()
+                }}
+              />
+            )}
           </form.Field>
-        </section>
+        </Section>
 
-        <StatusCard workspace={workspace} />
-        <OnboardingCard
+        <StatusSection workspace={workspace} />
+        <OnboardingSection
           workspace={workspace}
           invite={currentInvite}
           delivery={inviteResult?.delivery}
           resendPending={resend.isPending}
           reissuePending={reissue.isPending}
-          onResend={() => {
-            if (
-              currentInvite !== undefined &&
-              window.confirm(
-                "The previous message may already have arrived. Send the same link again?",
-              )
-            ) {
-              resend.mutate(currentInvite.id)
-            }
-          }}
-          onReissue={rotateInvite}
+          onResend={resendInvite}
+          onReissue={reissueInvite}
         />
         <form.Subscribe selector={(state) => state.isDirty}>
           {(formDirty) => (
@@ -604,9 +420,9 @@ function WorkspaceDetailsPage() {
               error={deleteError}
               disabled={
                 formDirty ||
-                avatarIntent !== "keep" ||
+                avatar.intent !== "keep" ||
                 update.isPending ||
-                processingAvatar ||
+                avatar.processing ||
                 remove.isPending
               }
               pending={remove.isPending}
@@ -626,323 +442,77 @@ function WorkspaceDetailsPage() {
           )}
         </form.Subscribe>
 
-        {saveError ? (
-          <div className="bg-destructive/10 text-destructive mt-8 rounded-2xl px-4 py-3 text-sm">
-            <p>{saveError}</p>
-            {saveError.startsWith("Workspace changed") ? (
-              <button
-                type="button"
-                onClick={reloadProfile}
-                className="mt-2 font-semibold underline"
-              >
-                Reload current profile
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-
-        <div className="border-border bg-background/95 fixed inset-x-0 bottom-0 z-10 border-t px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur">
-          <div className="mx-auto max-w-2xl">
-            {saveMessage ? (
-              <div className="mb-3 flex items-center justify-between gap-3 text-sm">
-                <span
-                  className={saveMessage.includes("failed") ? "text-amber-200" : "text-emerald-300"}
-                >
-                  {saveMessage}
-                </span>
-                {saveMessage.includes("failed") ? (
-                  <button
-                    type="button"
-                    disabled={retryBranding.isPending}
-                    onClick={retryTelegram}
-                    className="font-semibold underline disabled:opacity-50"
-                  >
-                    {retryBranding.isPending ? "Retrying…" : "Retry Telegram update"}
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-            <form.Subscribe selector={(state) => state.isDirty}>
-              {(formDirty) => (
+        {saveError === undefined ? null : (
+          <Alert variant="destructive" className="bg-destructive/10 mt-8 border-transparent">
+            <AlertDescription className="text-destructive">
+              <p>{saveError}</p>
+              {saveError.startsWith("Workspace changed") ? (
                 <button
-                  type="submit"
-                  disabled={
-                    (!formDirty && avatarIntent === "keep") ||
-                    update.isPending ||
-                    processingAvatar ||
-                    avatarError !== undefined
-                  }
-                  className="bg-primary text-primary-foreground h-13 w-full rounded-2xl font-semibold transition-opacity disabled:opacity-50"
+                  type="button"
+                  onClick={reloadProfile}
+                  className="mt-2 font-semibold underline"
                 >
-                  {update.isPending ? "Saving…" : "Save changes"}
+                  Reload current profile
                 </button>
-              )}
+              ) : null}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <ActionBar>
+          {saveMessage === undefined ? (
+            <form.Subscribe selector={(state) => state.isDirty}>
+              {(formDirty) =>
+                formDirty || avatar.intent !== "keep" ? (
+                  <p className="text-muted-foreground mb-3 text-sm">Unsaved changes</p>
+                ) : null
+              }
             </form.Subscribe>
-          </div>
-        </div>
+          ) : (
+            <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+              <span
+                className={saveMessage.includes("failed") ? "text-amber-200" : "text-emerald-300"}
+              >
+                {saveMessage}
+              </span>
+              {saveMessage.includes("failed") ? (
+                <button
+                  type="button"
+                  disabled={retryBranding.isPending}
+                  onClick={retryTelegram}
+                  className="font-semibold underline disabled:opacity-50"
+                >
+                  {retryBranding.isPending ? "Retrying…" : "Retry Telegram update"}
+                </button>
+              ) : null}
+            </div>
+          )}
+          <form.Subscribe selector={(state) => state.isDirty}>
+            {(formDirty) => (
+              <Button
+                type="submit"
+                size="lg"
+                disabled={
+                  (!formDirty && avatar.intent === "keep") ||
+                  update.isPending ||
+                  avatar.processing ||
+                  avatar.error !== undefined
+                }
+                aria-busy={update.isPending || undefined}
+                className="h-13 w-full font-semibold"
+              >
+                {update.isPending ? (
+                  <>
+                    <Spinner /> Saving…
+                  </>
+                ) : (
+                  "Save changes"
+                )}
+              </Button>
+            )}
+          </form.Subscribe>
+        </ActionBar>
       </form>
     </main>
-  )
-}
-
-function DangerZone({
-  workspaceName,
-  open,
-  confirmationName,
-  error,
-  disabled,
-  pending,
-  onOpenChange,
-  onConfirmationNameChange,
-  onDelete,
-}: {
-  readonly workspaceName: string
-  readonly open: boolean
-  readonly confirmationName: string
-  readonly error: string | undefined
-  readonly disabled: boolean
-  readonly pending: boolean
-  readonly onOpenChange: (open: boolean) => void
-  readonly onConfirmationNameChange: (value: string) => void
-  readonly onDelete: () => void
-}) {
-  return (
-    <section className="mt-12" aria-labelledby="danger-zone-heading">
-      <h2
-        id="danger-zone-heading"
-        className="text-destructive px-1 text-2xl font-semibold tracking-tight"
-      >
-        Danger zone
-      </h2>
-      <div className="border-destructive/40 bg-destructive/5 mt-4 rounded-2xl border p-5">
-        <p className="font-semibold">Delete workspace permanently</p>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Deletes the workspace, its clients, sessions, transcripts, artifacts, and custom uploads.
-          This cannot be undone.
-        </p>
-        {disabled ? (
-          <p className="text-muted-foreground mt-3 text-sm">
-            Save or discard profile changes before deleting this workspace.
-          </p>
-        ) : null}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onOpenChange(true)}
-          className="border-destructive text-destructive mt-5 h-11 rounded-xl border px-4 font-semibold disabled:opacity-50"
-        >
-          Delete workspace
-        </button>
-      </div>
-
-      <AlertDialog open={open} onOpenChange={onOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete “{workspaceName}”?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently deletes all workspace data. To confirm, enter the workspace name
-              exactly as shown.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium">Workspace name</span>
-            <Input
-              value={confirmationName}
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              aria-invalid={error === undefined ? undefined : true}
-              onChange={(event) => onConfirmationNameChange(event.target.value)}
-            />
-          </label>
-          {error ? <p className="text-destructive text-sm">{error}</p> : null}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-            <button
-              type="button"
-              disabled={pending || confirmationName !== workspaceName}
-              onClick={onDelete}
-              className="bg-destructive text-destructive-foreground h-10 rounded-4xl px-4 text-sm font-medium disabled:opacity-50"
-            >
-              {pending ? "Deleting…" : "Delete permanently"}
-            </button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </section>
-  )
-}
-
-function StatusCard({ workspace }: { readonly workspace: AdminSurface.WorkspaceDetail }) {
-  return (
-    <section className="mt-12" aria-labelledby="status-heading">
-      <h2 id="status-heading" className="px-1 text-2xl font-semibold tracking-tight">
-        Status
-      </h2>
-      <dl className="bg-card ring-border mt-4 overflow-hidden rounded-2xl ring-1">
-        <StatusRow label="Bot connection" value={statusLabel[workspace.botStatus]} />
-        <StatusRow
-          label="Coach language"
-          value={
-            workspace.coachLanguage === undefined
-              ? "Unknown"
-              : languageLabel[workspace.coachLanguage]
-          }
-        />
-        <StatusRow
-          label="Bot username"
-          value={
-            workspace.botUsername === undefined ? "Not connected" : `@${workspace.botUsername}`
-          }
-        />
-        <StatusRow
-          label="Terms"
-          value={workspace.termsAcceptedAt === undefined ? "Not accepted" : "Accepted"}
-        />
-        <StatusRow
-          label="Invited"
-          value={formatTimestamp(workspace.invite?.issuedAt, "Not invited")}
-        />
-        <StatusRow label="Created" value={formatTimestamp(workspace.createdAt, "Unknown")} />
-        <StatusRow label="Last login" value={formatTimestamp(workspace.lastLoginAt, "Never")} />
-        <StatusRow
-          label="Last activity"
-          value={formatTimestamp(workspace.lastActivityAt, "Never")}
-        />
-      </dl>
-    </section>
-  )
-}
-
-function StatusRow({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div className="border-border flex min-h-14 items-center justify-between gap-5 border-b px-4 py-3 last:border-b-0">
-      <dt className="text-muted-foreground text-sm">{label}</dt>
-      <dd className="text-right text-sm font-medium">{value}</dd>
-    </div>
-  )
-}
-
-function OnboardingCard({
-  workspace,
-  invite,
-  delivery,
-  resendPending,
-  reissuePending,
-  onResend,
-  onReissue,
-}: {
-  readonly workspace: AdminSurface.WorkspaceDetail
-  readonly invite: AdminSurface.WorkspaceDetail["invite"]
-  readonly delivery: AdminSurface.DeliveryStatus | undefined
-  readonly resendPending: boolean
-  readonly reissuePending: boolean
-  readonly onResend: () => void
-  readonly onReissue: () => void
-}) {
-  const [copied, setCopied] = useState(false)
-  const fallbackRef = useRef<HTMLTextAreaElement>(null)
-  const completed = workspace.botStatus !== "awaiting-setup" || workspace.invite?.status === "used"
-
-  const copy = async () => {
-    if (invite?.link === undefined) return
-    try {
-      await navigator.clipboard.writeText(invite.link)
-      setCopied(true)
-      const webApp = await loadTelegramWebApp()
-      webApp?.HapticFeedback?.notificationOccurred("success")
-    } catch {
-      fallbackRef.current?.focus()
-      fallbackRef.current?.select()
-    }
-  }
-
-  return (
-    <section className="mt-12" aria-labelledby="onboarding-heading">
-      <h2 id="onboarding-heading" className="px-1 text-2xl font-semibold tracking-tight">
-        Onboarding
-      </h2>
-      <div className="bg-card ring-border mt-4 rounded-2xl p-5 ring-1">
-        {completed ? (
-          <>
-            <p className="font-semibold">Onboarding completed</p>
-            <p className="text-muted-foreground mt-2 text-sm">
-              Invited {formatTimestamp(workspace.invite?.issuedAt, "date unavailable")}. Re-linking
-              is managed separately from coach onboarding.
-            </p>
-          </>
-        ) : invite === undefined ? (
-          <>
-            <p className="font-semibold">Not invited</p>
-            <p className="text-muted-foreground mt-2 text-sm">
-              This workspace has no onboarding invite.
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="font-semibold">
-              {invite.status === "expired" ? "Invite expired" : "Current onboarding invite"}
-            </p>
-            <p className="text-muted-foreground mt-2 text-sm">
-              {invite.status === "expired"
-                ? `Expired ${formatTimestamp(invite.expiresAt, "date unavailable")}`
-                : `Expires ${formatTimestamp(invite.expiresAt, "date unavailable")}`}
-            </p>
-            {invite.link !== undefined ? (
-              <>
-                <textarea
-                  ref={fallbackRef}
-                  readOnly
-                  value={invite.link}
-                  rows={3}
-                  aria-label="Current coach onboarding link"
-                  className="bg-background ring-border mt-4 w-full resize-none rounded-xl p-3 text-sm ring-1 outline-none"
-                />
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => void copy()}
-                    className="bg-primary text-primary-foreground h-11 rounded-xl font-semibold"
-                  >
-                    {copied ? "Copied" : "Copy link"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={resendPending}
-                    onClick={onResend}
-                    className="ring-border h-11 rounded-xl font-semibold ring-1 disabled:opacity-50"
-                  >
-                    {resendPending ? "Sending…" : "Send again"}
-                  </button>
-                </div>
-              </>
-            ) : null}
-            {delivery === "failed" ? (
-              <p className="text-amber-200 mt-3 text-sm">
-                The invite was issued, but Telegram delivery failed. The link remains valid.
-              </p>
-            ) : delivery === "sent" ? (
-              <p className="text-emerald-300 mt-3 text-sm">
-                The onboarding message was sent to the manager chat.
-              </p>
-            ) : null}
-            {workspace.canReissue ? (
-              <button
-                type="button"
-                disabled={reissuePending}
-                onClick={onReissue}
-                className="text-destructive ring-destructive/30 mt-5 h-11 w-full rounded-xl font-semibold ring-1 disabled:opacity-50"
-              >
-                {reissuePending
-                  ? "Issuing…"
-                  : invite.status === "expired"
-                    ? "Issue new link"
-                    : "Re-issue link"}
-              </button>
-            ) : null}
-          </>
-        )}
-      </div>
-    </section>
   )
 }

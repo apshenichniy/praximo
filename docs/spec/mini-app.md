@@ -11,6 +11,12 @@ hub-and-spoke "Today" variant won. Vocabulary follows
 The Mini App opens **fullscreen** (Bot API 8.0 `Telegram.WebApp.requestFullscreen()`, with `fullscreenChanged` handling and safe-area insets in the layout) — decided in
 [#14](https://github.com/apshenichniy/praximo/issues/14).
 
+Vertical swipes inside the webview are **disabled** (Bot API 7.7
+`Telegram.WebApp.disableVerticalSwipes()`, called during host initialization before
+`ready()`), so swiping page content never minimizes the shell — BotFather-style. Telegram's
+native header stays available to minimize or close the Mini App; that host affordance is not
+(and cannot be) overridden. Pre-7.7 clients keep the default swipe behavior.
+
 The coach reaches the app from **their coach bot**, shown as **"Open"** — the in-chat
 menu button (set at provisioning, [ADR 0004](../adr/0004-bot-per-coach-provisioning.md),
 [#86](https://github.com/apshenichniy/praximo/issues/86)) and, if the coach enables it in
