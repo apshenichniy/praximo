@@ -541,12 +541,7 @@ export const layer = Layer.effect(
       // name the invitation rather than pass for an identity that never started.
       const attempt = yield* openAttempt(coachTelegramId)
       if (attempt === undefined) return yield* new ProvisioningUnavailable({ reason: "not-found" })
-      const heldByCaller =
-        attempt.status === "accepted" && attempt.acceptedByTelegramId === coachTelegramId
-      const stillOffered = attempt.status === "pending" && attempt.expiresAt > now
-      return yield* new ProvisioningUnavailable({
-        reason: heldByCaller || stillOffered ? "claimed" : unavailableReason(attempt, now),
-      })
+      return yield* new ProvisioningUnavailable({ reason: unavailableReason(attempt, now) })
     })
 
     /**

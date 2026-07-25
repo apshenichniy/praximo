@@ -58,7 +58,12 @@ extra bot is not connected and can be removed in @BotFather
 ([#135](https://github.com/apshenichniy/praximo/issues/135)). Genuine
 infrastructure failures on the same path stay `500`, because those *are*
 retryable; collapsing the two is what left the manager bot's webhook failing
-forever. The distinction matters more once the entry point becomes a deep link
+forever. One shape is knowingly left behind: a coach whose attempt is still open
+on an invitation an administrator reset gets a refusal that is equally
+deterministic and still answers `500`. It is deliberately not folded into the
+same 200 — the coach's bot really is unconnected there, so the reassuring copy
+would be a lie, and what to say instead is a copy decision this ADR does not
+take. The distinction matters more once the entry point becomes a deep link
 ([#134](https://github.com/apshenichniy/praximo/issues/134)): a link stays in the
 chat, where the `oneTime()` keyboard button it replaces vanished after a tap.
 

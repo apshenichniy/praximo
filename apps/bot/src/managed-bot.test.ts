@@ -186,10 +186,16 @@ describe("the extra-bot message", () => {
 
   it("never puts a verb that agrees with the coach's gender in their mouth", () => {
     // Coach gender is unknown to the system (#16), so the Slavic copy has to
-    // avoid the past-tense forms that would have to pick one.
+    // avoid the past-tense forms that would have to pick one. `\b` is ASCII-only
+    // in JavaScript and never matches beside Cyrillic, which would make this
+    // guard silently vacuous — hence the explicit letter lookaround, and the
+    // assertion below that the pattern still catches what it is aimed at.
+    const gendered = /(?<!\p{L})(створили|створив|створила|создали|создал|создала)(?!\p{L})/u
+    expect(gendered.test("Ви створили бота")).toBe(true)
+
     for (const language of ["uk", "ru"] as const) {
       const text = messages(CoachLanguage.make(language)).extraBotNotConnected("ada_second_bot")
-      expect(text).not.toMatch(/\b(створили|створив|створила|создали|создал|создала)\b/)
+      expect(text).not.toMatch(gendered)
     }
   })
 })
