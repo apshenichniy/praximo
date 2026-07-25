@@ -15,7 +15,7 @@ import { clientLanguage, type Copy, messages } from "./messages.ts"
 import {
   coachMiniAppUrl,
   constantTimeEqual,
-  deliverProvisioningNotifications,
+  deliverCoachNotifications,
   managedBotSuggestions,
   prepareOnboarding,
   provisionManagedBot,
@@ -426,7 +426,7 @@ export const handleManagerInlineInviteRpc = (
   getRuntime(env).runPromise(prepareManagerInlineInvite(recipient, invite))
 
 export const handleScheduled = (env: Env): Promise<void> =>
-  getRuntime(env).runPromise(deliverProvisioningNotifications())
+  getRuntime(env).runPromise(deliverCoachNotifications())
 
 export const handleCoachBotReleaseRpc = (
   env: Env,

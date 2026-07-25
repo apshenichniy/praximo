@@ -160,7 +160,9 @@ const readLaunch = (
 
   return {
     signature: decodeBase64Url(signature),
-    signed: new TextEncoder().encode(dataCheckString(params, botId)),
+    // Copied into a fresh view so the byte type is the same under every app’s
+    // ambient lib — `TextEncoder` is typed over `ArrayBufferLike` in some.
+    signed: new Uint8Array(new TextEncoder().encode(dataCheckString(params, botId))),
     telegramUserId: readTelegramUserId(params),
     authDateMillis,
   }

@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
-import { CoachBotProvisioningRepo, CoachOnboardingRepo } from "@praximo/db"
+import { CoachBotProvisioningRepo, CoachNotification, CoachOnboardingRepo } from "@praximo/db"
 import { TelegramId } from "@praximo/domain"
 import { CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Api, InputFile } from "grammy"
@@ -311,27 +311,56 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   })
 })
 
-export const deliverProvisioningNotifications = Effect.fn(
-  "BotWorker.deliverProvisioningNotifications",
-)(function* () {
-  const repo = yield* CoachBotProvisioningRepo.Service
-  const sender = yield* ManagerBotSender.Service
-  const now = new Date(yield* Clock.currentTimeMillis)
-  const notifications = yield* repo.pendingNotifications(now, 20)
-  yield* Effect.forEach(
-    notifications,
-    (notification) =>
-      sender
-        .sendText(
-          notification.recipientTelegramId,
-          `Coach bot @${notification.botUsername} is connected to “${notification.workspaceName}”.`,
-        )
-        .pipe(
+/**
+ * What the admin is told, per kind of coach notification.
+ *
+ * These live here rather than in `messages.ts`, which is a tri-lingual
+ * *coach-facing* interface: an English-only admin string added there would
+ * quietly break that module's contract. Admin copy is English-only by decision
+ * (admin-surface.md), so it sits beside the loop that sends it.
+ *
+ * An unknown kind returns `undefined` and is left in the queue rather than
+ * delivered with the wrong words — a row a newer deploy enqueued must wait for
+ * the deploy that knows how to phrase it, not arrive mislabelled.
+ */
+export const coachNotificationText = (
+  notification: CoachBotProvisioningRepo.PendingNotification,
+): string | undefined => {
+  switch (notification.kind) {
+    case CoachNotification.Kind.BotConnected:
+      return `Coach bot @${notification.botUsername} is connected to “${notification.workspaceName}”.`
+    case CoachNotification.Kind.OnboardingComplete:
+      return `“${notification.workspaceName}” finished onboarding — the coach accepted the terms and opened @${notification.botUsername}.`
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Deliver the admin-facing coach notifications that are due. Claim, lease and
+ * retry mechanics are the repository's; this only decides what each row says.
+ */
+export const deliverCoachNotifications = Effect.fn("BotWorker.deliverCoachNotifications")(
+  function* () {
+    const repo = yield* CoachBotProvisioningRepo.Service
+    const sender = yield* ManagerBotSender.Service
+    const now = new Date(yield* Clock.currentTimeMillis)
+    const notifications = yield* repo.pendingNotifications(now, 20)
+    yield* Effect.forEach(
+      notifications,
+      (notification) => {
+        const text = coachNotificationText(notification)
+        // Its lease has already been taken and its attempt counted, so an
+        // unrecognised kind simply becomes available again on the next sweep.
+        if (text === undefined) return Effect.void
+        return sender.sendText(notification.recipientTelegramId, text).pipe(
           Effect.flatMap(() => repo.markNotificationDelivered(notification.id, now)),
           Effect.catchTag("ManagerBotSender.SendFailed", () =>
             repo.deferNotification(notification.id, now),
           ),
-        ),
-    { concurrency: 4 },
-  )
-})
+        )
+      },
+      { concurrency: 4 },
+    )
+  },
+)
