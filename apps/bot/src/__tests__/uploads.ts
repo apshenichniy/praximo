@@ -14,20 +14,27 @@ export interface UploadsStub {
   readonly reads: Array<string>
 }
 
+/**
+ * Only `get` is implemented — provisioning reads and never writes. Typing it as
+ * `R2Bucket["get"]` keeps that one method honest against the real interface, and
+ * the widening cast is confined to the return, so a caller that later reaches
+ * for `head`/`put` meets an obviously incomplete stub rather than `undefined`.
+ */
 export const uploadsStub = (objects: Record<string, Uint8Array> = {}): UploadsStub => {
   const reads: Array<string> = []
-  const bucket = {
-    get: async (key: string) => {
-      reads.push(key)
-      const bytes = objects[key]
-      return bytes === undefined
-        ? null
-        : ({ arrayBuffer: async () => bytes.slice().buffer } as R2ObjectBody)
-    },
-  } as unknown as R2Bucket
+  const get: R2Bucket["get"] = async (key: string) => {
+    reads.push(key)
+    const bytes = objects[key]
+    if (bytes === undefined) return null
+    // Enough of an R2ObjectBody for the single method the reader calls.
+    return { arrayBuffer: async () => bytes.slice().buffer } as R2ObjectBody
+  }
 
-  return { bucket, reads }
+  return { bucket: { get } as R2Bucket, reads }
 }
+
+/** The key every stage holds its branding image at, matching `.env.example`. */
+export const BRANDING_AVATAR_KEY = "branding/default-coach-avatar.jpg"
 
 /** A recognisable stand-in for the branding JPEG, small enough to compare by eye. */
 export const BRANDING_AVATAR_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0x00, 0x01])

@@ -2,19 +2,18 @@ import { describe, expect, it } from "@effect/vitest"
 import type { CoachBotProvisioningRepo } from "@praximo/db"
 import { Effect } from "effect"
 import { CoachMenuButtonText, coachMiniAppUrl, configureCoachBot } from "./provisioning.ts"
-import { BRANDING_AVATAR_BYTES, uploadsStub } from "./test-uploads.ts"
+import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 
 const TOKEN = "9100777:AAHkq2Lb8fN1sQx3TzVpYr7WcJd4MgEuKvB"
 const BOT_ID = "9100777"
 
-const DEFAULT_AVATAR_KEY = "branding/default-coach-avatar.jpg"
 const WORKSPACE_AVATAR_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x02])
 
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
-  DEFAULT_COACH_BOT_AVATAR_R2_KEY: DEFAULT_AVATAR_KEY,
+  DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
   COACH_MINI_APP_URL: "https://stage.praximo.io/",
-  UPLOADS: uploadsStub({ [DEFAULT_AVATAR_KEY]: BRANDING_AVATAR_BYTES }).bucket,
+  UPLOADS: uploadsStub({ [BRANDING_AVATAR_KEY]: BRANDING_AVATAR_BYTES }).bucket,
 }
 
 // No stored avatar key of its own, so this workspace gets the platform image.
@@ -31,7 +30,8 @@ interface TelegramStub {
   readonly calls: Array<Call>
 }
 
-const telegramStub = (): TelegramStub => {
+/** `refuses` names a method Telegram rejects, the way it rejects a bad photo. */
+const telegramStub = (refuses?: string): TelegramStub => {
   const calls: Array<Call> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const [, credential = "", method = ""] = new URL(input.toString()).pathname.split("/")
@@ -41,6 +41,12 @@ const telegramStub = (): TelegramStub => {
       token: credential.replace(/^bot/, ""),
       body: typeof body === "string" ? JSON.parse(body) : undefined,
     })
+    if (method === refuses) {
+      return Response.json(
+        { ok: false, error_code: 400, description: "Bad Request: PHOTO_INVALID_DIMENSIONS" },
+        { status: 400 },
+      )
+    }
     if (method === "getMe") {
       return Response.json({
         ok: true,
@@ -107,12 +113,12 @@ describe("coach bot configuration", () => {
   it.effect("dresses the bot in the stage's stored branding image, not a generated one", () =>
     Effect.gen(function* () {
       const telegram = telegramStub()
-      const bucket = uploadsStub({ [DEFAULT_AVATAR_KEY]: BRANDING_AVATAR_BYTES })
+      const bucket = uploadsStub({ [BRANDING_AVATAR_KEY]: BRANDING_AVATAR_BYTES })
 
       yield* configure(telegram, { UPLOADS: bucket.bucket })
 
       // One stage-wide object, replaced by upload rather than by deploy (#138).
-      expect(bucket.reads).toEqual([DEFAULT_AVATAR_KEY])
+      expect(bucket.reads).toEqual([BRANDING_AVATAR_KEY])
       expect(telegram.calls.map((call) => call.method)).toContain("setMyProfilePhoto")
     }),
   )
@@ -121,7 +127,7 @@ describe("coach bot configuration", () => {
     Effect.gen(function* () {
       const telegram = telegramStub()
       const bucket = uploadsStub({
-        [DEFAULT_AVATAR_KEY]: BRANDING_AVATAR_BYTES,
+        [BRANDING_AVATAR_KEY]: BRANDING_AVATAR_BYTES,
         "avatars/ada.jpg": WORKSPACE_AVATAR_BYTES,
       })
 
@@ -147,6 +153,23 @@ describe("coach bot configuration", () => {
       // and the menu button — the parts that make the bot usable — still land.
       const methods = telegram.calls.map((call) => call.method)
       expect(methods).not.toContain("setMyProfilePhoto")
+      expect(methods).toContain("setWebhook")
+      expect(methods).toContain("setChatMenuButton")
+    }),
+  )
+
+  it.effect("onboards the coach even when Telegram rejects the stored image", () =>
+    Effect.gen(function* () {
+      const telegram = telegramStub("setMyProfilePhoto")
+
+      yield* configure(telegram)
+
+      // The object is no longer computed from the bot id, so anyone with write
+      // access to the bucket can put something Telegram refuses there. Every
+      // retry would fail on it identically — stranding the coach — so the photo
+      // is dropped rather than the onboarding.
+      const methods = telegram.calls.map((call) => call.method)
+      expect(methods).toContain("setMyProfilePhoto")
       expect(methods).toContain("setWebhook")
       expect(methods).toContain("setChatMenuButton")
     }),

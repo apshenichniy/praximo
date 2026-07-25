@@ -176,23 +176,27 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
   // branding was removed, #108) keeps it; every other bot wears the stage's
   // platform image.
   const avatarKey = workspace.avatarR2Key ?? env.DEFAULT_COACH_BOT_AVATAR_R2_KEY
-  const avatar = yield* loadAvatarObject(env, avatarKey).pipe(Effect.result)
   const secret = input.secret ?? webhookSecret()
 
-  // A picture the stage never uploaded must not cost a coach their onboarding —
-  // the same judgement the generated-avatar fallback used to encode. The bot
-  // simply starts without one, and the warning names the key an operator has to
-  // fill with `bun run branding:avatar:set`.
-  if (Result.isSuccess(avatar)) {
-    yield* telegram("setMyProfilePhoto", () =>
-      api.setMyProfilePhoto({
-        type: "static",
-        photo: new InputFile(avatar.success, "avatar.jpg"),
-      }),
-    )
-  } else {
+  // The whole photo step is best-effort, on purpose (#138). Nothing about the
+  // picture may cost a coach their onboarding — not a stage that never uploaded
+  // one, not an R2 hiccup, and not an object someone put there that Telegram
+  // refuses. Since the object is no longer computed from the bot id, a bad one
+  // would fail every retry identically and strand the coach; a bot without a
+  // photo is recoverable by the coach in @BotFather, so that is the way to fail.
+  // The warning names the operation and the key, which is what an operator needs
+  // to point `bun run branding:avatar:set` at.
+  const photo = yield* loadAvatarObject(env, avatarKey).pipe(
+    Effect.flatMap((bytes) =>
+      telegram("setMyProfilePhoto", () =>
+        api.setMyProfilePhoto({ type: "static", photo: new InputFile(bytes, "avatar.jpg") }),
+      ),
+    ),
+    Effect.result,
+  )
+  if (Result.isFailure(photo)) {
     yield* Effect.logWarning(
-      `coach bot ${botId} provisioned without a profile photo: ${avatar.failure.operation} on "${avatarKey}"`,
+      `coach bot ${botId} provisioned without a profile photo: ${photo.failure.operation} on "${avatarKey}"`,
     )
   }
   yield* telegram("setMyDescription", () =>
