@@ -1,4 +1,8 @@
-import { adminUrlForOrigin, buildSetMenuButtonRequest } from "./menu-button.ts"
+import {
+  adminUrlForOrigin,
+  buildSetMenuButtonRequest,
+  managerBotSetupWarnings,
+} from "./menu-button.ts"
 
 /**
  * `bun run manager-bot:set-menu <web-origin>` — point the dev manager bot's chat menu
@@ -44,16 +48,14 @@ const getMe = (await getMeResponse.json()) as {
   readonly result?: {
     readonly username?: string
     readonly has_main_web_app?: boolean
+    readonly can_manage_bots?: boolean
   }
 }
 if (!getMeResponse.ok || !getMe.ok || !getMe.result) {
   throw new Error(`getMe failed (${getMeResponse.status}): ${getMe.description ?? "unknown error"}`)
 }
-if (!getMe.result.has_main_web_app) {
-  console.warn(
-    "bot:set-menu — warning: Main Mini App is not enabled; configure /admin in @BotFather " +
-      "to expose the chat-list Open button",
-  )
+for (const warning of managerBotSetupWarnings(getMe.result)) {
+  console.warn(`bot:set-menu — warning: ${warning}`)
 }
 
 console.log(`bot:set-menu — pointing the manager bot's menu button at ${adminUrl}`)
