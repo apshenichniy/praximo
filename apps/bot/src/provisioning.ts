@@ -242,10 +242,34 @@ export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(functi
   )
 })
 
-export interface CreationPromptEnv {
+/** What it takes to reach the coach's manager chat at all. */
+export interface ManagerBotEnv {
   readonly MANAGER_BOT_TOKEN: string
+}
+
+/** …plus the name the creation deep link has to carry. */
+export interface CreationPromptEnv extends ManagerBotEnv {
   readonly MANAGER_BOT_USERNAME: string
 }
+
+/**
+ * A step whose failure must not cost the coach their onboarding: run it, and on
+ * failure say what was lost instead of propagating it.
+ *
+ * Every step this wraps is one of the prompt's, and they share a reason. The
+ * prompt is a courtesy on top of a fact — an invitation reserved, or a bot
+ * connected — that is already true in the database, and no amount of Telegram
+ * refusing to redraw a message may undo it. The operation name is what an
+ * operator needs, so it is what the warning carries.
+ */
+const bestEffort = <A, E extends { readonly operation: string }, R>(
+  step: Effect.Effect<A, E, R>,
+  lost: (operation: string) => string,
+): Effect.Effect<void, never, R> =>
+  Effect.gen(function* () {
+    const outcome = yield* Effect.result(step)
+    if (Result.isFailure(outcome)) yield* Effect.logWarning(lost(outcome.failure.operation))
+  })
 
 /**
  * Where the coach launches creation from: Telegram's own managed-bot dialog,
@@ -261,29 +285,6 @@ export interface CreationPromptEnv {
  */
 export const createBotLink = (managerBotUsername: string, suggestedUsername: string): string =>
   `https://t.me/newbot/${managerBotUsername}/${suggestedUsername}`
-
-/**
- * Take the keyboard off a superseded prompt, leaving its text alone.
- *
- * Best-effort by contract: Telegram gives a bot 48 hours to edit its own message
- * in a private chat and the coach may have deleted it. Neither is a reason to
- * refuse the resume the coach actually asked for — the message that keeps its
- * button is one the claim fence refuses anyway.
- */
-const disarmPrompt = Effect.fn("BotWorker.disarmPrompt")(function* (
-  api: Api,
-  chatId: TelegramId,
-  messageId: number,
-) {
-  const disarmed = yield* telegram("editMessageReplyMarkup", () =>
-    api.editMessageReplyMarkup(chatId, messageId),
-  ).pipe(Effect.result)
-  if (Result.isFailure(disarmed)) {
-    yield* Effect.logWarning(
-      `creation prompt ${messageId} in chat ${chatId} could not be disarmed: ${disarmed.failure.operation}`,
-    )
-  }
-})
 
 /**
  * Offer bot creation, holding the invariant that matters more than any one
@@ -309,9 +310,17 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
   const chatId = setup.coachTelegramId
   const copy = messages(setup.coachLanguage)
 
+  // Only the keyboard comes off, not the text: the old message stays as the
+  // record of what happened. Telegram gives a bot 48 hours to edit its own
+  // message in a private chat and the coach may have deleted it, and neither is
+  // a reason to refuse the resume they actually asked for — a prompt that keeps
+  // its button is one the claim fence refuses anyway (#135).
   const previous = setup.promptMessageId
   if (previous !== undefined) {
-    yield* disarmPrompt(api, chatId, previous)
+    yield* bestEffort(
+      telegram("editMessageReplyMarkup", () => api.editMessageReplyMarkup(chatId, previous)),
+      (operation) => `creation prompt ${previous} in chat ${chatId} stayed armed: ${operation}`,
+    )
   }
 
   const suggestions = managedBotSuggestions(setup.workspace.name)
@@ -323,18 +332,17 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
       ),
     }),
   )
-  // Best-effort, and the asymmetry is on purpose: the coach is looking at a
-  // working button, and failing their `/start` now would take that away to
-  // protect a later disarm. What is lost is only the handle on this message.
-  yield* repo
-    .recordPrompt(setup.id, sent.message_id, new Date(yield* Clock.currentTimeMillis))
-    .pipe(
-      Effect.catch((failure) =>
-        Effect.logWarning(
-          `creation prompt ${sent.message_id} for attempt ${setup.id} was sent but not recorded: ${failure.operation}`,
-        ),
-      ),
-    )
+  // The asymmetry here is deliberate. The coach is looking at a working button,
+  // and failing their `/start` now would take it away to protect a *later*
+  // disarm — or, on the redelivery a failure invites, send them a second one. So
+  // the handle on this message is what is given up: the next `/start` would then
+  // disarm an already-dead id and leave two armed prompts, which is precisely
+  // the case the claim fence exists to survive (#135).
+  yield* bestEffort(
+    repo.recordPrompt(setup.id, sent.message_id, new Date(yield* Clock.currentTimeMillis)),
+    (operation) =>
+      `creation prompt ${sent.message_id} for attempt ${setup.id} was sent but not recorded: ${operation}`,
+  )
   return sent.message_id
 })
 
@@ -351,7 +359,7 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
  * message the coach deleted may undo that.
  */
 export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(function* (
-  env: { readonly MANAGER_BOT_TOKEN: string },
+  env: ManagerBotEnv,
   prompt: CoachBotProvisioningRepo.Provisioning,
   botUsername: string,
   telegramFetch?: typeof globalThis.fetch,
@@ -359,18 +367,17 @@ export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(
   const messageId = prompt.promptMessageId
   if (messageId === undefined) return
   const api = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
-  const settled = yield* telegram("editMessageText", () =>
-    api.editMessageText(
-      prompt.coachTelegramId,
-      messageId,
-      messages(prompt.coachLanguage).promptConnected(botUsername),
+  yield* bestEffort(
+    telegram("editMessageText", () =>
+      api.editMessageText(
+        prompt.coachTelegramId,
+        messageId,
+        messages(prompt.coachLanguage).promptConnected(botUsername),
+      ),
     ),
-  ).pipe(Effect.result)
-  if (Result.isFailure(settled)) {
-    yield* Effect.logWarning(
-      `coach bot @${botUsername} is connected but its creation prompt ${messageId} stayed armed: ${settled.failure.operation}`,
-    )
-  }
+    (operation) =>
+      `coach bot @${botUsername} is connected but its creation prompt ${messageId} stayed armed: ${operation}`,
+  )
 })
 
 /**
@@ -403,6 +410,9 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   const credentials = yield* CoachBotCredential.Service
   const now = new Date(yield* Clock.currentTimeMillis)
   const managerApi = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
+  // `exactOptionalPropertyTypes` refuses an explicit `undefined` here, and both
+  // configuration branches need the same seam.
+  const injectedFetch = telegramFetch === undefined ? {} : { telegramFetch }
 
   const existing = yield* repo.findByBotId(String(managedBot.id)).pipe(Effect.result)
   if (Result.isSuccess(existing)) {
@@ -417,7 +427,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       workspace: profile,
       coachName: coachDisplayName(user, profile.name),
       webhookOrigin,
-      ...(telegramFetch === undefined ? {} : { telegramFetch }),
+      ...injectedFetch,
     })
     return {
       _tag: "Connected",
@@ -461,7 +471,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     workspace: provisioning.workspace,
     coachName: coachDisplayName(user, provisioning.workspace.name),
     webhookOrigin,
-    ...(telegramFetch === undefined ? {} : { telegramFetch }),
+    ...injectedFetch,
   })
   const installation = yield* repo.complete({
     provisioningId: provisioning.id,

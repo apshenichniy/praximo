@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { CoachBotProvisioningRepo } from "@praximo/db"
+import { CoachBotProvisioningRepo, QueryFailed } from "@praximo/db"
 import { CoachLanguage, CoachOnboardingInviteId, TelegramId, WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
@@ -77,7 +77,10 @@ interface RepoStub {
   readonly completed: Array<string>
 }
 
-const repoStub = (claimed: CoachBotProvisioningRepo.Provisioning): RepoStub => {
+const repoStub = (
+  claimed: CoachBotProvisioningRepo.Provisioning,
+  options: { readonly recordFails?: boolean } = {},
+): RepoStub => {
   const recorded: Array<{ readonly attemptId: string; readonly promptMessageId: number }> = []
   const completed: Array<string> = []
   const layer = Layer.succeed(
@@ -86,6 +89,14 @@ const repoStub = (claimed: CoachBotProvisioningRepo.Provisioning): RepoStub => {
       prepare: unsupported,
       claim: () => Effect.succeed(claimed),
       recordPrompt: (attemptId, promptMessageId) => {
+        if (options.recordFails === true) {
+          return Effect.fail(
+            new QueryFailed({
+              operation: "provisioning.recordPrompt",
+              cause: new Error("connection refused"),
+            }),
+          )
+        }
         recorded.push({ attemptId, promptMessageId })
         return Effect.void
       },
@@ -230,6 +241,27 @@ describe("offering bot creation", () => {
       expect(repo.recorded).toEqual([
         { attemptId: "cbp_test_800000101", promptMessageId: messageId },
       ])
+    }),
+  )
+
+  it.effect("keeps the button the coach is looking at when recording it fails", () =>
+    Effect.gen(function* () {
+      const repo = repoStub(attempt(), { recordFails: true })
+      const telegram = telegramStub()
+
+      const messageId = yield* offer(repo, telegram, attempt({ promptMessageId: 401 }))
+
+      // The `/start` succeeds and the coach gets a working button. What is given
+      // up is the handle on it: a later `/start` will disarm the dead 401 and
+      // leave two armed prompts, which the claim fence survives (#135). Failing
+      // here instead would either take the working button away or — on the
+      // redelivery a failure invites — hand them a second one.
+      expect(telegram.calls.map((call) => call.method)).toEqual([
+        "editMessageReplyMarkup",
+        "sendMessage",
+      ])
+      expect(messageId).toBeGreaterThan(0)
+      expect(repo.recorded).toEqual([])
     }),
   )
 
