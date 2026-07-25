@@ -292,6 +292,23 @@ describe("what the coach sees while their bot is set up", () => {
     }),
   )
 
+  it.effect("keeps what Telegram held for a coach it has greeted with nothing", () =>
+    Effect.gen(function* () {
+      // The same refusal as above, and the reason it must not end in a drop. A
+      // coach who taps **Start bot** after this run began has been greeted by
+      // neither message — both were refused for want of a chat to write in — and
+      // the `/start` behind that tap is queued precisely because the webhook is
+      // being armed only now. Dropping it leaves them in an empty chat; delivered,
+      // it reaches the bot's own `/start` handler and the same **Open** button.
+      const telegram = telegramStub({ unopenedChat: true })
+
+      yield* provision(telegram)
+
+      const armed = coachBotCalls(telegram, "setWebhook")[0]
+      expect(armed?.body).not.toHaveProperty("drop_pending_updates")
+    }),
+  )
+
   it.effect("connects the bot even when neither message can be delivered", () =>
     Effect.gen(function* () {
       const telegram = telegramStub({ failing: ["sendMessage", "editMessageText"] })

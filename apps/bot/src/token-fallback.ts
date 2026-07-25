@@ -232,6 +232,7 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
   yield* setCoachBotMenuButton({
     token,
     botId: candidate.botId,
+    coachChatId: candidate.coachTelegramId,
     miniAppBaseUrl: env.COACH_MINI_APP_URL,
     ...injectedFetch,
   })

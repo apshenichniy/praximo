@@ -5,7 +5,12 @@ import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
 import { Effect, Layer } from "effect"
 import { messages } from "./messages.ts"
-import { createBotLink, offerBotCreation, provisionManagedBot } from "./provisioning.ts"
+import {
+  createBotLink,
+  offerBotCreation,
+  provisionManagedBot,
+  suggestedBotName,
+} from "./provisioning.ts"
 import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 
 /**
@@ -193,10 +198,26 @@ const bodyOf = (telegram: TelegramStub, method: string): Record<string, unknown>
   telegram.calls.find((call) => call.method === method)?.body
 
 describe("the creation deep link", () => {
-  it("carries the manager bot and the suggested username, and nothing else", () => {
-    expect(createBotLink("PraximoManagerBot", "ada_coaching_3pue_bot")).toBe(
-      "https://t.me/newbot/PraximoManagerBot/ada_coaching_3pue_bot",
+  it("carries the manager bot and both suggestions", () => {
+    expect(createBotLink("PraximoManagerBot", "ada_coaching_3pue_bot", "Ada Coaching")).toBe(
+      "https://t.me/newbot/PraximoManagerBot/ada_coaching_3pue_bot?name=Ada%20Coaching",
     )
+  })
+
+  // The name is what `bots.createBot` refuses to be called without, so a link
+  // that omits it opens a dialog whose **Create** button cannot respond until
+  // the coach types one — a broken button, as far as they can tell.
+  it("always carries a name, even for a workspace whose own name is blank", () => {
+    expect(suggestedBotName("   ")).toBe("Praximo Coach")
+  })
+
+  // Telegram takes 1–64 characters and says nothing else about the value, so the
+  // only thing to hold is the ceiling — and to hold it without leaving the
+  // trailing space a cut mid-word makes.
+  it("clamps a long workspace name to what Telegram accepts", () => {
+    const name = suggestedBotName(`${"Ada ".repeat(20)}Coaching`)
+    expect(name.length).toBeLessThanOrEqual(64)
+    expect(name).toBe(name.trim())
   })
 })
 
@@ -222,10 +243,12 @@ describe("offering bot creation", () => {
           [
             {
               text: messages("ru").createBotButton,
-              // The suggested username, tag and all, as the coach sees it — a
-              // golden value, so a change in how it is derived shows up here as
-              // the change to a tapped URL that it is (#147).
-              url: "https://t.me/newbot/PraximoManagerBot/ada_coaching_3pue_bot",
+              // Both suggestions, tag and all, as the coach sees them — a golden
+              // value, so a change in how either is derived shows up here as the
+              // change to a tapped URL that it is (#147). The `name` is the half
+              // that decides whether the dialog's **Create** button responds at
+              // all, so its presence is asserted where the URL is, not apart.
+              url: "https://t.me/newbot/PraximoManagerBot/ada_coaching_3pue_bot?name=Ada%20Coaching",
             },
           ],
         ],
@@ -354,7 +377,7 @@ describe("activation and the prompt", () => {
 
       expect(failure).toMatchObject({
         _tag: "BotWorker.TelegramSetupFailed",
-        operation: "setChatMenuButton",
+        operation: "setChatMenuButton.chat",
       })
       // The workspace is unconnected on purpose and the coach resumes by tapping
       // again — disarming here would strand them.
