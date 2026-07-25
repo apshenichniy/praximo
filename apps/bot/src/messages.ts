@@ -18,6 +18,14 @@ export interface Copy {
   readonly setupInProgress: string
   readonly invitationReserved: (workspaceName: string) => string
   readonly createBotButton: string
+  /**
+   * What the creation prompt itself becomes once the bot is connected (#134).
+   * The button is gone with the keyboard, so this message has one job: to be the
+   * confirmation the coach came back to that message for. Distinct from
+   * `botConnected`, which arrives as its own message and points them onward — the
+   * two sit next to each other in the chat and must not read as a duplicate.
+   */
+  readonly promptConnected: (username: string) => string
   readonly botConnected: (username: string) => string
   /**
    * A bot the coach created that we did not connect, because their setup was
@@ -52,6 +60,7 @@ const en: Copy = {
       workspaceName.length === 0 ? "" : ` (“${workspaceName}”)`
     }. Create your coach bot to finish the setup — you can come back to this chat and continue any time.\n\nAlready have a bot? Send me its @BotFather token in this chat instead and I will connect it.`,
   createBotButton: "Create coach bot",
+  promptConnected: (username) => `Setup finished — your coach bot @${username} is connected.`,
   botConnected: (username) => `Your coach bot @${username} is connected. Open it to continue.`,
   extraBotNotConnected: (username) =>
     `Your workspace is fine — your coach bot is still connected and working.\n\n@${username} is a second bot, and it is not connected to Praximo. Nothing needs fixing on your side.\n\nIf you would rather not keep it, delete @${username} in @BotFather. We cannot remove it for you — only you can.`,
@@ -89,6 +98,7 @@ const uk: Copy = {
       workspaceName.length === 0 ? "" : ` («${workspaceName}»)`
     }. Створіть свого бота, щоб завершити налаштування — ви можете повернутися до цього чату будь-коли.\n\nУже маєте бота? Надішліть мені його токен із @BotFather просто в цей чат, і я підключу його.`,
   createBotButton: "Створити бота",
+  promptConnected: (username) => `Налаштування завершено — бота @${username} підключено.`,
   botConnected: (username) => `Ваш бот @${username} підключено. Відкрийте його, щоб продовжити.`,
   extraBotNotConnected: (username) =>
     `З вашим простором усе гаразд — ваш бот і далі підключений та працює.\n\n@${username} — це другий бот, і він не підключений до Praximo. Виправляти нічого не потрібно.\n\nЯкщо він вам не потрібен, видаліть @${username} у @BotFather. Ми не можемо зробити це за вас — це можете зробити лише ви.`,
@@ -126,6 +136,7 @@ const ru: Copy = {
       workspaceName.length === 0 ? "" : ` («${workspaceName}»)`
     }. Создайте своего бота, чтобы завершить настройку — вы можете вернуться в этот чат в любой момент.\n\nУже есть бот? Пришлите мне его токен из @BotFather прямо в этот чат, и я подключу его.`,
   createBotButton: "Создать бота",
+  promptConnected: (username) => `Настройка завершена — бот @${username} подключён.`,
   botConnected: (username) => `Ваш бот @${username} подключён. Откройте его, чтобы продолжить.`,
   extraBotNotConnected: (username) =>
     `С вашим пространством всё в порядке — ваш бот по-прежнему подключён и работает.\n\n@${username} — это второй бот, и он не подключён к Praximo. Исправлять ничего не нужно.\n\nЕсли он вам не нужен, удалите @${username} в @BotFather. Мы не можем сделать это за вас — это можете сделать только вы.`,

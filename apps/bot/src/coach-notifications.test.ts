@@ -39,6 +39,7 @@ const run = (queued: ReadonlyArray<CoachBotProvisioningRepo.PendingNotification>
       CoachBotProvisioningRepo.Service.of({
         prepare: unsupported,
         claim: unsupported,
+        recordPrompt: unsupported,
         ingestCandidate: unsupported,
         findCandidateByBotId: unsupported,
         complete: unsupported,

@@ -11,6 +11,7 @@ import {
   configureCoachBot,
   constantTimeEqual,
   type ProvisioningEnv,
+  settleCreationPrompt,
   sha256,
   telegram,
   webhookSecret,
@@ -240,6 +241,10 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
     botInfo: configured.botInfo,
     now,
   })
+  // A coach who pasted a token may still have a live creation button sitting in
+  // the manager chat from before they gave up on it. Their bot is connected now,
+  // whichever path got them here, so that button is retired the same way (#134).
+  yield* settleCreationPrompt(env, claimed, candidate.botUsername, input.telegramFetch)
 
   const copy = messages(candidate.coachLanguage)
   // The bot is connected the moment the transaction commits; a greeting that

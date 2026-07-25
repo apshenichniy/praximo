@@ -17,9 +17,10 @@ below.
   bot management enabled in the @BotFather Mini App (`can_manage_bots`), and its
   token is in `MANAGER_BOT_TOKEN` ([#84](https://github.com/apshenichniy/praximo/issues/84)).
   **Verify it rather than assume it** — `bun run manager-bot:set-menu <web-origin>`
-  reports both manual @BotFather flags. With bot management off, Telegram simply
-  does not serve the one-tap button and the coach sees a share sheet that never
-  completes; nothing fails server-side, so the only other way to notice is a phone.
+  reports both manual @BotFather flags. With bot management off the coach's tap
+  cannot produce a bot, and nothing fails server-side — the attempt simply sits at
+  `requested` waiting for a `managed_bot` update Telegram never sends — so the only
+  other way to notice is a phone.
 - The stage is deployed and `COACH_MINI_APP_URL` points at its coach Mini App
   origin — this is the URL every coach bot's menu button will open.
 - The operator's Telegram id carries the admin flag, so the `/admin` route opens
@@ -44,17 +45,31 @@ onboard anyone until delivery lands
 ## 2. The coach connects their bot
 
 The coach opens the link, which lands in the manager bot as `/start <code>`. The
-manager bot reserves the invitation and offers a **Create coach bot** button
-(Telegram's own managed-bot dialog, with a username suggested from the workspace
-name). The coach picks the final name and username there; one tap is the whole
-step.
+manager bot reserves the invitation and sends one message with a **Create coach
+bot** button on it — an inline link into Telegram's own managed-bot dialog, with a
+username suggested from the workspace name. The coach picks the final name and
+username there; one tap is the whole step.
 
-> ⚠️ **A reply-keyboard button does not work on iPhone** (verified 2026-07-25,
-> [#134](https://github.com/apshenichniy/praximo/issues/134)) — Telegram iOS turns
-> the tap into a share sheet that never completes. The `t.me/newbot/…` **deep
-> link** opens the same dialog correctly on iOS, and that is the mechanism being
-> shipped. Until it is, a coach onboarding from a phone should use the token path
-> below — it reaches the identical `connected` outcome.
+> **The button is a `t.me/newbot/…` deep link, on iPhone and on Desktop alike**
+> ([#134](https://github.com/apshenichniy/praximo/issues/134)). The
+> `request_managed_bot` **reply-keyboard** button this replaced never worked on
+> Telegram iOS — the tap became a share sheet that never completed — so if you are
+> reading an older transcript that says to use the token path from a phone, that
+> workaround is no longer needed.
+
+**Exactly one of those buttons is ever live.** A coach who reopens their link
+gets a fresh message, and the previous one loses its button as the new one is
+sent; once the bot is connected, the message the coach tapped is edited in place
+into a confirmation naming the bot, and no armed button is left anywhere in the
+chat. Two things follow for the operator:
+
+- A prompt that still carries a button after a coach reports being stuck means
+  provisioning did **not** complete — that is the resume path, and tapping it
+  again is the right advice.
+- A message the coach deleted, or one older than Telegram's 48-hour edit window,
+  cannot be edited. Provisioning succeeds regardless and logs a warning naming the
+  message; the coach may simply keep a stale-looking button, which the claim fence
+  refuses anyway ([#135](https://github.com/apshenichniy/praximo/issues/135)).
 
 Everything downstream is automatic — nothing here is an operator action:
 

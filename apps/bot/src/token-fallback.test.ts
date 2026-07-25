@@ -5,6 +5,7 @@ import { CoachLanguage, CoachOnboardingInviteId, TelegramId, WorkspaceId } from 
 import { CoachBotCredential } from "@praximo/telegram"
 import type { Update } from "grammy/types"
 import { Effect, Layer } from "effect"
+import { messages as messagesFor } from "./messages.ts"
 import {
   authenticateProof,
   botFatherToken,
@@ -97,6 +98,8 @@ const repoStub = (
   options: {
     readonly installed?: CoachBotProvisioningRepo.Installation
     readonly parked?: CoachBotProvisioningRepo.Candidate
+    /** A creation prompt the coach left armed in the manager chat (#134). */
+    readonly promptMessageId?: number
   } = {},
 ): RepoStub => {
   const ingested: Array<CoachBotProvisioningRepo.IngestCandidateInput> = []
@@ -113,9 +116,13 @@ const repoStub = (
             status: "configuring",
             managedBotId,
             managedBotUsername,
+            ...(options.promptMessageId === undefined
+              ? {}
+              : { promptMessageId: options.promptMessageId }),
           }),
         )
       },
+      recordPrompt: unsupported,
       ingestCandidate: (input) => {
         ingested.push(input)
         return Effect.succeed(provisioning())
@@ -143,18 +150,30 @@ const repoStub = (
   return { layer, ingested, claimed, completed }
 }
 
+interface Edit {
+  readonly token: string
+  readonly chatId: unknown
+  readonly messageId: unknown
+  readonly text: unknown
+  readonly replyMarkup: unknown
+}
+
 interface TelegramStub {
   readonly fetch: typeof globalThis.fetch
   readonly calls: Array<{ readonly method: string; readonly token: string }>
   readonly messages: Array<string>
+  /** Every `editMessageText`, with the credential it was made on. */
+  readonly edits: Array<Edit>
 }
 
 const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
   const calls: Array<{ readonly method: string; readonly token: string }> = []
   const messages: Array<string> = []
+  const edits: Array<Edit> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const [, credential = "", method = ""] = new URL(input.toString()).pathname.split("/")
-    calls.push({ method, token: credential.replace(/^bot/, "") })
+    const token = credential.replace(/^bot/, "")
+    calls.push({ method, token })
     if (failing.includes(method)) {
       return Response.json(
         { ok: false, error_code: 401, description: "Unauthorized" },
@@ -165,6 +184,17 @@ const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
       const body = init?.body
       messages.push(typeof body === "string" ? String(JSON.parse(body).text) : "")
       return Response.json({ ok: true, result: { message_id: 1 } })
+    }
+    if (method === "editMessageText") {
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) : {}
+      edits.push({
+        token,
+        chatId: body.chat_id,
+        messageId: body.message_id,
+        text: body.text,
+        replyMarkup: body.reply_markup,
+      })
+      return Response.json({ ok: true, result: { message_id: body.message_id } })
     }
     if (method === "getMe") {
       return Response.json({
@@ -182,7 +212,7 @@ const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
     }
     return Response.json({ ok: true, result: true })
   }
-  return { fetch, calls, messages }
+  return { fetch, calls, messages, edits }
 }
 
 const proofUpdate = (text: string, fromId: string): Update =>
@@ -390,6 +420,40 @@ describe("BotFather token fallback", () => {
       // The secret the handshake was armed with is the one that stays installed,
       // so a retry of this update still authenticates.
       expect(completed?.webhookSecretHash).toBe(SECRET_HASH)
+    }),
+  )
+
+  it.effect("retires the creation prompt the coach abandoned in the manager chat", () =>
+    Effect.gen(function* () {
+      const repo = repoStub({ parked: candidate(), promptMessageId: 401 })
+      const telegram = telegramStub()
+
+      yield* proofOf(repo, telegram, proofUpdate(`/start ${PROOF}`, coach))
+
+      // Whichever path connected the bot, the creation button must not survive
+      // it (#134) — and this one lives in the *manager* chat, so the edit is the
+      // only Telegram call here made on the manager's own credential.
+      expect(telegram.edits).toEqual([
+        {
+          token: env.MANAGER_BOT_TOKEN,
+          chatId: coach,
+          messageId: 401,
+          text: messagesFor(CoachLanguage.make("uk")).promptConnected(BOT_USERNAME),
+          replyMarkup: undefined,
+        },
+      ])
+    }),
+  )
+
+  it.effect("activates even when that abandoned prompt can no longer be edited", () =>
+    Effect.gen(function* () {
+      const repo = repoStub({ parked: candidate(), promptMessageId: 401 })
+      const telegram = telegramStub(["editMessageText"])
+
+      const outcome = yield* proofOf(repo, telegram, proofUpdate(`/start ${PROOF}`, coach))
+
+      expect(outcome).toEqual({ _tag: "Activated", username: BOT_USERNAME })
+      expect(repo.completed).toHaveLength(1)
     }),
   )
 

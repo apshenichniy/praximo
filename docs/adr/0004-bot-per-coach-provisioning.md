@@ -28,9 +28,26 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
     opens the creation dialog correctly on iOS. Both drive the same MTProto
     `bots.createBot` and produce the same `managed_bot` update, and our claim is
     keyed on the coach's Telegram id rather than the keyboard's `request_id`, so
-    the launch mechanism is interchangeable without touching the fence. The deep
-    link is therefore the mechanism to ship. Evidence and the migration in
-    [#134](https://github.com/apshenichniy/praximo/issues/134).
+    the launch mechanism is interchangeable without touching the fence. **The
+    deep link, on an inline `url` button, is what ships**
+    ([#134](https://github.com/apshenichniy/praximo/issues/134)) — inline `url` is
+    the most basic inline type there is and renders on every client, so it cannot
+    hit the failure above.
+  - **At most one live creation button exists in the coach's chat at any moment,
+    and none once the bot is connected** ([#134](https://github.com/apshenichniy/praximo/issues/134)).
+    The keyboard button was `oneTime()` and vanished after a tap; a link in a
+    message is permanent, and `/start` is a documented resume path, so without
+    this the chat accumulates armed buttons. The attempt row therefore records its
+    `prompt_message_id`: a `/start` that offers creation strips the keyboard from
+    the previously recorded prompt *before* sending the new one, and a completed
+    activation edits that prompt in place — keyboard removed, text confirming the
+    connected bot. **Edited, never deleted**: the coach is looking at exactly that
+    message expecting confirmation. A partial provisioning failure deliberately
+    leaves the button armed, because re-tapping is how the runbook says to resume,
+    and a failed edit is logged rather than allowed to fail provisioning. This
+    reduces exposure; it does not replace the server-side fence
+    ([#135](https://github.com/apshenichniy/praximo/issues/135)) — a coach can
+    still tap twice before the edit lands.
 - **No shared-single-bot mode**, not even as a degraded state: it breaks branding and forfeits per-coach rate limits.
 
 ### Bot roles
@@ -41,7 +58,7 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
 ### Provisioning flow (within manual coach onboarding)
 
 1. Admin creates the workspace manually and hands the coach a personal deep link to the manager bot.
-2. Manager bot shows a `request_managed_bot` keyboard button (equivalently the `t.me/newbot/{manager}/{suggested}` deep link) with a **suggested username derived from the workspace name**; the coach picks the final name/username in Telegram's own dialog.
+2. Manager bot sends one message carrying a `t.me/newbot/{manager}/{suggested}` deep link on an inline `url` button, with a **suggested username derived from the workspace name**; the coach picks the final name and display name in Telegram's own dialog (the deep-link form carries only the username).
 3. On `Update.managed_bot` / `ManagedBotCreated`, everything is automatic: `getManagedBotToken` → encrypt and store the token → branding → `setWebhook` with a fresh per-bot secret → `setChatMenuButton` pointing at the Mini App. No manual steps after the tap.
 
 Opening `/start` does not reserve the workspace. It records a resumable request;
@@ -63,9 +80,9 @@ on an invitation an administrator reset gets a refusal that is equally
 deterministic and still answers `500`. It is deliberately not folded into the
 same 200 — the coach's bot really is unconnected there, so the reassuring copy
 would be a lie, and what to say instead is a copy decision this ADR does not
-take. The distinction matters more once the entry point becomes a deep link
+take. The distinction matters more now that the entry point is a deep link
 ([#134](https://github.com/apshenichniy/praximo/issues/134)): a link stays in the
-chat, where the `oneTime()` keyboard button it replaces vanished after a tap.
+chat, where the `oneTime()` keyboard button it replaced vanished after a tap.
 
 ### BotFather token fallback
 

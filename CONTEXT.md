@@ -33,6 +33,10 @@ _Avoid_: pending bot, unclaimed bot
 The handshake that lets a pasted credential connect a Candidate Bot: the coach opens that bot with a one-shot nonce only their manager chat received, from the same Telegram account that pasted the token. Possession of a token is not proof it is the coach's to hand over.
 _Avoid_: verification, confirmation code
 
+**Creation Prompt**:
+The one message in the coach's manager chat whose button opens Telegram's bot-creation dialog. It is **armed** while that button is live and **disarmed** once the button is taken off it. At most one armed prompt exists in a chat at any moment, and none once the workspace has a Bot — so a prompt still armed means provisioning has not completed and re-tapping is the way to resume.
+_Avoid_: create button, keyboard, invite message
+
 ### Clients and onboarding
 
 **Client**:

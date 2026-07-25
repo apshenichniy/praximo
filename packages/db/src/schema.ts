@@ -259,7 +259,20 @@ export const coachBotProvisioning = pgTable(
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
     coachTelegramId: text("coach_telegram_id").notNull(),
+    // Named after the `request_managed_bot` keyboard button that no longer
+    // exists (#134): creation is launched by deep link now, and the deep-link
+    // form carries no request id. The column stays under its old name because
+    // what it actually is — this attempt's stable identity within the coach,
+    // derived from (invite, coach) and fenced by the unique index below — never
+    // depended on the keyboard. Renaming it would rewrite the index and the
+    // fence to say the same thing.
     keyboardRequestId: integer("keyboard_request_id").notNull(),
+    // The manager-chat message whose inline button launches creation (#134).
+    // Recorded because a link in a message is permanent where the reply-keyboard
+    // button it replaces vanished after one tap: this is the only handle on the
+    // prompt that has to be disarmed before another is sent, and edited once the
+    // bot is connected. Null until the first prompt has been sent.
+    promptMessageId: integer("prompt_message_id"),
     managedBotId: text("managed_bot_id"),
     managedBotUsername: text("managed_bot_username"),
     candidateBotId: text("candidate_bot_id"),

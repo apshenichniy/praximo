@@ -8,7 +8,7 @@ import {
   CoachBotRelease,
   ManagerBotSender,
 } from "@praximo/telegram"
-import { Bot, InlineKeyboard, Keyboard } from "grammy"
+import { Bot, InlineKeyboard } from "grammy"
 import type { Update, User, UserFromGetMe } from "grammy/types"
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Result } from "effect"
 import { clientLanguage, type Copy, messages } from "./messages.ts"
@@ -17,7 +17,7 @@ import {
   constantTimeEqual,
   deliverCoachNotifications,
   type ManagedBotOutcome,
-  managedBotSuggestions,
+  offerBotCreation,
   prepareOnboarding,
   provisionManagedBot,
 } from "./provisioning.ts"
@@ -147,15 +147,10 @@ const makeManagerBot = (
       await ctx.reply(setup.status === "completed" ? copy.linkUsed : copy.setupInProgress)
       return
     }
-    const suggestions = managedBotSuggestions(setup.workspace.name)
-    const keyboard = new Keyboard()
-      .requestManagedBot(copy.createBotButton, setup.keyboardRequestId, {
-        suggested_name: suggestions.name,
-        suggested_username: suggestions.username,
-      })
-      .resized()
-      .oneTime()
-    await ctx.reply(copy.invitationReserved(setup.workspace.name), { reply_markup: keyboard })
+    // The prompt's whole lifecycle — disarm the previous button, send the new
+    // one, record it — is one operation, because the invariant it holds spans all
+    // three (#134).
+    await getRuntime(env).runPromise(offerBotCreation(env, setup, telegramFetch))
   })
 
   /**
@@ -274,9 +269,13 @@ const handleManagerWebhook = async (
   const bot = await managerBotFor(env, telegramFetch, webhookOrigin)
   if (update.managed_bot !== undefined) {
     const result = await getRuntime(env).runPromise(
-      provisionManagedBot(env, update.managed_bot.user, update.managed_bot.bot, webhookOrigin).pipe(
-        Effect.result,
-      ),
+      provisionManagedBot(
+        env,
+        update.managed_bot.user,
+        update.managed_bot.bot,
+        webhookOrigin,
+        telegramFetch,
+      ).pipe(Effect.result),
     )
     if (result._tag === "Failure") return new Response(null, { status: 500 })
     if (result.success._tag === "Connected") coachBots.delete(String(update.managed_bot.bot.id))

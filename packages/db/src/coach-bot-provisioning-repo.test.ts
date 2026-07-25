@@ -82,6 +82,42 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
+  it.effect("carries the live creation prompt across a repeated /start and into the claim", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachBotProvisioningRepo.Service
+      const aggregate = yield* inviteFor("prompt-message", ISSUED_AT)
+
+      // Nothing has been sent yet, so there is no prompt to disarm.
+      const first = yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      expect(first.promptMessageId).toBeUndefined()
+
+      yield* repo.recordPrompt(first.id, 401, STARTED_AT)
+
+      // The point of recording it: the *next* `/start` reads back the message it
+      // has to disarm before it may send another (#134).
+      const resumed = yield* repo.prepare(
+        aggregate.invite.id,
+        coach,
+        new Date("2026-07-25T09:00:00.000Z"),
+      )
+      expect(resumed.id).toBe(first.id)
+      expect(resumed.promptMessageId).toBe(401)
+
+      yield* repo.recordPrompt(first.id, 402, new Date("2026-07-25T09:00:01.000Z"))
+
+      // And activation reads it off the claimed attempt, which is what makes the
+      // prompt editable in place once the bot is connected.
+      const claimed = yield* repo.claim(
+        coach,
+        "9100010",
+        "ada_coach_bot",
+        new Date("2026-07-25T09:05:00.000Z"),
+      )
+      expect(claimed.id).toBe(first.id)
+      expect(claimed.promptMessageId).toBe(402)
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
   it.effect("refuses a competing identity without disclosing the claimant", () =>
     Effect.gen(function* () {
       const repo = yield* CoachBotProvisioningRepo.Service
