@@ -11,6 +11,7 @@ import {
   completeOwnershipProof,
   ingestBotFatherToken,
 } from "./token-fallback.ts"
+import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 
 const TOKEN = "9100777:AAHkq2Lb8fN1sQx3TzVpYr7WcJd4MgEuKvB"
 const BOT_ID = "9100777"
@@ -29,9 +30,9 @@ const SECRET_HASH = sha256Hex(SECRET)
 
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
-  DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default-coach-avatar.jpg",
+  DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
   COACH_MINI_APP_URL: "https://stage.praximo.io/",
-  UPLOADS: {} as R2Bucket,
+  UPLOADS: uploadsStub({ [BRANDING_AVATAR_KEY]: BRANDING_AVATAR_BYTES }).bucket,
 }
 
 const unsupported = () => Effect.die(new Error("unsupported test operation"))

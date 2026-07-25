@@ -59,12 +59,28 @@ step.
 Everything downstream is automatic — nothing here is an operator action:
 
 - the bot's token is fetched and stored AES-GCM-encrypted;
-- default Praximo branding is applied — an avatar generated from the bot's id,
-  plus an English description and short description templated from the coach's
-  own Telegram name. Both are pure functions of their seed, so re-running
-  provisioning reproduces the same bot rather than re-skinning one the coach has
-  since made their own ([#108](https://github.com/apshenichniy/praximo/issues/108));
-  rebranding is the coach's, done in @BotFather;
+- default Praximo branding is applied — the stage's stored branding image from
+  R2, plus an English description and short description templated from the
+  coach's own Telegram name. The text is a pure function of its seed, so a retry
+  reproduces it exactly; the picture is whatever the key holds **at that moment**,
+  so a re-provisioning after the image was replaced installs the new one
+  ([#108](https://github.com/apshenichniy/praximo/issues/108),
+  [#138](https://github.com/apshenichniy/praximo/issues/138)). Provisioning always
+  sets the photo, so a coach who rebranded in @BotFather and is then re-provisioned
+  gets the platform image back — rebranding is coach-side and is theirs to redo.
+  **To change the picture every future coach bot starts with**, upload a new one —
+  no code change, no deploy:
+
+  ```sh
+  bun run branding:avatar:set --stage dev_apshenichniy --file ./avatar.png \
+    --key branding/default-coach-avatar.jpg
+  ```
+
+  Any JPEG/PNG/WebP/SVG source is normalized to the square 512×512 JPEG the key
+  must hold, and only that key is replaced. The photo step is best-effort end to
+  end: a stage that never uploaded an image, an R2 error, or an object Telegram
+  refuses all leave the bot without a photo and a warning in the Worker log
+  naming the key — never a coach who cannot finish onboarding;
 - the webhook is armed with a fresh per-bot secret;
 - the **in-chat menu button** is set to a `web_app` button labelled **"Open"**,
   pointing at `COACH_MINI_APP_URL`;
