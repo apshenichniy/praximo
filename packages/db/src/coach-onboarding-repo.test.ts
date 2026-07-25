@@ -10,15 +10,15 @@ import { Effect, Layer, Result } from "effect"
 import { CoachOnboardingRepo, InviteTtlMilliseconds } from "./coach-onboarding-repo.ts"
 import { Database } from "./client.ts"
 import * as schema from "./schema.ts"
+import { skipWithoutDatabase, testDatabaseUrl } from "./test-database.ts"
 
-const DATABASE_URL = process.env.DATABASE_URL
 const requestId = () => crypto.randomUUID()
 const issuedByTelegramId = "100000001"
 
-describe.skipIf(!DATABASE_URL)("CoachOnboardingRepo (dev Neon branch)", () => {
+describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", () => {
   const appLayer = Layer.provideMerge(
     CoachOnboardingRepo.layer,
-    Database.testLayer(DATABASE_URL ?? ""),
+    Database.testLayer(testDatabaseUrl),
   )
 
   it.effect("atomically creates the aggregate and makes identical retries idempotent", () =>

@@ -6,8 +6,8 @@ import { CoachBotProvisioningRepo } from "./coach-bot-provisioning-repo.ts"
 import { CoachOnboardingRepo } from "./coach-onboarding-repo.ts"
 import { Database } from "./client.ts"
 import * as schema from "./schema.ts"
+import { skipWithoutDatabase, testDatabaseUrl } from "./test-database.ts"
 
-const DATABASE_URL = process.env.DATABASE_URL
 const requestId = () => crypto.randomUUID()
 const issuedByTelegramId = "100000001"
 const coach = TelegramId.make("800000101")
@@ -21,10 +21,10 @@ const STARTED_AT = new Date("2026-07-23T19:00:00.000Z")
  * attempt are taken by one statement, so these run against a real Postgres —
  * the compare-and-set and its snapshot semantics are the whole subject.
  */
-describe.skipIf(!DATABASE_URL)("CoachBotProvisioningRepo claim (dev Neon branch)", () => {
+describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon branch)", () => {
   const appLayer = Layer.provideMerge(
     Layer.mergeAll(CoachBotProvisioningRepo.layer, CoachOnboardingRepo.layer),
-    Database.testLayer(DATABASE_URL ?? ""),
+    Database.testLayer(testDatabaseUrl),
   )
 
   const inviteFor = Effect.fnUntraced(function* (

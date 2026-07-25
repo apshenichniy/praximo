@@ -4,17 +4,16 @@ import { eq } from "drizzle-orm"
 import { Effect, Layer, Result } from "effect"
 import { Database } from "./client.ts"
 import * as schema from "./schema.ts"
+import { skipWithoutDatabase, testDatabaseUrl } from "./test-database.ts"
 import { WorkspaceDeletionRepo } from "./workspace-deletion-repo.ts"
-
-const DATABASE_URL = process.env.DATABASE_URL
 
 const uniqueId = (prefix: string): string =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
 
-describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => {
+describe.skipIf(skipWithoutDatabase)("WorkspaceDeletionRepo (dev Neon branch)", () => {
   const appLayer = Layer.provideMerge(
     WorkspaceDeletionRepo.layer,
-    Database.testLayer(DATABASE_URL ?? ""),
+    Database.testLayer(testDatabaseUrl),
   )
 
   it.effect("snapshots every owned R2 key, cascades the workspace, and replays the receipt", () =>

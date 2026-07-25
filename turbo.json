@@ -10,7 +10,12 @@
     "test": {
       "dependsOn": ["^check"],
       "inputs": ["src/**", "tsconfig.json", "package.json"],
-      "outputs": []
+      "outputs": [],
+      // turbo runs tasks in strict env mode: anything not listed here is
+      // stripped, which is how `@praximo/db`'s database suites silently skipped
+      // even when the caller had a `DATABASE_URL` (#136). `CI` carries the rule
+      // that a missing URL there is a failure, not a skip.
+      "env": ["DATABASE_URL", "CI", "REQUIRE_DATABASE_TESTS"]
     },
     "build": {
       "dependsOn": ["^check"],

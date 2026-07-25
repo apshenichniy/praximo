@@ -4,14 +4,15 @@ import { eq, inArray } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Database } from "./client.ts"
 import * as schema from "./schema.ts"
+import { skipWithoutDatabase, testDatabaseUrl } from "./test-database.ts"
 import { WorkspaceRepo } from "./workspace-repo.ts"
 
 /**
- * Repository seam tested against the dev Neon branch (slice #36). Skips entirely
- * when `DATABASE_URL` is absent, so `bun run test` stays green without secrets;
- * run `bun run db:reset` first to provision a clean, migrated branch.
+ * Repository seam tested against a real Neon branch (slice #36). The gate lives
+ * in `test-database.ts`: locally the suite skips without `DATABASE_URL` (run
+ * `bun run db:reset` to provision a clean, migrated dev branch), while in CI a
+ * missing URL fails rather than skips (#136).
  */
-const DATABASE_URL = process.env.DATABASE_URL
 
 const uniqueId = (prefix: string): string =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
@@ -20,8 +21,8 @@ const uniqueId = (prefix: string): string =>
 const uniqueTelegramId = (offset: number): TelegramId =>
   TelegramId.make(String(810_000_000_000 + (Date.now() % 1_000_000) * 10 + offset))
 
-describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
-  const appLayer = Layer.provideMerge(WorkspaceRepo.layer, Database.testLayer(DATABASE_URL ?? ""))
+describe.skipIf(skipWithoutDatabase)("WorkspaceRepo (dev Neon branch)", () => {
+  const appLayer = Layer.provideMerge(WorkspaceRepo.layer, Database.testLayer(testDatabaseUrl))
 
   it.effect("round-trips a workspace it created", () =>
     Effect.gen(function* () {
