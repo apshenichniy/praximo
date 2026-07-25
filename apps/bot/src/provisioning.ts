@@ -153,6 +153,31 @@ export const CoachMenuButtonText = "Open"
 export const apiFor = (token: string, telegramFetch?: typeof globalThis.fetch): Api =>
   new Api(token, telegramFetch === undefined ? undefined : { fetch: telegramFetch })
 
+/**
+ * The coach Mini App URL for one specific bot: the configured base plus
+ * `?b=<telegramBotId>`.
+ *
+ * The parameter makes a launch self-identifying, which is what lets the app
+ * verify the Ed25519 signature against a named bot *before* it touches the
+ * database — no authorization decision is taken from an unverified key (ADR
+ * 0006). It is untrusted on its own: the signature binds the bot id, so a
+ * forged or borrowed value simply fails to verify.
+ *
+ * A base the URL parser rejects is handed back unchanged rather than throwing.
+ * Every caller here is on a path where a connected bot already exists, and the
+ * app still resolves such a launch by identity; `configureCoachBot` is where an
+ * unusable value is refused outright, before a bot is branded.
+ */
+export const coachMiniAppUrl = (baseUrl: string, botId: string): string => {
+  try {
+    const url = new URL(baseUrl)
+    url.searchParams.set("b", botId)
+    return url.toString()
+  } catch {
+    return baseUrl
+  }
+}
+
 export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
   input: CoachBotConfiguration,
 ) {
@@ -163,7 +188,7 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
     try: () => {
       const url = new URL(env.COACH_MINI_APP_URL)
       if (url.protocol !== "https:") throw new Error("Mini App URL must use HTTPS")
-      return url.toString()
+      return coachMiniAppUrl(url.toString(), botId)
     },
     catch: () => new TelegramSetupFailed({ operation: "miniAppUrl.validate" }),
   })

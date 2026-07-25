@@ -13,6 +13,7 @@ import type { Update, User, UserFromGetMe } from "grammy/types"
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Result } from "effect"
 import { clientLanguage, type Copy, messages } from "./messages.ts"
 import {
+  coachMiniAppUrl,
   constantTimeEqual,
   deliverProvisioningNotifications,
   managedBotSuggestions,
@@ -293,7 +294,10 @@ const coachBotFor = async (
     bot.command("start", (ctx) => {
       const copy = messages(clientLanguage(ctx.from?.language_code))
       return ctx.reply(copy.botReady, {
-        reply_markup: new InlineKeyboard().webApp(copy.openButton, env.COACH_MINI_APP_URL),
+        reply_markup: new InlineKeyboard().webApp(
+          copy.openButton,
+          coachMiniAppUrl(env.COACH_MINI_APP_URL, botId),
+        ),
       })
     })
     coachBots.set(botId, bot)

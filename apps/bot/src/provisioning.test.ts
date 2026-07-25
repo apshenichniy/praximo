@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import type { CoachBotProvisioningRepo } from "@praximo/db"
 import { Effect } from "effect"
-import { CoachMenuButtonText, configureCoachBot } from "./provisioning.ts"
+import { CoachMenuButtonText, coachMiniAppUrl, configureCoachBot } from "./provisioning.ts"
 
 const TOKEN = "9100777:AAHkq2Lb8fN1sQx3TzVpYr7WcJd4MgEuKvB"
 const BOT_ID = "9100777"
@@ -84,7 +84,10 @@ describe("coach bot configuration", () => {
         menu_button: {
           type: "web_app",
           text: CoachMenuButtonText,
-          web_app: { url: env.COACH_MINI_APP_URL },
+          // Self-identifying: the launch names the bot it came from, so the app
+          // can verify the signature against that bot before it reads anything
+          // (ADR 0006). The value is untrusted — the signature is what binds it.
+          web_app: { url: `${env.COACH_MINI_APP_URL}?b=${BOT_ID}` },
         },
       })
       expect(CoachMenuButtonText).toBe("Open")
@@ -110,4 +113,27 @@ describe("coach bot configuration", () => {
       expect(telegram.calls.map((call) => call.method)).toEqual(["getMe"])
     }),
   )
+})
+
+describe("coach Mini App URL", () => {
+  it("names the bot without disturbing whatever else the base carries", () => {
+    expect(coachMiniAppUrl("https://stage.praximo.io/", "9100777")).toBe(
+      "https://stage.praximo.io/?b=9100777",
+    )
+    expect(coachMiniAppUrl("https://stage.praximo.io/app?utm=x", "9100777")).toBe(
+      "https://stage.praximo.io/app?utm=x&b=9100777",
+    )
+    // Re-provisioning the same bot reproduces the same URL rather than stacking
+    // a second `b`, which Telegram would hand the app as an array.
+    expect(coachMiniAppUrl(coachMiniAppUrl("https://stage.praximo.io/", "1"), "2")).toBe(
+      "https://stage.praximo.io/?b=2",
+    )
+  })
+
+  it("hands back a base it cannot parse rather than throwing at a reply site", () => {
+    // Both inline-button callers run after a bot is connected, and the app
+    // resolves a launch with no `b` by identity. `configureCoachBot` is where an
+    // unusable value is refused — before anything is branded.
+    expect(coachMiniAppUrl("not a url", "9100777")).toBe("not a url")
+  })
 })
