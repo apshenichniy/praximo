@@ -112,7 +112,10 @@ describe("a second managed bot", () => {
   it.effect("leaves a genuine infrastructure failure on the retryable path", () =>
     Effect.gen(function* () {
       const repo = repoStub(
-        new QueryFailed({ operation: "provisioning.claim", cause: new Error("connection refused") }),
+        new QueryFailed({
+          operation: "provisioning.claim",
+          cause: new Error("connection refused"),
+        }),
       )
 
       const failure = yield* Effect.flip(provision(repo))
