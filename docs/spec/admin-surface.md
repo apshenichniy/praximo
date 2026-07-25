@@ -159,7 +159,7 @@ The manager bot proactively notifies the admin of the events that the Mini App c
 
 - **Coach completed Managed Bots setup → bot connected** (`connected`).
 - **Coach's first Mini App login → terms accepted** — onboarding complete, workspace fully active.
-- **`needs re-link`** — a coach bot returned 401 (token revoked); status flips and the coach is notified per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md). Consistent with [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md), there is no manual retry surface in the product; recovery is coach-side re-linking.
+- **`needs re-link`** — a coach bot returned 401 **and could not be repaired**. A revoked token is normally re-fetched by the manager bot and the workspace never leaves `connected`, so this status means the bot was deleted or arrived through the BotFather paste flow ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md) §Token lifecycle). Both the coach and the invite issuer are notified. Consistent with [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md), there is no manual retry surface in the product; recovery is coach-side re-linking. A silent repair notifies the coach alone and changes no status.
 
 ## Dev tooling: reset + admin seed
 

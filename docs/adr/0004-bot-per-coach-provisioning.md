@@ -52,7 +52,7 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
 
 ### Bot roles
 
-- The **manager bot** (platform-owned; Telegram display name `PraximoMother`, dev instance suffixed) does provisioning and service notifications to the coach only ("bot needs re-link", permanent pipeline failures). After onboarding it is mostly silent.
+- The **manager bot** (platform-owned; Telegram display name `PraximoMother`, dev instance suffixed) does provisioning and service notifications — to the coach ("bot needs re-link", permanent pipeline failures) and to the invite issuer, whose own bot cannot carry them. After onboarding it is mostly silent.
 - The **coach's own bot is the single surface** for both the coach (Mini App entry, briefs / debriefs / mentor reviews as messages) and their clients. This is the "workspace bot" of the client-onboarding spec.
 
 ### Provisioning flow (within manual coach onboarding)
@@ -121,8 +121,10 @@ unconnected, and a fresh paste supersedes the previous nonce and secret.
 
 ### Token lifecycle
 
-- `ManagedBotUpdated` (rotation / owner-side change) → re-fetch the token, re-arm the webhook, invalidate the cache.
-- A 401 from the Bot API (the paste flow has no rotation notifications) → workspace status **"bot needs re-link"**, coach notified via the manager bot. No manual retry surface in the product, consistent with ADR 0001.
+- `ManagedBotUpdated` fires **only when a bot is created** — it carries the creating user and the new bot, nothing else. There is no owner-side rotation update, and a revoked token also stops inbound webhooks, so a coach who regenerates a token in @BotFather produces no signal in either direction. Discovery is therefore active: a daily `getMe` sweep over connected bots on the `bot` Worker's cron ([#55](https://github.com/apshenichniy/praximo/issues/55)).
+- A 401 is **repaired before it is reported**. `getManagedBotToken` returns a fresh, immediately working credential for a bot created through Managed Bots — **management rights survive the owner's `/revoke`** (verified live on the dev stage, 2026-07-25) — so the token is re-encrypted, the bot fully reconfigured, and the workspace never leaves `connected`.
+- Only an unrepairable bot becomes **"bot needs re-link"**: deleted (`getManagedBotToken` answers `403 Forbidden: user is deactivated`), or connected through the paste flow, where we never held management rights. Coach and invite issuer are both notified via the manager bot. No manual retry surface in the product, consistent with ADR 0001; recovery is coach-side re-linking.
+- The stored token does **not** discriminate — a revoked bot and a deleted one both answer `401 Unauthorized`, never 404. `getManagedBotToken` is the only discriminator between "repairable" and "gone".
 
 ### Role routing inside the coach bot
 
