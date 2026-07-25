@@ -78,13 +78,14 @@ const candidate = (
   ...overrides,
 })
 
-const installation: CoachBotProvisioningRepo.Installation = {
+const installation: CoachBotProvisioningRepo.Activation = {
   workspaceId,
   telegramBotId: BOT_ID,
   username: BOT_USERNAME,
   encryptedToken: `sealed:${TOKEN}`,
   webhookSecretHash: "installed-hash",
   botInfo: {},
+  reconnected: false,
 }
 
 interface RepoStub {
@@ -135,6 +136,7 @@ const repoStub = (
         completed.push(input)
         return Effect.succeed(installation)
       },
+      reopenForRelink: unsupported,
       findByBotId: (telegramBotId) =>
         options.installed === undefined
           ? Effect.fail(new CoachBotProvisioningRepo.InstallationNotFound({ key: telegramBotId }))

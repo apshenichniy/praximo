@@ -63,6 +63,19 @@ const step = (title: string, description: string, state: CoachStepState): CoachS
  * else, so it carries no progression.
  */
 export const coachScreen = (coach: ViewerRole.ViewerCoach): CoachScreen => {
+  // A broken bot is not a step of onboarding, so it carries no progression
+  // either — it is one thing to be done, in the one chat that can still do it
+  // (#55). The companion this stub becomes (#119) renders the same state with
+  // the rest of its checklist.
+  if (coach.state === "needs-relink") {
+    return {
+      title: "Your coach bot needs reconnecting",
+      body: "Telegram no longer accepts your bot's token, so it has stopped answering. Nothing in your workspace is lost — reconnect it from the chat with the Praximo bot.",
+      action: "Reconnect in chat",
+      steps: [],
+    }
+  }
+
   if (coach.state === "active") {
     return {
       title: "Your workspace lives in your bot",

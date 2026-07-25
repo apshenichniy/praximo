@@ -145,6 +145,20 @@ describe("ViewerRole", () => {
     }),
   )
 
+  it.effect("sends a coach whose bot died to the manager, not to their own bot", () =>
+    Effect.gen(function* () {
+      const role = yield* resolve({
+        coach: Effect.succeed({ state: "needs-relink", workspaceId, botUsername: "ada_coach_bot" }),
+      })
+
+      expect(role.coach?.state).toBe("needs-relink")
+      // The whole point of the state is that `t.me/ada_coach_bot` answers
+      // nothing — and a bare manager link is a dead end too, because an existing
+      // chat shows no Start button for it to press (#55).
+      expect(role.coach?.link).toBe("https://t.me/PraximoMotherBot?start=relink")
+    }),
+  )
+
   it.effect("reports both roles for an admin who is also a coach", () =>
     Effect.gen(function* () {
       const role = yield* resolve({

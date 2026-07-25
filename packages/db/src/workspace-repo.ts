@@ -12,11 +12,9 @@ import {
 } from "@praximo/domain"
 import { and, asc, desc, eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
+import { BotConnectionStatus, botConnectionStatus } from "./bot-connection-status.ts"
 import { Database, decodeFirstRow, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
-
-export const BotConnectionStatus = Schema.Literals(["awaiting-setup", "connected", "needs-relink"])
-export type BotConnectionStatus = typeof BotConnectionStatus.Type
 
 /**
  * The onboarding state the coaches list renders from (#107): the invite's own
@@ -85,8 +83,12 @@ export interface RenameInput {
 
 /**
  * Where one Telegram identity stands as a coach — the coach half of the manager
- * Mini App's entry role (#106). Three states, most advanced first:
+ * Mini App's entry role (#106). Four states:
  *
+ * - `needs-relink` — the bot is beyond repair and only the coach can reconnect
+ *   it (#55). It outranks every other state rather than sitting between them:
+ *   it is not a stage of onboarding but a thing to be done now, and a coach who
+ *   has finished onboarding is exactly who this happens to.
  * - `active` — onboarding is finished: the bot is connected and terms accepted.
  * - `bot-connected` — provisioning landed, first login + ToS is still pending.
  * - `accepted` — the invite is exclusively claimed but no bot exists yet, so
@@ -103,7 +105,7 @@ export const CoachContext = Schema.Union([
     code: CoachOnboardingInviteCode,
   }),
   Schema.Struct({
-    state: Schema.Literals(["bot-connected", "active"]),
+    state: Schema.Literals(["bot-connected", "active", "needs-relink"]),
     workspaceId: WorkspaceId,
     botUsername: Schema.NonEmptyString,
   }),
@@ -136,17 +138,6 @@ export class UpdateConflict extends Schema.TaggedErrorClass<UpdateConflict>()(
     id: WorkspaceId,
   },
 ) {}
-
-/**
- * `bot.connection_status` is snake_case in Postgres and kebab-case in the
- * domain; a missing bot row reads as the pre-provisioning state.
- */
-const botConnectionStatus = (value: string | null): BotConnectionStatus =>
-  value === null || value === "awaiting_setup"
-    ? "awaiting-setup"
-    : value === "needs_relink"
-      ? "needs-relink"
-      : "connected"
 
 const decodeWorkspace = Schema.decodeUnknownEffect(Workspace)
 const decodeList = Schema.decodeUnknownEffect(Schema.Array(ListItem))
@@ -428,6 +419,7 @@ export const layer = Layer.effect(
               workspaceId: schema.member.workspaceId,
               termsAcceptedAt: schema.member.termsAcceptedAt,
               botUsername: schema.bot.username,
+              connectionStatus: schema.bot.connectionStatus,
             })
             .from(schema.member)
             .leftJoin(schema.bot, eq(schema.bot.workspaceId, schema.member.workspaceId))
@@ -437,12 +429,24 @@ export const layer = Layer.effect(
         catch: (cause) => new QueryFailed({ operation: "findCoachByTelegramId", cause }),
       })
       const owned = ownedRows.filter((row) => row.botUsername !== null)
-      // The most advanced state wins: a finished workspace is the one worth
-      // pointing at, even for an identity that somehow owns a second one.
-      const active = owned.find((row) => row.termsAcceptedAt !== null) ?? owned[0]
+      // A broken bot outranks a finished one: it is the only state here that
+      // asks the coach to do something, and asking is the whole point of the
+      // screen (#55). After it, the most advanced state wins — a finished
+      // workspace is the one worth pointing at, even for an identity that
+      // somehow owns a second one.
+      const active =
+        owned.find((row) => botConnectionStatus(row.connectionStatus) === "needs-relink") ??
+        owned.find((row) => row.termsAcceptedAt !== null) ??
+        owned[0]
       if (active !== undefined && active.botUsername !== null) {
+        const status = botConnectionStatus(active.connectionStatus)
         return yield* decodeCoachContext({
-          state: active.termsAcceptedAt === null ? "bot-connected" : "active",
+          state:
+            status === "needs-relink"
+              ? "needs-relink"
+              : active.termsAcceptedAt === null
+                ? "bot-connected"
+                : "active",
           workspaceId: active.workspaceId,
           botUsername: active.botUsername,
         }).pipe(
@@ -517,5 +521,9 @@ export const layer = Layer.effect(
     return Service.of({ findById, create, list, getDetail, findCoachByTelegramId, rename })
   }),
 )
+
+/** Re-exported so `WorkspaceRepo.BotConnectionStatus` keeps naming what the
+ * admin surfaces render (#55 moved the definition to its own module). */
+export { BotConnectionStatus }
 
 export * as WorkspaceRepo from "./workspace-repo.ts"

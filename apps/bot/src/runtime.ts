@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
-import { CoachBotProvisioningRepo, CoachOnboardingRepo, Database, WorkspaceRepo } from "@praximo/db"
+import {
+  CoachBotHealthRepo,
+  CoachBotProvisioningRepo,
+  CoachOnboardingRepo,
+  Database,
+  WorkspaceRepo,
+} from "@praximo/db"
 import { TelegramId, WorkspaceId } from "@praximo/domain"
 import {
   BotRegistry,
@@ -19,8 +25,11 @@ import {
   type ManagedBotOutcome,
   offerBotCreation,
   prepareOnboarding,
+  prepareRelink,
   provisionManagedBot,
 } from "./provisioning.ts"
+import { sweepCoachBotHealth } from "./coach-bot-health.ts"
+import * as BotRegistryLive from "./bot-registry.ts"
 import {
   authenticateProof,
   botFatherToken,
@@ -38,25 +47,41 @@ export interface Env {
   readonly COACH_BOT_CREDENTIAL_KEY: string
   readonly DEFAULT_COACH_BOT_AVATAR_R2_KEY: string
   readonly COACH_MINI_APP_URL: string
+  /**
+   * This Worker's own public origin — the value `manager-bot:set-webhook`
+   * installs on the manager bot, bound here because the health sweep runs on a
+   * cron and a repair re-arms the coach bot's webhook (#55). There is no request
+   * to read an origin off at that point. Optional: a stage that never set it
+   * still repairs credentials, it just leaves webhooks as Telegram has them.
+   */
+  readonly MANAGER_BOT_WEBHOOK_URL?: string
   readonly UPLOADS: R2Bucket
 }
 
 const DbLive = Layer.mergeAll(
   WorkspaceRepo.layer,
   CoachBotProvisioningRepo.layer,
+  CoachBotHealthRepo.layer,
   CoachOnboardingRepo.layer,
 ).pipe(Layer.provide(Database.layer))
 const CoachBotDataLive = Layer.mergeAll(DbLive, CoachBotCredential.layer)
-const CoachBotReleaseLayer = Layer.provideMerge(CoachBotReleaseLive.layer, CoachBotDataLive)
-const AppLive = Layer.mergeAll(
-  CoachBotReleaseLayer,
-  BotRegistry.layer,
-  ManagerBotSender.layer,
-  CoachOnboardingToken.layer,
-)
+const appLive = (env: Env) =>
+  Layer.mergeAll(
+    Layer.provideMerge(
+      // The registry's live layer is the one thing here that needs the bindings
+      // themselves rather than only the config they carry: a repair reads the
+      // stage's avatar out of R2 (#55).
+      Layer.mergeAll(CoachBotReleaseLive.layer, BotRegistryLive.layer(env)),
+      CoachBotDataLive,
+    ),
+    ManagerBotSender.layer,
+    CoachOnboardingToken.layer,
+  )
 
 const runtimeFromEnv = (env: Env) =>
-  ManagedRuntime.make(Layer.provide(AppLive, ConfigProvider.layer(ConfigProvider.fromUnknown(env))))
+  ManagedRuntime.make(
+    Layer.provide(appLive(env), ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
+  )
 
 /** Exactly one runtime per Worker isolate (ADR 0002), built from `env` once. */
 let runtime: ReturnType<typeof runtimeFromEnv> | undefined
@@ -130,12 +155,30 @@ const makeManagerBot = (
 
   bot.command("start", async (ctx) => {
     const language = clientLanguage(ctx.from?.language_code)
-    if (ctx.from === undefined || typeof ctx.match !== "string" || ctx.match.length === 0) {
+    if (ctx.from === undefined) {
       await ctx.reply(messages(language).openLinkFirst)
       return
     }
+    const parameter = typeof ctx.match === "string" ? ctx.match : ""
+    // Recovery is entered here, and by two doors (#55). The banner in the coach
+    // Mini App carries the reserved payload; a bare `/start` is the door for a
+    // coach who simply came back to the chat, and until now answered them with
+    // advice to open a link they cannot have. Both resolve to the same reopen,
+    // which does nothing at all for an identity with no broken bot — so a
+    // stranger's `/start` still falls through to the same old answer.
+    if (parameter.length === 0 || parameter === CoachOnboardingToken.RelinkStartParameter) {
+      const relink = await getRuntime(env).runPromise(
+        prepareRelink(ctx.from.id).pipe(Effect.orElseSucceed(() => undefined)),
+      )
+      if (relink === undefined) {
+        await ctx.reply(messages(language).openLinkFirst)
+        return
+      }
+      await getRuntime(env).runPromise(offerBotCreation(env, relink, "relink", telegramFetch))
+      return
+    }
     const result = await getRuntime(env).runPromise(
-      prepareOnboarding(ctx.match, ctx.from.id).pipe(Effect.result),
+      prepareOnboarding(parameter, ctx.from.id).pipe(Effect.result),
     )
     if (result._tag === "Failure") {
       const failure = result.failure as { readonly _tag?: string; readonly reason?: string }
@@ -151,7 +194,7 @@ const makeManagerBot = (
     // The prompt's whole lifecycle — disarm the previous button, send the new
     // one, record it — is one operation, because the invariant it holds spans all
     // three (#134).
-    await getRuntime(env).runPromise(offerBotCreation(env, setup, telegramFetch))
+    await getRuntime(env).runPromise(offerBotCreation(env, setup, "invitation", telegramFetch))
   })
 
   /**
@@ -475,8 +518,28 @@ export const handleManagerInlineInviteRpc = (
 ): Promise<ManagerBotSender.PrepareRpcResult> =>
   getRuntime(env).runPromise(prepareManagerInlineInvite(recipient, invite))
 
-export const handleScheduled = (env: Env): Promise<void> =>
-  getRuntime(env).runPromise(deliverCoachNotifications())
+/**
+ * The five-minute cron does two things, in this order and neither able to stop
+ * the other (#55).
+ *
+ * The sweep runs first because what it discovers is what the delivery pass then
+ * carries out of the same tick — a bot found dead is announced within seconds
+ * rather than on the next one. Each half is isolated: a sweep that dies on a
+ * Telegram outage must not take the notification queue down with it, and a
+ * failing queue must not stop discovery.
+ */
+export const handleScheduled = async (env: Env): Promise<void> => {
+  const tick = getRuntime(env)
+  await tick.runPromise(
+    sweepCoachBotHealth(env).pipe(
+      Effect.tapError((failure) =>
+        Effect.logWarning(`coach bot health sweep skipped this tick — ${failure.operation}`),
+      ),
+      Effect.ignore,
+    ),
+  )
+  await tick.runPromise(deliverCoachNotifications())
+}
 
 export const handleCoachBotReleaseRpc = (
   env: Env,

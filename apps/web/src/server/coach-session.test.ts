@@ -23,6 +23,7 @@ const principal = (overrides: Partial<Principal> = {}): Principal => ({
   language: "en",
   botUsername: "ada_coach_bot",
   telegramBotId: BOT_ID,
+  botConnectionStatus: "connected",
   termsAcceptedAt: new Date(AUTH_DATE - 86_400_000),
   deletionPending: false,
   ...overrides,

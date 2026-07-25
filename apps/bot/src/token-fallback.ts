@@ -245,7 +245,7 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
     secret: input.secretToken,
     ...injectedFetch,
   })
-  yield* repo.complete({
+  const activation = yield* repo.complete({
     provisioningId: claimed.id,
     // The parked envelope already holds this exact credential under the current
     // key; re-encrypting would only mint a second ciphertext for it.
@@ -257,7 +257,13 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
   // A coach who pasted a token may still have a live creation button sitting in
   // the manager chat from before they gave up on it. Their bot is connected now,
   // whichever path got them here, so that button is retired the same way (#134).
-  yield* settleCreationPrompt(env, claimed, candidate.botUsername, input.telegramFetch)
+  yield* settleCreationPrompt(
+    env,
+    claimed,
+    candidate.botUsername,
+    activation.reconnected,
+    input.telegramFetch,
+  )
   // Re-armed with the very secret this request authenticated against, which the
   // activation transaction has just recorded the hash of. On this path the bot has
   // been pointed at us since the paste — that is how the proof arrived — so there

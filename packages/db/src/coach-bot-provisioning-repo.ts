@@ -81,14 +81,33 @@ export interface Installation {
   readonly botInfo: unknown
 }
 
+/**
+ * What an activation produced. `reconnected` is the one thing only the
+ * activating statement can know: whether this workspace's bot was at
+ * `needs_relink` when it landed (#55). Every caller-visible consequence hangs
+ * off it — the prompt says "reconnected" rather than "setup finished", and the
+ * admin gets `relink_completed` rather than nothing.
+ */
+export interface Activation extends Installation {
+  readonly reconnected: boolean
+}
+
 export interface PendingNotification {
   readonly id: string
   readonly workspaceId: WorkspaceId
   /** Which push this is — the delivery loop picks its copy from it. */
   readonly kind: string
+  /**
+   * Whose words this row gets. `admin` is English composed beside the delivery
+   * loop; `coach` is the tri-lingual catalog in {@link coachLanguage} (#55). One
+   * event can queue both, so the copy is selected on the pair, not the kind.
+   */
+  readonly recipientRole: CoachNotification.Role
   readonly recipientTelegramId: TelegramId
   readonly workspaceName: string
   readonly botUsername: string
+  /** The workspace owner's chosen language, whoever this row is addressed to. */
+  readonly coachLanguage: CoachLanguage
   readonly attemptCount: number
 }
 
@@ -145,7 +164,28 @@ export interface Interface {
   ) => Effect.Effect<Candidate, CandidateNotFound | QueryFailed>
   readonly complete: (
     input: CompleteInput,
-  ) => Effect.Effect<Installation, ProvisioningUnavailable | QueryFailed>
+  ) => Effect.Effect<Activation, ProvisioningUnavailable | QueryFailed>
+  /**
+   * Put a re-linking coach back on the attempt row their first bot came from
+   * (#55), and hand it over ready to be prompted again.
+   *
+   * `provisioningId` and `keyboardRequestId` are pure functions of (invite,
+   * coach), so a second row for that pair cannot exist without changing the
+   * derivation — reopening the one that does is the only way through. It also
+   * lifts the row out of `one_claim_per_invite`, which covers `configuring` and
+   * `completed` alone.
+   *
+   * Idempotent: an attempt already reopened is returned unchanged, so a coach
+   * who taps the recovery link twice gets one row and two prompts, the second of
+   * which disarms the first.
+   *
+   * `undefined` means this identity has nothing to recover — not a coach, or a
+   * coach whose bot is fine.
+   */
+  readonly reopenForRelink: (
+    coachTelegramId: TelegramId,
+    now: Date,
+  ) => Effect.Effect<Provisioning | undefined, QueryFailed>
   readonly findByBotId: (
     telegramBotId: string,
   ) => Effect.Effect<Installation, InstallationNotFound | QueryFailed>
@@ -282,6 +322,23 @@ const openAttemptFence = (coachTelegramId: TelegramId, now: Date) => sql`
       and "invite"."accepted_by_telegram_id" = "candidate"."coach_telegram_id"
     )
     or ("invite"."status" = 'pending' and "invite"."expires_at" > ${now})
+    -- Re-linking (#55). The invitation is spent and its public code is dead —
+    -- recovery is never entered through it — so the used arm is what carries a
+    -- coach whose bot became unreachable back through the very same attempt row.
+    -- Fenced on the workspace's own state rather than on the invite alone: only
+    -- a bot that needs re-linking reopens anything, so a finished onboarding
+    -- cannot be re-entered by a coach who simply creates a second bot (#135).
+    or (
+      "invite"."status" = 'used'
+      and "invite"."accepted_by_telegram_id" = "candidate"."coach_telegram_id"
+      and exists (
+        select 1
+        from "bot"
+        where
+          "bot"."workspace_id" = "candidate"."workspace_id"
+          and "bot"."connection_status" = 'needs_relink'
+      )
+    )
   )
   and not exists (
     select 1
@@ -739,9 +796,20 @@ export const layer = Layer.effect(
       },
     )
 
+    /**
+     * Activation, and the one statement that also closes a re-link.
+     *
+     * `previous_bot` is read from the pre-statement snapshot, so it still says
+     * what this workspace's bot was *before* the upsert below rewrites it. That
+     * is the only place the difference between a first connection and a recovery
+     * is visible: afterwards both rows read `connected` (#55).
+     */
     const complete = Effect.fn("CoachBotProvisioningRepo.complete")(function* (
       input: CompleteInput,
     ) {
+      const relinkKind = CoachNotification.Kind.RelinkCompleted
+      const relinkWorkspace = sql`"completed_attempt"."workspace_id"`
+      const relinkEpisode = sql`"previous_bot"."relink_episode"::text`
       const rows = yield* Effect.tryPromise({
         try: () =>
           client.execute(sql`
@@ -773,23 +841,52 @@ export const layer = Layer.effect(
                     and "invite"."accepted_by_telegram_id" = "attempt"."coach_telegram_id"
                   )
                   or "attempt"."status" = 'completed'
+                  -- The re-link arm (#55), fenced the same way the open-attempt
+                  -- fence fences its own: a spent invitation activates nothing
+                  -- unless this workspace's bot is the one asking to come back.
+                  or (
+                    "invite"."status" = 'used'
+                    and "invite"."accepted_by_telegram_id" = "attempt"."coach_telegram_id"
+                    and exists (
+                      select 1
+                      from "bot"
+                      where
+                        "bot"."workspace_id" = "attempt"."workspace_id"
+                        and "bot"."connection_status" = 'needs_relink'
+                    )
+                  )
                 )
                 and (
                   "owner"."telegram_user_id" is null
                   or "owner"."telegram_user_id" = "attempt"."coach_telegram_id"
                 )
             ),
+            previous_bot as (
+              select
+                "bot"."workspace_id",
+                "bot"."connection_status",
+                "bot"."relink_episode"
+              from "bot"
+              join candidate on candidate."workspace_id" = "bot"."workspace_id"
+            ),
             connected_bot as (
               insert into "bot" (
                 "workspace_id", "token", "telegram_bot_id", "username", "bot_info",
-                "webhook_secret_hash", "connection_status", "created_at", "updated_at"
+                "webhook_secret_hash", "connection_status", "health_checked_at",
+                "created_at", "updated_at"
               )
               select
                 "workspace_id", ${input.encryptedToken}, "managed_bot_id",
                 "managed_bot_username", ${JSON.stringify(input.botInfo)}::jsonb,
-                ${input.webhookSecretHash}, 'connected', ${input.now}, ${input.now}
+                ${input.webhookSecretHash}, 'connected', ${input.now},
+                ${input.now}, ${input.now}
               from candidate
               where "managed_bot_id" is not null and "managed_bot_username" is not null
+              -- A coach who re-links to a *different* bot rewrites this row in
+              -- place: the table is keyed by workspace, so the old bot id simply
+              -- stops being ours (#55). The unique index on it only bites when
+              -- the new bot already belongs to another workspace, which is the
+              -- existing "bot already taken" refusal.
               on conflict ("workspace_id") do update set
                 "token" = excluded."token",
                 "telegram_bot_id" = excluded."telegram_bot_id",
@@ -797,6 +894,9 @@ export const layer = Layer.effect(
                 "bot_info" = excluded."bot_info",
                 "webhook_secret_hash" = excluded."webhook_secret_hash",
                 "connection_status" = 'connected',
+                -- Telegram has just answered this credential, so the sweep has
+                -- nothing to learn from it for another day.
+                "health_checked_at" = excluded."health_checked_at",
                 "updated_at" = excluded."updated_at"
               returning *
             ),
@@ -856,8 +956,37 @@ export const layer = Layer.effect(
                 ${input.now}, ${input.now}, ${input.now}
               from completed_attempt
               on conflict ("dedupe_key") do nothing
+            ),
+            -- The admin heard about the outage; they hear about its end here
+            -- (#55). The bot_connected row cannot carry this — its key was taken
+            -- by the first connection and its insert does nothing on conflict —
+            -- so a recovery gets a kind and an episode of its own.
+            queued_relink_notification as (
+              insert into "coach_bot_notification" (
+                "id", "workspace_id", "kind", "dedupe_key", "recipient_role",
+                "recipient_telegram_id", "status", "attempt_count", "available_at",
+                "created_at", "updated_at"
+              )
+              select
+                ${CoachNotification.id(relinkKind, relinkWorkspace, relinkEpisode)},
+                "completed_attempt"."workspace_id",
+                ${relinkKind},
+                ${CoachNotification.dedupeKey(relinkKind, relinkWorkspace, relinkEpisode)},
+                ${CoachNotification.Role.Admin},
+                "completed_attempt"."issued_by_telegram_id", 'pending', 0,
+                ${input.now}, ${input.now}, ${input.now}
+              from completed_attempt
+              join previous_bot
+                on "previous_bot"."workspace_id" = "completed_attempt"."workspace_id"
+              where "previous_bot"."connection_status" = 'needs_relink'
+              on conflict ("dedupe_key") do nothing
             )
-            select * from connected_bot
+            select
+              connected_bot.*,
+              exists (
+                select 1 from previous_bot where "connection_status" = 'needs_relink'
+              ) as "reconnected"
+            from connected_bot
             where exists (select 1 from completed_attempt)
           `),
         catch: (cause) => new QueryFailed({ operation: "provisioning.complete", cause }),
@@ -870,6 +999,7 @@ export const layer = Layer.effect(
             token: string | null
             webhook_secret_hash: string | null
             bot_info: unknown
+            reconnected: boolean
           }
         | undefined
       const installation =
@@ -883,8 +1013,72 @@ export const layer = Layer.effect(
               webhookSecretHash: row.webhook_secret_hash,
               botInfo: row.bot_info,
             })
-      if (installation !== undefined) return installation
+      if (installation !== undefined && row !== undefined) {
+        return { ...installation, reconnected: row.reconnected } satisfies Activation
+      }
       return yield* new ProvisioningUnavailable({ reason: "identity-conflict" })
+    })
+
+    /**
+     * The re-link reopen (#55). Two statements rather than one because the
+     * second is also the answer for a coach who is *already* reopened — the
+     * update matches nothing on their second tap, and refusing them then would
+     * make the recovery link work exactly once.
+     *
+     * The ownership fence is the owner membership, not the invite's claim: the
+     * membership is what a connected bot actually wrote, and it is the same fence
+     * `complete` re-applies when the new bot arrives.
+     */
+    const reopenForRelink = Effect.fn("CoachBotProvisioningRepo.reopenForRelink")(function* (
+      coachTelegramId: TelegramId,
+      now: Date,
+    ) {
+      yield* Effect.tryPromise({
+        try: () =>
+          client.execute(sql`
+            update "coach_bot_provisioning" as "attempt"
+            set "status" = 'requested', "updated_at" = ${now}
+            from "bot"
+            where
+              "bot"."workspace_id" = "attempt"."workspace_id"
+              and "bot"."connection_status" = 'needs_relink'
+              and "attempt"."coach_telegram_id" = ${coachTelegramId}
+              and "attempt"."status" = 'completed'
+              and exists (
+                select 1
+                from "member" as "owner"
+                where
+                  "owner"."workspace_id" = "attempt"."workspace_id"
+                  and "owner"."role" = 'owner'
+                  and "owner"."telegram_user_id" = "attempt"."coach_telegram_id"
+              )
+          `),
+        catch: (cause) => new QueryFailed({ operation: "provisioning.reopenForRelink", cause }),
+      })
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({ requestId: schema.coachBotProvisioning.keyboardRequestId })
+            .from(schema.coachBotProvisioning)
+            .innerJoin(
+              schema.bot,
+              eq(schema.bot.workspaceId, schema.coachBotProvisioning.workspaceId),
+            )
+            .where(
+              and(
+                eq(schema.coachBotProvisioning.coachTelegramId, coachTelegramId),
+                eq(schema.coachBotProvisioning.status, "requested"),
+                eq(schema.bot.connectionStatus, "needs_relink"),
+              ),
+            )
+            .orderBy(desc(schema.coachBotProvisioning.updatedAt))
+            .limit(1),
+        catch: (cause) =>
+          new QueryFailed({ operation: "provisioning.reopenForRelink.inspect", cause }),
+      })
+      const requestId = rows[0]?.requestId
+      if (requestId === undefined) return undefined
+      return yield* loadProvisioning(coachTelegramId, requestId)
     })
 
     const loadInstallation = Effect.fn("CoachBotProvisioningRepo.loadInstallation")(function* (
@@ -986,6 +1180,10 @@ export const layer = Layer.effect(
               username: input.username,
               botInfo: input.botInfo,
               webhookSecretHash: input.webhookSecretHash,
+              // Every caller of this has just held a working credential in its
+              // hand — a re-configuration, or the repair that refreshed one
+              // (#55) — so the sweep has nothing left to ask about this bot.
+              healthCheckedAt: input.now,
               updatedAt: input.now,
             })
             .where(eq(schema.bot.telegramBotId, input.telegramBotId))
@@ -1033,17 +1231,24 @@ export const layer = Layer.effect(
               claimed."id",
               claimed."workspace_id",
               claimed."kind",
+              claimed."recipient_role",
               claimed."recipient_telegram_id",
               claimed."attempt_count",
               "workspace"."name" as "workspace_name",
-              "bot"."username" as "bot_username"
+              "bot"."username" as "bot_username",
+              "owner"."language" as "coach_language"
             from claimed
-            -- Both current kinds are about a workspace whose bot exists, and
-            -- both name it in their copy, so the inner join and the null-username
+            -- Every current kind is about a workspace whose bot exists, and each
+            -- names it in its copy, so the inner join and the null-username
             -- filter below are load-bearing rather than incidental. A future
-            -- pre-bot push (#119's "setup started") has to relax them.
+            -- pre-bot push (#119's "setup started") has to relax them. The owner
+            -- join is inner for the same reason: a coach-addressed row has no
+            -- language without it, and a workspace with a bot always has one.
             join "workspace" on "workspace"."id" = claimed."workspace_id"
             join "bot" on "bot"."workspace_id" = claimed."workspace_id"
+            join "member" as "owner"
+              on "owner"."workspace_id" = claimed."workspace_id"
+              and "owner"."role" = 'owner'
           `),
           catch: (cause) => new QueryFailed({ operation: "notification.pending", cause }),
         })
@@ -1052,9 +1257,11 @@ export const layer = Layer.effect(
             id: string
             workspace_id: string
             kind: string
+            recipient_role: string
             recipient_telegram_id: string
             workspace_name: string
             bot_username: string | null
+            coach_language: CoachLanguage
             attempt_count: number
           }>
         ).flatMap((row) =>
@@ -1065,9 +1272,17 @@ export const layer = Layer.effect(
                   id: row.id,
                   workspaceId: WorkspaceId.make(row.workspace_id),
                   kind: row.kind,
+                  // Anything that is not the coach is the admin, which is what
+                  // the column's own default says of every row written before it
+                  // existed.
+                  recipientRole:
+                    row.recipient_role === CoachNotification.Role.Coach
+                      ? CoachNotification.Role.Coach
+                      : CoachNotification.Role.Admin,
                   recipientTelegramId: TelegramId.make(row.recipient_telegram_id),
                   workspaceName: row.workspace_name,
                   botUsername: row.bot_username,
+                  coachLanguage: row.coach_language,
                   attemptCount: row.attempt_count,
                 } satisfies PendingNotification,
               ],
@@ -1122,6 +1337,7 @@ export const layer = Layer.effect(
       ingestCandidate,
       findCandidateByBotId,
       complete,
+      reopenForRelink,
       findByBotId,
       findInFlightManagedAttempt,
       findByWorkspace,

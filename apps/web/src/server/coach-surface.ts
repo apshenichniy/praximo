@@ -1,3 +1,4 @@
+import { CoachOnboardingToken } from "@praximo/auth"
 import { MemberRepo } from "@praximo/db"
 import { Clock, Context, Effect, Layer, Schema } from "effect"
 import { TERMS_VERSION } from "@/features/legal/versions.ts"
@@ -20,6 +21,17 @@ export type CoachEntry =
       readonly botUsername: string
       readonly telegramBotId: string
       readonly language: string
+      /**
+       * Present exactly while the coach's own bot has stopped answering (#55).
+       * Nothing about the workspace is blocked by it — the delivery channel is
+       * broken, not the data — so it is a banner on the home screen rather than
+       * a screen of its own, and it carries the one link that repairs it.
+       *
+       * That link points at the *manager* bot with a reserved payload: the
+       * coach's bot cannot answer, and an existing chat offers no **Start**
+       * button for a bare link to press.
+       */
+      readonly relink?: { readonly link: string }
     }
 
 export interface Interface {
@@ -52,6 +64,27 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const session = yield* CoachSession.Service
     const members = yield* MemberRepo.Service
+    const tokens = yield* CoachOnboardingToken.Service
+
+    /**
+     * The home screen for one authenticated coach. It is built in one place
+     * because both entry points hand back the same screen, and the re-link
+     * banner has to appear on both — a coach whose bot dies between opening the
+     * terms and accepting them is still a coach whose bot died.
+     */
+    const home = Effect.fn("CoachSurface.home")(function* (
+      principal: CoachSession.PreOnboardingPrincipal,
+    ) {
+      return {
+        kind: "home",
+        botUsername: principal.botUsername,
+        telegramBotId: principal.telegramBotId,
+        language: principal.language,
+        ...(principal.botConnectionStatus === "needs-relink"
+          ? { relink: { link: yield* tokens.relinkLink() } }
+          : {}),
+      } satisfies CoachEntry
+    })
 
     /**
      * The entry, authenticated once. The gate it asks is the weaker one — this
@@ -66,12 +99,7 @@ export const layer = Layer.effect(
       if (!CoachSession.isOnboarded(principal)) {
         return { kind: "terms-required", termsVersion: TERMS_VERSION } satisfies CoachEntry
       }
-      return {
-        kind: "home",
-        botUsername: principal.botUsername,
-        telegramBotId: principal.telegramBotId,
-        language: principal.language,
-      } satisfies CoachEntry
+      return yield* home(principal)
     })
 
     /**
@@ -102,12 +130,7 @@ export const layer = Layer.effect(
       // write did not take, rather than handing back a home screen assembled
       // from what the acceptance call happened to know.
       const onboarded = yield* session.requireOnboardedCoach(credential, READ_WINDOW_MILLIS)
-      return {
-        kind: "home",
-        botUsername: onboarded.botUsername,
-        telegramBotId: onboarded.telegramBotId,
-        language: onboarded.language,
-      } satisfies CoachEntry
+      return yield* home(onboarded)
     })
 
     return Service.of({ openApp, acceptTerms })

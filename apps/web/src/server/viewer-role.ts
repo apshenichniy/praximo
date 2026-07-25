@@ -29,6 +29,19 @@ export type ViewerCoach =
       readonly botUsername: string
       readonly link: string
     }
+  /**
+   * The coach's own bot is beyond repair and only they can reconnect it (#55).
+   * Its `link` points at the **manager** bot, not at `t.me/{botUsername}` — the
+   * whole point of the state is that their bot cannot answer — and carries the
+   * reserved recovery payload, because an existing chat shows no **Start**
+   * button and a bare link would reach nothing.
+   */
+  | {
+      readonly state: "needs-relink"
+      readonly workspaceId: WorkspaceId
+      readonly botUsername: string
+      readonly link: string
+    }
 
 /**
  * What the manager Mini App's entry resolves before it renders anything.
@@ -80,6 +93,14 @@ export const layer = Layer.effect(
           state: "accepted",
           workspaceId: coach.workspaceId,
           link: yield* tokens.linkFor(coach.code),
+        } satisfies ViewerCoach
+      }
+      if (coach.state === "needs-relink") {
+        return {
+          state: "needs-relink",
+          workspaceId: coach.workspaceId,
+          botUsername: coach.botUsername,
+          link: yield* tokens.relinkLink(),
         } satisfies ViewerCoach
       }
       return {

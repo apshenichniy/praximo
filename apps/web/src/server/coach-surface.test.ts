@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { CoachInitData } from "@praximo/auth"
+import { CoachInitData, CoachOnboardingToken } from "@praximo/auth"
 import { MemberRepo } from "@praximo/db"
 import { WorkspaceId } from "@praximo/domain"
 import { Effect, Layer } from "effect"
@@ -13,6 +13,7 @@ import type { LaunchCredential } from "./launch-credential.ts"
 const BOT_ID = "9100777"
 const OTHER_BOT_ID = "9100778"
 const MEMBER_ID = "mem_ada"
+const MANAGER_BOT_USERNAME = "PraximoMotherDevBot"
 const AUTH_DATE = Date.parse("2026-07-23T12:00:00.000Z")
 const NOW = AUTH_DATE + 60_000
 
@@ -24,6 +25,7 @@ const principal = (overrides: Partial<Principal> = {}): Principal => ({
   language: "en",
   botUsername: "ada_coach_bot",
   telegramBotId: BOT_ID,
+  botConnectionStatus: "connected",
   deletionPending: false,
   ...overrides,
 })
@@ -77,6 +79,7 @@ const run = <A, E>(
         Layer.provide(
           Layer.mergeAll(
             members,
+            CoachOnboardingToken.testLayer(MANAGER_BOT_USERNAME),
             CoachSession.layer.pipe(
               Layer.provide(Layer.mergeAll(CoachInitData.testLayer(TEST_PUBLIC_KEY), members)),
             ),
@@ -183,6 +186,43 @@ describe("CoachSurface", () => {
             yield* (yield* CoachSurface.Service).openApp(yield* Effect.promise(() => credential())),
           ).toMatchObject({ kind: "home" })
         }),
+    ),
+  )
+
+  it.effect("hands a coach whose bot died the one link that repairs it", () =>
+    run(
+      principal({
+        termsAcceptedAt: new Date(AUTH_DATE - 86_400_000),
+        botConnectionStatus: "needs-relink",
+      }),
+      () =>
+        Effect.gen(function* () {
+          yield* TestClock.setTime(NOW)
+          // The app still opens, and that is the point: the launch is signed by
+          // Telegram over the bot id with no token involved, so this surface
+          // survives the bot that carries it (#55). Nothing is blocked — the
+          // delivery channel broke, not the data — so it is a banner on the
+          // home screen rather than a wall.
+          expect(
+            yield* (yield* CoachSurface.Service).openApp(yield* Effect.promise(() => credential())),
+          ).toMatchObject({
+            kind: "home",
+            relink: { link: `https://t.me/${MANAGER_BOT_USERNAME}?start=relink` },
+          })
+        }),
+    ),
+  )
+
+  it.effect("says nothing about re-linking while the bot is fine", () =>
+    run(principal({ termsAcceptedAt: new Date(AUTH_DATE - 86_400_000) }), () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const entry = yield* (yield* CoachSurface.Service).openApp(
+          yield* Effect.promise(() => credential()),
+        )
+        expect(entry).toMatchObject({ kind: "home" })
+        expect(entry.kind === "home" ? entry.relink : undefined).toBeUndefined()
+      }),
     ),
   )
 
