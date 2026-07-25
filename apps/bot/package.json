@@ -14,8 +14,7 @@
     "@praximo/domain": "workspace:*",
     "@praximo/telegram": "workspace:*",
     "effect": "catalog:",
-    "grammy": "catalog:",
-    "jpeg-js": "catalog:"
+    "grammy": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

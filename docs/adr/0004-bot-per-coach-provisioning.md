@@ -113,7 +113,7 @@ Resolve the incoming update's Telegram user id: workspace owner → coach experi
 
 ### Branding
 
-- Name and username are the coach's choice in the one-tap dialog. Avatar, description, and short description are set **programmatically from the workspace profile** (collected during manual onboarding), in the coach's language.
+- Name and username are the coach's choice in the one-tap dialog. Avatar, description, and short description are set **programmatically from the workspace profile** (collected during manual onboarding), in the coach's language. The avatar is the stage's single stored branding object in R2 (`DEFAULT_COACH_BOT_AVATAR_R2_KEY`), replaced by upload rather than by deploy ([#138](https://github.com/apshenichniy/praximo/issues/138)); a workspace that still carries its own avatar key keeps it, and a missing object costs the bot its photo but never the coach their onboarding.
 - Admin profile updates reapply avatar, description, and short description
   through the bot Worker's internal RPC boundary; tokens never enter the web
   Worker.

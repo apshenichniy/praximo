@@ -36,7 +36,6 @@
         "@praximo/telegram": "workspace:*",
         "effect": "catalog:",
         "grammy": "catalog:",
-        "jpeg-js": "catalog:",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
@@ -225,7 +224,6 @@
     "clsx": "2.1.1",
     "effect": "4.0.0-beta.99",
     "grammy": "1.45.1",
-    "jpeg-js": "0.4.4",
     "oxlint": "1.74.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
@@ -1382,8 +1380,6 @@
     "jose": ["jose@5.10.0", "", {}, "sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg=="],
 
     "joycon": ["joycon@3.1.1", "", {}, "sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw=="],
-
-    "jpeg-js": ["jpeg-js@0.4.4", "", {}, "sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg=="],
 
     "js-base64": ["js-base64@3.9.1", "", {}, "sha512-U73qptcvf/HIOauFOmqT3a0mDUp0MYlfd15oqoe9kqZt5XhiXVb+HG09sLvI9PQ9tZIBFS4nlErai8zbWazP0g=="],
 

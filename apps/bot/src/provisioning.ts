@@ -6,11 +6,7 @@ import { CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Api, InputFile } from "grammy"
 import type { User } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
-import {
-  defaultBotDescription,
-  defaultBotShortDescription,
-  generateDefaultAvatar,
-} from "./default-branding.ts"
+import { defaultBotDescription, defaultBotShortDescription } from "./default-branding.ts"
 
 export interface ProvisioningEnv {
   readonly MANAGER_BOT_TOKEN: string
@@ -85,7 +81,14 @@ export const sha256 = (value: string) =>
       ),
   )
 
-const loadAvatarObject = Effect.fnUntraced(function* (env: ProvisioningEnv, key: string) {
+/**
+ * The bot's starting avatar, read from R2: one image per stage, swapped by
+ * upload rather than by deploy (#138).
+ */
+const loadAvatarObject = Effect.fn("BotWorker.loadAvatarObject")(function* (
+  env: ProvisioningEnv,
+  key: string,
+) {
   const object = yield* Effect.tryPromise({
     try: () => env.UPLOADS.get(key),
     catch: () => new TelegramSetupFailed({ operation: "avatar.load" }),
@@ -97,29 +100,6 @@ const loadAvatarObject = Effect.fnUntraced(function* (env: ProvisioningEnv, key:
       catch: () => new TelegramSetupFailed({ operation: "avatar.read" }),
     }),
   )
-})
-
-/**
- * The bot's starting avatar. A workspace that still carries a stored key (from
- * before manager-side branding was removed, #108) keeps it; everything else is
- * generated on the spot. The stage's static R2 object stays as the fallback for
- * the case where generation itself fails — a bot with a stock avatar is a far
- * smaller problem than a coach who cannot finish onboarding.
- */
-const resolveAvatarBytes = Effect.fn("BotWorker.resolveAvatarBytes")(function* (
-  env: ProvisioningEnv,
-  workspace: CoachBotProvisioningRepo.WorkspaceProfile,
-  seed: string,
-) {
-  if (workspace.avatarR2Key !== undefined) {
-    return yield* loadAvatarObject(env, workspace.avatarR2Key)
-  }
-  const generated = yield* Effect.try({
-    try: () => generateDefaultAvatar(seed),
-    catch: () => new TelegramSetupFailed({ operation: "avatar.generate" }),
-  }).pipe(Effect.result)
-  if (Result.isSuccess(generated)) return generated.success
-  return yield* loadAvatarObject(env, env.DEFAULT_COACH_BOT_AVATAR_R2_KEY)
 })
 
 export interface CoachBotConfiguration {
@@ -192,17 +172,29 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
     },
     catch: () => new TelegramSetupFailed({ operation: "miniAppUrl.validate" }),
   })
-  // Seeded by the bot id so a re-provisioning of the same bot reproduces the
-  // same avatar rather than re-skinning a profile the coach may already own.
-  const avatarBytes = yield* resolveAvatarBytes(env, workspace, botId)
+  // A workspace that still carries its own avatar key (from before manager-side
+  // branding was removed, #108) keeps it; every other bot wears the stage's
+  // platform image.
+  const avatarKey = workspace.avatarR2Key ?? env.DEFAULT_COACH_BOT_AVATAR_R2_KEY
+  const avatar = yield* loadAvatarObject(env, avatarKey).pipe(Effect.result)
   const secret = input.secret ?? webhookSecret()
 
-  yield* telegram("setMyProfilePhoto", () =>
-    api.setMyProfilePhoto({
-      type: "static",
-      photo: new InputFile(avatarBytes, "avatar.jpg"),
-    }),
-  )
+  // A picture the stage never uploaded must not cost a coach their onboarding —
+  // the same judgement the generated-avatar fallback used to encode. The bot
+  // simply starts without one, and the warning names the key an operator has to
+  // fill with `bun run branding:avatar:set`.
+  if (Result.isSuccess(avatar)) {
+    yield* telegram("setMyProfilePhoto", () =>
+      api.setMyProfilePhoto({
+        type: "static",
+        photo: new InputFile(avatar.success, "avatar.jpg"),
+      }),
+    )
+  } else {
+    yield* Effect.logWarning(
+      `coach bot ${botId} provisioned without a profile photo: ${avatar.failure.operation} on "${avatarKey}"`,
+    )
+  }
   yield* telegram("setMyDescription", () =>
     api.setMyDescription(workspace.description ?? defaultBotDescription(coachName)),
   )

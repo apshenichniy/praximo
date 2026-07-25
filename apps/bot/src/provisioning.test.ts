@@ -2,19 +2,22 @@ import { describe, expect, it } from "@effect/vitest"
 import type { CoachBotProvisioningRepo } from "@praximo/db"
 import { Effect } from "effect"
 import { CoachMenuButtonText, coachMiniAppUrl, configureCoachBot } from "./provisioning.ts"
+import { BRANDING_AVATAR_BYTES, uploadsStub } from "./test-uploads.ts"
 
 const TOKEN = "9100777:AAHkq2Lb8fN1sQx3TzVpYr7WcJd4MgEuKvB"
 const BOT_ID = "9100777"
 
+const DEFAULT_AVATAR_KEY = "branding/default-coach-avatar.jpg"
+const WORKSPACE_AVATAR_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x02])
+
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
-  DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default-coach-avatar.jpg",
+  DEFAULT_COACH_BOT_AVATAR_R2_KEY: DEFAULT_AVATAR_KEY,
   COACH_MINI_APP_URL: "https://stage.praximo.io/",
-  UPLOADS: {} as R2Bucket,
+  UPLOADS: uploadsStub({ [DEFAULT_AVATAR_KEY]: BRANDING_AVATAR_BYTES }).bucket,
 }
 
-// No stored avatar key, so the avatar is generated in-process and R2 is never
-// touched — the menu-button call is what these tests are about.
+// No stored avatar key of its own, so this workspace gets the platform image.
 const workspace: CoachBotProvisioningRepo.WorkspaceProfile = { name: "Ada Coaching" }
 
 interface Call {
@@ -57,12 +60,16 @@ const telegramStub = (): TelegramStub => {
   return { fetch, calls }
 }
 
-const configure = (telegram: TelegramStub, overrides: Partial<typeof env> = {}) =>
+const configure = (
+  telegram: TelegramStub,
+  overrides: Partial<typeof env> = {},
+  profile: CoachBotProvisioningRepo.WorkspaceProfile = workspace,
+) =>
   configureCoachBot({
     env: { ...env, ...overrides },
     token: TOKEN,
     botId: BOT_ID,
-    workspace,
+    workspace: profile,
     coachName: "Ada",
     webhookOrigin: "https://bot.praximo.test",
     telegramFetch: telegram.fetch,
@@ -94,6 +101,54 @@ describe("coach bot configuration", () => {
       // The coach bot's own credential, never the manager's: the button belongs
       // to the bot the coach owns.
       expect(menu?.token).toBe(TOKEN)
+    }),
+  )
+
+  it.effect("dresses the bot in the stage's stored branding image, not a generated one", () =>
+    Effect.gen(function* () {
+      const telegram = telegramStub()
+      const bucket = uploadsStub({ [DEFAULT_AVATAR_KEY]: BRANDING_AVATAR_BYTES })
+
+      yield* configure(telegram, { UPLOADS: bucket.bucket })
+
+      // One stage-wide object, replaced by upload rather than by deploy (#138).
+      expect(bucket.reads).toEqual([DEFAULT_AVATAR_KEY])
+      expect(telegram.calls.map((call) => call.method)).toContain("setMyProfilePhoto")
+    }),
+  )
+
+  it.effect("keeps a workspace's own stored avatar ahead of the platform one", () =>
+    Effect.gen(function* () {
+      const telegram = telegramStub()
+      const bucket = uploadsStub({
+        [DEFAULT_AVATAR_KEY]: BRANDING_AVATAR_BYTES,
+        "avatars/ada.jpg": WORKSPACE_AVATAR_BYTES,
+      })
+
+      // Set by the manager before #108 removed admin-side branding; a bot that
+      // already wears it must not be re-skinned by a re-provisioning.
+      yield* configure(
+        telegram,
+        { UPLOADS: bucket.bucket },
+        { ...workspace, avatarR2Key: "avatars/ada.jpg" },
+      )
+
+      expect(bucket.reads).toEqual(["avatars/ada.jpg"])
+    }),
+  )
+
+  it.effect("onboards the coach even when the stage never uploaded a branding image", () =>
+    Effect.gen(function* () {
+      const telegram = telegramStub()
+
+      yield* configure(telegram, { UPLOADS: uploadsStub().bucket })
+
+      // A missing picture costs the bot its photo and nothing else: the webhook
+      // and the menu button — the parts that make the bot usable — still land.
+      const methods = telegram.calls.map((call) => call.method)
+      expect(methods).not.toContain("setMyProfilePhoto")
+      expect(methods).toContain("setWebhook")
+      expect(methods).toContain("setChatMenuButton")
     }),
   )
 
