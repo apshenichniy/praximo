@@ -19,6 +19,18 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
   ([#95](https://github.com/apshenichniy/praximo/issues/95)) as the fallback for
   a coach who already owns a bot or whom Managed Bots fails; it carries its own
   ownership-proof handshake and joins the one-tap pipeline at activation.
+  - ⚠️ **Client constraint, verified 2026-07-25: one-tap works on Telegram
+    Desktop and not on iOS.** The iOS client does not support the
+    `request_managed_bot` button and degrades an unknown button type into a share
+    action — poisoning the whole reply keyboard, so even a plain text button
+    beside it stops working. The coach sees a share sheet that spins and
+    completes nothing; nothing fails server-side, and the provisioning attempt
+    sits at `requested` waiting for a `managed_bot` update that never comes.
+    Managed Bots shipped in Bot API 10.0 (May 2026), so this is a client catching
+    up rather than a design fault. Until it does, the token-paste fallback is the
+    de facto primary path for coaches onboarding from an iPhone — which is most
+    of them. Tracked in
+    [#134](https://github.com/apshenichniy/praximo/issues/134).
 - **No shared-single-bot mode**, not even as a degraded state: it breaks branding and forfeits per-coach rate limits.
 
 ### Bot roles

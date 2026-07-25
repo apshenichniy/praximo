@@ -49,6 +49,13 @@ manager bot reserves the invitation and offers a **Create coach bot** button
 name). The coach picks the final name and username there; one tap is the whole
 step.
 
+> ⚠️ **On iPhone that button does not work** (verified 2026-07-25,
+> [#134](https://github.com/apshenichniy/praximo/issues/134)). Telegram iOS has no
+> support for the managed-bot request button yet and turns the tap into a share
+> sheet that never completes. It works on **Telegram Desktop**. Until the iOS
+> client catches up, tell a coach onboarding from a phone to use the token path
+> below — it reaches the identical `connected` outcome.
+
 Everything downstream is automatic — nothing here is an operator action:
 
 - the bot's token is fetched and stored AES-GCM-encrypted;
