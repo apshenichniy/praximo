@@ -8,7 +8,7 @@ Agents write all documents, commit titles, and commit messages in English by def
 
 bun workspaces + Turborepo. Three deployable Workers in `apps/` (`web`, `bot`, `pipeline`), seven private `@praximo/*` packages in `packages/`. [ADR 0002](docs/adr/0002-monorepo-layout-and-module-boundaries.md) is the source of truth for the layout and the module boundaries.
 
-Commands: `bun run check` (typecheck every workspace, then lint), `bun run test`, `bun run build` (bundles each Worker for workerd via `wrangler --dry-run`), `bun run format`.
+Commands: `bun run check` (typecheck every workspace, then lint), `bun run test`, `bun run build` (bundles each Worker for workerd via `wrangler --dry-run`), `bun run format`, `bun run deploy` (deploys the personal stage; `--dry-run` to rehearse it, and `prod` needs `--confirm-prod`).
 
 Conventions worth knowing before writing code here:
 
