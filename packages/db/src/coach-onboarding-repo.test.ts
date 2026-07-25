@@ -29,7 +29,6 @@ describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", ()
         requestId: requestId(),
         requestFingerprint: "same-payload",
         name: "Ada Coaching",
-        coachLanguage: CoachLanguage.make("uk"),
         description: "A coaching practice",
         issuedByTelegramId,
         now: new Date("2026-07-23T18:00:00.000Z"),
@@ -45,7 +44,9 @@ describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", ()
       const replay = yield* repo.createOrGet(input)
       expect(replay).toEqual({ aggregate: created, created: false })
       expect(createdOutcome.created).toBe(true)
-      expect(created.owner).toEqual({ language: "uk" })
+      // Creation does not choose the coach's language: the owner is born on the
+      // column default and the claiming `/start` seeds it (#130).
+      expect(created.owner).toEqual({ language: "en" })
       expect(created.invite.status).toBe("pending")
       expect(created.invite.code).toMatch(CoachOnboardingInviteCodePattern)
       expect(yield* repo.resolveCode(created.invite.code)).toBe(created.invite.id)
@@ -202,7 +203,6 @@ describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", ()
         requestId: requestId(),
         requestFingerprint: "concurrent-identical",
         name: "Concurrent Coaching",
-        coachLanguage: CoachLanguage.make("en"),
         issuedByTelegramId,
         now,
       }
@@ -268,7 +268,6 @@ describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", ()
         requestId: requestId(),
         requestFingerprint: "reissue-source",
         name: "Reissue Coaching",
-        coachLanguage: CoachLanguage.make("en"),
         issuedByTelegramId,
         now: new Date("2026-07-23T18:00:00.000Z"),
       })
@@ -340,7 +339,6 @@ describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", ()
         requestId: requestId(),
         requestFingerprint: "reset-accepted",
         name: "Reset Coaching",
-        coachLanguage: CoachLanguage.make("en"),
         issuedByTelegramId,
         now: new Date("2026-07-23T18:00:00.000Z"),
       })
@@ -401,7 +399,6 @@ describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", ()
         requestId: requestId(),
         requestFingerprint: "declined-then-reinvited",
         name: "Second Chance Coaching",
-        coachLanguage: CoachLanguage.make("en"),
         issuedByTelegramId,
         now: new Date("2026-07-23T18:00:00.000Z"),
       })
@@ -449,7 +446,6 @@ describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", ()
         requestId: requestId(),
         requestFingerprint: "accepted-no-ttl",
         name: "Patient Coaching",
-        coachLanguage: CoachLanguage.make("en"),
         issuedByTelegramId,
         now: new Date("2026-07-23T18:00:00.000Z"),
       })
@@ -490,7 +486,6 @@ describe.skipIf(skipWithoutDatabase)("CoachOnboardingRepo (dev Neon branch)", ()
           requestId: requestId(),
           requestFingerprint: fingerprint,
           name: "Concurrent reissue",
-          coachLanguage: CoachLanguage.make("en"),
           issuedByTelegramId,
           now: new Date("2026-07-23T18:00:00.000Z"),
         })

@@ -21,8 +21,6 @@ export interface CreateInput {
   readonly requestFingerprint: string
   /** Internal label; the workspace row stores "" until the coach names it. */
   readonly name?: string
-  /** Owner-member language; defaults to "en" until onboarding sets it. */
-  readonly coachLanguage?: CoachLanguage
   readonly avatarR2Key?: string
   readonly description?: string
   readonly shortDescription?: string
@@ -410,18 +408,19 @@ export const layer = Layer.effect(
               returning "id"
             ),
             inserted_member as (
+              -- "language" is deliberately absent: the column's default is what
+              -- an unclaimed member is born with, and creation has no business
+              -- deciding the coach's language (#130).
               insert into "member" (
                 "id",
                 "workspace_id",
                 "role",
-                "language",
                 "telegram_user_id"
               )
               select
                 ${memberId},
                 "id",
                 'owner',
-                ${input.coachLanguage ?? "en"}::language,
                 null
               from inserted_workspace
               returning "id"
@@ -632,7 +631,6 @@ export const layer = Layer.effect(
           requestId: input.requestId,
           requestFingerprint: fingerprint,
           name: replay.aggregate.workspace.name,
-          coachLanguage: replay.aggregate.owner.language,
           issuedByTelegramId: input.issuedByTelegramId,
           now: input.now,
         })).aggregate
@@ -727,7 +725,6 @@ export const layer = Layer.effect(
           requestId: input.requestId,
           requestFingerprint: fingerprint,
           name: reconciled.aggregate.workspace.name,
-          coachLanguage: reconciled.aggregate.owner.language,
           issuedByTelegramId: input.issuedByTelegramId,
           now: input.now,
         })).aggregate

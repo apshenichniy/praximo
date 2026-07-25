@@ -4,7 +4,10 @@ import { useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
 import { attachBackButton, loadTelegramWebApp, readTelegramInitData } from "@/lib/telegram.ts"
 
-export function TelegramBackButton({ onBack }: { readonly onBack?: () => void } = {}) {
+export function TelegramBackButton({
+  onBack,
+  label = "Back",
+}: { readonly onBack?: () => void; readonly label?: string } = {}) {
   const router = useRouter()
   const [usesNativeButton, setUsesNativeButton] = useState<boolean>()
   const handleBack = useCallback(
@@ -40,7 +43,7 @@ export function TelegramBackButton({ onBack }: { readonly onBack?: () => void } 
       className="text-muted-foreground hover:text-foreground -ml-2 inline-flex h-10 items-center gap-2 rounded-xl px-2 text-sm transition-colors"
     >
       <HugeiconsIcon icon={ArrowLeft01Icon} size={20} strokeWidth={2} />
-      Back
+      {label}
     </button>
   )
 }

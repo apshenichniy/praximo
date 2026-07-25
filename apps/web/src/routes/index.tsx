@@ -1,4 +1,5 @@
 import { BotIcon, WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
+import type { CoachLanguage } from "@praximo/domain"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useRef, useState } from "react"
 
@@ -7,10 +8,14 @@ import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { CoachHome } from "@/features/coach/components/coach-home.tsx"
-import { TermsScreen } from "@/features/coach/components/terms-screen.tsx"
+import { OnboardingFlow } from "@/features/coach/components/onboarding-flow.tsx"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
+import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
+import { coachCopy } from "@/features/i18n/coach-copy.ts"
+import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import {
   acceptCoachTerms,
+  chooseCoachLanguage,
   type CoachEntryTransportResult,
   loadCoachEntry,
 } from "@/server/coach.functions.ts"
@@ -21,16 +26,30 @@ import {
  * resolves what this coach sees before anything paints.
  *
  * Client-only, because the credential is a browser fact: it arrives from the
- * Telegram host after the page loads. English-only in this slice (D4), with the
- * i18n foundation ticket as the named payer.
+ * Telegram host after the page loads. Every screen below an authenticated coach
+ * renders in `member.language`; the two refusals above one render in the
+ * language the launch itself claims, because at that point there is no member to
+ * ask (#130).
  */
+export interface CoachEntryLoaderData {
+  readonly entry: CoachEntryTransportResult
+  readonly launchLanguage: CoachLanguage
+}
+
 export const Route = createFileRoute("/")({
   ssr: false,
   pendingMs: 0,
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
-  loader: async (): Promise<CoachEntryTransportResult> =>
-    loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
+  loader: async (): Promise<CoachEntryLoaderData> => {
+    // Both halves come from the same launch, and the credential is memoized, so
+    // this is one round trip rather than two.
+    const [entry, credential] = await Promise.all([
+      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
+      resolveLaunchCredential(),
+    ])
+    return { entry, launchLanguage: launchLocale(credential.initData) }
+  },
   component: CoachEntry,
 })
 
@@ -68,11 +87,15 @@ export const acceptOnce = (inFlight: { current: boolean }, run: () => Promise<vo
 }
 
 function CoachEntry() {
-  const entry = Route.useLoaderData()
+  const { entry, launchLanguage } = Route.useLoaderData()
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const inFlight = useRef(false)
+
+  // An authenticated coach has a language of their own; anyone else gets what
+  // their Telegram client asked for, because there is no member to ask.
+  const copy = coachCopy(entry.ok ? entry.entry.language : launchLanguage)
 
   const retry = useCallback(() => void router.invalidate(), [router])
 
@@ -88,25 +111,50 @@ function CoachEntry() {
           await router.invalidate()
           return
         }
-        setError(
-          result.error === "stale"
-            ? "These terms have been updated. Reopen the app to read the current version."
-            : "That did not go through. Check your connection and try again.",
-        )
+        setError(result.error === "stale" ? copy.terms.staleError : copy.common.failed)
       } catch {
-        setError("That did not go through. Check your connection and try again.")
+        setError(copy.common.failed)
       } finally {
         setPending(false)
       }
     })
-  }, [entry, router])
+  }, [copy, entry, router])
+
+  /**
+   * Persist the coach's choice, then let the flow move on — but only if the
+   * write landed. A coach whose language did not save must not walk into terms
+   * rendered from a database that disagrees with the screen they just left.
+   */
+  const chooseLanguage = useCallback(
+    async (chosen: CoachLanguage): Promise<boolean> => {
+      setPending(true)
+      setError(undefined)
+      try {
+        const result = await chooseCoachLanguage({ data: { language: chosen } })
+        if (result.ok) {
+          await router.invalidate()
+          return true
+        }
+        setError(coachCopy(chosen).common.failed)
+        return false
+      } catch {
+        setError(coachCopy(chosen).common.failed)
+        return false
+      } finally {
+        setPending(false)
+      }
+    },
+    [router],
+  )
 
   return (
     <MiniAppShell>
       <TelegramFullscreen />
       <CoachScreen
         entry={entry}
+        launchLanguage={launchLanguage}
         onAccept={accept}
+        onChooseLanguage={chooseLanguage}
         onRetry={retry}
         pending={pending}
         error={error}
@@ -117,13 +165,17 @@ function CoachEntry() {
 
 export function CoachScreen({
   entry,
+  launchLanguage,
   onAccept,
+  onChooseLanguage,
   onRetry,
   pending,
   error,
 }: {
   readonly entry: CoachEntryTransportResult
+  readonly launchLanguage: CoachLanguage
   readonly onAccept: () => void
+  readonly onChooseLanguage: (language: CoachLanguage) => Promise<boolean>
   readonly onRetry: () => void
   readonly pending: boolean
   readonly error: string | undefined
@@ -132,37 +184,47 @@ export function CoachScreen({
     // A refused credential is not a missing page: somebody opened the app from
     // somewhere it does not belong, and saying so beats a 404. Every refusal
     // reads the same, because the server deliberately cannot tell them apart.
+    const copy = coachCopy(launchLanguage)
     return entry.error === "unauthenticated" ? (
       <EntryFrame
         icon={BotIcon}
         tone="muted"
-        title="Open Praximo from your bot"
-        body="This app opens from the Praximo bot set up for your practice. Find it in Telegram and tap Open."
+        title={copy.entry.notFromBotTitle}
+        body={copy.entry.notFromBotBody}
       />
     ) : (
       <EntryFrame
         icon={WifiDisconnected01Icon}
         tone="muted"
-        title="We couldn't open Praximo"
-        body="Something on our side is not answering. Try again in a moment."
+        title={copy.entry.unavailableTitle}
+        body={copy.entry.unavailableBody}
       >
         <div className="mt-8">
           <Button className="w-full" onClick={onRetry}>
-            Try again
+            {copy.common.tryAgain}
           </Button>
         </div>
       </EntryFrame>
     )
   }
 
-  // The terms are a state of the entry, not a route of their own: a blocking
-  // screen with a URL is a screen that can be bookmarked past.
+  // First login is a state of the entry, not a route: a blocking screen with a
+  // URL is a screen that can be bookmarked past.
   if (entry.entry.kind === "terms-required") {
-    return <TermsScreen onAccept={onAccept} pending={pending} error={error} />
+    return (
+      <OnboardingFlow
+        language={entry.entry.language}
+        onChooseLanguage={onChooseLanguage}
+        onAccept={onAccept}
+        pending={pending}
+        error={error}
+      />
+    )
   }
 
   return (
     <CoachHome
+      copy={coachCopy(entry.entry.language)}
       botUsername={entry.entry.botUsername}
       mainMiniAppUrl={mainMiniAppUrlFor(
         typeof window === "undefined" ? "" : window.location.href,

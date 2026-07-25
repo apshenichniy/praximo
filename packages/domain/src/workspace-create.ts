@@ -8,8 +8,28 @@ export const CreateWorkspaceRequestId = Schema.String.check(Schema.isUUID(4))
 /** Idempotency for a workspace rename — the same shape the create path uses. */
 export const WorkspaceRenameRequestId = CreateWorkspaceRequestId
 
-export const CoachLanguage = Schema.Literals(["en", "uk", "ru"])
+/** The three languages the product speaks, and the order it offers them in. */
+export const CoachLanguages = ["en", "uk", "ru"] as const
+
+export const CoachLanguage = Schema.Literals(CoachLanguages)
 export type CoachLanguage = typeof CoachLanguage.Type
+
+/** What the product falls back to: the language every text is authored in. */
+export const DefaultCoachLanguage: CoachLanguage = "en"
+
+/**
+ * A Telegram `language_code` narrowed to what the product speaks.
+ *
+ * It lives in the domain because both sides of the product need the same
+ * answer: the bot narrows the sender's client language for updates that never
+ * reach a workspace row, and the Mini App narrows the launch's own claim for
+ * the screens shown before a member is resolved. Two copies of this would be
+ * two ways for `uk-UA` to mean different things (#130).
+ */
+export const narrowCoachLanguage = (languageCode: string | undefined): CoachLanguage => {
+  const base = (languageCode ?? "").toLowerCase().split("-")[0] ?? ""
+  return CoachLanguages.find((language) => language === base) ?? DefaultCoachLanguage
+}
 
 const WorkspaceName = Schema.Trim.check(Schema.isMinLength(1)).check(
   Schema.isMaxLength(WorkspaceNameMaxLength),
@@ -33,10 +53,16 @@ const NonEmptyShortDescription = Schema.Trim.check(Schema.isMinLength(1)).check(
 
 // Creation asks for nothing but an optional internal label: the coach owns
 // their profile (language, descriptions) and sets it during onboarding (#103).
+//
+// `coachLanguage` is deliberately absent (#130). It was optional here and
+// nobody sent it, so every coach in the database was born English and stayed
+// English — a column with two possible writers under different owners is how
+// that drift happened. The coach's language now has exactly two writers, both
+// on the coach's own side of the product: the invite claim seeds it from
+// Telegram, and the coach chooses it during onboarding.
 const RawCreateWorkspaceInput = Schema.Struct({
   requestId: CreateWorkspaceRequestId,
   name: Schema.optionalKey(Schema.Trim.check(Schema.isMaxLength(WorkspaceNameMaxLength))),
-  coachLanguage: Schema.optionalKey(CoachLanguage),
   description: RawOptionalDescription,
   shortDescription: RawOptionalShortDescription,
 })
@@ -44,7 +70,6 @@ const RawCreateWorkspaceInput = Schema.Struct({
 const NormalizedCreateWorkspaceInput = Schema.Struct({
   requestId: CreateWorkspaceRequestId,
   name: Schema.optionalKey(WorkspaceName),
-  coachLanguage: Schema.optionalKey(CoachLanguage),
   description: Schema.optionalKey(NonEmptyDescription),
   shortDescription: Schema.optionalKey(NonEmptyShortDescription),
 })
@@ -54,7 +79,6 @@ export const CreateWorkspaceInput = RawCreateWorkspaceInput.pipe(
     decode: SchemaGetter.transform((input) => ({
       requestId: input.requestId,
       ...(input.name === undefined || input.name.length === 0 ? {} : { name: input.name }),
-      ...(input.coachLanguage === undefined ? {} : { coachLanguage: input.coachLanguage }),
       ...(input.description === undefined || input.description.length === 0
         ? {}
         : { description: input.description }),

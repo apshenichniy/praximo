@@ -1,4 +1,4 @@
-import { CoachLanguage } from "@praximo/domain"
+import { type CoachLanguage, DefaultCoachLanguage, narrowCoachLanguage } from "@praximo/domain"
 
 /**
  * Every coach-facing line the manager bot and a not-yet-installed coach bot can
@@ -222,7 +222,7 @@ const ru: Copy = {
 
 const catalog: Record<CoachLanguage, Copy> = { en, uk, ru }
 
-export const DefaultLanguage: CoachLanguage = CoachLanguage.make("en")
+export const DefaultLanguage: CoachLanguage = DefaultCoachLanguage
 
 export const messages = (language: CoachLanguage = DefaultLanguage): Copy => catalog[language]
 
@@ -230,8 +230,8 @@ export const messages = (language: CoachLanguage = DefaultLanguage): Copy => cat
  * The sender's Telegram client language, narrowed to what the product speaks.
  * Only a fallback: a workspace that already carries the coach's chosen language
  * always wins over the client's regional tag.
+ *
+ * The narrowing itself belongs to the domain, so the Mini App resolves `uk-UA`
+ * to the same thing this does (#130).
  */
-export const clientLanguage = (languageCode: string | undefined): CoachLanguage => {
-  const base = (languageCode ?? "").toLowerCase().split("-")[0] ?? ""
-  return base === "uk" || base === "ru" ? CoachLanguage.make(base) : DefaultLanguage
-}
+export const clientLanguage = narrowCoachLanguage
