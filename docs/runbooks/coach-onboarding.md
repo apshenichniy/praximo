@@ -82,6 +82,10 @@ chat. Two things follow for the operator:
 Everything downstream is automatic — nothing here is an operator action:
 
 - the bot's token is fetched and stored AES-GCM-encrypted;
+- the **in-chat menu button** is set to a `web_app` button labelled **"Open"**,
+  pointing at `COACH_MINI_APP_URL`. **This one is first**, before the coach is told
+  anything, because their client caches that button when it opens the chat
+  ([#156](https://github.com/apshenichniy/praximo/issues/156));
 - default Praximo branding is applied — the stage's stored branding image from
   R2, plus an English description and short description templated from the
   coach's own Telegram name. The text is a pure function of its seed, so a retry
@@ -105,10 +109,14 @@ Everything downstream is automatic — nothing here is an operator action:
   refuses all leave the bot without a photo and a warning in the Worker log
   naming the key — never a coach who cannot finish onboarding;
 - the webhook is armed with a fresh per-bot secret;
-- the **in-chat menu button** is set to a `web_app` button labelled **"Open"**,
-  pointing at `COACH_MINI_APP_URL`;
 - the workspace flips to `connected`, the invite is consumed, and the manager
   bot notifies the admin.
+
+> If a coach says the **Open** button next to the message input is missing, ask
+> them to close and reopen the chat — that is the client's cached view of the bot,
+> not a bot without a button. `getChatMenuButton` with the coach bot's token is the
+> server-side truth. The **Open** button inside the "Praximo готов" message works
+> either way, so they are never actually locked out of the Mini App.
 
 **What the coach sees is one message.** Telegram's dialog ends with a **Start bot**
 button, so they tap it while the steps above are still running. The bot answers

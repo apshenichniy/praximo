@@ -12,6 +12,7 @@ import {
   configureCoachBot,
   constantTimeEqual,
   type ProvisioningEnv,
+  setCoachBotMenuButton,
   settleCreationPrompt,
   sha256,
   telegram,
@@ -225,6 +226,15 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
   )
   const injectedFetch =
     input.telegramFetch === undefined ? {} : { telegramFetch: input.telegramFetch }
+  // Same first step as the managed path (#156). Here the coach is looking at the
+  // bot they pasted a token for — they have already opened it to answer the proof
+  // handshake — so their client's cache is just as much in play.
+  yield* setCoachBotMenuButton({
+    token,
+    botId: candidate.botId,
+    miniAppBaseUrl: env.COACH_MINI_APP_URL,
+    ...injectedFetch,
+  })
   const configured = yield* configureCoachBot({
     env,
     token,

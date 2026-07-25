@@ -434,6 +434,10 @@ describe("activation and the prompt", () => {
 
       expect(armedBeforeRotate).toBe(true)
       expect(repo.rotated).toHaveLength(1)
+      // And re-configuring re-sets the menu button, like a first connection does
+      // (#156) — this is the branch a `managed_bot` redelivery takes, and the one
+      // that has to pick up a changed `COACH_MINI_APP_URL`.
+      expect(telegram.calls.map((call) => call.method)).toContain("setChatMenuButton")
     }),
   )
 
