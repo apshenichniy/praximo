@@ -22,8 +22,9 @@ menu button (set at provisioning, [ADR 0004](../adr/0004-bot-per-coach-provision
 [#86](https://github.com/apshenichniy/praximo/issues/86)) and, if the coach enables it in
 @BotFather, the chat-list Main Mini App "Open" button. The menu button is always present; the
 Main Mini App is optional coach self-service, since no Bot API can set it (ADR 0004 §Mini App
-entry points). This mirrors the admin's two "Open" surfaces on the manager bot
-([admin-surface.md](admin-surface.md) §Entry points).
+entry points) — the @BotFather steps live in the
+[coach onboarding runbook](../runbooks/coach-onboarding.md). This mirrors the admin's two
+"Open" surfaces on the manager bot ([admin-surface.md](admin-surface.md) §Entry points).
 
 ## Navigation model
 

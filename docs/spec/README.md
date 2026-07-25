@@ -4,7 +4,7 @@ Multi-tenant platform for coaches: session scheduling, video calls, audio record
 
 This document is the **assembly point** of the MVP spec: the end-to-end product flow, the architecture at a glance, the index of every specification document, and the list of what is deliberately left open. It adds no new decisions — every statement here is a pointer into a document that owns it. Assembled in wayfinder ticket [#13](https://github.com/apshenichniy/praximo/issues/13); the full decision trail lives on the [wayfinder map](https://github.com/apshenichniy/praximo/issues/1).
 
-**How to read:** [CONTEXT.md](../../CONTEXT.md) defines the ubiquitous language — every document follows it. Specs (this directory) describe product behavior; ADRs ([docs/adr/](../adr/)) record architecture decisions; research write-ups live on `research/*` branches; prototypes in `prototypes/` and on `prototype/*` branches.
+**How to read:** [CONTEXT.md](../../CONTEXT.md) defines the ubiquitous language — every document follows it. Specs (this directory) describe product behavior; ADRs ([docs/adr/](../adr/)) record architecture decisions; runbooks ([docs/runbooks/](../runbooks/)) are the operator's step-by-step procedures; research write-ups live on `research/*` branches; prototypes in `prototypes/` and on `prototype/*` branches.
 
 ## The product flow, end to end
 
@@ -59,6 +59,12 @@ Domains: `stage.praximo.io` (canonical dev web), `app.praximo.io` (prod web), `a
 | [admin-surface.md](admin-surface.md) | Operator surface (BotFather-style Mini App admin section): invite-a-coach flow, coaches list/details, deletion, deep-link lifecycle, manager-bot notifications |
 | [privacy-retention.md](privacy-retention.md) | Consent policy, retention, deletion, residency, roles |
 | [privacy-copy.md](privacy-copy.md) | The four texts: client consent, pre-join notice, privacy policy, coach ToS (with embedded DPA) |
+
+### Runbooks (`docs/runbooks/`)
+
+| Runbook | Covers |
+|---|---|
+| [coach-onboarding.md](../runbooks/coach-onboarding.md) | Operator checklist for onboarding one coach: invite, bot connection (one-tap and token fallback), verification, the optional coach-side Main Mini App step, offboarding pointer |
 
 ### ADRs (`docs/adr/`)
 

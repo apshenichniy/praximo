@@ -101,7 +101,7 @@ Each bot can surface its Mini App two ways, both shown to the user as **"Open"**
 - **In-chat menu button** (`setChatMenuButton`, `web_app`) — an ordinary Bot API call, set **programmatically** with the bot's token: on the manager bot at setup (`scripts/set-menu-button.ts`, [#80](https://github.com/apshenichniy/praximo/issues/80)) and on each coach bot at provisioning (step 3 above), labelled `"Open"`.
 - **Chat-list "Open" button** (Telegram's *Main Mini App*) — as of **Bot API 10.2 (July 2026) there is no API to set it**; `has_main_web_app` is read-only in `getMe`, and the URL is configured **only in @BotFather, per bot, by the bot's owner**. Managed (coach) bots appear in the owner's @BotFather, so a coach *can* enable it — but the platform cannot do it for them.
 
-Consequence for provisioning: the automated pipeline sets the **menu button** for every coach bot; the chat-list "Open" is **optional coach self-service** and onboarding is never blocked on it ([#86](https://github.com/apshenichniy/praximo/issues/86)). For the platform-owned manager bot the operator enables the Main Mini App once, by hand ([#84](https://github.com/apshenichniy/praximo/issues/84)). This is a Telegram limitation, not deferred work.
+Consequence for provisioning: the automated pipeline sets the **menu button** for every coach bot; the chat-list "Open" is **optional coach self-service** and onboarding is never blocked on it ([#86](https://github.com/apshenichniy/praximo/issues/86)) — the @BotFather steps to hand a coach who wants it are in the [coach onboarding runbook](../runbooks/coach-onboarding.md). For the platform-owned manager bot the operator enables the Main Mini App once, by hand ([#84](https://github.com/apshenichniy/praximo/issues/84)). This is a Telegram limitation, not deferred work.
 
 ### Explicitly skipped
 
@@ -109,7 +109,7 @@ Consequence for provisioning: the automated pipeline sets the **menu button** fo
 
 ### Offboarding
 
-On workspace deletion: `deleteWebhook`, wipe the token and the bot record. The bot itself remains the coach's property (in the Managed Bots model the coach is the owner) — we only release control. This becomes part of the coach on/offboarding runbook.
+On workspace deletion: `deleteWebhook`, wipe the token and the bot record. The bot itself remains the coach's property (in the Managed Bots model the coach is the owner) — we only release control. Operator-facing steps: [coach onboarding runbook](../runbooks/coach-onboarding.md).
 
 ## Consequences
 
