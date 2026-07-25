@@ -23,7 +23,7 @@ const adminRoute = getRouteApi("/admin")
 // Admin copy is English-only (admin-surface.md): the admin is the solo operator,
 // so the trilingual machinery that serves coaches never reaches these routes.
 function AdminHome() {
-  const { initData } = adminRoute.useLoaderData()
+  const { initData, coach: viewerCoach } = adminRoute.useLoaderData()
   const { data } = useSuspenseQuery(adminWorkspaceListQuery(initData))
   const navigate = useNavigate()
   const openInvite = useCallback(() => void navigate({ to: "/admin/workspaces/new" }), [navigate])
@@ -52,10 +52,10 @@ function AdminHome() {
     <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
       <AdminHero />
 
-      {data.viewerCoach === undefined ? null : (
+      {viewerCoach === null ? null : (
         <div className="mt-10">
           <ViewerCoachCard
-            viewerCoach={data.viewerCoach}
+            viewerCoach={viewerCoach}
             onOpen={(link) => void openTelegramLink(link)}
           />
         </div>

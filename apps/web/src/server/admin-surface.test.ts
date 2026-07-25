@@ -203,6 +203,9 @@ const workspaceRepoLayer = (rows: ReadonlyArray<WorkspaceRepo.ListItem>) =>
       ),
       list: Effect.fn("WorkspaceRepo.Test.list")(() => Effect.succeed(rows)),
       getDetail: Effect.fn("WorkspaceRepo.Test.getDetail")(() => Effect.die("unused")),
+      findCoachByTelegramId: Effect.fn("WorkspaceRepo.Test.findCoachByTelegramId")(() =>
+        Effect.die("unused"),
+      ),
       rename: Effect.fn("WorkspaceRepo.Test.rename")(() => Effect.die("unused")),
     }),
   )
@@ -343,6 +346,9 @@ const detailWorkspaceRepoLayer = (
       ),
       list: Effect.fn("WorkspaceRepo.Test.list")(() => Effect.succeed([])),
       getDetail: Effect.fn("WorkspaceRepo.Test.getDetail")(() => Effect.succeed(detail)),
+      findCoachByTelegramId: Effect.fn("WorkspaceRepo.Test.findCoachByTelegramId")(() =>
+        Effect.die("unused"),
+      ),
       rename: Effect.fn("WorkspaceRepo.Test.rename")(
         (input) =>
           renameResult ?? Effect.succeed({ ...detail, name: input.name, updatedAt: input.now }),
@@ -508,83 +514,9 @@ describe("AdminSurface", () => {
     }).pipe(Effect.provide(appLayer(stageRows)), Effect.provide(testConfig)),
   )
 
-  it.effect("surfaces the viewing admin's own coach claim without a second query", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(Date.parse(NOW))
-      const adminSurface = yield* AdminSurface.Service
-      const result = yield* adminSurface.listWorkspaces(VALID_INIT_DATA)
-
-      expect(result.viewerCoach).toEqual({
-        state: "accepted",
-        workspaceId: "ws_mine",
-        link: "https://t.me/PraximoMotherBot?start=ws_ADA23456",
-      })
-    }).pipe(
-      Effect.provide(
-        appLayer([
-          activeRow,
-          WorkspaceRepo.ListItem.make({
-            id: WorkspaceId.make("ws_mine"),
-            name: "My practice",
-            botStatus: "awaiting-setup",
-            invite: listInvite({
-              status: "accepted",
-              acceptedAt: hoursBefore(3),
-              acceptedByTelegramId: adminTelegramId,
-            }),
-          }),
-        ]),
-      ),
-      Effect.provide(testConfig),
-    ),
-  )
-
-  it.effect("prefers the admin's active bot over an older claim", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(Date.parse(NOW))
-      const adminSurface = yield* AdminSurface.Service
-      const result = yield* adminSurface.listWorkspaces(VALID_INIT_DATA)
-
-      expect(result.viewerCoach).toEqual({
-        state: "active",
-        workspaceId: "ws_my_bot",
-        link: "https://t.me/my_own_bot",
-      })
-    }).pipe(
-      Effect.provide(
-        appLayer([
-          WorkspaceRepo.ListItem.make({
-            id: WorkspaceId.make("ws_claimed"),
-            name: "Claimed",
-            botStatus: "awaiting-setup",
-            invite: listInvite({
-              status: "accepted",
-              acceptedAt: hoursBefore(3),
-              acceptedByTelegramId: adminTelegramId,
-            }),
-          }),
-          WorkspaceRepo.ListItem.make({
-            id: WorkspaceId.make("ws_my_bot"),
-            name: "My bot",
-            botStatus: "connected",
-            botUsername: "my_own_bot",
-            ownerTelegramUserId: adminTelegramId,
-            termsAcceptedAt: hoursBefore(100),
-          }),
-        ]),
-      ),
-      Effect.provide(testConfig),
-    ),
-  )
-
-  it.effect("leaves the viewer's coach context absent when they are only an admin", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(Date.parse(NOW))
-      const adminSurface = yield* AdminSurface.Service
-
-      expect(yield* adminSurface.listWorkspaces(VALID_INIT_DATA)).not.toHaveProperty("viewerCoach")
-    }).pipe(Effect.provide(appLayer(stageRows)), Effect.provide(testConfig)),
-  )
+  // The viewing admin's own coach hat is no longer resolved here: the entry
+  // gate answers it once, for every viewer, before any admin screen mounts
+  // (#106). Its states are covered in viewer-role.test.ts.
 
   it.effect("denies authentic initData for a Telegram id outside the admin set", () =>
     Effect.gen(function* () {

@@ -123,7 +123,7 @@ const makeManagerBot = (env: Env, telegramFetch: typeof globalThis.fetch): Bot =
       .resized()
       .oneTime()
     await ctx.reply(
-      `Create the managed bot for “${setup.workspace.name}”. The invitation is claimed only after Telegram confirms the bot.`,
+      `This invitation is now reserved for you${setup.workspace.name.length === 0 ? "" : ` (“${setup.workspace.name}”)`}. Create your coach bot to finish the setup — you can come back to this chat and continue any time.`,
       { reply_markup: keyboard },
     )
   })

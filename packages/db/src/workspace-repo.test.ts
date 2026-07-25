@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { CoachOnboardingInviteId, Workspace, WorkspaceId } from "@praximo/domain"
+import { CoachOnboardingInviteId, TelegramId, Workspace, WorkspaceId } from "@praximo/domain"
 import { eq, inArray } from "drizzle-orm"
 import { Effect, Layer } from "effect"
 import { Database } from "./client.ts"
@@ -15,6 +15,10 @@ const DATABASE_URL = process.env.DATABASE_URL
 
 const uniqueId = (prefix: string): string =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`
+
+/** Distinct Telegram identities that cannot collide with a concurrent run. */
+const uniqueTelegramId = (offset: number): TelegramId =>
+  TelegramId.make(String(810_000_000_000 + (Date.now() % 1_000_000) * 10 + offset))
 
 describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
   const appLayer = Layer.provideMerge(WorkspaceRepo.layer, Database.testLayer(DATABASE_URL ?? ""))
@@ -266,6 +270,100 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
           lastActivityAt: new Date("2026-07-24T10:00:00.000Z"),
         },
       ])
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("resolves one Telegram identity's coach context, most advanced state first", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkspaceRepo.Service
+      const { client } = yield* Database.Service
+      const claimed = WorkspaceId.make(uniqueId("ws_claimed"))
+      const halfway = WorkspaceId.make(uniqueId("ws_bot_connected"))
+      const dualHalfway = WorkspaceId.make(uniqueId("ws_dual_halfway"))
+      const activated = WorkspaceId.make(uniqueId("ws_activated"))
+      const ids = [claimed, halfway, dualHalfway, activated]
+      const claimant = uniqueTelegramId(1)
+      const halfOwner = uniqueTelegramId(2)
+      const dualOwner = uniqueTelegramId(3)
+      const stranger = uniqueTelegramId(4)
+
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(() =>
+          client.delete(schema.workspace).where(inArray(schema.workspace.id, ids)),
+        ).pipe(Effect.asVoid),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.workspace).values(ids.map((id) => ({ id, name: id }))),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.member).values([
+          {
+            id: uniqueId("mem_halfway"),
+            workspaceId: halfway,
+            role: "owner",
+            language: "en",
+            telegramUserId: halfOwner,
+          },
+          {
+            id: uniqueId("mem_dual_halfway"),
+            workspaceId: dualHalfway,
+            role: "owner",
+            language: "en",
+            telegramUserId: dualOwner,
+          },
+          {
+            id: uniqueId("mem_activated"),
+            workspaceId: activated,
+            role: "owner",
+            language: "en",
+            telegramUserId: dualOwner,
+            termsAcceptedAt: new Date("2026-07-20T10:00:00.000Z"),
+          },
+        ]),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.bot).values([
+          { workspaceId: halfway, connectionStatus: "connected", username: "half_coach_bot" },
+          { workspaceId: dualHalfway, connectionStatus: "connected", username: "dual_coach_bot" },
+          { workspaceId: activated, connectionStatus: "connected", username: "done_coach_bot" },
+        ]),
+      )
+      yield* Effect.promise(() =>
+        client.insert(schema.coachOnboardingInvite).values({
+          id: uniqueId("ci_claim"),
+          workspaceId: claimed,
+          requestId: uniqueId("req"),
+          requestFingerprint: "coach-context",
+          code: uniqueId("CODE").toUpperCase().slice(0, 8),
+          issuedByTelegramId: "100000001",
+          status: "accepted",
+          issuedAt: new Date("2026-07-22T10:00:00.000Z"),
+          expiresAt: new Date("2026-07-29T10:00:00.000Z"),
+          acceptedByTelegramId: claimant,
+          acceptedAt: new Date("2026-07-23T10:00:00.000Z"),
+        }),
+      )
+
+      // A connected bot without terms acceptance is provisioned, not activated.
+      expect(yield* repo.findCoachByTelegramId(halfOwner)).toMatchObject({
+        state: "bot-connected",
+        workspaceId: halfway,
+        botUsername: "half_coach_bot",
+      })
+      // An owner whose onboarding finished outranks their own half-finished
+      // workspace: the active one is what that person actually opens.
+      expect(yield* repo.findCoachByTelegramId(dualOwner)).toMatchObject({
+        state: "active",
+        workspaceId: activated,
+        botUsername: "done_coach_bot",
+      })
+      // A claim with no bot yet is still a coach — the state the manager Mini
+      // App's companion renders from (#106).
+      expect(yield* repo.findCoachByTelegramId(claimant)).toMatchObject({
+        state: "accepted",
+        workspaceId: claimed,
+      })
+      expect(yield* repo.findCoachByTelegramId(stranger)).toBeUndefined()
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 

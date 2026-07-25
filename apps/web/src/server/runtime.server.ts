@@ -11,6 +11,7 @@ import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
+import { ViewerRole } from "./viewer-role.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
 interface Env {
@@ -48,7 +49,7 @@ const runtimeFromEnv = (env: Env) => {
     runCancellation,
     repositories,
   )
-  const app = AdminSurface.layer.pipe(Layer.provide(dependencies))
+  const app = Layer.mergeAll(AdminSurface.layer, ViewerRole.layer).pipe(Layer.provide(dependencies))
   return ManagedRuntime.make(
     Layer.provide(app, ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
   )
@@ -94,6 +95,14 @@ const resolveEnv = async (): Promise<Env> => {
 let runtimePromise: Promise<ReturnType<typeof runtimeFromEnv>> | undefined
 
 const getRuntime = () => (runtimePromise ??= resolveEnv().then(runtimeFromEnv))
+
+/** The manager Mini App's entry gate (#106) — the one call every viewer makes. */
+export const resolveViewerRole = async (initData: string): Promise<ViewerRole.Role> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(ViewerRole.Service, (service) => service.resolveRole(initData)),
+  )
+}
 
 export const listAdminWorkspaces = async (
   initData: string,

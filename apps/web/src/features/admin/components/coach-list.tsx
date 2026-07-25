@@ -24,6 +24,7 @@ import { WorkspaceAvatar } from "@/features/admin/components/workspace-avatar.ts
 import { displayName } from "@/features/admin/formatting.ts"
 import { cn } from "@/lib/utils.ts"
 import type { AdminSurface } from "@/server/admin-surface.ts"
+import type { ViewerRole } from "@/server/viewer-role.ts"
 
 export type CoachEntry = AdminSurface.CoachListEntry
 
@@ -151,7 +152,7 @@ export function ViewerCoachCard({
   viewerCoach,
   onOpen,
 }: {
-  readonly viewerCoach: AdminSurface.ViewerCoach
+  readonly viewerCoach: ViewerRole.ViewerCoach
   readonly onOpen: (link: string) => void
 }) {
   const action = viewerCoachAction(viewerCoach)

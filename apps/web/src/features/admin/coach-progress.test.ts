@@ -110,10 +110,20 @@ describe("viewerCoachAction", () => {
       viewerCoachAction({ state: "accepted", workspaceId, link: "https://t.me/bot" }).title,
     ).toBe("Continue my coach setup")
     expect(
-      viewerCoachAction({ state: "bot-connected", workspaceId, link: "https://t.me/bot" }).title,
+      viewerCoachAction({
+        state: "bot-connected",
+        workspaceId,
+        botUsername: "bot",
+        link: "https://t.me/bot",
+      }).title,
     ).toBe("Continue my coach setup")
     expect(
-      viewerCoachAction({ state: "active", workspaceId, link: "https://t.me/bot" }).title,
+      viewerCoachAction({
+        state: "active",
+        workspaceId,
+        botUsername: "bot",
+        link: "https://t.me/bot",
+      }).title,
     ).toBe("Open my coach bot")
   })
 })
