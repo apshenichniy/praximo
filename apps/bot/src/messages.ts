@@ -19,6 +19,13 @@ export interface Copy {
   readonly invitationReserved: (workspaceName: string) => string
   readonly createBotButton: string
   readonly botConnected: (username: string) => string
+  /**
+   * A bot the coach created that we did not connect, because their setup was
+   * already finished (#135). Reassurance first — nothing is broken, and that is
+   * the question they actually have — then the bot by username, then the
+   * optional cleanup. Never an error, and never a request to fix anything.
+   */
+  readonly extraBotNotConnected: (username: string) => string
   readonly tokenNoActiveSetup: string
   readonly tokenInvalid: string
   readonly tokenBotTaken: string
@@ -46,6 +53,8 @@ const en: Copy = {
     }. Create your coach bot to finish the setup — you can come back to this chat and continue any time.\n\nAlready have a bot? Send me its @BotFather token in this chat instead and I will connect it.`,
   createBotButton: "Create coach bot",
   botConnected: (username) => `Your coach bot @${username} is connected. Open it to continue.`,
+  extraBotNotConnected: (username) =>
+    `Your workspace is fine — your coach bot is still connected and working.\n\n@${username} is a second bot, and it is not connected to Praximo. Nothing needs fixing on your side.\n\nIf you would rather not keep it, delete @${username} in @BotFather. We cannot remove it for you — only you can.`,
   tokenNoActiveSetup:
     "Open the one-time Praximo setup link sent by your administrator before sending a bot token.",
   tokenInvalid:
@@ -81,6 +90,8 @@ const uk: Copy = {
     }. Створіть свого бота, щоб завершити налаштування — ви можете повернутися до цього чату будь-коли.\n\nУже маєте бота? Надішліть мені його токен із @BotFather просто в цей чат, і я підключу його.`,
   createBotButton: "Створити бота",
   botConnected: (username) => `Ваш бот @${username} підключено. Відкрийте його, щоб продовжити.`,
+  extraBotNotConnected: (username) =>
+    `З вашим простором усе гаразд — ваш бот і далі підключений та працює.\n\n@${username} — це другий бот, і він не підключений до Praximo. Виправляти нічого не потрібно.\n\nЯкщо він вам не потрібен, видаліть @${username} у @BotFather. Ми не можемо зробити це за вас — це можете зробити лише ви.`,
   tokenNoActiveSetup:
     "Спершу відкрийте одноразове посилання Praximo від адміністратора, а вже потім надсилайте токен бота.",
   tokenInvalid:
@@ -116,6 +127,8 @@ const ru: Copy = {
     }. Создайте своего бота, чтобы завершить настройку — вы можете вернуться в этот чат в любой момент.\n\nУже есть бот? Пришлите мне его токен из @BotFather прямо в этот чат, и я подключу его.`,
   createBotButton: "Создать бота",
   botConnected: (username) => `Ваш бот @${username} подключён. Откройте его, чтобы продолжить.`,
+  extraBotNotConnected: (username) =>
+    `С вашим пространством всё в порядке — ваш бот по-прежнему подключён и работает.\n\n@${username} — это второй бот, и он не подключён к Praximo. Исправлять ничего не нужно.\n\nЕсли он вам не нужен, удалите @${username} в @BotFather. Мы не можем сделать это за вас — это можете сделать только вы.`,
   tokenNoActiveSetup:
     "Сначала откройте одноразовую ссылку Praximo от администратора, а потом присылайте токен бота.",
   tokenInvalid:

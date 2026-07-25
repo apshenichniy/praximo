@@ -321,6 +321,93 @@ describe.skipIf(!DATABASE_URL)("CoachBotProvisioningRepo claim (dev Neon branch)
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
+  /**
+   * The second managed bot (#135). A coach who taps the creation entry point
+   * twice has no open attempt left by the time the second `managed_bot` update
+   * arrives, so the fence refuses it. What must be true of that refusal: it is
+   * the typed `not-found`, and the bot the first tap installed is untouched.
+   */
+  it.effect("refuses a second bot for a finished coach and leaves the first installed", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachBotProvisioningRepo.Service
+      const aggregate = yield* inviteFor("second-bot", ISSUED_AT)
+
+      const attempt = yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      yield* repo.claim(coach, "9100010", "ada_first_bot", STARTED_AT)
+      const installed = yield* repo.complete({
+        provisioningId: attempt.id,
+        encryptedToken: candidate.encryptedToken,
+        webhookSecretHash: candidate.webhookSecretHash,
+        botInfo: { id: 9100010, is_bot: true, username: "ada_first_bot" },
+        now: STARTED_AT,
+      })
+      expect(installed.telegramBotId).toBe("9100010")
+
+      const refused = yield* Effect.flip(
+        repo.claim(coach, "9100011", "ada_second_bot", new Date("2026-07-23T19:20:00.000Z")),
+      )
+      // `not-found` and nothing else: the terminal answer the webhook turns into
+      // a 200, distinct from a query that simply failed.
+      expect(refused).toMatchObject({
+        _tag: "CoachBotProvisioningRepo.ProvisioningUnavailable",
+        reason: "not-found",
+      })
+
+      // The workspace still runs the bot the first tap installed.
+      expect(yield* repo.findByWorkspace(aggregate.workspace.id)).toMatchObject({
+        telegramBotId: "9100010",
+        username: "ada_first_bot",
+      })
+      expect((yield* Effect.flip(repo.findByBotId("9100011")))._tag).toBe(
+        "CoachBotProvisioningRepo.InstallationNotFound",
+      )
+      // And no attempt row was re-pointed at the second bot.
+      const { client } = yield* Database.Service
+      const attempts = yield* Effect.promise(() =>
+        client
+          .select({
+            managedBotId: schema.coachBotProvisioning.managedBotId,
+            status: schema.coachBotProvisioning.status,
+          })
+          .from(schema.coachBotProvisioning)
+          .where(eq(schema.coachBotProvisioning.inviteId, aggregate.invite.id)),
+      )
+      expect(attempts).toEqual([{ managedBotId: "9100010", status: "completed" }])
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("names the invitation's own lifecycle when it refuses a claim", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachBotProvisioningRepo.Service
+      const { client } = yield* Database.Service
+      const aggregate = yield* inviteFor("claim-reset", ISSUED_AT)
+
+      yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      // An administrator resets the invitation between the `/start` and the tap.
+      yield* Effect.promise(() =>
+        client
+          .update(schema.coachOnboardingInvite)
+          .set({
+            status: "cancelled",
+            cancellationReason: "reset_by_admin",
+            cancelledAt: ISSUED_AT,
+          })
+          .where(eq(schema.coachOnboardingInvite.id, aggregate.invite.id)),
+      )
+
+      const refused = yield* Effect.flip(
+        repo.claim(coach, "9100012", "ada_reset_bot", new Date("2026-07-23T19:20:00.000Z")),
+      )
+      // Not `not-found`: this coach *does* hold an open attempt, so the bot they
+      // just created is their first, not a spare. The webhook's terminal branch
+      // would otherwise reassure them about a bot that was never connected.
+      expect(refused).toMatchObject({
+        _tag: "CoachBotProvisioningRepo.ProvisioningUnavailable",
+        reason: "cancelled",
+      })
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
   it.effect("activation installs the bot and leaves no proof material behind", () =>
     Effect.gen(function* () {
       const repo = yield* CoachBotProvisioningRepo.Service

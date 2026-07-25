@@ -51,6 +51,22 @@ begins, and a repeated update resumes the same installation. Only the final
 database transaction sets the owner and `connected`, consumes the invite, and
 queues the manager-bot notification.
 
+A `managed_bot` update for a coach with **no open attempt** — the second bot of a
+coach who tapped twice — is a terminal, expected outcome, not a failure: the
+webhook answers `200` so Telegram stops redelivering, and the coach is told the
+extra bot is not connected and can be removed in @BotFather
+([#135](https://github.com/apshenichniy/praximo/issues/135)). Genuine
+infrastructure failures on the same path stay `500`, because those *are*
+retryable; collapsing the two is what left the manager bot's webhook failing
+forever. One shape is knowingly left behind: a coach whose attempt is still open
+on an invitation an administrator reset gets a refusal that is equally
+deterministic and still answers `500`. It is deliberately not folded into the
+same 200 — the coach's bot really is unconnected there, so the reassuring copy
+would be a lie, and what to say instead is a copy decision this ADR does not
+take. The distinction matters more once the entry point becomes a deep link
+([#134](https://github.com/apshenichniy/praximo/issues/134)): a link stays in the
+chat, where the `oneTime()` keyboard button it replaces vanished after a tap.
+
 ### BotFather token fallback
 
 Implemented by [#95](https://github.com/apshenichniy/praximo/issues/95). A token

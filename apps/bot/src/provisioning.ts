@@ -245,6 +245,22 @@ export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(functi
   )
 })
 
+/**
+ * What a `managed_bot` update settled into. Both cases are terminal and both are
+ * a 200: the failure channel is reserved for what a redelivery could still fix.
+ *
+ * `NoOpenAttempt` is the coach who created a second bot (#135) — by tapping the
+ * creation entry point twice, or coming back to it later. The fence refuses it
+ * by design, the first bot stays connected, and no retry can ever change that,
+ * so it must not be answered like an outage.
+ */
+export type ManagedBotOutcome =
+  | {
+      readonly _tag: "Connected"
+      readonly installation: CoachBotProvisioningRepo.Installation
+    }
+  | { readonly _tag: "NoOpenAttempt"; readonly botUsername: string }
+
 export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(function* (
   env: ProvisioningEnv,
   user: User,
@@ -272,25 +288,38 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       coachName: coachDisplayName(user, profile.name),
       webhookOrigin,
     })
-    return yield* repo.rotate({
-      telegramBotId: String(managedBot.id),
-      encryptedToken: yield* credentials.encrypt(token),
-      webhookSecretHash: yield* sha256(configured.secret),
-      botInfo: configured.botInfo,
-      username: managedBot.username,
-      now,
-    })
+    return {
+      _tag: "Connected",
+      installation: yield* repo.rotate({
+        telegramBotId: String(managedBot.id),
+        encryptedToken: yield* credentials.encrypt(token),
+        webhookSecretHash: yield* sha256(configured.secret),
+        botInfo: configured.botInfo,
+        username: managedBot.username,
+        now,
+      }),
+    } as const
   }
   if (existing.failure._tag !== "CoachBotProvisioningRepo.InstallationNotFound") {
     return yield* existing.failure
   }
 
-  const provisioning = yield* repo.claim(
-    TelegramId.make(String(user.id)),
-    String(managedBot.id),
-    managedBot.username,
-    now,
-  )
+  const claimed = yield* repo
+    .claim(TelegramId.make(String(user.id)), String(managedBot.id), managedBot.username, now)
+    .pipe(Effect.result)
+  if (Result.isFailure(claimed)) {
+    // `not-found` is the whole of "this coach has no open attempt": the fence
+    // matched nothing and no row anywhere carries this bot id. Deterministic, so
+    // a retry can only repeat it — every other refusal keeps its failure.
+    if (
+      claimed.failure._tag === "CoachBotProvisioningRepo.ProvisioningUnavailable" &&
+      claimed.failure.reason === "not-found"
+    ) {
+      return { _tag: "NoOpenAttempt", botUsername: managedBot.username } as const
+    }
+    return yield* claimed.failure
+  }
+  const provisioning = claimed.success
   const token = yield* telegram("getManagedBotToken", () =>
     new Api(env.MANAGER_BOT_TOKEN).getManagedBotToken(managedBot.id),
   )
@@ -302,13 +331,16 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     coachName: coachDisplayName(user, provisioning.workspace.name),
     webhookOrigin,
   })
-  return yield* repo.complete({
-    provisioningId: provisioning.id,
-    encryptedToken: yield* credentials.encrypt(token),
-    webhookSecretHash: yield* sha256(configured.secret),
-    botInfo: configured.botInfo,
-    now,
-  })
+  return {
+    _tag: "Connected",
+    installation: yield* repo.complete({
+      provisioningId: provisioning.id,
+      encryptedToken: yield* credentials.encrypt(token),
+      webhookSecretHash: yield* sha256(configured.secret),
+      botInfo: configured.botInfo,
+      now,
+    }),
+  } as const
 })
 
 /**

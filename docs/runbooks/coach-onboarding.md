@@ -91,6 +91,15 @@ A partial failure (Telegram refused a configuration call) leaves the workspace
 unconnected on purpose; the coach re-taps or re-sends the token and the same
 installation resumes. There is no operator retry surface.
 
+**A coach who ends up with two bots.** Tapping the creation entry point a second
+time makes Telegram create a second bot, and by then the coach has no open
+attempt left, so the platform does not connect it
+([#135](https://github.com/apshenichniy/praximo/issues/135)). Nothing is broken:
+the first bot stays connected and the workspace is untouched. The manager bot
+tells the coach so, names the unconnected bot, and offers @BotFather removal as
+optional — bots cannot delete bots, so only the coach can. Nothing is required
+of the operator, and nothing appears in the admin surface.
+
 ## 4. Optional — the coach enables the chat-list "Open"
 
 **This step is optional and belongs to the coach. Onboarding is complete without
