@@ -16,6 +16,10 @@ below.
 - The stage's manager bot (`PraximoMother`, dev instance suffixed) exists, has
   bot management enabled in the @BotFather Mini App (`can_manage_bots`), and its
   token is in `MANAGER_BOT_TOKEN` ([#84](https://github.com/apshenichniy/praximo/issues/84)).
+  **Verify it rather than assume it** — `bun run manager-bot:set-menu <web-origin>`
+  reports both manual @BotFather flags. With bot management off, Telegram simply
+  does not serve the one-tap button and the coach sees a share sheet that never
+  completes; nothing fails server-side, so the only other way to notice is a phone.
 - The stage is deployed and `COACH_MINI_APP_URL` points at its coach Mini App
   origin — this is the URL every coach bot's menu button will open.
 - The operator's Telegram id carries the admin flag, so the `/admin` route opens

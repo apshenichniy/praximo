@@ -1,5 +1,10 @@
 import { describe, expect, it } from "@effect/vitest"
-import { adminUrlForOrigin, buildSetMenuButtonRequest, MENU_BUTTON_TEXT } from "./menu-button.ts"
+import {
+  adminUrlForOrigin,
+  buildSetMenuButtonRequest,
+  managerBotSetupWarnings,
+  MENU_BUTTON_TEXT,
+} from "./menu-button.ts"
 
 // The pure half of bot:set-menu, tested with no env and no network — the HTTPS
 // guard and payload shape are the parts that must not be got wrong when pointing
@@ -54,5 +59,37 @@ describe("buildSetMenuButtonRequest", () => {
     expect(() =>
       buildSetMenuButtonRequest({ botToken: "123:ABC", adminUrl: "http://host/admin" }),
     ).toThrow(/must be https/)
+  })
+})
+
+// Both flags are manual @BotFather steps that fail silently and far from here —
+// the symptom is a dead button on someone's phone — so the preflight is the one
+// place a script can name them.
+
+describe("managerBotSetupWarnings", () => {
+  it("is silent when both manual steps are done", () => {
+    expect(managerBotSetupWarnings({ has_main_web_app: true, can_manage_bots: true })).toEqual([])
+  })
+
+  it("warns about bot management first, and says what it costs", () => {
+    const [first] = managerBotSetupWarnings({ has_main_web_app: true, can_manage_bots: false })
+    expect(first).toMatch(/can_manage_bots/)
+    expect(first).toMatch(/one-tap coach provisioning cannot work/)
+    // The fallback still works, and an operator staring at a dead button needs
+    // to know that before they start looking for a bug in our code.
+    expect(first).toMatch(/token-paste fallback/)
+  })
+
+  it("warns about the Main Mini App without implying the menu button is affected", () => {
+    const [first] = managerBotSetupWarnings({ has_main_web_app: false, can_manage_bots: true })
+    expect(first).toMatch(/Main Mini App/)
+    expect(first).toMatch(/in-chat menu button this script sets is unaffected/)
+  })
+
+  it("reports both, bot management first", () => {
+    const warnings = managerBotSetupWarnings({})
+    expect(warnings).toHaveLength(2)
+    expect(warnings[0]).toMatch(/can_manage_bots/)
+    expect(warnings[1]).toMatch(/Main Mini App/)
   })
 })

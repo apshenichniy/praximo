@@ -39,6 +39,53 @@ export const adminUrlForOrigin = (webOrigin: string): string => {
   return url.toString()
 }
 
+/**
+ * The `getMe` flags that report whether a stage's manual @BotFather setup was
+ * done. Both are read-only — no Bot API can set either — so a script can only
+ * observe them and say what is missing.
+ */
+export interface ManagerBotCapabilities {
+  readonly has_main_web_app?: boolean
+  readonly can_manage_bots?: boolean
+}
+
+/**
+ * What is still un-done in @BotFather for this manager bot, as lines to print.
+ *
+ * Both flags fail *silently and far from here*: nothing errors at deploy, and
+ * nothing errors when the bot sends its keyboard — the gap only shows up on a
+ * phone, minutes or days later, as a button that does nothing. That is what
+ * makes them worth a preflight at the one moment an operator is already
+ * pointed at this bot.
+ *
+ * `can_manage_bots` is the consequential one and is deliberately listed first:
+ * without it Telegram will not serve `request_managed_bot` at all, so the
+ * coach's "Create coach bot" button opens a generic share sheet that spins and
+ * completes nothing (observed on iOS, 2026-07-25). Warnings rather than a
+ * throw: pointing the menu button at a stage is a legitimate thing to do on a
+ * bot that has not been fully configured yet.
+ */
+export const managerBotSetupWarnings = (
+  capabilities: ManagerBotCapabilities,
+): ReadonlyArray<string> => {
+  const warnings: Array<string> = []
+  if (!capabilities.can_manage_bots) {
+    warnings.push(
+      "bot management is OFF (`can_manage_bots: false`) — one-tap coach provisioning cannot work: " +
+        "Telegram will not serve the `request_managed_bot` button, and the coach sees a share sheet " +
+        "that never completes. Enable bot management for this bot in the @BotFather Mini App " +
+        "(ADR 0004 §Prerequisites). The @BotFather token-paste fallback keeps working meanwhile.",
+    )
+  }
+  if (!capabilities.has_main_web_app) {
+    warnings.push(
+      "Main Mini App is not enabled — the chat-list Open button will be missing. " +
+        "Configure /admin in @BotFather (#84). The in-chat menu button this script sets is unaffected.",
+    )
+  }
+  return warnings
+}
+
 export interface SetMenuButtonRequest {
   readonly endpoint: string
   readonly body: {
