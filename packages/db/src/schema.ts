@@ -260,6 +260,12 @@ export const coachBotProvisioning = pgTable(
       .references(() => workspace.id, { onDelete: "cascade" }),
     coachTelegramId: text("coach_telegram_id").notNull(),
     keyboardRequestId: integer("keyboard_request_id").notNull(),
+    // The manager-chat message whose inline button launches creation (#134).
+    // Recorded because a link in a message is permanent where the reply-keyboard
+    // button it replaces vanished after one tap: this is the only handle on the
+    // prompt that has to be disarmed before another is sent, and edited once the
+    // bot is connected. Null until the first prompt has been sent.
+    promptMessageId: integer("prompt_message_id"),
     managedBotId: text("managed_bot_id"),
     managedBotUsername: text("managed_bot_username"),
     candidateBotId: text("candidate_bot_id"),

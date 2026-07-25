@@ -1,0 +1,1 @@
+ALTER TABLE "coach_bot_provisioning" ADD COLUMN "prompt_message_id" integer;

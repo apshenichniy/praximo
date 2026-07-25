@@ -72,6 +72,7 @@ const repoStub = (
     CoachBotProvisioningRepo.Service.of({
       prepare: unsupported,
       claim: () => Effect.fail(claimFailure),
+      recordPrompt: record("recordPrompt"),
       ingestCandidate: unsupported,
       findCandidateByBotId: unsupported,
       complete: record("complete"),

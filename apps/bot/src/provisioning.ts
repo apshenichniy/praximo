@@ -3,10 +3,11 @@ import { CoachOnboardingToken } from "@praximo/auth"
 import { CoachBotProvisioningRepo, CoachNotification, CoachOnboardingRepo } from "@praximo/db"
 import { TelegramId } from "@praximo/domain"
 import { CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
-import { Api, InputFile } from "grammy"
+import { Api, InlineKeyboard, InputFile } from "grammy"
 import type { User } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
 import { defaultBotDescription, defaultBotShortDescription } from "./default-branding.ts"
+import { messages } from "./messages.ts"
 
 export interface ProvisioningEnv {
   readonly MANAGER_BOT_TOKEN: string
@@ -241,6 +242,137 @@ export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(functi
   )
 })
 
+export interface CreationPromptEnv {
+  readonly MANAGER_BOT_TOKEN: string
+  readonly MANAGER_BOT_USERNAME: string
+}
+
+/**
+ * Where the coach launches creation from: Telegram's own managed-bot dialog,
+ * opened by deep link rather than by a `request_managed_bot` reply-keyboard
+ * button.
+ *
+ * The button does not work on Telegram iOS — the client degrades the *whole*
+ * keyboard into a share action, so even a plain button beside it stops
+ * responding (#134). This link opens the same dialog on every client, drives the
+ * same MTProto `bots.createBot`, and produces the same `managed_bot` update; it
+ * rides an inline `url` button, the most basic inline type there is. Only the
+ * username travels with it — the coach names the bot in the dialog.
+ */
+export const createBotLink = (managerBotUsername: string, suggestedUsername: string): string =>
+  `https://t.me/newbot/${managerBotUsername}/${suggestedUsername}`
+
+/**
+ * Take the keyboard off a superseded prompt, leaving its text alone.
+ *
+ * Best-effort by contract: Telegram gives a bot 48 hours to edit its own message
+ * in a private chat and the coach may have deleted it. Neither is a reason to
+ * refuse the resume the coach actually asked for — the message that keeps its
+ * button is one the claim fence refuses anyway.
+ */
+const disarmPrompt = Effect.fn("BotWorker.disarmPrompt")(function* (
+  api: Api,
+  chatId: TelegramId,
+  messageId: number,
+) {
+  const disarmed = yield* telegram("editMessageReplyMarkup", () =>
+    api.editMessageReplyMarkup(chatId, messageId),
+  ).pipe(Effect.result)
+  if (Result.isFailure(disarmed)) {
+    yield* Effect.logWarning(
+      `creation prompt ${messageId} in chat ${chatId} could not be disarmed: ${disarmed.failure.operation}`,
+    )
+  }
+})
+
+/**
+ * Offer bot creation, holding the invariant that matters more than any one
+ * message: **at most one live creation button exists in the coach's chat.**
+ *
+ * A link in a message is permanent and trivially tapped twice, where the
+ * `oneTime()` keyboard button it replaces vanished after a tap — and `/start` is
+ * a documented resume path, so a coach who comes back gets another prompt. Each
+ * new prompt therefore disarms the one recorded before it, and only then is a new
+ * button ever live. This removes opportunities to err; the claim fence (#135) is
+ * still what survives the error that happens anyway.
+ */
+export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function* (
+  env: CreationPromptEnv,
+  setup: CoachBotProvisioningRepo.Provisioning,
+  telegramFetch?: typeof globalThis.fetch,
+) {
+  const repo = yield* CoachBotProvisioningRepo.Service
+  const api = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
+  // The prompt lives in the coach's private conversation with the manager bot,
+  // so their Telegram id *is* the chat id — passed through as the id string the
+  // row holds, exactly as `ManagerBotSender` addresses the same chat.
+  const chatId = setup.coachTelegramId
+  const copy = messages(setup.coachLanguage)
+
+  const previous = setup.promptMessageId
+  if (previous !== undefined) {
+    yield* disarmPrompt(api, chatId, previous)
+  }
+
+  const suggestions = managedBotSuggestions(setup.workspace.name)
+  const sent = yield* telegram("sendMessage", () =>
+    api.sendMessage(chatId, copy.invitationReserved(setup.workspace.name), {
+      reply_markup: new InlineKeyboard().url(
+        copy.createBotButton,
+        createBotLink(env.MANAGER_BOT_USERNAME, suggestions.username),
+      ),
+    }),
+  )
+  // Best-effort, and the asymmetry is on purpose: the coach is looking at a
+  // working button, and failing their `/start` now would take that away to
+  // protect a later disarm. What is lost is only the handle on this message.
+  yield* repo
+    .recordPrompt(setup.id, sent.message_id, new Date(yield* Clock.currentTimeMillis))
+    .pipe(
+      Effect.catch((failure) =>
+        Effect.logWarning(
+          `creation prompt ${sent.message_id} for attempt ${setup.id} was sent but not recorded: ${failure.operation}`,
+        ),
+      ),
+    )
+  return sent.message_id
+})
+
+/**
+ * Retire the creation prompt now that its bot is connected: the keyboard comes
+ * off and the text becomes the confirmation.
+ *
+ * Edited, never deleted. The coach is looking at exactly this message expecting
+ * confirmation, and deleting it would erase both the context and the record of
+ * what happened. Omitting `reply_markup` on the edit is what removes the button.
+ *
+ * A failure here is logged and swallowed: the bot is connected the moment the
+ * activation transaction commits, and neither an expired edit window nor a
+ * message the coach deleted may undo that.
+ */
+export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(function* (
+  env: { readonly MANAGER_BOT_TOKEN: string },
+  prompt: CoachBotProvisioningRepo.Provisioning,
+  botUsername: string,
+  telegramFetch?: typeof globalThis.fetch,
+) {
+  const messageId = prompt.promptMessageId
+  if (messageId === undefined) return
+  const api = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
+  const settled = yield* telegram("editMessageText", () =>
+    api.editMessageText(
+      prompt.coachTelegramId,
+      messageId,
+      messages(prompt.coachLanguage).promptConnected(botUsername),
+    ),
+  ).pipe(Effect.result)
+  if (Result.isFailure(settled)) {
+    yield* Effect.logWarning(
+      `coach bot @${botUsername} is connected but its creation prompt ${messageId} stayed armed: ${settled.failure.operation}`,
+    )
+  }
+})
+
 /**
  * What a `managed_bot` update settled into. Both cases are terminal and both are
  * a 200: the failure channel is reserved for what a redelivery could still fix.
@@ -262,6 +394,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   user: User,
   managedBot: User,
   webhookOrigin: string,
+  telegramFetch?: typeof globalThis.fetch,
 ) {
   if (managedBot.username === undefined) {
     return yield* new TelegramSetupFailed({ operation: "managedBot.username" })
@@ -269,11 +402,12 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   const repo = yield* CoachBotProvisioningRepo.Service
   const credentials = yield* CoachBotCredential.Service
   const now = new Date(yield* Clock.currentTimeMillis)
+  const managerApi = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
 
   const existing = yield* repo.findByBotId(String(managedBot.id)).pipe(Effect.result)
   if (Result.isSuccess(existing)) {
     const token = yield* telegram("getManagedBotToken", () =>
-      new Api(env.MANAGER_BOT_TOKEN).getManagedBotToken(managedBot.id),
+      managerApi.getManagedBotToken(managedBot.id),
     )
     const profile = yield* repo.workspaceProfile(existing.success.workspaceId)
     const configured = yield* configureCoachBot({
@@ -283,6 +417,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       workspace: profile,
       coachName: coachDisplayName(user, profile.name),
       webhookOrigin,
+      ...(telegramFetch === undefined ? {} : { telegramFetch }),
     })
     return {
       _tag: "Connected",
@@ -317,7 +452,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   }
   const provisioning = claimed.success
   const token = yield* telegram("getManagedBotToken", () =>
-    new Api(env.MANAGER_BOT_TOKEN).getManagedBotToken(managedBot.id),
+    managerApi.getManagedBotToken(managedBot.id),
   )
   const configured = yield* configureCoachBot({
     env,
@@ -326,17 +461,21 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     workspace: provisioning.workspace,
     coachName: coachDisplayName(user, provisioning.workspace.name),
     webhookOrigin,
+    ...(telegramFetch === undefined ? {} : { telegramFetch }),
   })
-  return {
-    _tag: "Connected",
-    installation: yield* repo.complete({
-      provisioningId: provisioning.id,
-      encryptedToken: yield* credentials.encrypt(token),
-      webhookSecretHash: yield* sha256(configured.secret),
-      botInfo: configured.botInfo,
-      now,
-    }),
-  } as const
+  const installation = yield* repo.complete({
+    provisioningId: provisioning.id,
+    encryptedToken: yield* credentials.encrypt(token),
+    webhookSecretHash: yield* sha256(configured.secret),
+    botInfo: configured.botInfo,
+    now,
+  })
+  // The bot is connected, so the button that created it has no business staying
+  // live — and only a *completed* activation retires it. A partial failure above
+  // returns before this point, leaving the prompt armed so the coach can resume,
+  // which is exactly what the runbook tells them to do.
+  yield* settleCreationPrompt(env, provisioning, installation.username, telegramFetch)
+  return { _tag: "Connected", installation } as const
 })
 
 /**

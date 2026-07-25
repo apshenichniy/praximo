@@ -17,6 +17,12 @@ export interface Provisioning {
   readonly workspaceId: WorkspaceId
   readonly coachTelegramId: TelegramId
   readonly keyboardRequestId: number
+  /**
+   * The manager-chat message carrying this attempt's creation button (#134),
+   * once one has been sent. Absent means no prompt of this attempt is live —
+   * nothing to disarm, and nothing to confirm in place on activation.
+   */
+  readonly promptMessageId?: number
   readonly managedBotId?: string
   readonly managedBotUsername?: string
   readonly status: "requested" | "configuring" | "completed"
@@ -116,6 +122,15 @@ export interface Interface {
     managedBotUsername: string,
     now: Date,
   ) => Effect.Effect<Provisioning, ProvisioningUnavailable | QueryFailed>
+  /**
+   * Remember which message carries this attempt's live creation button. Written
+   * after the send, since the message id is what the send returns.
+   */
+  readonly recordPrompt: (
+    attemptId: string,
+    promptMessageId: number,
+    now: Date,
+  ) => Effect.Effect<void, QueryFailed>
   readonly ingestCandidate: (
     input: IngestCandidateInput,
   ) => Effect.Effect<Provisioning, ProvisioningUnavailable | QueryFailed>
@@ -302,6 +317,7 @@ export const layer = Layer.effect(
               workspaceId: schema.coachBotProvisioning.workspaceId,
               coachTelegramId: schema.coachBotProvisioning.coachTelegramId,
               requestId: schema.coachBotProvisioning.keyboardRequestId,
+              promptMessageId: schema.coachBotProvisioning.promptMessageId,
               managedBotId: schema.coachBotProvisioning.managedBotId,
               managedBotUsername: schema.coachBotProvisioning.managedBotUsername,
               status: schema.coachBotProvisioning.status,
@@ -345,6 +361,7 @@ export const layer = Layer.effect(
         workspaceId: WorkspaceId.make(row.workspaceId),
         coachTelegramId: TelegramId.make(row.coachTelegramId),
         keyboardRequestId: row.requestId,
+        ...(row.promptMessageId === null ? {} : { promptMessageId: row.promptMessageId }),
         ...(row.managedBotId === null ? {} : { managedBotId: row.managedBotId }),
         ...(row.managedBotUsername === null ? {} : { managedBotUsername: row.managedBotUsername }),
         status: row.status,
@@ -542,6 +559,28 @@ export const layer = Layer.effect(
       const attempt = yield* openAttempt(coachTelegramId)
       if (attempt === undefined) return yield* new ProvisioningUnavailable({ reason: "not-found" })
       return yield* new ProvisioningUnavailable({ reason: unavailableReason(attempt, now) })
+    })
+
+    /**
+     * The message id of the creation button now live in the coach's chat (#134).
+     *
+     * Touching `updated_at` is deliberate: the attempt whose button a coach can
+     * actually tap is the one an incoming `managed_bot` update should advance,
+     * and that is exactly what the open-attempt fence orders on.
+     */
+    const recordPrompt = Effect.fn("CoachBotProvisioningRepo.recordPrompt")(function* (
+      attemptId: string,
+      promptMessageId: number,
+      now: Date,
+    ) {
+      yield* Effect.tryPromise({
+        try: () =>
+          client
+            .update(schema.coachBotProvisioning)
+            .set({ promptMessageId, updatedAt: now })
+            .where(eq(schema.coachBotProvisioning.id, attemptId)),
+        catch: (cause) => new QueryFailed({ operation: "provisioning.recordPrompt", cause }),
+      })
     })
 
     /**
@@ -1029,6 +1068,7 @@ export const layer = Layer.effect(
     return Service.of({
       prepare,
       claim,
+      recordPrompt,
       ingestCandidate,
       findCandidateByBotId,
       complete,
