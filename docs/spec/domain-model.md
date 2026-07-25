@@ -28,7 +28,8 @@ The unit of tenancy. One coach's practice.
 
 A person inside a workspace, with a role.
 
-- `workspace_id`, auth identity (coach authenticates via Telegram — see Better-Auth research, ticket #5)
+- `workspace_id`, auth identity (`telegram_user_id` — the coach authenticates by Ed25519 Mini App `initData`, [ADR 0006](../adr/0006-coach-authentication-in-mvp.md); unique among owners, and the natural key a post-MVP Better-Auth `user` attaches to)
+- `terms_accepted_at` / `terms_version`, `last_login_at`, `last_activity_at`, and `credentials_valid_from` — the revocation floor an `auth_date` must clear
 - `role`: `owner` only in MVP; open set (`assistant`, `co_coach` reserved for group coaching)
 - `language`: `en | uk | ru` — chosen at coach onboarding; the language of the coach's UI and of all artifacts delivered to them
 - `avatar`: R2 object — Telegram profile photo, captured/refreshed at each Mini App login; shown in the web room

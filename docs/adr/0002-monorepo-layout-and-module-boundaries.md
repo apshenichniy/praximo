@@ -42,7 +42,7 @@ npm scope **`@praximo/*`**, all private:
 | `@praximo/transcription` | Provider-agnostic STT: `Transcription.Service` interface plus the Deepgram implementation under a `./deepgram` subpath. The provider is chosen by layer at pipeline wiring time. `domain` holds only Track Transcript / Transcript types, no provider knowledge. |
 | `@praximo/analysis` | Prompts + Vercel AI SDK for Brief / Debrief / Mentor Review. |
 | `@praximo/telegram` | Shared grammY client, bot registry, message sending (used by `bot`; `pipeline` delivers through the `pipeline → bot` service binding and shares only the types). |
-| `@praximo/auth` | First-party Better-Auth `telegram-mini-app` plugin (per the client onboarding spec). |
+| `@praximo/auth` | Telegram Mini App credential verification — manager HMAC for the admin, Ed25519 `validate3rd` for the coach ([ADR 0006](0006-coach-authentication-in-mvp.md)) — plus the coach onboarding deep-link token. Pure crypto and config: composition with the member lookup lives in `apps/web`, since packages carry no app wiring. The Better-Auth plugin arrives with ADR 0006's adoption step. |
 | `@praximo/tooling` | tsconfig and oxlint presets. |
 
 ### Effect conventions

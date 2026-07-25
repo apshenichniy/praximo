@@ -58,7 +58,7 @@ All intervals are **half-open `[start, end)`**: an instant belongs to the interv
 
 Two layers, deliberately distinct:
 
-- **Authentication into the browser experience** — resolving who this browser is: **both roles via their per-(session, role) join-link token** (wayfinder [#25](https://github.com/apshenichniy/praximo/issues/25); token mechanics in [client-onboarding-auth.md](client-onboarding-auth.md) §Web-room access). A post-MVP desktop web-app adds an authenticated Better-Auth session with workspace membership as an alternative coach gate; in MVP that branch is dormant. Sufficient for the pre-join page at any time.
+- **Authentication into the browser experience** — resolving who this browser is: **both roles via their per-(session, role) join-link token** (wayfinder [#25](https://github.com/apshenichniy/praximo/issues/25); token mechanics in [client-onboarding-auth.md](client-onboarding-auth.md) §Web-room access). A post-MVP desktop web-app adds an authenticated Better-Auth session with workspace membership as an alternative coach gate; in MVP that branch is dormant and, since Better Auth itself is deferred ([ADR 0006](../adr/0006-coach-authentication-in-mvp.md)), it is defined only at that adoption step. Sufficient for the pre-join page at any time.
 - **Authorization to connect to the physical room** — minting a LiveKit access token. Granted only when `ready_to_join` derives to true.
 
 ```

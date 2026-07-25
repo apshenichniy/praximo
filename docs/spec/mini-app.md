@@ -26,6 +26,25 @@ entry points) — the @BotFather steps live in the
 [coach onboarding runbook](../runbooks/coach-onboarding.md). This mirrors the admin's two
 "Open" surfaces on the manager bot ([admin-surface.md](admin-surface.md) §Entry points).
 
+## First login
+
+Before any screen below renders, the coach meets a **blocking terms-of-service acceptance**
+— a state of the entry, deliberately not a route of its own, so there is no URL to bookmark
+past it. It shows a short summary of what the coach is agreeing to and links the full terms
+and the privacy policy as in-app routes (an external link would eject them from the Mini App
+mid-acceptance); the single action is the host's own bottom button. There is no Decline
+control — closing the Mini App is the refusal.
+
+Acceptance records the fact and the text version on Member, and notifies the invite issuer
+that onboarding is complete. Every coach operation other than acceptance itself is refused
+until it lands. Authentication mechanics are in
+[client-onboarding-auth.md](client-onboarding-auth.md) §Coach authentication and
+[ADR 0006](../adr/0006-coach-authentication-in-mvp.md).
+
+Until the Today dashboard ships, acceptance lands on a minimal home that reports the
+workspace is active — deliberately not the manager Mini App's onboarding companion, which
+lives under a different credential and answers a different question.
+
 ## Navigation model
 
 Hub-and-spoke, no tab bar. One home dashboard; every other screen is a
