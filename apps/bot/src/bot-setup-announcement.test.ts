@@ -3,7 +3,7 @@ import { CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, CoachOnboardingInviteId, TelegramId, WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Logger } from "effect"
 import { GrammyError } from "grammy"
 import { messages } from "./messages.ts"
 import { announcementFailure, provisionManagedBot } from "./provisioning.ts"
@@ -330,6 +330,46 @@ const botApiError = (code: number, description: string): GrammyError =>
     "sendMessage",
     {},
   )
+
+/** Every line the run logged, so an operator's `grep` can be asserted. */
+const capturingLogs = (lines: Array<string>) =>
+  Logger.layer([Logger.make((options) => lines.push(String(options.message)))])
+
+describe("what the log says about an announcement that did not land", () => {
+  it.effect("names the bot, so the runbook's grep-by-bot-id finds it", () =>
+    Effect.gen(function* () {
+      const lines: Array<string> = []
+      // The coach has not tapped **Start bot**, so there is nobody to tell.
+      const telegram = telegramStub({ unopenedChat: true })
+
+      yield* provision(telegram).pipe(Effect.provide(capturingLogs(lines)))
+
+      const announcement = lines.find((line) => line.includes("nothing to announce"))
+      // The runbook tells an operator to check the Worker log for the bot id —
+      // twice — so a line without it is a line their method cannot find (#160).
+      expect(announcement).toContain(MANAGED_BOT_ID)
+      // And the chat is named as a chat. This line used to read "coach bot
+      // <chat id>", sending whoever read it looking for a bot that never existed.
+      expect(announcement).toContain(`chat ${coach}`)
+      expect(announcement).not.toContain(`coach bot ${coach}`)
+    }),
+  )
+
+  it.effect("says something different when the send should have landed", () =>
+    Effect.gen(function* () {
+      const lines: Array<string> = []
+      const telegram = telegramStub({ failing: ["sendMessage"] })
+
+      yield* provision(telegram).pipe(Effect.provide(capturingLogs(lines)))
+
+      // Only one of the two is a fault, and the log has to keep them apart: the
+      // greeting silently becoming its own message is the consequence to explain.
+      const undelivered = lines.find((line) => line.includes("undelivered"))
+      expect(undelivered).toContain(MANAGED_BOT_ID)
+      expect(lines.some((line) => line.includes("nothing to announce"))).toBe(false)
+    }),
+  )
+})
 
 describe("why a setup announcement did not land", () => {
   it("reads a refused chat as the coach not having opened the bot", () => {
