@@ -404,12 +404,15 @@ describe("BotFather token fallback", () => {
       expect(repo.claimed).toEqual([{ coach, botId: BOT_ID }])
       // The same steps the Managed Bots path runs, against the pasted bot's own
       // credential, and in the same order — which is the point of asserting it
-      // here. The menu button comes first, before the coach's client can cache its
-      // absence (#156); `setWebhook` comes last, after the activation transaction
-      // (#150). On this path the bot has been pointed at us since the paste, so
-      // that re-arm is belt-and-braces rather than the fix; one order for both
-      // paths is what stops them drifting.
+      // here. The menu button comes first, and twice: once addressed to the coach's
+      // own chat, which is the only form Telegram delivers to a client that has
+      // already read this bot, then once as the default for every later reader
+      // (#156). `setWebhook` comes last, after the activation transaction (#150).
+      // On this path the bot has been pointed at us since the paste, so that
+      // re-arm is belt-and-braces rather than the fix; one order for both paths is
+      // what stops them drifting.
       expect(telegram.calls.map((call) => call.method)).toEqual([
+        "setChatMenuButton",
         "setChatMenuButton",
         "getMe",
         "setMyProfilePhoto",
@@ -493,7 +496,7 @@ describe("BotFather token fallback", () => {
       )
       expect(failure).toMatchObject({
         _tag: "BotWorker.TelegramSetupFailed",
-        operation: "setChatMenuButton",
+        operation: "setChatMenuButton.chat",
       })
       // Claimed but never activated: the workspace stays unconnected.
       expect(repo.claimed).toHaveLength(1)

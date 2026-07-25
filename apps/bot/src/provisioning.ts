@@ -262,21 +262,27 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
 })
 
 /**
- * Put the Mini App on the bot's in-chat menu button — **the first thing done to a
- * new bot, before the coach is told anything.**
+ * Put the Mini App on the bot's in-chat menu button — **on the coach's own chat
+ * first, and on the bot's default second.**
  *
- * A Telegram client caches a bot's menu button when it opens the chat, and the
- * coach opens theirs by tapping **Start bot** the moment the bot exists — which is
- * the same moment the `managed_bot` update reaches us. Setting the button at the
- * end of configuration meant their client had already looked and cached its
- * absence: verified by `getChatMenuButton` returning the right `web_app` button
- * while the coach saw none, and by the button appearing as soon as they reopened
- * the chat (#156).
+ * The coach opens their chat by tapping **Start bot** the moment the bot exists,
+ * which is the same moment the `managed_bot` update reaches us; their client reads
+ * the bot's menu button then and caches what it read. Setting the button after
+ * that left them looking at its absence until they reopened the chat — verified by
+ * `getChatMenuButton` returning the right `web_app` button while the coach saw
+ * none (#156).
  *
- * This wins that race rather than removing it — their tap and our first call are
- * simultaneous. What makes that acceptable is that the greeting carries its own
- * inline **Open** button, so the coach is never without a way in, and the menu
- * button materialises on their next visit regardless.
+ * **Doing it earlier does not fix that, and the scope is why.** `setChatMenuButton`
+ * without a `chat_id` changes the *default*, and a default is the one thing
+ * Telegram cannot deliver: `updateBotMenuButton` names one bot for one recipient,
+ * so a change nobody is addressed by reaches a client only when it next refetches
+ * the bot — on reopening the chat. No ordering wins a race against a value that is
+ * never pushed. Addressed to the coach's own chat (`bots.setBotMenuButton` takes a
+ * `user_id`), the same change is an update their client applies where it stands.
+ *
+ * So both go on. The targeted one is what the coach sees now; the default is what
+ * every later client of that bot reads, including the coach's other devices and
+ * their own clients. Targeted first, because it is the one somebody is waiting for.
  *
  * The Mini App URL is validated here because this is what consumes it, which also
  * means an unusable one fails before the coach has been promised anything.
@@ -285,6 +291,8 @@ export const setCoachBotMenuButton = Effect.fn("BotWorker.setCoachBotMenuButton"
   function* (input: {
     readonly token: string
     readonly botId: string
+    /** The coach's Telegram id, which in their private chat is also the chat id. */
+    readonly coachChatId: TelegramId
     readonly miniAppBaseUrl: string
     readonly telegramFetch?: typeof globalThis.fetch
   }) {
@@ -297,10 +305,16 @@ export const setCoachBotMenuButton = Effect.fn("BotWorker.setCoachBotMenuButton"
       catch: () => new TelegramSetupFailed({ operation: "miniAppUrl.validate" }),
     })
     const api = apiFor(input.token, input.telegramFetch)
-    yield* telegram("setChatMenuButton", () =>
-      api.setChatMenuButton({
-        menu_button: { type: "web_app", text: CoachMenuButtonText, web_app: { url: miniAppUrl } },
-      }),
+    const menuButton = {
+      type: "web_app",
+      text: CoachMenuButtonText,
+      web_app: { url: miniAppUrl },
+    } as const
+    yield* telegram("setChatMenuButton.chat", () =>
+      api.setChatMenuButton({ chat_id: Number(input.coachChatId), menu_button: menuButton }),
+    )
+    yield* telegram("setChatMenuButton.default", () =>
+      api.setChatMenuButton({ menu_button: menuButton }),
     )
   },
 )
@@ -431,6 +445,11 @@ export const announceCoachBotSetup = Effect.fn("BotWorker.announceCoachBotSetup"
  *
  * Best-effort throughout. The bot is connected the moment the activation
  * transaction commits, and a greeting Telegram refuses may not undo that.
+ *
+ * **Whether it landed is the caller's business**, which is why this reports it
+ * rather than swallowing it whole: it is the only evidence that the coach has
+ * been greeted, and therefore the only thing that licenses discarding the
+ * `/start` Telegram is holding for them.
  */
 export const greetCoachOnBotReady = Effect.fn("BotWorker.greetCoachOnBotReady")(function* (input: {
   readonly token: string
@@ -458,11 +477,14 @@ export const greetCoachOnBotReady = Effect.fn("BotWorker.greetCoachOnBotReady")(
             reply_markup: keyboard,
           }),
         ).pipe(Effect.asVoid)
-  yield* bestEffort(
-    delivery,
-    (operation) =>
-      `coach bot ${input.botId} is connected but its coach was not greeted: ${operation}`,
-  )
+  const delivered = yield* Effect.result(delivery)
+  if (Result.isFailure(delivered)) {
+    yield* Effect.logWarning(
+      `coach bot ${input.botId} is connected but its coach was not greeted: ${delivered.failure.operation}`,
+    )
+    return false
+  }
+  return true
 })
 
 export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(function* (
@@ -513,6 +535,26 @@ const bestEffort = <A, E extends { readonly operation: string }, R>(
   })
 
 /**
+ * Telegram's shape for a bot display name: 1–64 characters, no other rule.
+ */
+const BotNameMaxLength = 64
+
+/**
+ * The display name offered to a coach, pre-filled into the creation deep link
+ * and editable by them in Telegram's own dialog.
+ *
+ * The workspace name, which the coach is already reading: the prompt this link
+ * rides on names the workspace in its own text, and the suggested username is
+ * derived from it too. Clamped rather than validated because Telegram places no
+ * constraint on a bot name beyond its length, and blank-guarded because a name
+ * of nothing is exactly the state that leaves the dialog unable to proceed.
+ */
+export const suggestedBotName = (workspaceName: string): string => {
+  const trimmed = workspaceName.trim().slice(0, BotNameMaxLength).trim()
+  return trimmed.length === 0 ? "Praximo Coach" : trimmed
+}
+
+/**
  * Where the coach launches creation from: Telegram's own managed-bot dialog,
  * opened by deep link rather than by a `request_managed_bot` reply-keyboard
  * button.
@@ -521,11 +563,25 @@ const bestEffort = <A, E extends { readonly operation: string }, R>(
  * keyboard into a share action, so even a plain button beside it stops
  * responding (#134). This link opens the same dialog on every client, drives the
  * same MTProto `bots.createBot`, and produces the same `managed_bot` update; it
- * rides an inline `url` button, the most basic inline type there is. Only the
- * username travels with it — the coach names the bot in the dialog.
+ * rides an inline `url` button, the most basic inline type there is.
+ *
+ * **Both suggestions travel with it, and the name is not optional in practice.**
+ * `bots.createBot` takes a display name of 1–64 characters, and the link's
+ * `name` parameter is what fills that field: left off, api/links says of it
+ * "Can be empty, in which case the user must choose a name before invoking
+ * bots.createBot" — so the dialog opens with an empty required field and its
+ * **Create** button simply does not respond until the coach notices and types
+ * one. That is not a one-tap flow, and it reads to the coach as a broken button
+ * rather than as a form they have not finished.
  */
-export const createBotLink = (managerBotUsername: string, suggestedUsername: string): string =>
-  `https://t.me/newbot/${managerBotUsername}/${suggestedUsername}`
+export const createBotLink = (
+  managerBotUsername: string,
+  suggestedUsername: string,
+  suggestedName: string,
+): string =>
+  `https://t.me/newbot/${managerBotUsername}/${suggestedUsername}?name=${encodeURIComponent(
+    suggestedName,
+  )}`
 
 /**
  * Offer bot creation, holding the invariant that matters more than any one
@@ -569,7 +625,7 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
     api.sendMessage(chatId, copy.invitationReserved(setup.workspace.name), {
       reply_markup: new InlineKeyboard().url(
         copy.createBotButton,
-        createBotLink(env.MANAGER_BOT_USERNAME, suggested),
+        createBotLink(env.MANAGER_BOT_USERNAME, suggested, suggestedBotName(setup.workspace.name)),
       ),
     }),
   )
@@ -664,6 +720,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     yield* setCoachBotMenuButton({
       token,
       botId: existing.success.telegramBotId,
+      coachChatId: TelegramId.make(String(user.id)),
       miniAppBaseUrl: env.COACH_MINI_APP_URL,
       ...injectedFetch,
     })
@@ -741,6 +798,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   yield* setCoachBotMenuButton({
     token,
     botId: String(managedBot.id),
+    coachChatId: provisioning.coachTelegramId,
     miniAppBaseUrl: env.COACH_MINI_APP_URL,
     ...injectedFetch,
   })
@@ -784,7 +842,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   // whoever taps Start; doing that while this edit was still in flight would greet
   // the coach twice for one tap, in two different languages (the handler reads the
   // Telegram client's, this reads the workspace owner's).
-  yield* greetCoachOnBotReady({
+  const greeted = yield* greetCoachOnBotReady({
     token,
     chatId: provisioning.coachTelegramId,
     language: provisioning.coachLanguage,
@@ -794,15 +852,26 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     ...injectedFetch,
   })
   // Last, so no update can reach the bot's route before the row that serves it
-  // exists (#150) — and dropping what Telegram held while it waited, because the
-  // coach's early `/start` has just been answered above rather than needing a
-  // replay that would arrive as a second greeting (#154).
+  // exists (#150).
+  //
+  // **What Telegram is holding is dropped only if the coach has already been
+  // greeted** (#154). The queue's one occupant is their `/start` from the
+  // **Start bot** button, and dropping it is right when we have answered it
+  // ourselves — a replay would then greet them a second time. But a coach who
+  // taps **Start bot** *after* this run began has been greeted by nothing: both
+  // sends above were refused because at the time there was no chat to write in,
+  // and their `/start` is sitting in that queue precisely because the webhook is
+  // only being armed now. Dropping it there is what leaves them looking at an
+  // empty chat with no way in but the menu button. Delivered last, it reaches
+  // the bot's own `/start` handler, which greets them with the same **Open**
+  // button. The cost of being wrong in this direction is one greeting too many;
+  // in the other it is none at all.
   yield* armCoachBotWebhook({
     token,
     botId: String(managedBot.id),
     secret: configured.secret,
     webhookOrigin,
-    dropPendingUpdates: true,
+    dropPendingUpdates: greeted,
     ...injectedFetch,
   })
   return { _tag: "Connected", installation } as const
