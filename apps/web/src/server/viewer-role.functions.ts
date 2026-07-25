@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start"
+import { launchCredential } from "./launch-credential.ts"
 import { resolveViewerRole } from "./runtime.server.ts"
 import type { ViewerRole } from "./viewer-role.ts"
 
@@ -18,23 +19,17 @@ export type ViewerRoleTransportResult =
  * `notFound()`: it is the call a non-admin is *expected* to make, and its whole
  * job is to say which screen that person gets.
  *
- * A missing credential is answered without a round trip — an empty `initData`
- * cannot be verified, and the client already renders the same landing for it.
+ * A missing credential is answered without reaching the verifier — an empty
+ * `initData` cannot be verified, and the client already renders the same landing
+ * for it.
  */
 export const loadViewerRole = createServerFn({ method: "POST" })
-  .validator((input: unknown): { readonly initData: string } => ({
-    initData:
-      typeof input === "object" &&
-      input !== null &&
-      "initData" in input &&
-      typeof input.initData === "string"
-        ? input.initData
-        : "",
-  }))
-  .handler(async ({ data }): Promise<ViewerRoleTransportResult> => {
-    if (data.initData.length === 0) return { ok: false, error: "unauthenticated" }
+  .middleware([launchCredential])
+  .handler(async ({ context }): Promise<ViewerRoleTransportResult> => {
+    const initData = context.credential.initData
+    if (initData.length === 0) return { ok: false, error: "unauthenticated" }
     try {
-      return { ok: true, role: await resolveViewerRole(data.initData) }
+      return { ok: true, role: await resolveViewerRole(initData) }
     } catch (error) {
       if (
         typeof error === "object" &&

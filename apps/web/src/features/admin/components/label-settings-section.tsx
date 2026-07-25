@@ -34,15 +34,9 @@ const errorMessages = {
  * button appears only once the field is actually dirty — a permanently enabled
  * Save on a settings screen invites a pointless write.
  */
-export function LabelSettingsSection({
-  workspace,
-  initData,
-}: {
-  readonly workspace: WorkspaceDetail
-  readonly initData: string
-}) {
+export function LabelSettingsSection({ workspace }: { readonly workspace: WorkspaceDetail }) {
   const queryClient = useQueryClient()
-  const rename = useMutation(renameWorkspaceMutation(initData, queryClient))
+  const rename = useMutation(renameWorkspaceMutation(queryClient))
   const [value, setValue] = useState(workspace.name)
   const [touched, setTouched] = useState(false)
   const [error, setError] = useState<string>()
@@ -83,7 +77,7 @@ export function LabelSettingsSection({
   const reload = () => {
     setError(undefined)
     void queryClient
-      .fetchQuery(adminWorkspaceDetailQuery(initData, workspace.id))
+      .fetchQuery(adminWorkspaceDetailQuery(workspace.id))
       .then((current) => setValue(current.name))
       .catch(() => setError(errorMessages.server))
   }

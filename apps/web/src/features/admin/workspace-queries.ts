@@ -26,17 +26,17 @@ export const workspaceKeys = {
   deletion: (workspaceId: string) => [...workspaceKeys.all, "deletion", workspaceId] as const,
 }
 
-export const adminWorkspaceListQuery = (initData: string) =>
+export const adminWorkspaceListQuery = () =>
   queryOptions({
     queryKey: workspaceKeys.list(),
-    queryFn: () => loadAdminWorkspaces({ data: { initData } }),
+    queryFn: () => loadAdminWorkspaces(),
     retry: false,
   })
 
-export const adminWorkspaceDetailQuery = (initData: string, workspaceId: string) =>
+export const adminWorkspaceDetailQuery = (workspaceId: string) =>
   queryOptions({
     queryKey: workspaceKeys.detail(workspaceId),
-    queryFn: () => loadAdminWorkspace({ data: { initData, workspaceId } }),
+    queryFn: () => loadAdminWorkspace({ data: { workspaceId } }),
     retry: false,
   })
 
@@ -62,13 +62,12 @@ const PausedDeletionPollMs = 4_000
  * cadence past that follows what the receipt itself says is happening.
  */
 export const adminWorkspaceDeletionQuery = (
-  initData: string,
   workspaceId: string,
   options?: { readonly watch?: boolean },
 ) =>
   queryOptions({
     queryKey: workspaceKeys.deletion(workspaceId),
-    queryFn: () => loadAdminWorkspaceDeletion({ data: { initData, workspaceId } }),
+    queryFn: () => loadAdminWorkspaceDeletion({ data: { workspaceId } }),
     retry: false,
     refetchInterval: (query) => {
       const receipt = query.state.data
@@ -87,12 +86,12 @@ export interface CreateCoachInviteMutationInput {
   readonly delivery: CreateInviteDelivery
 }
 
-export const createCoachInviteMutation = (initData: string, queryClient: QueryClient) => ({
+export const createCoachInviteMutation = (queryClient: QueryClient) => ({
   mutationFn: async ({
     input,
     delivery,
   }: CreateCoachInviteMutationInput): Promise<CreateInviteTransportResult> =>
-    createAdminCoachInvite({ data: { initData, input, delivery } }),
+    createAdminCoachInvite({ data: { input, delivery } }),
   onSuccess: (result: CreateInviteTransportResult) => {
     if (!result.ok) return
     // The pending card is derived server-side from the whole aggregate, so the
@@ -101,7 +100,7 @@ export const createCoachInviteMutation = (initData: string, queryClient: QueryCl
   },
 })
 
-export const prepareCoachInviteShareMutation = (initData: string) => ({
+export const prepareCoachInviteShareMutation = () => ({
   mutationFn: async ({
     inviteId,
     language,
@@ -109,17 +108,17 @@ export const prepareCoachInviteShareMutation = (initData: string) => ({
     readonly inviteId: string
     readonly language: CreateInviteDelivery["language"]
   }): Promise<PrepareShareTransportResult> =>
-    prepareAdminCoachInviteShare({ data: { initData, inviteId, language } }),
+    prepareAdminCoachInviteShare({ data: { inviteId, language } }),
 })
 
-export const recordCoachInviteShareMutation = (initData: string) => ({
+export const recordCoachInviteShareMutation = () => ({
   mutationFn: async ({
     inviteId,
     language,
   }: {
     readonly inviteId: string
     readonly language: CreateInviteDelivery["language"]
-  }) => recordAdminCoachInviteShare({ data: { initData, inviteId, language } }),
+  }) => recordAdminCoachInviteShare({ data: { inviteId, language } }),
 })
 
 export interface RenameWorkspaceMutationInput {
@@ -136,12 +135,12 @@ export interface RenameWorkspaceMutationInput {
  * — including the new `updatedAt` the next rename is checked against — so the
  * cache is written from the response rather than patched optimistically.
  */
-export const renameWorkspaceMutation = (initData: string, queryClient: QueryClient) => ({
+export const renameWorkspaceMutation = (queryClient: QueryClient) => ({
   mutationFn: async ({
     workspaceId,
     input,
   }: RenameWorkspaceMutationInput): Promise<RenameTransportResult> =>
-    renameAdminWorkspace({ data: { initData, workspaceId, input } }),
+    renameAdminWorkspace({ data: { workspaceId, input } }),
   onSuccess: (result: RenameTransportResult) => {
     if (!result.ok) return
     queryClient.setQueryData(workspaceKeys.detail(result.value.id), result.value)
@@ -149,7 +148,7 @@ export const renameWorkspaceMutation = (initData: string, queryClient: QueryClie
   },
 })
 
-export const reissueWorkspaceInviteMutation = (initData: string, queryClient: QueryClient) => ({
+export const reissueWorkspaceInviteMutation = (queryClient: QueryClient) => ({
   mutationFn: ({
     workspaceId,
     expectedInviteId,
@@ -160,7 +159,7 @@ export const reissueWorkspaceInviteMutation = (initData: string, queryClient: Qu
     readonly requestId: string
   }) =>
     reissueAdminWorkspaceInvite({
-      data: { initData, workspaceId, expectedInviteId, requestId },
+      data: { workspaceId, expectedInviteId, requestId },
     }),
   onSuccess: (
     result: Awaited<ReturnType<typeof reissueAdminWorkspaceInvite>>,
@@ -171,7 +170,7 @@ export const reissueWorkspaceInviteMutation = (initData: string, queryClient: Qu
   },
 })
 
-export const deleteWorkspaceMutation = (initData: string, queryClient: QueryClient) => ({
+export const deleteWorkspaceMutation = (queryClient: QueryClient) => ({
   mutationFn: ({
     workspaceId,
     requestId,
@@ -179,7 +178,7 @@ export const deleteWorkspaceMutation = (initData: string, queryClient: QueryClie
     readonly workspaceId: string
     readonly requestId: string
   }): Promise<DeleteWorkspaceTransportResult> =>
-    deleteAdminWorkspaceRequest({ data: { initData, workspaceId, requestId } }),
+    deleteAdminWorkspaceRequest({ data: { workspaceId, requestId } }),
   onSettled: (
     _result: DeleteWorkspaceTransportResult | undefined,
     _error: unknown,

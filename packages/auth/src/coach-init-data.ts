@@ -60,7 +60,7 @@ export class VerificationFailed extends Schema.TaggedErrorClass<VerificationFail
 const TelegramUser = Schema.Struct({ id: Schema.Number })
 const decodeTelegramUser = Schema.decodeUnknownSync(TelegramUser)
 
-const decodeHex = (value: string): Uint8Array => {
+const decodeHex = (value: string): Uint8Array<ArrayBuffer> => {
   if (!/^(?:[0-9a-f]{2})+$/i.test(value)) throw new Error("malformed hex")
   const bytes = new Uint8Array(value.length / 2)
   for (let index = 0; index < bytes.length; index += 1) {
@@ -74,7 +74,7 @@ const decodeHex = (value: string): Uint8Array => {
  * standard base64, so the alphabet is translated and the padding restored — a
  * lenient Node-only decoder would work here and then reject on workerd.
  */
-const decodeBase64Url = (value: string): Uint8Array => {
+const decodeBase64Url = (value: string): Uint8Array<ArrayBuffer> => {
   const standard = value.replaceAll("-", "+").replaceAll("_", "/")
   const padded = standard.padEnd(standard.length + ((4 - (standard.length % 4)) % 4), "=")
   const binary = atob(padded)
@@ -104,8 +104,8 @@ const dataCheckString = (params: URLSearchParams, botId: string): string => {
 }
 
 interface Launch {
-  readonly signature: Uint8Array
-  readonly signed: Uint8Array
+  readonly signature: Uint8Array<ArrayBuffer>
+  readonly signed: Uint8Array<ArrayBuffer>
   readonly telegramUserId: TelegramId
   readonly authDateMillis: number
 }

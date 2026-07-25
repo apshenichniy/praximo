@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
-import { createFileRoute, getRouteApi } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import { useRef, useState } from "react"
 
@@ -49,12 +49,8 @@ export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
   // fact that decides whether this screen shows a workspace or its purge.
   loader: async ({ context, params }) => {
     const [workspace] = await Promise.all([
-      context.queryClient.ensureQueryData(
-        adminWorkspaceDetailQuery(context.initData, params.workspaceId),
-      ),
-      context.queryClient.ensureQueryData(
-        adminWorkspaceDeletionQuery(context.initData, params.workspaceId),
-      ),
+      context.queryClient.ensureQueryData(adminWorkspaceDetailQuery(params.workspaceId)),
+      context.queryClient.ensureQueryData(adminWorkspaceDeletionQuery(params.workspaceId)),
     ])
     return workspace
   },
@@ -65,8 +61,6 @@ export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
   pendingComponent: WorkspaceDetailSkeleton,
   component: WorkspaceDetailsPage,
 })
-
-const adminRoute = getRouteApi("/admin")
 
 /**
  * Two screens behind one route (#108). Which one a coach gets is not a local
@@ -82,9 +76,8 @@ const adminRoute = getRouteApi("/admin")
  */
 function WorkspaceDetailsPage() {
   const { workspaceId } = Route.useParams()
-  const { initData } = adminRoute.useLoaderData()
-  const { data: workspace } = useSuspenseQuery(adminWorkspaceDetailQuery(initData, workspaceId))
-  const deletion = useWorkspaceDeletion(initData, workspaceId)
+  const { data: workspace } = useSuspenseQuery(adminWorkspaceDetailQuery(workspaceId))
+  const deletion = useWorkspaceDeletion(workspaceId)
   const progress = deletion.progress
   // Owned by the page rather than the danger zone: the moment a deletion is
   // prepared the sections below give way to the pipeline panel, and a sheet
@@ -107,17 +100,9 @@ function WorkspaceDetailsPage() {
         />
       )}
       {progress !== undefined ? null : detailVariant(workspace) === "active" ? (
-        <ActiveWorkspace
-          workspace={workspace}
-          initData={initData}
-          onDelete={() => setDeleteOpen(true)}
-        />
+        <ActiveWorkspace workspace={workspace} onDelete={() => setDeleteOpen(true)} />
       ) : (
-        <OnboardingWorkspace
-          workspace={workspace}
-          initData={initData}
-          onDelete={() => setDeleteOpen(true)}
-        />
+        <OnboardingWorkspace workspace={workspace} onDelete={() => setDeleteOpen(true)} />
       )}
       <DeleteWorkspaceSheet
         workspace={workspace}
@@ -134,11 +119,9 @@ function WorkspaceDetailsPage() {
 
 function ActiveWorkspace({
   workspace,
-  initData,
   onDelete,
 }: {
   readonly workspace: WorkspaceDetail
-  readonly initData: string
   readonly onDelete: () => void
 }) {
   return (
@@ -146,7 +129,7 @@ function ActiveWorkspace({
       <CoachStatusSection workspace={workspace} />
       <AboutSection workspace={workspace} />
       <PracticeSection />
-      <LabelSettingsSection workspace={workspace} initData={initData} />
+      <LabelSettingsSection workspace={workspace} />
       <WorkspaceDangerZone workspace={workspace} onDelete={onDelete} />
     </>
   )
@@ -154,19 +137,17 @@ function ActiveWorkspace({
 
 function OnboardingWorkspace({
   workspace,
-  initData,
   onDelete,
 }: {
   readonly workspace: WorkspaceDetail
-  readonly initData: string
   readonly onDelete: () => void
 }) {
   const queryClient = useQueryClient()
   const [shareError, setShareError] = useState<string>()
   const [shareNotice, setShareNotice] = useState<string>()
   const [resetOpen, setResetOpen] = useState(false)
-  const inviteShare = useInviteShare(initData)
-  const reissue = useMutation(reissueWorkspaceInviteMutation(initData, queryClient))
+  const inviteShare = useInviteShare()
+  const reissue = useMutation(reissueWorkspaceInviteMutation(queryClient))
   // Minted once per attempt and reused across retries, so a network failure
   // that actually landed replays the same reissue instead of minting a second.
   const reissueRequestId = useRef<string | undefined>(undefined)

@@ -36,17 +36,17 @@ export interface WorkspaceDeletion {
  * ago. A receipt that has stopped advancing is paused, not slow, and polling it
  * would be waiting for something nobody is doing.
  */
-export function useWorkspaceDeletion(initData: string, workspaceId: string): WorkspaceDeletion {
+export function useWorkspaceDeletion(workspaceId: string): WorkspaceDeletion {
   const queryClient = useQueryClient()
   const router = useRouter()
-  const remove = useMutation(deleteWorkspaceMutation(initData, queryClient))
+  const remove = useMutation(deleteWorkspaceMutation(queryClient))
   const requestId = useRef<string | undefined>(undefined)
   const [error, setError] = useState<string>()
 
   // The query decides its own cadence from the receipt; this screen only adds
   // the one thing the receipt cannot know — that a request of ours is open.
   const { data: receipt } = useSuspenseQuery(
-    adminWorkspaceDeletionQuery(initData, workspaceId, { watch: remove.isPending }),
+    adminWorkspaceDeletionQuery(workspaceId, { watch: remove.isPending }),
   )
 
   const progress = receipt ?? undefined

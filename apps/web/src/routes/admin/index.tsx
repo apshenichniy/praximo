@@ -23,8 +23,8 @@ const adminRoute = getRouteApi("/admin")
 // Admin copy is English-only (admin-surface.md): the admin is the solo operator,
 // so the trilingual machinery that serves coaches never reaches these routes.
 function AdminHome() {
-  const { initData, coach: viewerCoach } = adminRoute.useLoaderData()
-  const { data } = useSuspenseQuery(adminWorkspaceListQuery(initData))
+  const { coach: viewerCoach } = adminRoute.useLoaderData()
+  const { data } = useSuspenseQuery(adminWorkspaceListQuery())
   const navigate = useNavigate()
   const openInvite = useCallback(() => void navigate({ to: "/admin/workspaces/new" }), [navigate])
 

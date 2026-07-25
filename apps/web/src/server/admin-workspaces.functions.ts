@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto"
 import { notFound } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
+import { type LaunchCredential, launchCredential } from "./launch-credential.ts"
 import {
   createAdminWorkspace,
   deleteAdminWorkspace,
@@ -14,25 +15,22 @@ import {
 } from "./runtime.server.ts"
 import type { AdminSurface } from "./admin-surface.ts"
 
-const validateInitData = (input: unknown): { readonly initData: string } => {
-  if (
-    typeof input !== "object" ||
-    input === null ||
-    !("initData" in input) ||
-    typeof input.initData !== "string" ||
-    input.initData.length === 0
-  ) {
-    throw notFound()
-  }
-
-  return { initData: input.initData }
+/**
+ * Every admin transport answers a missing credential the way it answers a
+ * refused one — with a missing page. The admin tree is not a screen anyone is
+ * expected to reach without a credential; the entry gate next door is, and it
+ * says so with its own answer rather than a 404.
+ */
+const requireCredential = (context: { readonly credential: LaunchCredential }): string => {
+  if (context.credential.initData.length === 0) throw notFound()
+  return context.credential.initData
 }
 
 export const loadAdminWorkspaces = createServerFn({ method: "POST" })
-  .validator(validateInitData)
-  .handler(async ({ data }) => {
+  .middleware([launchCredential])
+  .handler(async ({ context }) => {
     try {
-      return await listAdminWorkspaces(data.initData)
+      return await listAdminWorkspaces(requireCredential(context))
     } catch {
       throw notFound()
     }
@@ -46,8 +44,7 @@ export type CreateInviteTransportResult =
 
 const validateCreateInvite = (
   input: unknown,
-): { readonly initData: string; readonly input: unknown; readonly delivery: unknown } => {
-  const validated = validateInitData(input)
+): { readonly input: unknown; readonly delivery: unknown } => {
   if (
     typeof input !== "object" ||
     input === null ||
@@ -56,16 +53,17 @@ const validateCreateInvite = (
   ) {
     throw notFound()
   }
-  return { ...validated, input: input.input, delivery: input.delivery }
+  return { input: input.input, delivery: input.delivery }
 }
 
 export const createAdminCoachInvite = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
   .validator(validateCreateInvite)
-  .handler(async ({ data }): Promise<CreateInviteTransportResult> => {
+  .handler(async ({ context, data }): Promise<CreateInviteTransportResult> => {
     try {
       return {
         ok: true,
-        value: await createAdminWorkspace(data.initData, data.input, data.delivery),
+        value: await createAdminWorkspace(requireCredential(context), data.input, data.delivery),
       }
     } catch (error) {
       if (typeof error !== "object" || error === null || !("_tag" in error)) {
@@ -92,8 +90,7 @@ export type PrepareShareTransportResult =
 
 const validatePrepareShare = (
   input: unknown,
-): { readonly initData: string; readonly inviteId: string; readonly language: string } => {
-  const validated = validateInitData(input)
+): { readonly inviteId: string; readonly language: string } => {
   if (
     typeof input !== "object" ||
     input === null ||
@@ -104,16 +101,21 @@ const validatePrepareShare = (
   ) {
     throw notFound()
   }
-  return { ...validated, inviteId: input.inviteId, language: input.language }
+  return { inviteId: input.inviteId, language: input.language }
 }
 
 export const prepareAdminCoachInviteShare = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
   .validator(validatePrepareShare)
-  .handler(async ({ data }): Promise<PrepareShareTransportResult> => {
+  .handler(async ({ context, data }): Promise<PrepareShareTransportResult> => {
     try {
       return {
         ok: true,
-        value: await prepareAdminInviteShareMessage(data.initData, data.inviteId, data.language),
+        value: await prepareAdminInviteShareMessage(
+          requireCredential(context),
+          data.inviteId,
+          data.language,
+        ),
       }
     } catch (error) {
       if (typeof error !== "object" || error === null || !("_tag" in error)) {
@@ -141,10 +143,11 @@ export type RecordShareTransportResult = { readonly ok: boolean }
  * rather than surfacing as an error.
  */
 export const recordAdminCoachInviteShare = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
   .validator(validatePrepareShare)
-  .handler(async ({ data }): Promise<RecordShareTransportResult> => {
+  .handler(async ({ context, data }): Promise<RecordShareTransportResult> => {
     try {
-      await recordAdminInviteShare(data.initData, data.inviteId, data.language)
+      await recordAdminInviteShare(requireCredential(context), data.inviteId, data.language)
       return { ok: true }
     } catch (error) {
       if (
@@ -159,10 +162,7 @@ export const recordAdminCoachInviteShare = createServerFn({ method: "POST" })
     }
   })
 
-const validateWorkspaceRequest = (
-  input: unknown,
-): { readonly initData: string; readonly workspaceId: string } => {
-  const validated = validateInitData(input)
+const validateWorkspaceRequest = (input: unknown): { readonly workspaceId: string } => {
   if (
     typeof input !== "object" ||
     input === null ||
@@ -172,14 +172,15 @@ const validateWorkspaceRequest = (
   ) {
     throw notFound()
   }
-  return { ...validated, workspaceId: input.workspaceId }
+  return { workspaceId: input.workspaceId }
 }
 
 export const loadAdminWorkspace = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
   .validator(validateWorkspaceRequest)
-  .handler(async ({ data }) => {
+  .handler(async ({ context, data }) => {
     try {
-      return await getAdminWorkspace(data.initData, data.workspaceId)
+      return await getAdminWorkspace(requireCredential(context), data.workspaceId)
     } catch {
       throw notFound()
     }
@@ -193,7 +194,7 @@ export type RenameTransportResult =
 
 const validateRename = (
   input: unknown,
-): { readonly initData: string; readonly workspaceId: string; readonly input: unknown } => {
+): { readonly workspaceId: string; readonly input: unknown } => {
   const validated = validateWorkspaceRequest(input)
   if (typeof input !== "object" || input === null || !("input" in input)) throw notFound()
   return { ...validated, input: input.input }
@@ -201,12 +202,17 @@ const validateRename = (
 
 /** The internal label is the only workspace field an admin still writes (#108). */
 export const renameAdminWorkspace = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
   .validator(validateRename)
-  .handler(async ({ data }): Promise<RenameTransportResult> => {
+  .handler(async ({ context, data }): Promise<RenameTransportResult> => {
     try {
       return {
         ok: true,
-        value: await renameAdminWorkspaceRuntime(data.initData, data.workspaceId, data.input),
+        value: await renameAdminWorkspaceRuntime(
+          requireCredential(context),
+          data.workspaceId,
+          data.input,
+        ),
       }
     } catch (error) {
       if (typeof error !== "object" || error === null || !("_tag" in error)) {
@@ -228,7 +234,6 @@ export const renameAdminWorkspace = createServerFn({ method: "POST" })
 const validateReissue = (
   input: unknown,
 ): {
-  readonly initData: string
   readonly workspaceId: string
   readonly expectedInviteId: string
   readonly requestId: string
@@ -252,13 +257,14 @@ const validateReissue = (
 }
 
 export const reissueAdminWorkspaceInvite = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
   .validator(validateReissue)
-  .handler(async ({ data }): Promise<CreateInviteTransportResult> => {
+  .handler(async ({ context, data }): Promise<CreateInviteTransportResult> => {
     try {
       return {
         ok: true,
         value: await reissueAdminWorkspaceInviteRuntime(
-          data.initData,
+          requireCredential(context),
           data.workspaceId,
           data.expectedInviteId,
           data.requestId,
@@ -291,7 +297,6 @@ export type DeleteWorkspaceTransportResult =
 const validateDeleteWorkspace = (
   input: unknown,
 ): {
-  readonly initData: string
   readonly workspaceId: string
   readonly requestId: string
 } => {
@@ -308,12 +313,13 @@ const validateDeleteWorkspace = (
 }
 
 export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
   .validator(validateDeleteWorkspace)
-  .handler(async ({ data }): Promise<DeleteWorkspaceTransportResult> => {
+  .handler(async ({ context, data }): Promise<DeleteWorkspaceTransportResult> => {
     try {
       return {
         ok: true,
-        value: await deleteAdminWorkspace(data.initData, data.workspaceId, {
+        value: await deleteAdminWorkspace(requireCredential(context), data.workspaceId, {
           requestId: data.requestId,
         }),
       }
@@ -346,10 +352,11 @@ export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
  * `undefined` — that is its own word for "nothing fetched yet".
  */
 export const loadAdminWorkspaceDeletion = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
   .validator(validateWorkspaceRequest)
-  .handler(async ({ data }): Promise<AdminSurface.DeletionProgress | null> => {
+  .handler(async ({ context, data }): Promise<AdminSurface.DeletionProgress | null> => {
     try {
-      return (await getAdminWorkspaceDeletion(data.initData, data.workspaceId)) ?? null
+      return (await getAdminWorkspaceDeletion(requireCredential(context), data.workspaceId)) ?? null
     } catch {
       throw notFound()
     }
