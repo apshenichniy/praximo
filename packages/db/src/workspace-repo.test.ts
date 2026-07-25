@@ -273,18 +273,17 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
-  it.effect("resolves one Telegram identity's coach context, most advanced state first", () =>
+  it.effect("resolves one Telegram identity's coach context", () =>
     Effect.gen(function* () {
       const repo = yield* WorkspaceRepo.Service
       const { client } = yield* Database.Service
       const claimed = WorkspaceId.make(uniqueId("ws_claimed"))
       const halfway = WorkspaceId.make(uniqueId("ws_bot_connected"))
-      const dualHalfway = WorkspaceId.make(uniqueId("ws_dual_halfway"))
       const activated = WorkspaceId.make(uniqueId("ws_activated"))
-      const ids = [claimed, halfway, dualHalfway, activated]
+      const ids = [claimed, halfway, activated]
       const claimant = uniqueTelegramId(1)
       const halfOwner = uniqueTelegramId(2)
-      const dualOwner = uniqueTelegramId(3)
+      const activeOwner = uniqueTelegramId(3)
       const stranger = uniqueTelegramId(4)
 
       yield* Effect.addFinalizer(() =>
@@ -305,18 +304,11 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
             telegramUserId: halfOwner,
           },
           {
-            id: uniqueId("mem_dual_halfway"),
-            workspaceId: dualHalfway,
-            role: "owner",
-            language: "en",
-            telegramUserId: dualOwner,
-          },
-          {
             id: uniqueId("mem_activated"),
             workspaceId: activated,
             role: "owner",
             language: "en",
-            telegramUserId: dualOwner,
+            telegramUserId: activeOwner,
             termsAcceptedAt: new Date("2026-07-20T10:00:00.000Z"),
           },
         ]),
@@ -324,7 +316,6 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
       yield* Effect.promise(() =>
         client.insert(schema.bot).values([
           { workspaceId: halfway, connectionStatus: "connected", username: "half_coach_bot" },
-          { workspaceId: dualHalfway, connectionStatus: "connected", username: "dual_coach_bot" },
           { workspaceId: activated, connectionStatus: "connected", username: "done_coach_bot" },
         ]),
       )
@@ -350,9 +341,11 @@ describe.skipIf(!DATABASE_URL)("WorkspaceRepo (dev Neon branch)", () => {
         workspaceId: halfway,
         botUsername: "half_coach_bot",
       })
-      // An owner whose onboarding finished outranks their own half-finished
-      // workspace: the active one is what that person actually opens.
-      expect(yield* repo.findCoachByTelegramId(dualOwner)).toMatchObject({
+      // Terms acceptance is what turns a provisioned workspace into an active
+      // one. Since #54 an identity can own at most one owner seat
+      // (`member_owner_telegram_user_id_idx`), so this lookup is single-valued
+      // by constraint and the repo's most-advanced-state tie-break is defensive.
+      expect(yield* repo.findCoachByTelegramId(activeOwner)).toMatchObject({
         state: "active",
         workspaceId: activated,
         botUsername: "done_coach_bot",

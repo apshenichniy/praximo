@@ -34,17 +34,35 @@ export interface DemoWorkspace {
     /** Bound at bot connection, not at invite acceptance. */
     readonly telegramUserId?: string
     readonly termsAcceptedHoursAgo?: number
+    /**
+     * The version accepted. Seeded alongside the fact so no fixture holds a
+     * state `acceptTerms` never produces — it writes both columns or neither.
+     */
+    readonly termsVersion?: string
     readonly lastActivityHoursAgo?: number
   }
   readonly bot?: {
     readonly connectionStatus: "awaiting_setup" | "connected" | "needs_relink"
     readonly username?: string
+    /**
+     * The bot's own Telegram id. Required for any fixture whose owner has a
+     * `telegramUserId`: the coach Mini App resolves a launch through the bot it
+     * came from (ADR 0006), so a bot row without one is unauthenticatable.
+     */
+    readonly telegramBotId?: string
   }
   /** Newest last; the coaches list reads the most recently issued one. */
   readonly invites?: ReadonlyArray<DemoInvite>
 }
 
 const Day = 24
+
+/**
+ * A plausible content-derived terms version for fixtures. The real one is
+ * computed from the rendered legal modules in `apps/web`, which this package
+ * cannot see; the fixtures only need a value of the right shape.
+ */
+const DemoTermsVersion = "2026-08-01+devseed"
 
 /**
  * Deterministic fixtures for the coaches list. Between them they cover every
@@ -171,7 +189,11 @@ export const demoWorkspaces: ReadonlyArray<DemoWorkspace> = [
       telegramUserId: "700000103",
       lastActivityHoursAgo: 1,
     },
-    bot: { connectionStatus: "connected", username: "annie_easley_demo_bot" },
+    bot: {
+      connectionStatus: "connected",
+      username: "annie_easley_demo_bot",
+      telegramBotId: "7000000103",
+    },
     invites: [
       {
         id: "ci_dev_fixture_annie",
@@ -244,9 +266,14 @@ export const demoWorkspaces: ReadonlyArray<DemoWorkspace> = [
       language: "en",
       telegramUserId: "700000111",
       termsAcceptedHoursAgo: 20 * Day,
+      termsVersion: DemoTermsVersion,
       lastActivityHoursAgo: 2,
     },
-    bot: { connectionStatus: "connected", username: "north_star_demo_bot" },
+    bot: {
+      connectionStatus: "connected",
+      username: "north_star_demo_bot",
+      telegramBotId: "7000000111",
+    },
     invites: [
       {
         id: "ci_dev_fixture_north_star",
@@ -268,9 +295,14 @@ export const demoWorkspaces: ReadonlyArray<DemoWorkspace> = [
       language: "uk",
       telegramUserId: "700000112",
       termsAcceptedHoursAgo: 60 * Day,
+      termsVersion: DemoTermsVersion,
       lastActivityHoursAgo: 3 * Day,
     },
-    bot: { connectionStatus: "needs_relink", username: "quiet_harbor_demo_bot" },
+    bot: {
+      connectionStatus: "needs_relink",
+      username: "quiet_harbor_demo_bot",
+      telegramBotId: "7000000112",
+    },
     invites: [
       {
         id: "ci_dev_fixture_quiet_harbor",
@@ -350,6 +382,10 @@ export const seedDemoWorkspaces = Effect.fn("DevSeed.seedDemoWorkspaces")(functi
               workspace.owner.termsAcceptedHoursAgo === undefined
                 ? null
                 : at(now, workspace.owner.termsAcceptedHoursAgo),
+            termsVersion:
+              workspace.owner.termsAcceptedHoursAgo === undefined
+                ? null
+                : (workspace.owner.termsVersion ?? DemoTermsVersion),
             lastLoginAt:
               workspace.owner.termsAcceptedHoursAgo === undefined
                 ? null
@@ -371,6 +407,7 @@ export const seedDemoWorkspaces = Effect.fn("DevSeed.seedDemoWorkspaces")(functi
             workspaceId: workspace.id,
             connectionStatus: workspace.bot.connectionStatus,
             username: workspace.bot.username ?? null,
+            telegramBotId: workspace.bot.telegramBotId ?? null,
             // Never a token: a fixture must not be able to reach Telegram.
             token: null,
           },

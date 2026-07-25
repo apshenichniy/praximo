@@ -301,8 +301,15 @@ export const coachBotProvisioning = pgTable(
 )
 
 /**
- * Completion and its manager notification are committed together. Delivery is
- * retried independently so a Telegram outage cannot roll back a connected bot.
+ * Admin-facing pushes committed together with the workspace fact that caused
+ * them. Delivery is retried independently so a Telegram outage cannot roll back
+ * a connected bot.
+ *
+ * Idempotency is keyed on `dedupe_key`, composed by the caller, rather than on
+ * `(workspace_id, kind)`: a workspace emits several kinds over its life (#54's
+ * `onboarding_complete` beside the shipped `bot_connected`) and some of them
+ * recur per episode rather than once forever (#55's re-link). The composer owns
+ * how much recurrence a kind allows; the index only enforces the decision.
  */
 export const coachBotNotification = pgTable(
   "coach_bot_notification",
@@ -311,6 +318,9 @@ export const coachBotNotification = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
+    // Open set: which push this row is, so delivery can pick its copy.
+    kind: text("kind").notNull().default("bot_connected"),
+    dedupeKey: text("dedupe_key").notNull(),
     recipientTelegramId: text("recipient_telegram_id").notNull(),
     status: coachBotNotificationStatusEnum("status").notNull().default("pending"),
     attemptCount: integer("attempt_count").notNull().default(0),
@@ -320,7 +330,7 @@ export const coachBotNotification = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
   },
   (t) => [
-    uniqueIndex("coach_bot_notification_workspace_id_idx").on(t.workspaceId),
+    uniqueIndex("coach_bot_notification_dedupe_key_idx").on(t.dedupeKey),
     index("coach_bot_notification_delivery_idx").on(t.status, t.availableAt),
   ],
 )
@@ -335,16 +345,36 @@ export const member = pgTable(
     // Open set: `owner` only in MVP.
     role: text("role").notNull().default("owner"),
     language: languageEnum("language").notNull(),
-    // Auth identity — the coach authenticates via Telegram (ticket #5).
+    // Auth identity — the coach authenticates per launch through their own bot's
+    // Mini App, with no server session (ADR 0006). This column is the natural
+    // key that verification resolves to a member.
     telegramUserId: text("telegram_user_id"),
     avatarR2Key: text("avatar_r2_key"),
     termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true, mode: "date" }),
+    // The content-derived version of the terms actually accepted. A record, not
+    // a gate: the gate is `terms_accepted_at`, and a bump forces nothing.
+    termsVersion: text("terms_version"),
+    // Revocation floor: an `initData` older than this is refused however valid
+    // its signature. Null means no floor. Sessionless auth would otherwise have
+    // no revocation at all; in MVP only workspace deletion writes it.
+    credentialsValidFrom: timestamp("credentials_valid_from", {
+      withTimezone: true,
+      mode: "date",
+    }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true, mode: "date" }),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true, mode: "date" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },
-  (t) => [index("member_workspace_id_idx").on(t.workspaceId)],
+  (t) => [
+    index("member_workspace_id_idx").on(t.workspaceId),
+    // One Telegram identity owns at most one workspace (#119's own invariant),
+    // which is what makes the credential-to-member lookup single-valued by
+    // constraint rather than by tie-break — and indexes the column it probes.
+    uniqueIndex("member_owner_telegram_user_id_idx")
+      .on(t.telegramUserId)
+      .where(sql`${t.role} = 'owner' and ${t.telegramUserId} is not null`),
+  ],
 )
 
 export const client = pgTable(

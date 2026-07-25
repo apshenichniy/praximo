@@ -69,6 +69,31 @@ describe("demo workspace seed contract", () => {
     expect(codes.every((code) => CoachOnboardingInviteCodePattern.test(code))).toBe(true)
   })
 
+  it("gives every authenticatable coach a bot id to be launched from", () => {
+    // The coach Mini App resolves a launch through the bot it came from
+    // (ADR 0006), so a fixture with a bound Telegram identity and no
+    // `telegramBotId` is a coach nobody can sign in as.
+    const bound = demoWorkspaces.filter((workspace) => workspace.owner?.telegramUserId)
+    expect(bound.length).toBeGreaterThan(0)
+    expect(bound.every((workspace) => workspace.bot?.telegramBotId)).toBe(true)
+
+    const botIds = demoWorkspaces.flatMap((workspace) => workspace.bot?.telegramBotId ?? [])
+    expect(new Set(botIds).size).toBe(botIds.length)
+
+    // One Telegram identity owns at most one workspace — the partial unique
+    // index the credential lookup relies on.
+    const owners = demoWorkspaces.flatMap((workspace) => workspace.owner?.telegramUserId ?? [])
+    expect(new Set(owners).size).toBe(owners.length)
+  })
+
+  it("records the accepted version wherever it records the acceptance", () => {
+    const accepted = demoWorkspaces.filter(
+      (workspace) => workspace.owner?.termsAcceptedHoursAgo !== undefined,
+    )
+    expect(accepted.length).toBeGreaterThan(0)
+    expect(accepted.every((workspace) => workspace.owner?.termsVersion)).toBe(true)
+  })
+
   it("never pretends a fixture bot can reach Telegram", () => {
     expect(demoWorkspaces.some((workspace) => "token" in (workspace.bot ?? {}))).toBe(false)
   })

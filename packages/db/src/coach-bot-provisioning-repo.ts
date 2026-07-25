@@ -8,6 +8,7 @@ import {
 import { and, desc, eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
+import { CoachNotification } from "./coach-notification.ts"
 import * as schema from "./schema.ts"
 
 export interface Provisioning {
@@ -71,6 +72,8 @@ export interface Installation {
 export interface PendingNotification {
   readonly id: string
   readonly workspaceId: WorkspaceId
+  /** Which push this is — the delivery loop picks its copy from it. */
+  readonly kind: string
   readonly recipientTelegramId: TelegramId
   readonly workspaceName: string
   readonly botUsername: string
@@ -777,15 +780,18 @@ export const layer = Layer.effect(
             ),
             queued_notification as (
               insert into "coach_bot_notification" (
-                "id", "workspace_id", "recipient_telegram_id", "status",
+                "id", "workspace_id", "kind", "dedupe_key", "recipient_telegram_id", "status",
                 "attempt_count", "available_at", "created_at", "updated_at"
               )
               select
-                'cbn_' || substring("workspace_id" from 4),
-                "workspace_id", "issued_by_telegram_id", 'pending', 0,
+                ${CoachNotification.id(CoachNotification.Kind.BotConnected, sql`"workspace_id"`)},
+                "workspace_id",
+                ${CoachNotification.Kind.BotConnected},
+                ${CoachNotification.dedupeKey(CoachNotification.Kind.BotConnected, sql`"workspace_id"`)},
+                "issued_by_telegram_id", 'pending', 0,
                 ${input.now}, ${input.now}, ${input.now}
               from completed_attempt
-              on conflict ("workspace_id") do nothing
+              on conflict ("dedupe_key") do nothing
             )
             select * from connected_bot
             where exists (select 1 from completed_attempt)
@@ -931,11 +937,16 @@ export const layer = Layer.effect(
             select
               claimed."id",
               claimed."workspace_id",
+              claimed."kind",
               claimed."recipient_telegram_id",
               claimed."attempt_count",
               "workspace"."name" as "workspace_name",
               "bot"."username" as "bot_username"
             from claimed
+            -- Both current kinds are about a workspace whose bot exists, and
+            -- both name it in their copy, so the inner join and the null-username
+            -- filter below are load-bearing rather than incidental. A future
+            -- pre-bot push (#119's "setup started") has to relax them.
             join "workspace" on "workspace"."id" = claimed."workspace_id"
             join "bot" on "bot"."workspace_id" = claimed."workspace_id"
           `),
@@ -945,6 +956,7 @@ export const layer = Layer.effect(
           result.rows as unknown as ReadonlyArray<{
             id: string
             workspace_id: string
+            kind: string
             recipient_telegram_id: string
             workspace_name: string
             bot_username: string | null
@@ -957,6 +969,7 @@ export const layer = Layer.effect(
                 {
                   id: row.id,
                   workspaceId: WorkspaceId.make(row.workspace_id),
+                  kind: row.kind,
                   recipientTelegramId: TelegramId.make(row.recipient_telegram_id),
                   workspaceName: row.workspace_name,
                   botUsername: row.bot_username,
