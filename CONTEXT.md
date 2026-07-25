@@ -38,6 +38,10 @@ The one message in the coach's manager chat whose button opens Telegram's bot-cr
 _Avoid_: create button, keyboard, invite message
 _Note_: **armed** is also said of a *webhook* — a bot pointed at us with a secret we hold the hash of. Same word, unrelated subject: a prompt is armed for the coach to tap, a webhook is armed for Telegram to deliver to. Say which when it is not obvious from the sentence.
 
+**Setup Announcement**:
+The first thing a coach's own bot says, sent while it is still being configured and **edited in place** into the ready greeting once it is. It exists because Telegram offers a **Start bot** button the moment the bot exists, so the coach is already waiting; a send that Telegram refuses means they have not opened the chat, which is the platform's only way of knowing.
+_Avoid_: loading message, placeholder, please wait
+
 ### Clients and onboarding
 
 **Client**:

@@ -110,17 +110,35 @@ Everything downstream is automatic — nothing here is an operator action:
 - the workspace flips to `connected`, the invite is consumed, and the manager
   bot notifies the admin.
 
+**What the coach sees is one message.** Telegram's dialog ends with a **Start bot**
+button, so they tap it while the steps above are still running. The bot answers
+immediately — *"Настраиваю вашего бота — это займёт несколько секунд"*, in their
+language — and when activation completes **that same message becomes** *"Praximo
+готов"* with the **Open** button
+([#154](https://github.com/apshenichniy/praximo/issues/154)). One tap, no silence,
+and no second greeting: the early `/start` is dropped from Telegram's queue
+because it has already been answered. If the log says an announcement was
+**undelivered**, the coach may see the greeting as a separate message instead of
+an edit — cosmetic, and they are still greeted.
+
+A coach who has *not* opened the bot gets nothing at that point, by design —
+Telegram refuses a message to a user who never started the bot, which is exactly
+how the platform learns they are not there. Their later `/start` is greeted
+normally.
+
 The webhook is armed **last**, after the workspace flips to `connected`
-([#150](https://github.com/apshenichniy/praximo/issues/150)). That ordering is
-what lets a coach tap **Start** the instant Telegram hands them their new bot: an
-update sent before the webhook exists is held by Telegram and delivered once it
-does, by which time the installation is there to answer it. Two operator
+([#150](https://github.com/apshenichniy/praximo/issues/150)), so no update can
+reach the bot's route before the row that serves it exists. Two operator
 consequences:
 
 - If a coach reports that **Start did nothing**, check the Worker log for the bot
   id. Every refusal on a coach bot's route now logs — no installation, no
   candidate, secret mismatch, or an attempt still configuring — so the reason is
   one `grep` away rather than a reconstruction from database timestamps.
+  **`alchemy logs` cannot read them yet**: the observability telemetry query
+  answers `403` while the rest of the token works, so the account API token is
+  missing its Workers Observability permission group. Adding it is a dashboard
+  action on a dashboard-minted token — ADR 0003's human carve-out.
 - A failure at the arming step leaves a workspace **`connected` with a bot that
   hears nothing**. Telegram repeats the `managed_bot` update and the retry
   re-arms, so it normally heals itself; if a coach's bot stays mute while the

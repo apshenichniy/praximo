@@ -42,6 +42,16 @@ export interface Copy {
   readonly proofPrompt: (username: string, link: string) => string
   readonly proofIdentityMismatch: string
   readonly proofLinkRequired: string
+  /**
+   * The first thing the coach's own bot says, sent while it is still being
+   * configured (#154).
+   *
+   * Telegram offers a **Start bot** button the moment the bot exists, so the
+   * coach taps it seconds before there is anything to answer with. This is what
+   * they see instead of an empty chat; it becomes `botReady` in place once
+   * activation completes, so it has to read as a step and not as a state.
+   */
+  readonly botSettingUp: string
   readonly botReady: string
   readonly openButton: string
 }
@@ -78,6 +88,7 @@ const en: Copy = {
     "This confirmation link belongs to somebody else's Praximo setup. Ask your administrator for your own setup link.",
   proofLinkRequired:
     "Open the confirmation link the Praximo manager bot sent you to finish connecting this bot.",
+  botSettingUp: "Setting your bot up — this takes a few seconds.",
   botReady: "Praximo is ready.",
   openButton: "Open",
 }
@@ -116,6 +127,7 @@ const uk: Copy = {
     "Це посилання підтвердження належить чужому налаштуванню Praximo. Попросіть адміністратора надіслати вам власне посилання.",
   proofLinkRequired:
     "Відкрийте посилання підтвердження, яке надіслав вам бот-менеджер Praximo, щоб завершити підключення.",
+  botSettingUp: "Налаштовую вашого бота — це триває кілька секунд.",
   botReady: "Praximo готовий.",
   openButton: "Відкрити",
 }
@@ -153,6 +165,7 @@ const ru: Copy = {
     "Эта ссылка подтверждения принадлежит чужой настройке Praximo. Попросите администратора прислать вам вашу собственную ссылку.",
   proofLinkRequired:
     "Откройте ссылку подтверждения, которую прислал вам бот-менеджер Praximo, чтобы завершить подключение.",
+  botSettingUp: "Настраиваю вашего бота — это займёт несколько секунд.",
   botReady: "Praximo готов.",
   openButton: "Открыть",
 }
