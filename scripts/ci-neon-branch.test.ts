@@ -3,6 +3,7 @@ import {
   CI_BRANCH_PREFIX,
   ciBranchName,
   createBranchRequest,
+  defaultBranchId,
   deleteBranchRequest,
   isBranchReady,
   parseBranchState,
@@ -30,23 +31,34 @@ describe("ciBranchName", () => {
 })
 
 describe("createBranchRequest", () => {
-  it("asks for a schema-only branch with a read-write compute", () => {
-    const request = createBranchRequest({ projectId: "icy-sunset-1", name: "ci-run-42-1" })
+  it("asks for a schema-only child of the parent, with a read-write compute", () => {
+    const request = createBranchRequest({
+      projectId: "icy-sunset-1",
+      name: "ci-run-42-1",
+      parentId: "br-curly-forest",
+    })
 
     expect(request.method).toBe("POST")
     expect(request.url).toBe("https://console.neon.tech/api/v2/projects/icy-sunset-1/branches")
     expect(request.body).toEqual({
-      // schema-only: CI never needs — and must never copy — the parent's rows.
-      branch: { name: "ci-run-42-1", init_source: "schema-only" },
+      branch: {
+        name: "ci-run-42-1",
+        // schema-only: CI never needs — and must never copy — the parent's rows.
+        init_source: "schema-only",
+        // Never omitted: without a parent Neon makes a *root* branch, and the
+        // project holds only a couple, so a second concurrent run is refused
+        // with ROOT_BRANCHES_LIMIT_EXCEEDED before it can test anything (#143).
+        parent_id: "br-curly-forest",
+      },
       // Without an endpoint the branch has no compute and no connection URI.
       endpoints: [{ type: "read_write" }],
     })
   })
 
   it("rejects an empty project id rather than calling /projects//branches", () => {
-    expect(() => createBranchRequest({ projectId: "", name: "ci-run-42-1" })).toThrow(
-      /missing Neon project id/,
-    )
+    expect(() =>
+      createBranchRequest({ projectId: "", name: "ci-run-42-1", parentId: "br-curly-forest" }),
+    ).toThrow(/missing Neon project id/)
   })
 })
 
@@ -158,5 +170,20 @@ describe("staleCiBranches", () => {
     expect(
       staleCiBranches([{ id: "br-odd", name: `${CI_BRANCH_PREFIX}3-1` }], { now, maxAgeMs }),
     ).toEqual([])
+  })
+})
+
+describe("defaultBranchId", () => {
+  it("finds the branch Neon marks as the project default", () => {
+    expect(
+      defaultBranchId([
+        { id: "br-dev", name: "Praximo-Branch-dev-apshenichniy-x" },
+        { id: "br-main", name: "main", default: true },
+      ]),
+    ).toBe("br-main")
+  })
+
+  it("refuses to fall back to a parentless create, which would be a root branch", () => {
+    expect(() => defaultBranchId([{ id: "br-dev", name: "dev" }])).toThrow(/no default branch/)
   })
 })

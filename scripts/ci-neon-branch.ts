@@ -52,18 +52,28 @@ const requireProjectId = (projectId: string): string => {
 /**
  * `init_source: "schema-only"` is the point: CI needs a migrated schema, never
  * the parent branch's rows, and `db:reset` drops and replays the migrations from
- * this checkout anyway. No `parent_id`, so the branch is taken from the project
- * default — which of the two it comes off makes no difference to a branch whose
- * schema is about to be dropped.
+ * this checkout anyway.
+ *
+ * `parent_id` is not optional in practice (#143). Omit it and Neon creates a
+ * *root* branch — one with no parent — and a project may hold only a couple of
+ * those, so the second concurrent CI run is refused with
+ * `ROOT_BRANCHES_LIMIT_EXCEEDED` before it can test anything. A child of the
+ * project default has no such limit.
+ *
+ * Do not read the API's own output as proof either way: a schema-only branch has
+ * no data lineage, so Neon reports `parent_id: null` for it whether or not one
+ * was sent. The observable difference is the only one that matters — with the
+ * parent, two CI branches coexist; without it, the second create is refused.
  */
 export const createBranchRequest = (input: {
   readonly projectId: string
   readonly name: string
+  readonly parentId: string
 }): NeonRequest => ({
   method: "POST",
   url: `${NEON_API_BASE}/projects/${requireProjectId(input.projectId)}/branches`,
   body: {
-    branch: { name: input.name, init_source: "schema-only" },
+    branch: { name: input.name, init_source: "schema-only", parent_id: input.parentId },
     // No endpoint means no compute and no connection URI to hand the suites.
     endpoints: [{ type: "read_write" }],
   },
@@ -139,6 +149,23 @@ export interface NeonBranchSummary {
   readonly id: string
   readonly name: string
   readonly created_at?: string | undefined
+  readonly default?: boolean | undefined
+}
+
+/**
+ * The branch every CI branch is taken from (#143). Discovered rather than
+ * configured: the project's default branch is whatever Neon says it is, and one
+ * fewer repository variable is one fewer thing to keep in sync.
+ */
+export const defaultBranchId = (branches: ReadonlyArray<NeonBranchSummary>): string => {
+  const branch = branches.find((candidate) => candidate.default === true)
+  if (branch === undefined) {
+    throw new Error(
+      "no default branch in this Neon project — CI branches are taken from it, and without one " +
+        "Neon would create a root branch, which the project may hold only a couple of",
+    )
+  }
+  return branch.id
 }
 
 /**
@@ -206,11 +233,18 @@ const appendGithubFile = (variable: string, line: string): void => {
   if (path) appendFileSync(path, `${line}\n`)
 }
 
-const reapStaleBranches = async (projectId: string, apiKey: string): Promise<void> => {
+const listBranches = async (
+  projectId: string,
+  apiKey: string,
+): Promise<ReadonlyArray<NeonBranchSummary>> => {
   const payload = asRecord(await callNeon(listBranchesRequest({ projectId }), apiKey))
-  const branches = Array.isArray(payload["branches"])
+  return Array.isArray(payload["branches"])
     ? (payload["branches"] as ReadonlyArray<NeonBranchSummary>)
     : []
+}
+
+const reapStaleBranches = async (projectId: string, apiKey: string): Promise<void> => {
+  const branches = await listBranches(projectId, apiKey)
   const stale = staleCiBranches(branches, {
     now: new Date(),
     maxAgeMs: STALE_BRANCH_MAX_AGE_MS,
@@ -260,8 +294,9 @@ const main = async (): Promise<void> => {
     runId: requireEnv("GITHUB_RUN_ID", "this script provisions branches for GitHub Actions runs"),
     runAttempt: process.env["GITHUB_RUN_ATTEMPT"] ?? "1",
   })
+  const parentId = defaultBranchId(await listBranches(projectId, apiKey))
   const created = parseCreateBranchResponse(
-    await callNeon(createBranchRequest({ projectId, name }), apiKey),
+    await callNeon(createBranchRequest({ projectId, name, parentId }), apiKey),
   )
 
   // Export the id *before* waiting: the cleanup step keys off this output, and a
