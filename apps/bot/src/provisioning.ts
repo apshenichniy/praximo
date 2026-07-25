@@ -1,9 +1,9 @@
 import { timingSafeEqual } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
 import { CoachBotProvisioningRepo, CoachNotification, CoachOnboardingRepo } from "@praximo/db"
-import { TelegramId, type WorkspaceId } from "@praximo/domain"
+import { type CoachLanguage, TelegramId, type WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
-import { Api, InlineKeyboard, InputFile } from "grammy"
+import { Api, GrammyError, InlineKeyboard, InputFile } from "grammy"
 import type { User } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
 import { defaultBotDescription, defaultBotShortDescription } from "./default-branding.ts"
@@ -308,6 +308,14 @@ export const armCoachBotWebhook = Effect.fn("BotWorker.armCoachBotWebhook")(func
   readonly botId: string
   readonly secret: string
   readonly webhookOrigin: string
+  /**
+   * Discard whatever Telegram queued while the bot had no webhook. True only on
+   * a first-time connection, where the one thing in that queue is the coach's own
+   * `/start` from the **Start bot** button — which we answer ourselves, in place,
+   * rather than let Telegram replay into a second greeting (#154). Left false on
+   * the BotFather path, where a queued update may be the proof handshake itself.
+   */
+  readonly dropPendingUpdates?: boolean
   readonly telegramFetch?: typeof globalThis.fetch
 }) {
   const api = apiFor(input.token, input.telegramFetch)
@@ -315,7 +323,117 @@ export const armCoachBotWebhook = Effect.fn("BotWorker.armCoachBotWebhook")(func
     api.setWebhook(`${input.webhookOrigin}/telegram/coach/${input.botId}`, {
       secret_token: input.secret,
       allowed_updates: ["message", "callback_query"],
+      ...(input.dropPendingUpdates === true ? { drop_pending_updates: true } : {}),
     }),
+  )
+})
+
+/**
+ * The coach's own bot, talking to the coach while it is still being set up — and
+ * then in place, once it is (#154).
+ *
+ * Telegram ends its creation dialog with a **Start bot** button, so the coach taps
+ * it seconds before there is anything to answer with. They used to get silence,
+ * conclude nothing had happened, and tap again. Two facts make this work without
+ * waiting to hear from them: a bot may message a user who has started it, and
+ * *only* such a user — so a send that succeeds proves they are sitting in the
+ * chat, and one that fails with 403 proves they are not there to be told
+ * anything. Either way it is best-effort, and neither can cost the coach their
+ * onboarding.
+ */
+/**
+ * Why the setup announcement did not land, to the only resolution that matters.
+ *
+ * `unopened` is Telegram refusing a message to a user who has not started the
+ * bot, and it is the *expected* answer — a coach who has not tapped **Start bot**
+ * has no chat for us to write in. Everything else is a send that should have
+ * worked, and may even have arrived without us learning its message id.
+ *
+ * Classified the way `ManagerBotSender` classifies its own failures, and as
+ * carefully: the category is all that escapes, never the cause, which can carry
+ * the bot's token or the message body (ADR 0004).
+ */
+export const announcementFailure = (cause: unknown): "unopened" | "undelivered" =>
+  cause instanceof GrammyError &&
+  (cause.error_code === 403 || cause.description.toLocaleLowerCase().includes("chat not found"))
+    ? "unopened"
+    : "undelivered"
+
+export const announceCoachBotSetup = Effect.fn("BotWorker.announceCoachBotSetup")(
+  function* (input: {
+    readonly token: string
+    readonly chatId: TelegramId
+    readonly language: CoachLanguage
+    readonly telegramFetch?: typeof globalThis.fetch
+  }) {
+    const api = apiFor(input.token, input.telegramFetch)
+    // Deliberately not `telegram()`, which drops the cause: this is the one place
+    // that has to tell "the coach is not in the chat" from "the send did not
+    // land", and only the Bot API error code says which.
+    const sent = yield* Effect.tryPromise({
+      try: () => api.sendMessage(input.chatId, messages(input.language).botSettingUp),
+      catch: announcementFailure,
+    }).pipe(Effect.result)
+    if (Result.isSuccess(sent)) return sent.success.message_id
+    if (sent.failure === "unopened") {
+      // The ordinary case, and a useful signal rather than a fault: the coach has
+      // not tapped **Start bot**, so there is nobody in the chat to tell.
+      yield* Effect.logInfo(
+        `coach bot ${input.chatId}: nothing to announce to — the coach has not opened it yet`,
+      )
+      return undefined
+    }
+    // Anything else is a send that should have landed, and may even have arrived
+    // without us learning its id — in which case the greeting becomes its own
+    // message rather than an edit of this one. A warning, not a shrug.
+    yield* Effect.logWarning(
+      `coach bot ${input.chatId}: setup announcement undelivered; the greeting will be a new message`,
+    )
+    return undefined
+  },
+)
+
+/**
+ * Turn that announcement into the greeting, or make the greeting from nothing.
+ *
+ * Edited rather than followed by a second message: the coach is looking at the
+ * line that said it would take a few seconds, and the honest end of that sentence
+ * is the same line saying it is done. When there was no announcement to edit —
+ * they had not opened the bot — this is their first message instead.
+ *
+ * Best-effort throughout. The bot is connected the moment the activation
+ * transaction commits, and a greeting Telegram refuses may not undo that.
+ */
+export const greetCoachOnBotReady = Effect.fn("BotWorker.greetCoachOnBotReady")(function* (input: {
+  readonly token: string
+  readonly chatId: TelegramId
+  readonly language: CoachLanguage
+  readonly botId: string
+  readonly miniAppBaseUrl: string
+  readonly announcementMessageId?: number
+  readonly telegramFetch?: typeof globalThis.fetch
+}) {
+  const api = apiFor(input.token, input.telegramFetch)
+  const copy = messages(input.language)
+  const keyboard = new InlineKeyboard().webApp(
+    copy.openButton,
+    coachMiniAppUrl(input.miniAppBaseUrl, input.botId),
+  )
+  const announced = input.announcementMessageId
+  const delivery =
+    announced === undefined
+      ? telegram("sendMessage", () =>
+          api.sendMessage(input.chatId, copy.botReady, { reply_markup: keyboard }),
+        ).pipe(Effect.asVoid)
+      : telegram("editMessageText", () =>
+          api.editMessageText(input.chatId, announced, copy.botReady, {
+            reply_markup: keyboard,
+          }),
+        ).pipe(Effect.asVoid)
+  yield* bestEffort(
+    delivery,
+    (operation) =>
+      `coach bot ${input.botId} is connected but its coach was not greeted: ${operation}`,
   )
 })
 
@@ -534,6 +652,12 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     // `managed_bot` update happened along. Arming first keeps a failure here
     // exactly as harmless as it was before the reorder: we return, the row still
     // carries the secret Telegram is still presenting, and the bot keeps working.
+    //
+    // And no `dropPendingUpdates`, also deliberately: this bot has been listening
+    // for a while, so its queue is the coach's and their clients' ordinary
+    // messages. Dropping them here would throw away conversation to tidy up a
+    // re-configuration — the first-time branch drops because the only thing queued
+    // there is a `/start` it has already answered itself (#154).
     yield* armCoachBotWebhook({
       token,
       botId: existing.success.telegramBotId,
@@ -576,6 +700,17 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   const token = yield* telegram("getManagedBotToken", () =>
     managerApi.getManagedBotToken(managedBot.id),
   )
+  // Before anything slow, because this is the message that has to beat the
+  // coach's own thumb: Telegram has already offered them **Start bot**, and
+  // everything below — an avatar upload, two descriptions, the menu button, the
+  // activation transaction — is the several seconds they used to spend looking at
+  // an empty chat (#154).
+  const announcement = yield* announceCoachBotSetup({
+    token,
+    chatId: provisioning.coachTelegramId,
+    language: provisioning.coachLanguage,
+    ...injectedFetch,
+  })
   const configured = yield* configureCoachBot({
     env,
     token,
@@ -600,13 +735,31 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   // now fail *after* the workspace is connected, and the coach must not be left
   // looking at a live creation button for a bot they already have.
   yield* settleCreationPrompt(env, provisioning, installation.username, telegramFetch)
+  // The end of the sentence the announcement started, in the same message — and
+  // *before* the webhook is armed, which is what makes "greeted once" true rather
+  // than likely. Once the route is live the bot's own `/start` handler greets
+  // whoever taps Start; doing that while this edit was still in flight would greet
+  // the coach twice for one tap, in two different languages (the handler reads the
+  // Telegram client's, this reads the workspace owner's).
+  yield* greetCoachOnBotReady({
+    token,
+    chatId: provisioning.coachTelegramId,
+    language: provisioning.coachLanguage,
+    botId: String(managedBot.id),
+    miniAppBaseUrl: env.COACH_MINI_APP_URL,
+    ...(announcement === undefined ? {} : { announcementMessageId: announcement }),
+    ...injectedFetch,
+  })
   // Last, so no update can reach the bot's route before the row that serves it
-  // exists (#150).
+  // exists (#150) — and dropping what Telegram held while it waited, because the
+  // coach's early `/start` has just been answered above rather than needing a
+  // replay that would arrive as a second greeting (#154).
   yield* armCoachBotWebhook({
     token,
     botId: String(managedBot.id),
     secret: configured.secret,
     webhookOrigin,
+    dropPendingUpdates: true,
     ...injectedFetch,
   })
   return { _tag: "Connected", installation } as const

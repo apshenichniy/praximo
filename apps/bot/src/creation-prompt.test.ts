@@ -463,7 +463,15 @@ describe("activation and the prompt", () => {
       const outcome = yield* provision(repo, telegram)
 
       expect(outcome).toEqual({ _tag: "Connected", installation })
-      expect(telegram.calls.map((call) => call.method)).not.toContain("editMessageText")
+      // Narrowed to the prompt on purpose: activation also edits the coach bot's
+      // own "setting up" message into the greeting (#154), so "no edit at all" is
+      // no longer the question — "no edit in the manager chat" is.
+      const promptEdits = telegram.calls.filter(
+        (call) => call.method === "editMessageText" && call.body.chat_id === coach,
+      )
+      expect(promptEdits.map((call) => call.body.text)).not.toContain(
+        messages("ru").promptConnected(MANAGED_BOT_USERNAME),
+      )
     }),
   )
 })
