@@ -17,17 +17,27 @@ const env = {
 // touched — the menu-button call is what these tests are about.
 const workspace: CoachBotProvisioningRepo.WorkspaceProfile = { name: "Ada Coaching" }
 
+interface Call {
+  readonly method: string
+  readonly token: string
+  readonly body: unknown
+}
+
 interface TelegramStub {
   readonly fetch: typeof globalThis.fetch
-  readonly calls: Array<{ readonly method: string; readonly body: unknown }>
+  readonly calls: Array<Call>
 }
 
 const telegramStub = (): TelegramStub => {
-  const calls: Array<{ readonly method: string; readonly body: unknown }> = []
+  const calls: Array<Call> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
-    const [, , method = ""] = new URL(input.toString()).pathname.split("/")
+    const [, credential = "", method = ""] = new URL(input.toString()).pathname.split("/")
     const body = init?.body
-    calls.push({ method, body: typeof body === "string" ? JSON.parse(body) : undefined })
+    calls.push({
+      method,
+      token: credential.replace(/^bot/, ""),
+      body: typeof body === "string" ? JSON.parse(body) : undefined,
+    })
     if (method === "getMe") {
       return Response.json({
         ok: true,
@@ -78,23 +88,9 @@ describe("coach bot configuration", () => {
         },
       })
       expect(CoachMenuButtonText).toBe("Open")
-    }),
-  )
-
-  it.effect("sets the menu button with the coach bot's own credential", () =>
-    Effect.gen(function* () {
-      const telegram = telegramStub()
-
-      yield* configure(telegram)
-
-      expect(telegram.calls.map((call) => call.method)).toEqual([
-        "getMe",
-        "setMyProfilePhoto",
-        "setMyDescription",
-        "setMyShortDescription",
-        "setWebhook",
-        "setChatMenuButton",
-      ])
+      // The coach bot's own credential, never the manager's: the button belongs
+      // to the bot the coach owns.
+      expect(menu?.token).toBe(TOKEN)
     }),
   )
 

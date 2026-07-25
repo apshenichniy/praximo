@@ -109,7 +109,7 @@ Consequence for provisioning: the automated pipeline sets the **menu button** fo
 
 ### Offboarding
 
-On workspace deletion: `deleteWebhook`, wipe the token and the bot record. The bot itself remains the coach's property (in the Managed Bots model the coach is the owner) — we only release control. Operator-facing steps: [coach onboarding runbook](../runbooks/coach-onboarding.md).
+On workspace deletion: `deleteWebhook`, wipe the token and the bot record. The bot itself remains the coach's property (in the Managed Bots model the coach is the owner) — we only release control. The operator flow lives in admin-surface.md §Delete flow; the [coach onboarding runbook](../runbooks/coach-onboarding.md) points at it from the coach's side.
 
 ## Consequences
 

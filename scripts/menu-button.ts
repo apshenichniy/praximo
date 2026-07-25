@@ -10,7 +10,12 @@
  * setup time, never a committed constant.
  */
 
-/** The BotFather-style chat menu label shared by both manager-bot entry points. */
+/**
+ * The BotFather-style chat menu label shared by both manager-bot entry points.
+ * Coach bots carry the same word, set at provisioning
+ * (`CoachMenuButtonText` in `apps/bot/src/provisioning.ts`, #86); the two live
+ * apart because `scripts/` is outside the workspace graph.
+ */
 export const MENU_BUTTON_TEXT = "Open"
 
 /**

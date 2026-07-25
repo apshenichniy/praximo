@@ -1,7 +1,7 @@
 # Runbook — Coach onboarding
 
 Coach onboarding is **manual by design**: there is no self-registration
-([README](../spec/README.md) §The product flow). The admin drives it from the
+([README](../spec/README.md) §The product flow, end to end). The admin drives it from the
 admin Mini App; everything after the coach's tap is automatic
 ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)). This runbook is the
 operator's checklist for one coach, end to end, plus the one **optional** step
@@ -25,11 +25,17 @@ below.
 
 In the admin Mini App, from the coaches list, tap the **Invite a coach**
 MainButton. The screen collects one optional field — the internal label you know
-the coach by — and offers three delivery actions (Telegram share, email, copy
-the invite). Tapping one creates the workspace (`awaiting setup`) and the
-single-use invite lazily and delivers in the same gesture; the pending card
-appears in the coaches list
-([admin-surface.md](../spec/admin-surface.md) §Invite a coach).
+the coach by. Delivering creates the workspace (`awaiting setup`) and the
+single-use invite lazily, in the same gesture; the pending card then appears in
+the coaches list ([admin-surface.md](../spec/admin-surface.md) §Invite a coach).
+
+Two channels work in MVP: **Send in Telegram** (native chat picker; the
+recipient is never revealed to the bot) and **Copy invite** (the forwardable
+message with the deep link, for any other channel). **Send by email is a UI stub
+in MVP** — it answers "coming soon" and creates nothing, so it cannot be used to
+onboard anyone until delivery lands
+([#105](https://github.com/apshenichniy/praximo/issues/105),
+[#114](https://github.com/apshenichniy/praximo/issues/114)).
 
 ## 2. The coach connects their bot
 
@@ -42,8 +48,12 @@ step.
 Everything downstream is automatic — nothing here is an operator action:
 
 - the bot's token is fetched and stored AES-GCM-encrypted;
-- default Praximo branding (avatar, description, short description) is applied
-  in the coach's language ([#108](https://github.com/apshenichniy/praximo/issues/108));
+- default Praximo branding is applied — an avatar generated from the bot's id,
+  plus an English description and short description templated from the coach's
+  own Telegram name. Both are pure functions of their seed, so re-running
+  provisioning reproduces the same bot rather than re-skinning one the coach has
+  since made their own ([#108](https://github.com/apshenichniy/praximo/issues/108));
+  rebranding is the coach's, done in @BotFather;
 - the webhook is armed with a fresh per-bot secret;
 - the **in-chat menu button** is set to a `web_app` button labelled **"Open"**,
   pointing at `COACH_MINI_APP_URL`;
