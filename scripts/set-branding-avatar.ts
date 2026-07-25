@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { promisify } from "node:util"
 import sharp from "sharp"
+import { requireEnv } from "./env.ts"
 
 const execFileAsync = promisify(execFile)
 
@@ -50,17 +51,11 @@ export const selectStageBucket = (stage: string, names: ReadonlyArray<string>): 
   return bucket
 }
 
-const requireEnvironment = (name: string): string => {
-  const value = process.env[name]
-  if (value === undefined || value.length === 0) throw new Error(`missing ${name}`)
-  return value
-}
-
 const main = async () => {
   const { stage, file, key: objectKey } = parseBrandingAvatarArgs(process.argv.slice(2))
-  requireEnvironment("CLOUDFLARE_ACCOUNT_ID")
-  requireEnvironment("CLOUDFLARE_API_TOKEN")
-  const configuredObjectKey = requireEnvironment("DEFAULT_COACH_BOT_AVATAR_R2_KEY")
+  requireEnv("CLOUDFLARE_ACCOUNT_ID")
+  requireEnv("CLOUDFLARE_API_TOKEN")
+  const configuredObjectKey = requireEnv("DEFAULT_COACH_BOT_AVATAR_R2_KEY")
   if (objectKey !== configuredObjectKey) {
     throw new Error("--key does not match the configured DEFAULT_COACH_BOT_AVATAR_R2_KEY")
   }

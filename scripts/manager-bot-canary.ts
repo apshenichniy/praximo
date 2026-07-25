@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url"
 import { ConfigProvider, Effect, Exit } from "effect"
 import { parseAdminTelegramIds, assertNotProd, resolveStage } from "../packages/db/src/reset.ts"
 import { ManagerBotSender } from "../packages/telegram/src/manager-bot-sender.ts"
+import { requireEnv } from "./env.ts"
 
 const canaryMessage = "Praximo manager-bot canary: delivery is working."
 
@@ -20,14 +21,6 @@ export const sendManagerBotCanary = Effect.fn("ManagerBotCanary.send")(function*
   const sender = yield* ManagerBotSender.Service
   yield* sender.sendText(recipient, canaryMessage)
 })
-
-const requireEnv = (name: string): string => {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`missing ${name} — set it in the root .env (see .env.example)`)
-  }
-  return value
-}
 
 interface CliOutput {
   readonly log: (message: string) => void

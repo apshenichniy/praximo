@@ -1,5 +1,6 @@
 import { appendFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
+import { requireEnv } from "./env.ts"
 
 /**
  * The database a CI run tests against (#136): an ephemeral, schema-only Neon
@@ -162,14 +163,6 @@ export const staleCiBranches = (
 
 /** Branches this old cannot belong to a live run — the whole job times out in minutes. */
 export const STALE_BRANCH_MAX_AGE_MS = 3 * 60 * 60 * 1000
-
-const requireEnv = (name: string, hint: string): string => {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`missing ${name} — ${hint}`)
-  }
-  return value
-}
 
 const callNeon = async (request: NeonRequest, apiKey: string): Promise<unknown> => {
   const response = await fetch(request.url, {
