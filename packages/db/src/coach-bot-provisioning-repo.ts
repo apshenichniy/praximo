@@ -456,6 +456,36 @@ export const layer = Layer.effect(
       return yield* new ProvisioningUnavailable({ reason: unavailableReason(invite, now) })
     })
 
+    /** The invite behind this identity's newest open attempt, if it has one. */
+    const openAttempt = Effect.fn("CoachBotProvisioningRepo.openAttempt")(function* (
+      coachTelegramId: TelegramId,
+    ) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({
+              status: schema.coachOnboardingInvite.status,
+              expiresAt: schema.coachOnboardingInvite.expiresAt,
+              acceptedByTelegramId: schema.coachOnboardingInvite.acceptedByTelegramId,
+            })
+            .from(schema.coachBotProvisioning)
+            .innerJoin(
+              schema.coachOnboardingInvite,
+              eq(schema.coachOnboardingInvite.id, schema.coachBotProvisioning.inviteId),
+            )
+            .where(
+              and(
+                eq(schema.coachBotProvisioning.coachTelegramId, coachTelegramId),
+                eq(schema.coachBotProvisioning.status, "requested"),
+              ),
+            )
+            .orderBy(desc(schema.coachBotProvisioning.updatedAt))
+            .limit(1),
+        catch: (cause) => new QueryFailed({ operation: "provisioning.openAttempt", cause }),
+      })
+      return rows[0]
+    })
+
     const claim = Effect.fn("CoachBotProvisioningRepo.claim")(function* (
       coachTelegramId: TelegramId,
       managedBotId: string,
@@ -503,39 +533,20 @@ export const layer = Layer.effect(
       ) {
         return claimed
       }
+      if (claimed !== undefined) return yield* new ProvisioningUnavailable({ reason: "claimed" })
+      // Same reading `ingestCandidate` makes of its own refusal, and load-bearing
+      // for the one-tap path: `not-found` is what the manager webhook treats as
+      // the terminal "this coach has no open attempt" and answers 200 to (#135),
+      // so an attempt still open on an invitation an administrator reset must
+      // name the invitation rather than pass for an identity that never started.
+      const attempt = yield* openAttempt(coachTelegramId)
+      if (attempt === undefined) return yield* new ProvisioningUnavailable({ reason: "not-found" })
+      const heldByCaller =
+        attempt.status === "accepted" && attempt.acceptedByTelegramId === coachTelegramId
+      const stillOffered = attempt.status === "pending" && attempt.expiresAt > now
       return yield* new ProvisioningUnavailable({
-        reason: claimed === undefined ? "not-found" : "claimed",
+        reason: heldByCaller || stillOffered ? "claimed" : unavailableReason(attempt, now),
       })
-    })
-
-    /** The invite behind this identity's newest open attempt, if it has one. */
-    const openAttempt = Effect.fn("CoachBotProvisioningRepo.openAttempt")(function* (
-      coachTelegramId: TelegramId,
-    ) {
-      const rows = yield* Effect.tryPromise({
-        try: () =>
-          client
-            .select({
-              status: schema.coachOnboardingInvite.status,
-              expiresAt: schema.coachOnboardingInvite.expiresAt,
-              acceptedByTelegramId: schema.coachOnboardingInvite.acceptedByTelegramId,
-            })
-            .from(schema.coachBotProvisioning)
-            .innerJoin(
-              schema.coachOnboardingInvite,
-              eq(schema.coachOnboardingInvite.id, schema.coachBotProvisioning.inviteId),
-            )
-            .where(
-              and(
-                eq(schema.coachBotProvisioning.coachTelegramId, coachTelegramId),
-                eq(schema.coachBotProvisioning.status, "requested"),
-              ),
-            )
-            .orderBy(desc(schema.coachBotProvisioning.updatedAt))
-            .limit(1),
-        catch: (cause) => new QueryFailed({ operation: "provisioning.openAttempt", cause }),
-      })
-      return rows[0]
     })
 
     /**

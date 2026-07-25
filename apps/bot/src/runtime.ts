@@ -16,6 +16,7 @@ import {
   coachMiniAppUrl,
   constantTimeEqual,
   deliverCoachNotifications,
+  type ManagedBotOutcome,
   managedBotSuggestions,
   prepareOnboarding,
   provisionManagedBot,
@@ -224,6 +225,36 @@ const managerBotFor = (
   return managerBotInitialization
 }
 
+/**
+ * What the coach is told once a `managed_bot` update has settled, and the answer
+ * Telegram gets for it.
+ *
+ * Every settled outcome is a 200 — `provisionManagedBot`'s failure channel is
+ * the only thing worth redelivering — so this is where the two are kept apart:
+ * a coach with no open attempt is finished with, not failed (#135).
+ *
+ * The language is the sender's Telegram client, not the workspace's: this update
+ * carries a user and a bot and nothing else, and the second-bot case has no
+ * provisioning row left to read a chosen language off.
+ */
+export const managedBotReply = async (
+  outcome: ManagedBotOutcome,
+  user: User,
+  send: (chatId: number, text: string) => Promise<unknown>,
+): Promise<Response> => {
+  const copy = messages(clientLanguage(user.language_code))
+  if (outcome._tag === "NoOpenAttempt") {
+    // Best-effort: this update is already terminal, and a Telegram hiccup on a
+    // courtesy message must not be the thing that reopens the retry loop.
+    await send(user.id, copy.extraBotNotConnected(outcome.botUsername)).catch(() => undefined)
+    return new Response(null, { status: 200 })
+  }
+  // Not best-effort, deliberately: the coach has to learn their bot is live, and
+  // a redelivery re-runs the (idempotent) rotation and tells them then.
+  await send(user.id, copy.botConnected(outcome.installation.username))
+  return new Response(null, { status: 200 })
+}
+
 const handleManagerWebhook = async (
   request: Request,
   env: Env,
@@ -248,14 +279,10 @@ const handleManagerWebhook = async (
       ),
     )
     if (result._tag === "Failure") return new Response(null, { status: 500 })
-    coachBots.delete(String(update.managed_bot.bot.id))
-    await bot.api.sendMessage(
-      update.managed_bot.user.id,
-      messages(clientLanguage(update.managed_bot.user.language_code)).botConnected(
-        result.success.username,
-      ),
+    if (result.success._tag === "Connected") coachBots.delete(String(update.managed_bot.bot.id))
+    return managedBotReply(result.success, update.managed_bot.user, (chatId, text) =>
+      bot.api.sendMessage(chatId, text),
     )
-    return new Response(null, { status: 200 })
   }
   await bot.handleUpdate(update)
   return new Response(null, { status: 200 })
