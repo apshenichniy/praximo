@@ -281,11 +281,13 @@ describe.skipIf(skipWithoutDatabase)("WorkspaceRepo (dev Neon branch)", () => {
       const claimed = WorkspaceId.make(uniqueId("ws_claimed"))
       const halfway = WorkspaceId.make(uniqueId("ws_bot_connected"))
       const activated = WorkspaceId.make(uniqueId("ws_activated"))
-      const ids = [claimed, halfway, activated]
+      const broken = WorkspaceId.make(uniqueId("ws_needs_relink"))
+      const ids = [claimed, halfway, activated, broken]
       const claimant = uniqueTelegramId(1)
       const halfOwner = uniqueTelegramId(2)
       const activeOwner = uniqueTelegramId(3)
       const stranger = uniqueTelegramId(4)
+      const brokenOwner = uniqueTelegramId(5)
 
       yield* Effect.addFinalizer(() =>
         Effect.promise(() =>
@@ -312,12 +314,21 @@ describe.skipIf(skipWithoutDatabase)("WorkspaceRepo (dev Neon branch)", () => {
             telegramUserId: activeOwner,
             termsAcceptedAt: new Date("2026-07-20T10:00:00.000Z"),
           },
+          {
+            id: uniqueId("mem_broken"),
+            workspaceId: broken,
+            role: "owner",
+            language: "en",
+            telegramUserId: brokenOwner,
+            termsAcceptedAt: new Date("2026-07-20T10:00:00.000Z"),
+          },
         ]),
       )
       yield* Effect.promise(() =>
         client.insert(schema.bot).values([
           { workspaceId: halfway, connectionStatus: "connected", username: "half_coach_bot" },
           { workspaceId: activated, connectionStatus: "connected", username: "done_coach_bot" },
+          { workspaceId: broken, connectionStatus: "needs_relink", username: "gone_coach_bot" },
         ]),
       )
       yield* Effect.promise(() =>
@@ -356,6 +367,13 @@ describe.skipIf(skipWithoutDatabase)("WorkspaceRepo (dev Neon branch)", () => {
       expect(yield* repo.findCoachByTelegramId(claimant)).toMatchObject({
         state: "accepted",
         workspaceId: claimed,
+      })
+      // A broken bot outranks a finished workspace: it is the only state that
+      // asks the coach for something, and asking is the screen's whole job (#55).
+      expect(yield* repo.findCoachByTelegramId(brokenOwner)).toMatchObject({
+        state: "needs-relink",
+        workspaceId: broken,
+        botUsername: "gone_coach_bot",
       })
       expect(yield* repo.findCoachByTelegramId(stranger)).toBeUndefined()
     }).pipe(Effect.scoped, Effect.provide(appLayer)),

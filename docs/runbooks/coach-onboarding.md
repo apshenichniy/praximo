@@ -220,6 +220,42 @@ The chat-list **Open** button then appears next to the bot. Both surfaces open
 the same app under the same word; nothing else in the workspace changes, and
 skipping this costs the coach only that shortcut.
 
+## 5. A coach bot that stops working
+
+**There is nothing for the operator to do here, and that is the design**
+([#55](https://github.com/apshenichniy/praximo/issues/55), ADR 0004 §Token
+lifecycle). It is in the runbook because an admin *will* be told when it
+happens, and the honest answer to "what do I do about this" is "nothing".
+
+A coach bot stops answering when its token is revoked or the bot is deleted in
+@BotFather. Neither produces an update — a revoked token stops inbound webhooks
+too — so discovery is active: a daily health sweep over connected bots on the bot
+Worker's five-minute cron, plus every live send.
+
+What happens then, in order:
+
+1. **Repair is attempted first.** Management rights survive the coach's
+   `/revoke`, so the manager bot re-fetches a working credential, reconfigures
+   the bot completely, and the workspace never leaves `connected`. The coach is
+   told once, in words that name what a real disconnect takes — deleting the bot
+   in @BotFather, or asking their administrator. The admin is told nothing,
+   because nothing happened.
+2. **Only an unrepairable bot flips to `needs re-link`**: deleted, or connected
+   through the @BotFather paste flow, where the platform never held management
+   rights. The coach and the invite issuer are both notified through the manager
+   bot — the coach's own bot is the thing that broke, so it cannot carry its own
+   bad news.
+3. **Recovery is the coach's**, and it is the ordinary provisioning flow: they
+   send `/start` in the manager chat (or tap the banner in their Mini App, which
+   still opens — its launch is signed by Telegram, not by the bot's token) and
+   create or paste a bot exactly as they did the first time. The admin is told
+   when it lands.
+
+**Do not reach for *Reissue invite*.** It requires an unbound owner and an
+`awaiting setup` bot, and a workspace that needs re-linking is neither, so it
+refuses — correctly. Nothing in the workspace is lost while the status stands:
+the delivery channel is broken, not the data.
+
 ## Offboarding
 
 Deleting a workspace releases the bot: the webhook is removed and the token and

@@ -1,6 +1,7 @@
 import { type CoachLanguage, TelegramId, WorkspaceId } from "@praximo/domain"
 import { and, eq, isNotNull, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
+import { type BotConnectionStatus, botConnectionStatus } from "./bot-connection-status.ts"
 import { Database, QueryFailed } from "./client.ts"
 import { CoachNotification } from "./coach-notification.ts"
 import * as schema from "./schema.ts"
@@ -20,6 +21,14 @@ export interface CoachPrincipalRow {
   readonly language: CoachLanguage
   readonly botUsername: string
   readonly telegramBotId: string
+  /**
+   * Whether that bot still answers. The coach entry reads it because a broken
+   * bot is exactly the state whose only surviving surface is this one: Ed25519
+   * launch verification involves no token, and the menu button is Telegram-side
+   * state a `/revoke` does not remove, so a coach can still open the Mini App
+   * from a bot that can no longer say a word (#55).
+   */
+  readonly botConnectionStatus: BotConnectionStatus
   readonly termsAcceptedAt?: Date
   readonly termsVersion?: string
   readonly credentialsValidFrom?: Date
@@ -87,6 +96,7 @@ const principalProjection = {
   language: schema.member.language,
   botUsername: schema.bot.username,
   telegramBotId: schema.bot.telegramBotId,
+  botConnectionStatus: schema.bot.connectionStatus,
   termsAcceptedAt: schema.member.termsAcceptedAt,
   termsVersion: schema.member.termsVersion,
   credentialsValidFrom: schema.member.credentialsValidFrom,
@@ -99,6 +109,7 @@ const toPrincipal = (row: {
   language: CoachLanguage
   botUsername: string | null
   telegramBotId: string | null
+  botConnectionStatus: string
   termsAcceptedAt: Date | null
   termsVersion: string | null
   credentialsValidFrom: Date | null
@@ -111,6 +122,7 @@ const toPrincipal = (row: {
     language: row.language,
     botUsername: row.botUsername,
     telegramBotId: row.telegramBotId,
+    botConnectionStatus: botConnectionStatus(row.botConnectionStatus),
     ...(row.termsAcceptedAt === null ? {} : { termsAcceptedAt: row.termsAcceptedAt }),
     ...(row.termsVersion === null ? {} : { termsVersion: row.termsVersion }),
     ...(row.credentialsValidFrom === null

@@ -34,6 +34,7 @@ const repoStub = (
       ingestCandidate: unsupported,
       findCandidateByBotId: unsupported,
       complete: unsupported,
+      reopenForRelink: unsupported,
       findByBotId: unsupported,
       findInFlightManagedAttempt: () => inFlight,
       findByWorkspace: unsupported,

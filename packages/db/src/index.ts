@@ -1,5 +1,7 @@
 export { AdminRepo } from "./admin-repo.ts"
+export { BotConnection } from "./bot-connection-status.ts"
 export { CoachOnboardingRepo } from "./coach-onboarding-repo.ts"
+export { CoachBotHealthRepo } from "./coach-bot-health-repo.ts"
 export { CoachBotProvisioningRepo } from "./coach-bot-provisioning-repo.ts"
 export { CoachNotification } from "./coach-notification.ts"
 export { Database, QueryFailed } from "./client.ts"

@@ -34,6 +34,14 @@ export interface PreOnboardingPrincipal {
    */
   readonly botUsername: string
   readonly telegramBotId: string
+  /**
+   * Whether that bot still answers Telegram. It travels with the principal
+   * because this app is the only surface a coach with a dead bot can still
+   * reach: their launch is signed by Telegram over the bot id, no token
+   * involved, and the menu button that carries them here is Telegram-side state
+   * a `/revoke` does not touch (#55).
+   */
+  readonly botConnectionStatus: MemberRepo.CoachPrincipalRow["botConnectionStatus"]
   readonly language: CoachLanguage
 }
 
@@ -187,6 +195,7 @@ export const layer = Layer.effect(
         language: found.language,
         botUsername: found.botUsername,
         telegramBotId: found.telegramBotId,
+        botConnectionStatus: found.botConnectionStatus,
         termsAcceptedAt: found.termsAcceptedAt,
         termsVersion: found.termsVersion,
       } satisfies CoachPrincipal
@@ -201,6 +210,7 @@ export const layer = Layer.effect(
           termsVersion: principal.termsVersion,
           botUsername: principal.botUsername,
           telegramBotId: principal.telegramBotId,
+          botConnectionStatus: principal.botConnectionStatus,
           language: principal.language,
         } satisfies PreOnboardingPrincipal
       },

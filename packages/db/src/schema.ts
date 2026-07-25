@@ -221,21 +221,39 @@ export const coachOnboardingInvite = pgTable(
  * `workspace_id` as its own primary key. Provisioning mechanics arrive with the
  * bot-per-coach ticket (#9); here it is metadata only.
  */
-export const bot = pgTable("bot", {
-  workspaceId: text("workspace_id")
-    .primaryKey()
-    .references(() => workspace.id, { onDelete: "cascade" }),
-  // A versioned AES-256-GCM envelope. Plain Telegram credentials never enter
-  // Postgres, logs, RPC payloads, or service bindings.
-  token: text("token"),
-  telegramBotId: text("telegram_bot_id").unique(),
-  username: text("username"),
-  botInfo: jsonb("bot_info"),
-  webhookSecretHash: text("webhook_secret_hash"),
-  connectionStatus: text("connection_status").notNull().default("awaiting_setup"),
-  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
-})
+export const bot = pgTable(
+  "bot",
+  {
+    workspaceId: text("workspace_id")
+      .primaryKey()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    // A versioned AES-256-GCM envelope. Plain Telegram credentials never enter
+    // Postgres, logs, RPC payloads, or service bindings.
+    token: text("token"),
+    telegramBotId: text("telegram_bot_id").unique(),
+    username: text("username"),
+    botInfo: jsonb("bot_info"),
+    webhookSecretHash: text("webhook_secret_hash"),
+    connectionStatus: text("connection_status").notNull().default("awaiting_setup"),
+    // When Telegram last confirmed this bot answers to its stored credential
+    // (#55). The health sweep takes its batch from the oldest of these rather
+    // than from a second cron, so the pass self-staggers: a bot checked now
+    // falls to the back of the queue for a day. Null is "never checked", which
+    // sorts first.
+    healthCheckedAt: timestamp("health_checked_at", { withTimezone: true, mode: "date" }),
+    // How many times this workspace's bot has become unreachable beyond repair.
+    // Incremented inside the conditional flip, so the winning statement is what
+    // hands out the episode number — which is what keeps two notifications about
+    // one outage apart from the next outage's pair (#55).
+    relinkEpisode: integer("relink_episode").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [
+    // The sweep's whole access pattern: connected bots, oldest check first.
+    index("bot_health_check_idx").on(t.connectionStatus, t.healthCheckedAt),
+  ],
+)
 
 /**
  * A `/start` only creates a request row. The first matching `managed_bot`
@@ -335,6 +353,13 @@ export const coachBotNotification = pgTable(
     kind: text("kind").notNull().default("bot_connected"),
     dedupeKey: text("dedupe_key").notNull(),
     recipientTelegramId: text("recipient_telegram_id").notNull(),
+    // Who this row is addressed to, as the copy sees it: `admin` speaks English
+    // beside the delivery loop, `coach` speaks the workspace owner's language
+    // from the tri-lingual catalog (#55). One event can queue both, so the role
+    // cannot be derived from the kind — and the recipient id alone does not say
+    // which vocabulary to reach for. Defaults to `admin`, which every row
+    // written before this column existed was.
+    recipientRole: text("recipient_role").notNull().default("admin"),
     status: coachBotNotificationStatusEnum("status").notNull().default("pending"),
     attemptCount: integer("attempt_count").notNull().default(0),
     availableAt: timestamp("available_at", { withTimezone: true, mode: "date" }).notNull(),

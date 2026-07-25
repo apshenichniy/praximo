@@ -54,6 +54,35 @@ export interface Copy {
   readonly botSettingUp: string
   readonly botReady: string
   readonly openButton: string
+  /**
+   * A coach bot whose credential Telegram had stopped accepting, put back
+   * together from the manager's own management rights before anybody noticed
+   * (#55). Sent once per episode, to the coach alone.
+   *
+   * It names the deliberate gesture on purpose. A coach who ran `/revoke`
+   * meaning to disconnect will otherwise watch it heal and revoke again; the
+   * only ways out are @BotFather or their administrator, and saying so is what
+   * stops the loop.
+   */
+  readonly botRepaired: (username: string) => string
+  /**
+   * The bot is beyond repair — deleted, or never ours to manage. Reassurance
+   * first, because the coach's real question is what happened to their data,
+   * then the one action that fixes it.
+   */
+  readonly botNeedsRelink: (username: string) => string
+  /**
+   * The recovery prompt: `invitationReserved`'s counterpart for a coach coming
+   * back to reconnect. No workspace name — they know whose workspace it is, and
+   * nothing is being reserved for them a second time.
+   */
+  readonly relinkReserved: string
+  /**
+   * What the recovery prompt becomes once the new bot is connected. Its own
+   * string because `promptConnected`'s "Setup finished" is wrong for something
+   * that was set up months ago and has just come back.
+   */
+  readonly promptReconnected: (username: string) => string
 }
 
 const en: Copy = {
@@ -91,6 +120,13 @@ const en: Copy = {
   botSettingUp: "Setting your bot up — this takes a few seconds.",
   botReady: "Praximo is ready.",
   openButton: "Open",
+  botRepaired: (username) =>
+    `The connection to your coach bot @${username} broke and has been restored automatically. Nothing was lost and there is nothing for you to do. If you wanted to disconnect the bot, delete it in @BotFather or ask your administrator — that is the only way.`,
+  botNeedsRelink: (username) =>
+    `Your coach bot @${username} has stopped working — Telegram no longer accepts its token. Nothing in your workspace is lost. Send /start in this chat to reconnect it.`,
+  relinkReserved:
+    "Let's reconnect your coach bot. Create a new one with the button below — or send me a token from @BotFather for a bot you already have.",
+  promptReconnected: (username) => `Reconnected — your coach bot @${username} is working again.`,
 }
 
 const uk: Copy = {
@@ -130,6 +166,13 @@ const uk: Copy = {
   botSettingUp: "Налаштовую вашого бота — це триває кілька секунд.",
   botReady: "Praximo готовий.",
   openButton: "Відкрити",
+  botRepaired: (username) =>
+    `Зв'язок із вашим ботом @${username} перервався й відновлено автоматично. Нічого не втрачено, робити нічого не потрібно. Якщо ви хотіли відключити бота — видаліть його в @BotFather або зверніться до адміністратора, іншого способу немає.`,
+  botNeedsRelink: (username) =>
+    `Ваш бот @${username} перестав працювати — Telegram більше не приймає його токен. Дані у вашому просторі збережено. Надішліть /start у цей чат, щоб підключити бота знову.`,
+  relinkReserved:
+    "Підключімо вашого бота знову. Створіть нового за кнопкою нижче — або надішліть мені токен із @BotFather для бота, який у вас уже є.",
+  promptReconnected: (username) => `Підключення відновлено — бот @${username} знову працює.`,
 }
 
 const ru: Copy = {
@@ -168,6 +211,13 @@ const ru: Copy = {
   botSettingUp: "Настраиваю вашего бота — это займёт несколько секунд.",
   botReady: "Praximo готов.",
   openButton: "Открыть",
+  botRepaired: (username) =>
+    `Связь с вашим ботом @${username} прервалась и восстановлена автоматически. Ничего не потеряно, делать ничего не нужно. Если вы хотели отключить бота — удалите его в @BotFather или обратитесь к администратору, другого способа нет.`,
+  botNeedsRelink: (username) =>
+    `Ваш бот @${username} перестал работать — Telegram больше не принимает его токен. Данные в вашем пространстве сохранены. Отправьте /start в этот чат, чтобы подключить бота заново.`,
+  relinkReserved:
+    "Подключим вашего бота заново. Создайте нового по кнопке ниже — или пришлите мне токен из @BotFather для бота, который у вас уже есть.",
+  promptReconnected: (username) => `Подключение восстановлено — бот @${username} снова работает.`,
 }
 
 const catalog: Record<CoachLanguage, Copy> = { en, uk, ru }

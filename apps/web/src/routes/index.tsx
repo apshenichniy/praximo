@@ -168,6 +168,7 @@ export function CoachScreen({
         typeof window === "undefined" ? "" : window.location.href,
         entry.entry.telegramBotId,
       )}
+      {...(entry.entry.relink === undefined ? {} : { relinkLink: entry.entry.relink.link })}
     />
   )
 }

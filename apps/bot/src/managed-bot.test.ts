@@ -76,6 +76,12 @@ const repoStub = (
       ingestCandidate: unsupported,
       findCandidateByBotId: unsupported,
       complete: record("complete"),
+      // A coach with a healthy workspace has nothing to reopen, which is the
+      // answer this whole path depends on: `NoOpenAttempt` only survives if the
+      // re-link probe finds nothing (#55). Not counted as a write — its
+      // statement is conditional and changes nothing here — so the assertion
+      // below keeps meaning "the first bot's installation was never touched".
+      reopenForRelink: () => Effect.succeed(undefined),
       findByBotId: (telegramBotId) =>
         Effect.fail(new CoachBotProvisioningRepo.InstallationNotFound({ key: telegramBotId })),
       findInFlightManagedAttempt: unsupported,

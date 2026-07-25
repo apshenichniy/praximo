@@ -370,6 +370,81 @@ export const armCoachBotWebhook = Effect.fn("BotWorker.armCoachBotWebhook")(func
   )
 })
 
+export interface CoachBotReconfiguration {
+  readonly env: ProvisioningEnv
+  readonly token: string
+  readonly botId: string
+  readonly workspace: CoachBotProvisioningRepo.WorkspaceProfile
+  readonly coachName: string
+  /**
+   * The coach's own chat, for the addressed menu button. Absent only where no
+   * owner is bound, which a connected workspace does not produce — the default
+   * button still goes on, so the bot is never left without one.
+   */
+  readonly coachChatId?: TelegramId
+  /**
+   * Where to point the webhook. Absent leaves it exactly as Telegram already has
+   * it, which is what the returned `armed` reports: a caller that did not arm
+   * must not record a secret Telegram has never seen (ADR 0004).
+   */
+  readonly webhookOrigin?: string
+  readonly telegramFetch?: typeof globalThis.fetch
+}
+
+/**
+ * Everything an *already installed* bot needs done to it, in the one order ADR
+ * 0004 fixes — menu button, branding, then the webhook, and only then may the
+ * caller rewrite the row.
+ *
+ * It exists because two callers now re-configure a live bot: a redelivered
+ * `managed_bot` update, and the health repair that follows a refreshed
+ * credential (#55). The order is the load-bearing part — arming before the write
+ * is what stops a new secret hash landing on a bot Telegram has not accepted it
+ * for — so it may not exist twice.
+ *
+ * Deliberately *not* the first-time path, which arms last and for the opposite
+ * reason: there the window #150 closes is a bot delivering before its row
+ * exists, and there is no working configuration to lose.
+ */
+export const reconfigureCoachBot = Effect.fn("BotWorker.reconfigureCoachBot")(function* (
+  input: CoachBotReconfiguration,
+) {
+  const injectedFetch =
+    input.telegramFetch === undefined ? {} : { telegramFetch: input.telegramFetch }
+  // The coach's own chat first: a client caches the menu button when it opens
+  // the chat, and a default is the one thing Telegram never pushes (#156).
+  if (input.coachChatId !== undefined) {
+    yield* setCoachBotMenuButton({
+      token: input.token,
+      botId: input.botId,
+      coachChatId: input.coachChatId,
+      miniAppBaseUrl: input.env.COACH_MINI_APP_URL,
+      ...injectedFetch,
+    })
+  }
+  const configured = yield* configureCoachBot({
+    env: input.env,
+    token: input.token,
+    botId: input.botId,
+    workspace: input.workspace,
+    coachName: input.coachName,
+    ...injectedFetch,
+  })
+  // No `dropPendingUpdates`, deliberately: this bot has been listening for a
+  // while, so its queue is the coach's and their clients' ordinary messages.
+  // Dropping them to tidy up a re-configuration would throw away conversation.
+  if (input.webhookOrigin !== undefined) {
+    yield* armCoachBotWebhook({
+      token: input.token,
+      botId: input.botId,
+      secret: configured.secret,
+      webhookOrigin: input.webhookOrigin,
+      ...injectedFetch,
+    })
+  }
+  return { ...configured, armed: input.webhookOrigin !== undefined }
+})
+
 /**
  * The coach's own bot, talking to the coach while it is still being set up — and
  * then in place, once it is (#154).
@@ -511,6 +586,25 @@ export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(functi
   )
 })
 
+/**
+ * Put a coach whose bot stopped working back on their own attempt row, ready to
+ * be offered creation again (#55).
+ *
+ * `undefined` means there is nothing to recover — the identity is not a coach,
+ * or their bot is fine. Recovery is deliberately not an admin action: `reissue`
+ * requires an unbound owner and an `awaiting_setup` bot, and a workspace that
+ * needs re-linking is neither.
+ */
+export const prepareRelink = Effect.fn("BotWorker.prepareRelink")(function* (
+  telegramUserId: number,
+) {
+  const repo = yield* CoachBotProvisioningRepo.Service
+  return yield* repo.reopenForRelink(
+    TelegramId.make(String(telegramUserId)),
+    new Date(yield* Clock.currentTimeMillis),
+  )
+})
+
 /** What it takes to reach the coach's manager chat at all. */
 export interface ManagerBotEnv {
   readonly MANAGER_BOT_TOKEN: string
@@ -603,6 +697,13 @@ export const createBotLink = (
 export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function* (
   env: CreationPromptEnv,
   setup: CoachBotProvisioningRepo.Provisioning,
+  /**
+   * Which sentence opens the prompt. `relink` is a coach coming back to a
+   * workspace whose bot died (#55): nothing is being reserved for them, they are
+   * reconnecting something they already have — and the invitation this attempt
+   * rides on is long spent, so saying otherwise would be a lie.
+   */
+  intent: "invitation" | "relink" = "invitation",
   telegramFetch?: typeof globalThis.fetch,
 ) {
   const repo = yield* CoachBotProvisioningRepo.Service
@@ -627,8 +728,10 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
   }
 
   const suggested = suggestedBotUsername(setup.workspace.name, setup.workspaceId)
+  const opening =
+    intent === "relink" ? copy.relinkReserved : copy.invitationReserved(setup.workspace.name)
   const sent = yield* telegram("sendMessage", () =>
-    api.sendMessage(chatId, copy.invitationReserved(setup.workspace.name), {
+    api.sendMessage(chatId, opening, {
       reply_markup: new InlineKeyboard().url(
         copy.createBotButton,
         createBotLink(env.MANAGER_BOT_USERNAME, suggested, suggestedBotName(setup.workspace.name)),
@@ -665,17 +768,26 @@ export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(
   env: ManagerBotEnv,
   prompt: CoachBotProvisioningRepo.Provisioning,
   botUsername: string,
+  /**
+   * What this closed (#55). Named rather than a boolean, and the same shape
+   * `offerBotCreation` opens with: "Setup finished" is the wrong end of the
+   * sentence for a workspace that was set up months ago and has just come back.
+   */
+  outcome: "connected" | "reconnected" = "connected",
   telegramFetch?: typeof globalThis.fetch,
 ) {
   const messageId = prompt.promptMessageId
   if (messageId === undefined) return
   const api = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
+  const copy = messages(prompt.coachLanguage)
   yield* bestEffort(
     telegram("editMessageText", () =>
       api.editMessageText(
         prompt.coachTelegramId,
         messageId,
-        messages(prompt.coachLanguage).promptConnected(botUsername),
+        outcome === "reconnected"
+          ? copy.promptReconnected(botUsername)
+          : copy.promptConnected(botUsername),
       ),
     ),
     (operation) =>
@@ -723,21 +835,6 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       managerApi.getManagedBotToken(managedBot.id),
     )
     const profile = yield* repo.workspaceProfile(existing.success.workspaceId)
-    yield* setCoachBotMenuButton({
-      token,
-      botId: existing.success.telegramBotId,
-      coachChatId: TelegramId.make(String(user.id)),
-      miniAppBaseUrl: env.COACH_MINI_APP_URL,
-      ...injectedFetch,
-    })
-    const configured = yield* configureCoachBot({
-      env,
-      token,
-      botId: existing.success.telegramBotId,
-      workspace: profile,
-      coachName: coachDisplayName(user, profile.name),
-      ...injectedFetch,
-    })
     // Armed *before* the write here, which is the opposite of the first-time
     // branch below, and deliberately so. This bot already has an installation —
     // that is how we got into this branch — so there is no window of the kind
@@ -749,16 +846,15 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     // `managed_bot` update happened along. Arming first keeps a failure here
     // exactly as harmless as it was before the reorder: we return, the row still
     // carries the secret Telegram is still presenting, and the bot keeps working.
-    //
-    // And no `dropPendingUpdates`, also deliberately: this bot has been listening
-    // for a while, so its queue is the coach's and their clients' ordinary
-    // messages. Dropping them here would throw away conversation to tidy up a
-    // re-configuration — the first-time branch drops because the only thing queued
-    // there is a `/start` it has already answered itself (#154).
-    yield* armCoachBotWebhook({
+    // That whole order lives in `reconfigureCoachBot`, which the health repair
+    // shares (#55).
+    const configured = yield* reconfigureCoachBot({
+      env,
       token,
       botId: existing.success.telegramBotId,
-      secret: configured.secret,
+      workspace: profile,
+      coachName: coachDisplayName(user, profile.name),
+      coachChatId: TelegramId.make(String(user.id)),
       webhookOrigin,
       ...injectedFetch,
     })
@@ -778,9 +874,30 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     return yield* existing.failure
   }
 
-  const claimed = yield* repo
-    .claim(TelegramId.make(String(user.id)), String(managedBot.id), managedBot.username, now)
-    .pipe(Effect.result)
+  const coachTelegramId = TelegramId.make(String(user.id))
+  // Read out of the narrowed parameter: the guard at the top of this function is
+  // what proves it is a string, and that narrowing does not survive a closure.
+  const claimedUsername = managedBot.username
+  const takeClaim = () =>
+    repo.claim(coachTelegramId, String(managedBot.id), claimedUsername, now).pipe(Effect.result)
+
+  let claimed = yield* takeClaim()
+  if (
+    Result.isFailure(claimed) &&
+    claimed.failure._tag === "CoachBotProvisioningRepo.ProvisioningUnavailable" &&
+    claimed.failure.reason === "not-found"
+  ) {
+    // A coach whose bot needs re-linking may create the new one without ever
+    // tapping the recovery prompt — from @BotFather's own dialog, or from a link
+    // they still had. Their attempt row is `completed`, so the fence matched
+    // nothing, and answering `extraBotNotConnected` here would tell them their
+    // workspace is fine when it is precisely not (#55). Reopening costs one
+    // conditional write and does nothing at all for a healthy coach.
+    const reopened = yield* repo.reopenForRelink(coachTelegramId, now).pipe(Effect.result)
+    if (Result.isSuccess(reopened) && reopened.success !== undefined) {
+      claimed = yield* takeClaim()
+    }
+  }
   if (Result.isFailure(claimed)) {
     // `not-found` is the whole of "this coach has no open attempt": the fence
     // matched nothing and no row anywhere carries this bot id. Deterministic, so
@@ -842,7 +959,13 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   // Before the webhook step, deliberately: that step is the one thing that can
   // now fail *after* the workspace is connected, and the coach must not be left
   // looking at a live creation button for a bot they already have.
-  yield* settleCreationPrompt(env, provisioning, installation.username, telegramFetch)
+  yield* settleCreationPrompt(
+    env,
+    provisioning,
+    installation.username,
+    installation.reconnected ? "reconnected" : "connected",
+    telegramFetch,
+  )
   // The end of the sentence the announcement started, in the same message — and
   // *before* the webhook is armed, which is what makes "greeted once" true rather
   // than likely. Once the route is live the bot's own `/start` handler greets
@@ -885,25 +1008,43 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
 })
 
 /**
- * What the admin is told, per kind of coach notification.
+ * What each notification says, chosen by **the kind and the recipient together**
+ * (#55). One event can queue a row for the coach and a row for the admin, so the
+ * kind alone does not decide the words — or even the language.
  *
- * These live here rather than in `messages.ts`, which is a tri-lingual
- * *coach-facing* interface: an English-only admin string added there would
- * quietly break that module's contract. Admin copy is English-only by decision
- * (admin-surface.md), so it sits beside the loop that sends it.
+ * The admin's lines live here rather than in `messages.ts`, which is a
+ * tri-lingual *coach-facing* interface: an English-only admin string added there
+ * would quietly break that module's contract. Admin copy is English-only by
+ * decision (admin-surface.md), so it sits beside the loop that sends it. The
+ * coach's lines come from the catalog, in the language their workspace carries.
  *
- * An unknown kind returns `undefined` and is left in the queue rather than
+ * An unrecognised pair returns `undefined` and is left in the queue rather than
  * delivered with the wrong words — a row a newer deploy enqueued must wait for
  * the deploy that knows how to phrase it, not arrive mislabelled.
  */
 export const coachNotificationText = (
   notification: CoachBotProvisioningRepo.PendingNotification,
 ): string | undefined => {
+  if (notification.recipientRole === CoachNotification.Role.Coach) {
+    const copy = messages(notification.coachLanguage)
+    switch (notification.kind) {
+      case CoachNotification.Kind.BotRepaired:
+        return copy.botRepaired(notification.botUsername)
+      case CoachNotification.Kind.NeedsRelink:
+        return copy.botNeedsRelink(notification.botUsername)
+      default:
+        return undefined
+    }
+  }
   switch (notification.kind) {
     case CoachNotification.Kind.BotConnected:
       return `Coach bot @${notification.botUsername} is connected to “${notification.workspaceName}”.`
     case CoachNotification.Kind.OnboardingComplete:
       return `“${notification.workspaceName}” finished onboarding — the coach accepted the terms and opened @${notification.botUsername}.`
+    case CoachNotification.Kind.NeedsRelink:
+      return `Coach bot @${notification.botUsername} in “${notification.workspaceName}” stopped working — Telegram rejected its token. The coach has been asked to reconnect it; no action is needed from you.`
+    case CoachNotification.Kind.RelinkCompleted:
+      return `“${notification.workspaceName}” is back online — the coach reconnected @${notification.botUsername}.`
     default:
       return undefined
   }

@@ -64,13 +64,14 @@ const attempt: CoachBotProvisioningRepo.Provisioning = {
   coachLanguage: CoachLanguage.make("ru"),
 }
 
-const installation: CoachBotProvisioningRepo.Installation = {
+const installation: CoachBotProvisioningRepo.Activation = {
   workspaceId,
   telegramBotId: MANAGED_BOT_ID,
   username: MANAGED_BOT_USERNAME,
   encryptedToken: `sealed:${MANAGED_BOT_TOKEN}`,
   webhookSecretHash: "installed-hash",
   botInfo: {},
+  reconnected: false,
 }
 
 const repoLayer = Layer.succeed(
@@ -82,6 +83,7 @@ const repoLayer = Layer.succeed(
     ingestCandidate: unsupported,
     findCandidateByBotId: unsupported,
     complete: () => Effect.succeed(installation),
+    reopenForRelink: unsupported,
     findByBotId: (telegramBotId) =>
       Effect.fail(new CoachBotProvisioningRepo.InstallationNotFound({ key: telegramBotId })),
     findInFlightManagedAttempt: unsupported,

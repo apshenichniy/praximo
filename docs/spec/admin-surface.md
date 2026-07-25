@@ -146,7 +146,7 @@ Single-use, **TTL 7 days** — the same constant as the client invite ([client-o
 
 ## Status fields on the workspace page
 
-Per workspace: the bot connection status (`awaiting setup` → `connected` → `needs re-link`; the last is a **display-only badge** until detection ships, [#55](https://github.com/apshenichniy/praximo/issues/55)), coach language, bot username, terms-accepted, the invite's delivery channel and link-opened marker (pending variant), and the dates:
+Per workspace: the bot connection status (`awaiting setup` → `connected` → `needs re-link`; the last is written by detection since [#55](https://github.com/apshenichniy/praximo/issues/55) — a daily health sweep on the bot Worker's cron plus every live send, each of which repairs before it reports), coach language, bot username, terms-accepted, the invite's delivery channel and link-opened marker (pending variant), and the dates:
 
 - **`invited`** — when the current invite was issued (updated on re-issue).
 - **`created`** — workspace creation.

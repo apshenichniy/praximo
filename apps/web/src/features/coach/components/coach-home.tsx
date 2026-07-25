@@ -12,12 +12,34 @@
 export function CoachHome({
   botUsername,
   mainMiniAppUrl,
+  relinkLink,
 }: {
   readonly botUsername: string
   readonly mainMiniAppUrl: string
+  /**
+   * Set only while the coach's own bot has stopped answering (#55). This app is
+   * the one surface that survives that — the launch is signed by Telegram, not
+   * by the bot's token — so the banner is where recovery starts.
+   */
+  readonly relinkLink?: string
 }) {
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
+      {relinkLink === undefined ? null : (
+        <section className="border-destructive/40 bg-destructive/10 mb-8 rounded-2xl border p-5">
+          <h2 className="text-base font-semibold tracking-tight">Your coach bot stopped working</h2>
+          <p className="text-muted-foreground mt-2 text-[13px] leading-5">
+            Telegram no longer accepts @{botUsername}&rsquo;s token, so it cannot send or receive
+            anything. Nothing in your workspace is lost.
+          </p>
+          <a
+            className="bg-primary text-primary-foreground mt-4 inline-flex h-10 w-full items-center justify-center rounded-xl text-sm font-medium"
+            href={relinkLink}
+          >
+            Reconnect your bot
+          </a>
+        </section>
+      )}
       <h1 className="text-2xl font-semibold tracking-tight text-pretty">
         Your workspace is active
       </h1>

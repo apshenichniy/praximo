@@ -66,13 +66,14 @@ const attempt = (
   ...overrides,
 })
 
-const installation: CoachBotProvisioningRepo.Installation = {
+const installation: CoachBotProvisioningRepo.Activation = {
   workspaceId,
   telegramBotId: MANAGED_BOT_ID,
   username: MANAGED_BOT_USERNAME,
   encryptedToken: `sealed:${MANAGED_BOT_TOKEN}`,
   webhookSecretHash: "installed-hash",
   botInfo: {},
+  reconnected: false,
 }
 
 interface RepoStub {
@@ -92,6 +93,8 @@ const repoStub = (
     /** Take the already-installed branch, as a redelivery of the update does. */
     readonly installed?: CoachBotProvisioningRepo.Installation
     readonly onRotate?: () => void
+    /** Activation closed a re-link rather than a first setup (#55). */
+    readonly reconnected?: boolean
   } = {},
 ): RepoStub => {
   const recorded: Array<{ readonly attemptId: string; readonly promptMessageId: number }> = []
@@ -119,8 +122,9 @@ const repoStub = (
       complete: (input) => {
         completed.push(input.provisioningId)
         options.onComplete?.()
-        return Effect.succeed(installation)
+        return Effect.succeed({ ...installation, reconnected: options.reconnected === true })
       },
+      reopenForRelink: unsupported,
       findByBotId: (telegramBotId) =>
         options.installed === undefined
           ? Effect.fail(new CoachBotProvisioningRepo.InstallationNotFound({ key: telegramBotId }))
@@ -223,7 +227,7 @@ describe("the creation deep link", () => {
 
 describe("offering bot creation", () => {
   const offer = (repo: RepoStub, telegram: TelegramStub, setup = attempt()) =>
-    offerBotCreation(env, setup, telegram.fetch).pipe(Effect.provide(repo.layer))
+    offerBotCreation(env, setup, "invitation", telegram.fetch).pipe(Effect.provide(repo.layer))
 
   it.effect("sends the link on an inline url button, and records the message", () =>
     Effect.gen(function* () {
@@ -258,6 +262,26 @@ describe("offering bot creation", () => {
       expect(repo.recorded).toEqual([
         { attemptId: "cbp_test_800000101", promptMessageId: messageId },
       ])
+    }),
+  )
+
+  it.effect("opens with reconnection rather than reservation when a bot is being re-linked", () =>
+    Effect.gen(function* () {
+      const repo = repoStub(attempt())
+      const telegram = telegramStub()
+
+      yield* offerBotCreation(env, attempt(), "relink", telegram.fetch).pipe(
+        Effect.provide(repo.layer),
+      )
+
+      // Nothing is being reserved for this coach a second time, and the
+      // invitation this attempt still rides on was spent months ago (#55).
+      const sent = bodyOf(telegram, "sendMessage")
+      expect(sent?.text).toBe(messages("ru").relinkReserved)
+      // The way in is unchanged: the same button, the same suggestions.
+      expect(sent?.reply_markup).toMatchObject({
+        inline_keyboard: [[{ text: messages("ru").createBotButton }]],
+      })
     }),
   )
 
@@ -351,6 +375,23 @@ describe("activation and the prompt", () => {
       expect(settled?.text).toBe(messages("ru").promptConnected(MANAGED_BOT_USERNAME))
       // Omitting `reply_markup` is what takes the button off.
       expect(settled?.reply_markup).toBeUndefined()
+    }),
+  )
+
+  it.effect("says reconnected, not set up, when the activation closed a re-link", () =>
+    Effect.gen(function* () {
+      const repo = repoStub(attempt({ status: "configuring", promptMessageId: 401 }), {
+        reconnected: true,
+      })
+      const telegram = telegramStub()
+
+      yield* provision(repo, telegram)
+
+      // "Setup finished" is the wrong end of the sentence for a workspace that
+      // was set up months ago and has just come back (#55).
+      expect(bodyOf(telegram, "editMessageText")?.text).toBe(
+        messages("ru").promptReconnected(MANAGED_BOT_USERNAME),
+      )
     }),
   )
 
