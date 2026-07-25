@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
-import { CoachBotProvisioningRepo, CoachOnboardingRepo } from "@praximo/db"
+import { CoachBotProvisioningRepo, CoachNotification, CoachOnboardingRepo } from "@praximo/db"
 import { TelegramId } from "@praximo/domain"
 import { CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Api, InputFile } from "grammy"
@@ -153,6 +153,31 @@ export const CoachMenuButtonText = "Open"
 export const apiFor = (token: string, telegramFetch?: typeof globalThis.fetch): Api =>
   new Api(token, telegramFetch === undefined ? undefined : { fetch: telegramFetch })
 
+/**
+ * The coach Mini App URL for one specific bot: the configured base plus
+ * `?b=<telegramBotId>`.
+ *
+ * The parameter makes a launch self-identifying, which is what lets the app
+ * verify the Ed25519 signature against a named bot *before* it touches the
+ * database — no authorization decision is taken from an unverified key (ADR
+ * 0006). It is untrusted on its own: the signature binds the bot id, so a
+ * forged or borrowed value simply fails to verify.
+ *
+ * A base the URL parser rejects is handed back unchanged rather than throwing.
+ * Every caller here is on a path where a connected bot already exists, and the
+ * app still resolves such a launch by identity; `configureCoachBot` is where an
+ * unusable value is refused outright, before a bot is branded.
+ */
+export const coachMiniAppUrl = (baseUrl: string, botId: string): string => {
+  try {
+    const url = new URL(baseUrl)
+    url.searchParams.set("b", botId)
+    return url.toString()
+  } catch {
+    return baseUrl
+  }
+}
+
 export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
   input: CoachBotConfiguration,
 ) {
@@ -163,7 +188,7 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
     try: () => {
       const url = new URL(env.COACH_MINI_APP_URL)
       if (url.protocol !== "https:") throw new Error("Mini App URL must use HTTPS")
-      return url.toString()
+      return coachMiniAppUrl(url.toString(), botId)
     },
     catch: () => new TelegramSetupFailed({ operation: "miniAppUrl.validate" }),
   })
@@ -286,27 +311,56 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   })
 })
 
-export const deliverProvisioningNotifications = Effect.fn(
-  "BotWorker.deliverProvisioningNotifications",
-)(function* () {
-  const repo = yield* CoachBotProvisioningRepo.Service
-  const sender = yield* ManagerBotSender.Service
-  const now = new Date(yield* Clock.currentTimeMillis)
-  const notifications = yield* repo.pendingNotifications(now, 20)
-  yield* Effect.forEach(
-    notifications,
-    (notification) =>
-      sender
-        .sendText(
-          notification.recipientTelegramId,
-          `Coach bot @${notification.botUsername} is connected to “${notification.workspaceName}”.`,
-        )
-        .pipe(
+/**
+ * What the admin is told, per kind of coach notification.
+ *
+ * These live here rather than in `messages.ts`, which is a tri-lingual
+ * *coach-facing* interface: an English-only admin string added there would
+ * quietly break that module's contract. Admin copy is English-only by decision
+ * (admin-surface.md), so it sits beside the loop that sends it.
+ *
+ * An unknown kind returns `undefined` and is left in the queue rather than
+ * delivered with the wrong words — a row a newer deploy enqueued must wait for
+ * the deploy that knows how to phrase it, not arrive mislabelled.
+ */
+export const coachNotificationText = (
+  notification: CoachBotProvisioningRepo.PendingNotification,
+): string | undefined => {
+  switch (notification.kind) {
+    case CoachNotification.Kind.BotConnected:
+      return `Coach bot @${notification.botUsername} is connected to “${notification.workspaceName}”.`
+    case CoachNotification.Kind.OnboardingComplete:
+      return `“${notification.workspaceName}” finished onboarding — the coach accepted the terms and opened @${notification.botUsername}.`
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Deliver the admin-facing coach notifications that are due. Claim, lease and
+ * retry mechanics are the repository's; this only decides what each row says.
+ */
+export const deliverCoachNotifications = Effect.fn("BotWorker.deliverCoachNotifications")(
+  function* () {
+    const repo = yield* CoachBotProvisioningRepo.Service
+    const sender = yield* ManagerBotSender.Service
+    const now = new Date(yield* Clock.currentTimeMillis)
+    const notifications = yield* repo.pendingNotifications(now, 20)
+    yield* Effect.forEach(
+      notifications,
+      (notification) => {
+        const text = coachNotificationText(notification)
+        // Its lease has already been taken and its attempt counted, so an
+        // unrecognised kind simply becomes available again on the next sweep.
+        if (text === undefined) return Effect.void
+        return sender.sendText(notification.recipientTelegramId, text).pipe(
           Effect.flatMap(() => repo.markNotificationDelivered(notification.id, now)),
           Effect.catchTag("ManagerBotSender.SendFailed", () =>
             repo.deferNotification(notification.id, now),
           ),
-        ),
-    { concurrency: 4 },
-  )
-})
+        )
+      },
+      { concurrency: 4 },
+    )
+  },
+)

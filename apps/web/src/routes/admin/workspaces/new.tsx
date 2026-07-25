@@ -1,7 +1,7 @@
 import { Copy01Icon, Mail01Icon, TelegramIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { type CoachLanguage, WorkspaceNameMaxLength } from "@praximo/domain"
 import { useState } from "react"
 import type { ReactNode } from "react"
@@ -25,8 +25,6 @@ export const Route = createFileRoute("/admin/workspaces/new")({
   component: InviteCoachPage,
 })
 
-const adminRoute = getRouteApi("/admin")
-
 const errorMessages = {
   validation: "Something went wrong with this invite. Go back and try again.",
   conflict: "This invite draft was already used with different details. Go back and reopen it.",
@@ -44,7 +42,6 @@ const telegramInviteLanguage: CoachLanguage = "en"
  * repeating an action never duplicates.
  */
 function InviteCoachPage() {
-  const { initData } = adminRoute.useLoaderData()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [requestId] = useState(() => crypto.randomUUID())
@@ -58,8 +55,8 @@ function InviteCoachPage() {
   const [copyError, setCopyError] = useState<string>()
   const [copyFallback, setCopyFallback] = useState<string>()
 
-  const mutation = useMutation(createCoachInviteMutation(initData, queryClient))
-  const inviteShare = useInviteShare(initData)
+  const mutation = useMutation(createCoachInviteMutation(queryClient))
+  const inviteShare = useInviteShare()
   const pending = mutation.isPending || inviteShare.sharingInviteId !== undefined
 
   const finish = (notice: string) => {

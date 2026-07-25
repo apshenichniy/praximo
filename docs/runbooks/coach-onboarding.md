@@ -101,7 +101,14 @@ What to tell a coach who wants it:
 1. Open **@BotFather** → `/mybots` → pick your Praximo bot.
 2. **Bot Settings → Configure Mini App → Enable Mini App**.
 3. Paste the coach Mini App URL — the same address the in-chat **Open** button
-   already uses (the stage's `COACH_MINI_APP_URL`, e.g. `https://stage.praximo.io/`).
+   already uses, **including its `?b=` parameter**, e.g.
+   `https://stage.praximo.io/?b=9100777`.
+
+The parameter is per bot: it names which bot the launch came from, so the app can
+verify the launch signature against that bot before it reads anything (ADR 0006).
+Only the app knows the number, so the coach's own home screen displays the exact
+URL to paste. A URL pasted without it still works — the app falls back to
+resolving the launch by the coach's Telegram identity — but paste the full one.
 
 The chat-list **Open** button then appears next to the bot. Both surfaces open
 the same app under the same word; nothing else in the workspace changes, and

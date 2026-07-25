@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
-import { AdminShell } from "@/components/admin-shell.tsx"
+import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 
 const src = (rel: string) =>
   readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8")
@@ -38,9 +38,9 @@ describe("global application theme", () => {
   it("does not retain a route-scoped admin theme", () => {
     const adminCssPath = fileURLToPath(new URL("../styles/admin.css", import.meta.url))
     const html = renderToStaticMarkup(
-      <AdminShell>
+      <MiniAppShell>
         <span>content</span>
-      </AdminShell>,
+      </MiniAppShell>,
     )
 
     expect(existsSync(adminCssPath)).toBe(false)

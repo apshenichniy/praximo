@@ -113,6 +113,8 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
         client.insert(schema.coachBotNotification).values({
           id: uniqueId("cbn"),
           workspaceId,
+          kind: "bot_connected",
+          dedupeKey: `bot_connected:${workspaceId}`,
           recipientTelegramId: "123456789",
           status: "delivered",
           attemptCount: 1,

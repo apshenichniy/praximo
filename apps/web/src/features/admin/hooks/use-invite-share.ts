@@ -34,9 +34,9 @@ export interface InviteShareController {
   readonly sharingInviteId: string | undefined
 }
 
-export const useInviteShare = (initData: string): InviteShareController => {
-  const prepareMutation = useMutation(prepareCoachInviteShareMutation(initData))
-  const recordMutation = useMutation(recordCoachInviteShareMutation(initData))
+export const useInviteShare = (): InviteShareController => {
+  const prepareMutation = useMutation(prepareCoachInviteShareMutation())
+  const recordMutation = useMutation(recordCoachInviteShareMutation())
   const [sharingInviteId, setSharingInviteId] = useState<string>()
 
   const share = async (input: InviteShareInput): Promise<InviteShareResult> => {

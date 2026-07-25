@@ -5,6 +5,7 @@ const completeEnvironment = {
   DATABASE_URL: "postgres://example",
   MANAGER_BOT_TOKEN: "token",
   MANAGER_BOT_USERNAME: "PraximoMotherBot",
+  TELEGRAM_ENV: "production",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default.jpg",
 }
 
@@ -19,6 +20,14 @@ describe("runtime environment selection", () => {
       canUseLocalProcessEnvironment(true, {
         ...completeEnvironment,
         DATABASE_URL: undefined,
+      }),
+    ).toBe(false)
+    // A binding added later is a binding this gate must also require: falling
+    // through to the Worker branch is what `requireString` throws on locally.
+    expect(
+      canUseLocalProcessEnvironment(true, {
+        ...completeEnvironment,
+        TELEGRAM_ENV: undefined,
       }),
     ).toBe(false)
   })

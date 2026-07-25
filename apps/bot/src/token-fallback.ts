@@ -7,6 +7,7 @@ import { Clock, Effect, Result, Schema } from "effect"
 import { clientLanguage, messages } from "./messages.ts"
 import {
   coachDisplayName,
+  coachMiniAppUrl,
   configureCoachBot,
   constantTimeEqual,
   type ProvisioningEnv,
@@ -245,7 +246,10 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
   // Telegram refuses must never undo that.
   yield* telegram("sendMessage", () =>
     api.sendMessage(message.chat.id, copy.botReady, {
-      reply_markup: new InlineKeyboard().webApp(copy.openButton, env.COACH_MINI_APP_URL),
+      reply_markup: new InlineKeyboard().webApp(
+        copy.openButton,
+        coachMiniAppUrl(env.COACH_MINI_APP_URL, candidate.botId),
+      ),
     }),
   ).pipe(Effect.result)
 

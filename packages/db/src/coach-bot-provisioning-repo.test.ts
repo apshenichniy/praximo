@@ -367,6 +367,51 @@ describe.skipIf(!DATABASE_URL)("CoachBotProvisioningRepo claim (dev Neon branch)
       expect((yield* Effect.flip(repo.findCandidateByBotId("9100005")))._tag).toBe(
         "CoachBotProvisioningRepo.CandidateNotFound",
       )
+
+      // The regression net for the notification key change (#54). Activation's
+      // enqueue infers its `on conflict` target from a unique index, so the
+      // moment `coach_bot_notification_workspace_id_idx` was dropped this
+      // statement either matches `dedupe_key` or raises 42P10 and takes the
+      // whole activation — bot row, owner binding, invite consumption — with it.
+      const { client } = yield* Database.Service
+      const queued = yield* Effect.promise(() =>
+        client
+          .select({
+            id: schema.coachBotNotification.id,
+            kind: schema.coachBotNotification.kind,
+            dedupeKey: schema.coachBotNotification.dedupeKey,
+            recipientTelegramId: schema.coachBotNotification.recipientTelegramId,
+          })
+          .from(schema.coachBotNotification)
+          .where(eq(schema.coachBotNotification.workspaceId, aggregate.workspace.id)),
+      )
+      expect(queued).toHaveLength(1)
+      expect(queued[0]).toMatchObject({
+        kind: "bot_connected",
+        dedupeKey: `bot_connected:${aggregate.workspace.id}`,
+        recipientTelegramId: issuedByTelegramId,
+      })
+
+      // A redelivered activation must stay a no-op rather than a duplicate push.
+      yield* repo.complete({
+        provisioningId: claimed.id,
+        encryptedToken: candidate.encryptedToken,
+        webhookSecretHash: candidate.webhookSecretHash,
+        botInfo: { id: 9100005, is_bot: true, username: candidate.botUsername },
+        now: STARTED_AT,
+      })
+      const afterRetry = yield* Effect.promise(() =>
+        client
+          .select({ id: schema.coachBotNotification.id })
+          .from(schema.coachBotNotification)
+          .where(eq(schema.coachBotNotification.workspaceId, aggregate.workspace.id)),
+      )
+      expect(afterRetry).toHaveLength(1)
+
+      const pending = yield* repo.pendingNotifications(STARTED_AT, 10)
+      expect(
+        pending.filter((notification) => notification.workspaceId === aggregate.workspace.id),
+      ).toMatchObject([{ kind: "bot_connected" }])
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 })
