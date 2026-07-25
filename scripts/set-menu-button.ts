@@ -3,6 +3,7 @@ import {
   buildSetMenuButtonRequest,
   managerBotSetupWarnings,
 } from "./menu-button.ts"
+import { requireEnv } from "./env.ts"
 
 /**
  * `bun run manager-bot:set-menu <web-origin>` — point the dev manager bot's chat menu
@@ -17,14 +18,6 @@ import {
  *
  *   bun run manager-bot:set-menu https://stage.praximo.io
  */
-
-const requireEnv = (name: string): string => {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`missing ${name} — set it in the root .env (see .env.example)`)
-  }
-  return value
-}
 
 const webOrigin = process.argv[2] ?? process.env.WEB_URL
 if (!webOrigin) {
