@@ -99,7 +99,8 @@ Everything downstream is automatic — nothing here is an operator action:
   no code change, no deploy:
 
   ```sh
-  bun run branding:avatar:set --stage dev_apshenichniy --file ./avatar.png \
+  bun run branding:avatar:set --stage dev_apshenichniy \
+    --file ./assets/branding/coach-bot/dark/avatar-512.png \
     --key branding/default-coach-avatar.jpg
   ```
 
