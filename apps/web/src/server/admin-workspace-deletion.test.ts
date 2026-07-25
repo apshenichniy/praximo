@@ -26,6 +26,9 @@ const unusedWorkspaceLayer = Layer.succeed(
     findById: Effect.fn("WorkspaceRepo.DeleteTest.findById")(() => Effect.die("unused")),
     list: Effect.fn("WorkspaceRepo.DeleteTest.list")(() => Effect.die("unused")),
     getDetail: Effect.fn("WorkspaceRepo.DeleteTest.getDetail")(() => Effect.die("unused")),
+    findCoachByTelegramId: Effect.fn("WorkspaceRepo.DeleteTest.findCoachByTelegramId")(() =>
+      Effect.die("unused"),
+    ),
     rename: Effect.fn("WorkspaceRepo.DeleteTest.rename")(() => Effect.die("unused")),
   }),
 )

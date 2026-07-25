@@ -5,6 +5,7 @@ import {
   CoachOnboardingInviteId,
   CoachOnboardingInviteStatus,
   InviteDeliveryRecord,
+  TelegramId,
   Workspace,
   WorkspaceId,
   WorkspaceNotFound,
@@ -83,6 +84,33 @@ export interface RenameInput {
 }
 
 /**
+ * Where one Telegram identity stands as a coach — the coach half of the manager
+ * Mini App's entry role (#106). Three states, most advanced first:
+ *
+ * - `active` — onboarding is finished: the bot is connected and terms accepted.
+ * - `bot-connected` — provisioning landed, first login + ToS is still pending.
+ * - `accepted` — the invite is exclusively claimed but no bot exists yet, so
+ *   the claim is the only thing tying the identity to a workspace. Its `code`
+ *   travels with it: the original deep link is what resumes the claim (#112).
+ *
+ * Absent means the identity is not a coach at all — an unknown viewer, or an
+ * admin who never claimed an invite.
+ */
+export const CoachContext = Schema.Union([
+  Schema.Struct({
+    state: Schema.Literal("accepted"),
+    workspaceId: WorkspaceId,
+    code: CoachOnboardingInviteCode,
+  }),
+  Schema.Struct({
+    state: Schema.Literals(["bot-connected", "active"]),
+    workspaceId: WorkspaceId,
+    botUsername: Schema.NonEmptyString,
+  }),
+])
+export type CoachContext = typeof CoachContext.Type
+
+/**
  * Reads and writes workspaces through the `Database` seam and decodes rows into
  * domain entities. Apps never touch Drizzle directly (ADR 0002) — they depend on
  * this service. This is the reference the other repositories follow.
@@ -92,6 +120,9 @@ export interface Interface {
   readonly create: (workspace: Workspace) => Effect.Effect<Workspace, QueryFailed>
   readonly list: () => Effect.Effect<ReadonlyArray<ListItem>, QueryFailed>
   readonly getDetail: (id: WorkspaceId) => Effect.Effect<Detail, WorkspaceNotFound | QueryFailed>
+  readonly findCoachByTelegramId: (
+    telegramId: TelegramId,
+  ) => Effect.Effect<CoachContext | undefined, QueryFailed>
   readonly rename: (
     input: RenameInput,
   ) => Effect.Effect<Detail, WorkspaceNotFound | UpdateConflict | QueryFailed>
@@ -120,6 +151,7 @@ const botConnectionStatus = (value: string | null): BotConnectionStatus =>
 const decodeWorkspace = Schema.decodeUnknownEffect(Workspace)
 const decodeList = Schema.decodeUnknownEffect(Schema.Array(ListItem))
 const decodeDetail = Schema.decodeUnknownEffect(Detail)
+const decodeCoachContext = Schema.decodeUnknownEffect(CoachContext)
 
 export const layer = Layer.effect(
   Service,
@@ -374,6 +406,85 @@ export const layer = Layer.effect(
     })
 
     /**
+     * The coach half of the entry role (#106), read from the two facts that can
+     * tie a Telegram identity to a workspace: the owner membership its bot
+     * connection wrote, and the invite claim that precedes it.
+     *
+     * Two constant-time lookups rather than one union: the second only runs for
+     * an identity that owns no workspace, which is exactly the case where the
+     * claim is the answer. Both tables hold one row per coach in MVP.
+     *
+     * An owner membership without a connected bot username cannot describe
+     * either bot-bearing state, so it falls through to the claim rather than
+     * inventing a bot the coach could not open.
+     */
+    const findCoachByTelegramId = Effect.fn("WorkspaceRepo.findCoachByTelegramId")(function* (
+      telegramId: TelegramId,
+    ) {
+      const ownedRows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({
+              workspaceId: schema.member.workspaceId,
+              termsAcceptedAt: schema.member.termsAcceptedAt,
+              botUsername: schema.bot.username,
+            })
+            .from(schema.member)
+            .leftJoin(schema.bot, eq(schema.bot.workspaceId, schema.member.workspaceId))
+            .where(
+              and(eq(schema.member.role, "owner"), eq(schema.member.telegramUserId, telegramId)),
+            ),
+        catch: (cause) => new QueryFailed({ operation: "findCoachByTelegramId", cause }),
+      })
+      const owned = ownedRows.filter((row) => row.botUsername !== null)
+      // The most advanced state wins: a finished workspace is the one worth
+      // pointing at, even for an identity that somehow owns a second one.
+      const active = owned.find((row) => row.termsAcceptedAt !== null) ?? owned[0]
+      if (active !== undefined && active.botUsername !== null) {
+        return yield* decodeCoachContext({
+          state: active.termsAcceptedAt === null ? "bot-connected" : "active",
+          workspaceId: active.workspaceId,
+          botUsername: active.botUsername,
+        }).pipe(
+          Effect.mapError(
+            (cause) => new QueryFailed({ operation: "findCoachByTelegramId.decode", cause }),
+          ),
+        )
+      }
+
+      const claimedRows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({
+              workspaceId: schema.coachOnboardingInvite.workspaceId,
+              code: schema.coachOnboardingInvite.code,
+            })
+            .from(schema.coachOnboardingInvite)
+            .where(
+              and(
+                eq(schema.coachOnboardingInvite.status, "accepted"),
+                eq(schema.coachOnboardingInvite.acceptedByTelegramId, telegramId),
+              ),
+            )
+            .orderBy(desc(schema.coachOnboardingInvite.acceptedAt))
+            .limit(1),
+        catch: (cause) => new QueryFailed({ operation: "findCoachByTelegramId.claim", cause }),
+      })
+      const claimed = claimedRows[0]
+      if (claimed === undefined) return undefined
+
+      return yield* decodeCoachContext({
+        state: "accepted",
+        workspaceId: claimed.workspaceId,
+        code: claimed.code,
+      }).pipe(
+        Effect.mapError(
+          (cause) => new QueryFailed({ operation: "findCoachByTelegramId.decode", cause }),
+        ),
+      )
+    })
+
+    /**
      * The internal label is the only workspace field an admin writes (#108).
      * The `updatedAt` comparison is the optimistic-concurrency check: a rename
      * against a stale version fails rather than clobbering a concurrent one.
@@ -403,7 +514,7 @@ export const layer = Layer.effect(
       return yield* new UpdateConflict({ id: input.id })
     })
 
-    return Service.of({ findById, create, list, getDetail, rename })
+    return Service.of({ findById, create, list, getDetail, findCoachByTelegramId, rename })
   }),
 )
 

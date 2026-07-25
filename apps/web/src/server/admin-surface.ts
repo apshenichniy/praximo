@@ -84,20 +84,9 @@ export interface CoachListEntry {
   readonly deleting?: true
 }
 
-/**
- * The admin's own coach hat, when they wear one. Resolved from the same
- * aggregate the list is built from, so the contextual action costs no extra
- * query and no extra entry hop (#107); #106 owns the general role dispatch.
- */
-export type ViewerCoach =
-  | { readonly state: "accepted"; readonly workspaceId: WorkspaceId; readonly link: string }
-  | { readonly state: "bot-connected"; readonly workspaceId: WorkspaceId; readonly link: string }
-  | { readonly state: "active"; readonly workspaceId: WorkspaceId; readonly link: string }
-
 export interface CoachListResult {
   /** Incomplete onboarding first (newest invite first), then active coaches A→Z. */
   readonly coaches: ReadonlyArray<CoachListEntry>
-  readonly viewerCoach?: ViewerCoach
 }
 
 export interface PrepareShareResult {
@@ -486,49 +475,16 @@ export const layer = Layer.effect(
     })
 
     /**
-     * The admin's own coach hat, if any. An active bot outranks a bot-connected
-     * one, which outranks an unclaimed-but-accepted invite — the most advanced
-     * state is the one worth acting on.
+     * The list is coaches and nothing else. The admin's *own* coach hat — the
+     * contextual action #107 puts above the list — is not resolved here: the
+     * entry gate (#106) already answered it for this viewer before any admin
+     * screen mounted, so re-deriving it from these rows would be a second,
+     * divergent answer to a question already settled.
      */
-    const resolveViewerCoach = Effect.fn("AdminSurface.resolveViewerCoach")(function* (
-      items: ReadonlyArray<WorkspaceRepo.ListItem>,
-      viewer: TelegramId,
-    ) {
-      let accepted: ViewerCoach | undefined
-      let connected: ViewerCoach | undefined
-      for (const item of items) {
-        if (item.ownerTelegramUserId === viewer && item.botUsername !== undefined) {
-          const candidate = {
-            state:
-              item.termsAcceptedAt === undefined ? ("bot-connected" as const) : ("active" as const),
-            workspaceId: item.id,
-            link: `https://t.me/${item.botUsername}`,
-          }
-          if (candidate.state === "active") return candidate
-          connected ??= candidate
-          continue
-        }
-        if (
-          accepted === undefined &&
-          item.invite?.status === "accepted" &&
-          item.invite.acceptedByTelegramId === viewer
-        ) {
-          // The original short code resumes the claim idempotently (#112), so
-          // the deep link is the honest "continue where you left off" target.
-          accepted = {
-            state: "accepted",
-            workspaceId: item.id,
-            link: yield* tokens.linkFor(item.invite.code),
-          }
-        }
-      }
-      return connected ?? accepted
-    })
-
     const listWorkspaces = Effect.fn("AdminSurface.listWorkspaces")(function* (
       rawInitData: string,
     ) {
-      const viewer = yield* verifyAdmin(rawInitData)
+      yield* verifyAdmin(rawInitData)
       const items = yield* workspaces
         .list()
         .pipe(Effect.mapError(() => new LoadFailed({ operation: "listWorkspaces" })))
@@ -560,11 +516,7 @@ export const layer = Layer.effect(
         (entry) => presentCoach(entry.item, entry.stage, deleting.has(entry.item.id)),
       )
 
-      const viewerCoach = yield* resolveViewerCoach(items, viewer)
-      return {
-        coaches,
-        ...(viewerCoach === undefined ? {} : { viewerCoach }),
-      } satisfies CoachListResult
+      return { coaches } satisfies CoachListResult
     })
 
     const loadWorkspace = Effect.fn("AdminSurface.loadWorkspace")(function* (

@@ -123,16 +123,34 @@ export class ProvisioningUnavailable extends Schema.TaggedErrorClass<Provisionin
 ) {}
 
 /**
- * Whether an invite can still carry a provisioning attempt. An `accepted` claim
- * has no TTL (#112), so only a `pending` invite is measured against its expiry;
- * `cancelled` is the fence a reset raises against an attempt still in flight.
+ * Why an invite cannot carry this identity's provisioning attempt. Called only
+ * once `prepare` has already tried to take the claim, so an invite that is not
+ * `accepted` by the caller by then is one somebody else holds.
+ *
+ * `claimed` is deliberately the answer for every foreign claim — the reply must
+ * not disclose who holds it (#112) — while `cancelled` stays distinct because
+ * it is the fence a reset raises against an attempt still in flight.
  */
-const claimable = (
+const unavailableReason = (
   invite: { readonly status: CoachOnboardingInviteStatus; readonly expiresAt: Date },
   now: Date,
-): boolean =>
-  invite.status === "accepted" ||
-  (invite.status === "pending" && invite.expiresAt.getTime() > now.getTime())
+): "expired" | "used" | "cancelled" | "claimed" => {
+  switch (invite.status) {
+    case "used":
+      return "used"
+    case "cancelled":
+      return "cancelled"
+    case "expired":
+      return "expired"
+    // A `pending` row that survived the accepting write is one another identity
+    // took first and this snapshot has not caught up to; only a lapsed TTL is
+    // genuinely an expiry.
+    case "pending":
+      return invite.expiresAt.getTime() <= now.getTime() ? "expired" : "claimed"
+    case "accepted":
+      return "claimed"
+  }
+}
 
 export class InstallationNotFound extends Schema.TaggedErrorClass<InstallationNotFound>()(
   "CoachBotProvisioningRepo.InstallationNotFound",
@@ -243,6 +261,22 @@ export const layer = Layer.effect(
       } satisfies Provisioning
     })
 
+    /**
+     * The accepting `/start` (#106, contract in #112). One statement takes the
+     * exclusive claim and opens this identity's provisioning attempt:
+     *
+     * - `accepting` is the compare-and-set. Only an unexpired `pending` invite
+     *   matches, so the first valid `/start` wins outright and every later one
+     *   sees a row it cannot transition.
+     * - `claimant` adds the resume branch. A data-modifying CTE is invisible to
+     *   the rest of the statement, so the second arm still reads the pre-update
+     *   status: when the acceptance lands the arm is empty, and when this same
+     *   identity is returning it is the only row. Exactly one row reaches the
+     *   insert, and a foreign claimant reaches none.
+     *
+     * The attempt row is keyed by (identity, keyboard request), so a repeated
+     * `/start` re-touches its own row rather than opening a second one.
+     */
     const prepare = Effect.fn("CoachBotProvisioningRepo.prepare")(function* (
       inviteId: CoachOnboardingInviteId,
       coachTelegramId: TelegramId,
@@ -252,6 +286,28 @@ export const layer = Layer.effect(
       yield* Effect.tryPromise({
         try: () =>
           client.execute(sql`
+            with accepting as (
+              update "coach_onboarding_invite"
+              set
+                "status" = 'accepted',
+                "accepted_by_telegram_id" = ${coachTelegramId},
+                "accepted_at" = ${now}
+              where
+                "id" = ${inviteId}
+                and "status" = 'pending'
+                and "expires_at" > ${now}
+              returning "id", "workspace_id"
+            ),
+            claimant as (
+              select "id", "workspace_id" from accepting
+              union all
+              select "id", "workspace_id"
+              from "coach_onboarding_invite"
+              where
+                "id" = ${inviteId}
+                and "status" = 'accepted'
+                and "accepted_by_telegram_id" = ${coachTelegramId}
+            )
             insert into "coach_bot_provisioning" (
               "id", "invite_id", "workspace_id", "coach_telegram_id",
               "keyboard_request_id", "status", "created_at", "updated_at"
@@ -265,13 +321,7 @@ export const layer = Layer.effect(
               'requested',
               ${now},
               ${now}
-            from "coach_onboarding_invite"
-            where
-              "id" = ${inviteId}
-              and (
-                "status" = 'accepted'
-                or ("status" = 'pending' and "expires_at" > ${now})
-              )
+            from claimant
             on conflict ("coach_telegram_id", "keyboard_request_id")
             do update set "updated_at" = excluded."updated_at"
           `),
@@ -284,6 +334,7 @@ export const layer = Layer.effect(
             .select({
               status: schema.coachOnboardingInvite.status,
               expiresAt: schema.coachOnboardingInvite.expiresAt,
+              acceptedByTelegramId: schema.coachOnboardingInvite.acceptedByTelegramId,
             })
             .from(schema.coachOnboardingInvite)
             .where(eq(schema.coachOnboardingInvite.id, inviteId))
@@ -291,21 +342,20 @@ export const layer = Layer.effect(
         catch: (cause) => new QueryFailed({ operation: "provisioning.prepare.inspect", cause }),
       })
       const invite = inviteRows[0]
-      if (prepared !== undefined && invite !== undefined && claimable(invite, now)) {
-        return prepared
+      if (invite === undefined) return yield* new ProvisioningUnavailable({ reason: "not-found" })
+
+      const claimedByCaller =
+        invite.status === "accepted" && invite.acceptedByTelegramId === coachTelegramId
+      if (claimedByCaller && prepared !== undefined) return prepared
+      if (claimedByCaller) {
+        // The claim is this identity's own, so nothing about the invite explains
+        // a missing attempt row: that is a broken write, not a refused claim.
+        return yield* new QueryFailed({
+          operation: "provisioning.prepare.attempt",
+          cause: new Error("claim was accepted but its provisioning attempt is missing"),
+        })
       }
-      return yield* new ProvisioningUnavailable({
-        reason:
-          invite === undefined
-            ? "not-found"
-            : invite.status === "used"
-              ? "used"
-              : invite.status === "cancelled"
-                ? "cancelled"
-                : invite.status === "expired" || invite.expiresAt.getTime() <= now.getTime()
-                  ? "expired"
-                  : "claimed",
-      })
+      return yield* new ProvisioningUnavailable({ reason: unavailableReason(invite, now) })
     })
 
     const claim = Effect.fn("CoachBotProvisioningRepo.claim")(function* (
@@ -337,8 +387,14 @@ export const layer = Layer.effect(
                 limit 1
               )
               and "candidate"."status" = 'requested'
+              -- An accepted claim only carries the attempt of the identity that
+              -- took it: a managed bot created by anyone else must never
+              -- consume another coach's reserved workspace (#112).
               and (
-                "invite"."status" = 'accepted'
+                (
+                  "invite"."status" = 'accepted'
+                  and "invite"."accepted_by_telegram_id" = "candidate"."coach_telegram_id"
+                )
                 or ("invite"."status" = 'pending' and "invite"."expires_at" > ${now})
               )
               and not exists (
@@ -405,8 +461,15 @@ export const layer = Layer.effect(
               where
                 "attempt"."id" = ${input.provisioningId}
                 and "attempt"."status" in ('configuring', 'completed')
+                -- The same identity fence the claim step applies: an accepted
+                -- invite only ever completes for the identity that took the
+                -- claim (#106), never for whoever holds an attempt row.
                 and (
-                  "invite"."status" in ('pending', 'accepted')
+                  "invite"."status" = 'pending'
+                  or (
+                    "invite"."status" = 'accepted'
+                    and "invite"."accepted_by_telegram_id" = "attempt"."coach_telegram_id"
+                  )
                   or "attempt"."status" = 'completed'
                 )
                 and (
