@@ -1,10 +1,11 @@
 import {
+  type CoachLanguage,
   CoachOnboardingInviteId,
   type CoachOnboardingInviteStatus,
   TelegramId,
   WorkspaceId,
 } from "@praximo/domain"
-import { and, eq, sql } from "drizzle-orm"
+import { and, desc, eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
@@ -25,6 +26,37 @@ export interface Provisioning {
     readonly shortDescription?: string
   }
   readonly issuedByTelegramId: TelegramId
+  /** The owner member's language — every coach-facing bot message is in it. */
+  readonly coachLanguage: CoachLanguage
+}
+
+/**
+ * A BotFather token pasted into the manager chat (#95), parked on the attempt
+ * row until the coach proves ownership through the bot it belongs to. The token
+ * is an encrypted envelope here exactly as it is once installed; the proof nonce
+ * and the webhook secret the candidate bot answers with are held as hashes.
+ */
+export interface Candidate {
+  readonly provisioningId: string
+  readonly coachTelegramId: TelegramId
+  readonly botId: string
+  readonly botUsername: string
+  readonly encryptedToken: string
+  readonly proofHash: string
+  readonly webhookSecretHash: string
+  /** `configuring` is a parked candidate whose activation is being retried. */
+  readonly status: "requested" | "configuring"
+  readonly coachLanguage: CoachLanguage
+}
+
+export interface IngestCandidateInput {
+  readonly coachTelegramId: TelegramId
+  readonly botId: string
+  readonly botUsername: string
+  readonly encryptedToken: string
+  readonly proofHash: string
+  readonly webhookSecretHash: string
+  readonly now: Date
 }
 
 export interface Installation {
@@ -81,6 +113,12 @@ export interface Interface {
     managedBotUsername: string,
     now: Date,
   ) => Effect.Effect<Provisioning, ProvisioningUnavailable | QueryFailed>
+  readonly ingestCandidate: (
+    input: IngestCandidateInput,
+  ) => Effect.Effect<Provisioning, ProvisioningUnavailable | QueryFailed>
+  readonly findCandidateByBotId: (
+    botId: string,
+  ) => Effect.Effect<Candidate, CandidateNotFound | QueryFailed>
   readonly complete: (
     input: CompleteInput,
   ) => Effect.Effect<Installation, ProvisioningUnavailable | QueryFailed>
@@ -157,6 +195,16 @@ export class InstallationNotFound extends Schema.TaggedErrorClass<InstallationNo
   { key: Schema.String },
 ) {}
 
+/**
+ * No bot of this id has a credential parked awaiting its ownership proof. Its
+ * own error rather than `InstallationNotFound`: on the handshake route an
+ * installation is what does not exist yet, by definition (#95).
+ */
+export class CandidateNotFound extends Schema.TaggedErrorClass<CandidateNotFound>()(
+  "CoachBotProvisioningRepo.CandidateNotFound",
+  { botId: Schema.String },
+) {}
+
 const keyboardRequestId = (inviteId: string, coachTelegramId: string): number => {
   let hash = 0x811c9dc5
   for (const byte of new TextEncoder().encode(`${inviteId}:${coachTelegramId}`)) {
@@ -168,6 +216,44 @@ const keyboardRequestId = (inviteId: string, coachTelegramId: string): number =>
 
 const provisioningId = (inviteId: string, coachTelegramId: string): string =>
   `cbp_${inviteId.slice(3)}_${coachTelegramId}`
+
+/**
+ * The fence every advancing write puts on an attempt row aliased `candidate`,
+ * joined to its invite as `invite`: it must be this identity's newest open
+ * attempt, on an invite this identity holds — or one still unclaimed and
+ * unexpired — that nobody else has already won.
+ *
+ * An accepted claim only carries the attempt of the identity that took it: a bot
+ * offered by anyone else must never consume another coach's reserved workspace
+ * (#112).
+ */
+const openAttemptFence = (coachTelegramId: TelegramId, now: Date) => sql`
+  "candidate"."coach_telegram_id" = ${coachTelegramId}
+  and "candidate"."id" = (
+    select "latest"."id"
+    from "coach_bot_provisioning" as "latest"
+    where
+      "latest"."coach_telegram_id" = ${coachTelegramId}
+      and "latest"."status" = 'requested'
+    order by "latest"."updated_at" desc
+    limit 1
+  )
+  and "candidate"."status" = 'requested'
+  and (
+    (
+      "invite"."status" = 'accepted'
+      and "invite"."accepted_by_telegram_id" = "candidate"."coach_telegram_id"
+    )
+    or ("invite"."status" = 'pending' and "invite"."expires_at" > ${now})
+  )
+  and not exists (
+    select 1
+    from "coach_bot_provisioning" as "winner"
+    where
+      "winner"."invite_id" = "candidate"."invite_id"
+      and "winner"."status" in ('configuring', 'completed')
+  )
+`
 
 const nextAttemptAt = (now: Date, attemptCount: number): Date =>
   new Date(now.getTime() + Math.min(60, 2 ** Math.min(attemptCount, 6)) * 60_000)
@@ -221,6 +307,7 @@ export const layer = Layer.effect(
               description: schema.workspace.description,
               shortDescription: schema.workspace.shortDescription,
               issuedByTelegramId: schema.coachOnboardingInvite.issuedByTelegramId,
+              coachLanguage: schema.member.language,
             })
             .from(schema.coachBotProvisioning)
             .innerJoin(
@@ -230,6 +317,13 @@ export const layer = Layer.effect(
             .innerJoin(
               schema.workspace,
               eq(schema.workspace.id, schema.coachBotProvisioning.workspaceId),
+            )
+            .innerJoin(
+              schema.member,
+              and(
+                eq(schema.member.workspaceId, schema.coachBotProvisioning.workspaceId),
+                eq(schema.member.role, "owner"),
+              ),
             )
             .where(
               and(
@@ -258,6 +352,7 @@ export const layer = Layer.effect(
           ...(row.shortDescription === null ? {} : { shortDescription: row.shortDescription }),
         },
         issuedByTelegramId: TelegramId.make(row.issuedByTelegramId),
+        coachLanguage: row.coachLanguage,
       } satisfies Provisioning
     })
 
@@ -376,34 +471,7 @@ export const layer = Layer.effect(
             from "coach_onboarding_invite" as "invite"
             where
               "candidate"."invite_id" = "invite"."id"
-              and "candidate"."coach_telegram_id" = ${coachTelegramId}
-              and "candidate"."id" = (
-                select "latest"."id"
-                from "coach_bot_provisioning" as "latest"
-                where
-                  "latest"."coach_telegram_id" = ${coachTelegramId}
-                  and "latest"."status" = 'requested'
-                order by "latest"."updated_at" desc
-                limit 1
-              )
-              and "candidate"."status" = 'requested'
-              -- An accepted claim only carries the attempt of the identity that
-              -- took it: a managed bot created by anyone else must never
-              -- consume another coach's reserved workspace (#112).
-              and (
-                (
-                  "invite"."status" = 'accepted'
-                  and "invite"."accepted_by_telegram_id" = "candidate"."coach_telegram_id"
-                )
-                or ("invite"."status" = 'pending' and "invite"."expires_at" > ${now})
-              )
-              and not exists (
-                select 1
-                from "coach_bot_provisioning" as "winner"
-                where
-                  "winner"."invite_id" = "candidate"."invite_id"
-                  and "winner"."status" in ('configuring', 'completed')
-              )
+              and ${openAttemptFence(coachTelegramId, now)}
           `),
         catch: (cause) => new QueryFailed({ operation: "provisioning.claim", cause }),
       })
@@ -436,6 +504,173 @@ export const layer = Layer.effect(
         reason: claimed === undefined ? "not-found" : "claimed",
       })
     })
+
+    /** The invite behind this identity's newest open attempt, if it has one. */
+    const openAttempt = Effect.fn("CoachBotProvisioningRepo.openAttempt")(function* (
+      coachTelegramId: TelegramId,
+    ) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({
+              status: schema.coachOnboardingInvite.status,
+              expiresAt: schema.coachOnboardingInvite.expiresAt,
+              acceptedByTelegramId: schema.coachOnboardingInvite.acceptedByTelegramId,
+            })
+            .from(schema.coachBotProvisioning)
+            .innerJoin(
+              schema.coachOnboardingInvite,
+              eq(schema.coachOnboardingInvite.id, schema.coachBotProvisioning.inviteId),
+            )
+            .where(
+              and(
+                eq(schema.coachBotProvisioning.coachTelegramId, coachTelegramId),
+                eq(schema.coachBotProvisioning.status, "requested"),
+              ),
+            )
+            .orderBy(desc(schema.coachBotProvisioning.updatedAt))
+            .limit(1),
+        catch: (cause) => new QueryFailed({ operation: "provisioning.openAttempt", cause }),
+      })
+      return rows[0]
+    })
+
+    /**
+     * Park a pasted BotFather credential on the coach's open attempt (#95).
+     *
+     * Deliberately the same fences `claim` applies — the identity that took the
+     * invite, an invite nobody else has won — but the attempt stays `requested`:
+     * a pasted token buys nothing until the coach answers the proof handshake
+     * through the bot it belongs to. Only then does `claim` advance the row, so
+     * both onboarding paths converge on one activation.
+     *
+     * Re-pasting overwrites the parked candidate, which is what makes a failed
+     * or abandoned attempt resumable: the previous nonce and webhook secret stop
+     * being accepted the moment a new one lands.
+     */
+    const ingestCandidate = Effect.fn("CoachBotProvisioningRepo.ingestCandidate")(function* (
+      input: IngestCandidateInput,
+    ) {
+      yield* Effect.tryPromise({
+        try: () =>
+          client.execute(sql`
+            update "coach_bot_provisioning" as "candidate"
+            set
+              "candidate_bot_id" = ${input.botId},
+              "candidate_bot_username" = ${input.botUsername},
+              "candidate_token" = ${input.encryptedToken},
+              "candidate_proof_hash" = ${input.proofHash},
+              "candidate_webhook_secret_hash" = ${input.webhookSecretHash},
+              "candidate_ingested_at" = ${input.now},
+              "updated_at" = ${input.now}
+            from "coach_onboarding_invite" as "invite"
+            where
+              "candidate"."invite_id" = "invite"."id"
+              and ${openAttemptFence(input.coachTelegramId, input.now)}
+              -- The partial unique index would raise this as a constraint
+              -- violation; refusing it here keeps a bot somebody else is already
+              -- onboarding a typed answer rather than a query failure.
+              and not exists (
+                select 1
+                from "coach_bot_provisioning" as "other"
+                where
+                  "other"."candidate_bot_id" = ${input.botId}
+                  and "other"."status" <> 'completed'
+                  and "other"."id" <> "candidate"."id"
+              )
+          `),
+        catch: (cause) => new QueryFailed({ operation: "provisioning.ingestCandidate", cause }),
+      })
+      const ingestedRows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({ requestId: schema.coachBotProvisioning.keyboardRequestId })
+            .from(schema.coachBotProvisioning)
+            .where(
+              and(
+                eq(schema.coachBotProvisioning.coachTelegramId, input.coachTelegramId),
+                eq(schema.coachBotProvisioning.candidateBotId, input.botId),
+                eq(schema.coachBotProvisioning.status, "requested"),
+              ),
+            )
+            .limit(1),
+        catch: (cause) =>
+          new QueryFailed({ operation: "provisioning.ingestCandidate.inspect", cause }),
+      })
+      const requestId = ingestedRows[0]?.requestId
+      if (requestId !== undefined) {
+        const ingested = yield* loadProvisioning(input.coachTelegramId, requestId)
+        if (ingested !== undefined) return ingested
+      }
+      // Why the paste was refused is the invite's answer, not the token's: the
+      // coach is told their link expired or was used, rather than a flat "no
+      // active setup" that fits only an identity with no attempt at all.
+      const attempt = yield* openAttempt(input.coachTelegramId)
+      if (attempt === undefined) return yield* new ProvisioningUnavailable({ reason: "not-found" })
+      const heldByCaller =
+        attempt.status === "accepted" && attempt.acceptedByTelegramId === input.coachTelegramId
+      const stillOffered = attempt.status === "pending" && attempt.expiresAt > input.now
+      return yield* new ProvisioningUnavailable({
+        reason: heldByCaller || stillOffered ? "claimed" : unavailableReason(attempt, input.now),
+      })
+    })
+
+    const findCandidateByBotId = Effect.fn("CoachBotProvisioningRepo.findCandidateByBotId")(
+      function* (botId: string) {
+        const rows = yield* Effect.tryPromise({
+          try: () =>
+            client
+              .select({
+                provisioningId: schema.coachBotProvisioning.id,
+                coachTelegramId: schema.coachBotProvisioning.coachTelegramId,
+                botUsername: schema.coachBotProvisioning.candidateBotUsername,
+                encryptedToken: schema.coachBotProvisioning.candidateToken,
+                proofHash: schema.coachBotProvisioning.candidateProofHash,
+                webhookSecretHash: schema.coachBotProvisioning.candidateWebhookSecretHash,
+                status: schema.coachBotProvisioning.status,
+                coachLanguage: schema.member.language,
+              })
+              .from(schema.coachBotProvisioning)
+              .innerJoin(
+                schema.member,
+                and(
+                  eq(schema.member.workspaceId, schema.coachBotProvisioning.workspaceId),
+                  eq(schema.member.role, "owner"),
+                ),
+              )
+              .where(
+                and(
+                  eq(schema.coachBotProvisioning.candidateBotId, botId),
+                  sql`${schema.coachBotProvisioning.status} <> 'completed'`,
+                ),
+              )
+              .limit(1),
+          catch: (cause) => new QueryFailed({ operation: "provisioning.findCandidate", cause }),
+        })
+        const row = rows[0]
+        if (
+          row === undefined ||
+          row.botUsername === null ||
+          row.encryptedToken === null ||
+          row.proofHash === null ||
+          row.webhookSecretHash === null ||
+          row.status === "completed"
+        ) {
+          return yield* new CandidateNotFound({ botId })
+        }
+        return {
+          provisioningId: row.provisioningId,
+          coachTelegramId: TelegramId.make(row.coachTelegramId),
+          botId,
+          botUsername: row.botUsername,
+          encryptedToken: row.encryptedToken,
+          proofHash: row.proofHash,
+          webhookSecretHash: row.webhookSecretHash,
+          status: row.status,
+          coachLanguage: row.coachLanguage,
+        } satisfies Candidate
+      },
+    )
 
     const complete = Effect.fn("CoachBotProvisioningRepo.complete")(function* (
       input: CompleteInput,
@@ -525,7 +760,15 @@ export const layer = Layer.effect(
             ),
             completed_attempt as (
               update "coach_bot_provisioning"
-              set "status" = 'completed', "updated_at" = ${input.now}
+              set
+                "status" = 'completed',
+                "updated_at" = ${input.now},
+                -- The installed credential now lives on the bot row; the pasted
+                -- envelope and the one-shot proof secrets have no reason to
+                -- outlive the handshake that consumed them (#95).
+                "candidate_token" = null,
+                "candidate_proof_hash" = null,
+                "candidate_webhook_secret_hash" = null
               from candidate
               where
                 "coach_bot_provisioning"."id" = candidate."id"
@@ -767,6 +1010,8 @@ export const layer = Layer.effect(
     return Service.of({
       prepare,
       claim,
+      ingestCandidate,
+      findCandidateByBotId,
       complete,
       findByBotId,
       findByWorkspace,

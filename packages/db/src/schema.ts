@@ -241,6 +241,12 @@ export const bot = pgTable("bot", {
  * A `/start` only creates a request row. The first matching `managed_bot`
  * service update atomically advances one row to `configuring`; the partial
  * unique index keeps the invitation unclaimed until that moment.
+ *
+ * The `candidate_*` columns carry the BotFather fallback (#95): a token pasted
+ * into the manager chat is validated, encrypted, and parked on the same attempt
+ * row until the coach proves ownership through the candidate bot. Only then does
+ * it advance into `managed_bot_id` and through the one-tap path's own claim,
+ * configuration, and activation. The plaintext token never lands here.
  */
 export const coachBotProvisioning = pgTable(
   "coach_bot_provisioning",
@@ -256,6 +262,19 @@ export const coachBotProvisioning = pgTable(
     keyboardRequestId: integer("keyboard_request_id").notNull(),
     managedBotId: text("managed_bot_id"),
     managedBotUsername: text("managed_bot_username"),
+    candidateBotId: text("candidate_bot_id"),
+    candidateBotUsername: text("candidate_bot_username"),
+    // The same versioned AES-256-GCM envelope `bot.token` holds.
+    candidateToken: text("candidate_token"),
+    // SHA-256 of the proof nonce carried by the candidate bot's `/start` link,
+    // and of the webhook secret that bot answers the proof route with. Both are
+    // secrets the coach's own bot echoes back, so only their hashes are stored.
+    candidateProofHash: text("candidate_proof_hash"),
+    candidateWebhookSecretHash: text("candidate_webhook_secret_hash"),
+    candidateIngestedAt: timestamp("candidate_ingested_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     status: coachBotProvisioningStatusEnum("status").notNull().default("requested"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull(),
@@ -271,6 +290,12 @@ export const coachBotProvisioning = pgTable(
     uniqueIndex("coach_bot_provisioning_one_bot_idx")
       .on(t.managedBotId)
       .where(sql`${t.managedBotId} is not null`),
+    // One in-flight candidate per bot: two coaches cannot park the same pasted
+    // bot at once, and the proof webhook resolves its row by bot id alone. A
+    // completed attempt drops out so the bot can be onboarded again later.
+    uniqueIndex("coach_bot_provisioning_one_candidate_idx")
+      .on(t.candidateBotId)
+      .where(sql`${t.candidateBotId} is not null and ${t.status} <> 'completed'`),
     index("coach_bot_provisioning_workspace_id_idx").on(t.workspaceId),
   ],
 )
