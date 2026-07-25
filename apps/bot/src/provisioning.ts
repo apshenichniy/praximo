@@ -139,6 +139,17 @@ export interface CoachBotConfiguration {
   readonly telegramFetch?: typeof globalThis.fetch
 }
 
+/**
+ * The label on every coach bot's in-chat menu button. Deliberately the same
+ * English word Telegram puts on the chat-list Main Mini App button and the same
+ * one the manager bot carries (`scripts/menu-button.ts`): a coach who enables
+ * the Main Mini App themselves in @BotFather then has two entry points to one
+ * app under one word, which is the BotFather pattern (ADR 0004 §Mini App entry
+ * points, #86). Not translated for that reason — it names the platform
+ * affordance, not our copy.
+ */
+export const CoachMenuButtonText = "Open"
+
 export const apiFor = (token: string, telegramFetch?: typeof globalThis.fetch): Api =>
   new Api(token, telegramFetch === undefined ? undefined : { fetch: telegramFetch })
 
@@ -183,7 +194,7 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
     api.setChatMenuButton({
       menu_button: {
         type: "web_app",
-        text: "Open",
+        text: CoachMenuButtonText,
         web_app: { url: miniAppUrl },
       },
     }),
