@@ -58,7 +58,7 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
 ### Provisioning flow (within manual coach onboarding)
 
 1. Admin creates the workspace manually and hands the coach a personal deep link to the manager bot.
-2. Manager bot sends one message carrying a `t.me/newbot/{manager}/{suggested}` deep link on an inline `url` button, with a **suggested username derived from the workspace name**; the coach picks the final name and display name in Telegram's own dialog (the deep-link form carries only the username).
+2. Manager bot sends one message carrying a `t.me/newbot/{manager}/{suggested}` deep link on an inline `url` button, with a **suggested username derived from the workspace name plus a short tag derived from its id** — the bare stem of a short name (`demo_bot`) is long since registered on Telegram, and the suggestion now rides in a URL the coach reads, while the tag stays stable across the repeated `/start` that re-sends the prompt ([#147](https://github.com/apshenichniy/praximo/issues/147)). The coach picks the final name and display name in Telegram's own dialog (the deep-link form carries only the username).
 3. On `Update.managed_bot` / `ManagedBotCreated`, everything is automatic: `getManagedBotToken` → encrypt and store the token → branding → `setWebhook` with a fresh per-bot secret → `setChatMenuButton` pointing at the Mini App. No manual steps after the tap.
 
 Opening `/start` does not reserve the workspace. It records a resumable request;

@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
 import { CoachBotProvisioningRepo, CoachNotification, CoachOnboardingRepo } from "@praximo/db"
-import { TelegramId } from "@praximo/domain"
+import { TelegramId, type WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Api, InlineKeyboard, InputFile } from "grammy"
 import type { User } from "grammy/types"
@@ -21,21 +21,80 @@ export class TelegramSetupFailed extends Schema.TaggedErrorClass<TelegramSetupFa
   { operation: Schema.String },
 ) {}
 
-export const managedBotSuggestions = (
-  workspaceName: string,
-): { readonly name: string; readonly username: string } => {
+/**
+ * Telegram's shape for a bot username: 5–32 characters of `[A-Za-z0-9_]`,
+ * opening with a letter, ending in `bot`.
+ */
+const UsernameMaxLength = 32
+const UsernameEnding = "_bot"
+/**
+ * Four base-36 symbols — about 1.7 million tags. Not a uniqueness guarantee and
+ * not a secret: enough that a plausible stem stops landing on a name somebody
+ * registered years ago, while staying short enough to read in a URL.
+ */
+const TagLength = 4
+
+/**
+ * A short, stable tag for one workspace.
+ *
+ * FNV-1a over the id rather than a slice of it: the id is
+ * `ws_{uuid-without-dashes}` in production but `ws_dev_fixture_ada` from the dev
+ * seed, so no fixed offset carries the same amount of variety. Derived rather
+ * than random because `/start` is a resume path that re-sends the prompt (#134)
+ * — a coach who reopens their link must be offered the same username, not a new
+ * one each time.
+ */
+const workspaceTag = (workspaceId: WorkspaceId): string => {
+  let hash = 0x811c9dc5
+  for (const byte of new TextEncoder().encode(workspaceId)) {
+    hash ^= byte
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(36).padStart(TagLength, "0").slice(-TagLength)
+}
+
+/**
+ * The bot username offered to a coach, pre-filled into the creation deep link
+ * (#134) and editable by them in Telegram's own dialog.
+ *
+ * Two jobs at once. It has to *read* as the workspace's — so the name is folded
+ * to ASCII and punctuation collapsed — and it has to be one Telegram will accept
+ * and probably still has free, which the bare stem is not: `demo_bot` and
+ * `coaching_bot` were registered long ago, and the namespace being collided with
+ * is the whole of Telegram's, not ours (#147). Hence the tag.
+ *
+ * Every branch below keeps the result inside Telegram's shape by construction,
+ * so there is no length guard or fallback at the end to be dead code: the head
+ * always opens with a letter, the trim can never eat that letter, and the
+ * budget is arithmetic rather than a truncation of the finished string.
+ */
+export const suggestedBotUsername = (workspaceName: string, workspaceId: WorkspaceId): string => {
   const stem = workspaceName
     .normalize("NFKD")
     .replaceAll(/[\u0300-\u036f]/g, "")
     .replaceAll(/[^A-Za-z0-9]+/g, "_")
-    .replaceAll(/^_+|_+$/g, "")
+    // Leading separators only, and only because they decide the branch below: a
+    // stem that opens with `_` is not a stem. Trailing ones are left to the strip
+    // after the cut, which has to run there regardless — doing it twice would
+    // just be a second expression that can never change an output.
+    .replaceAll(/^_+/g, "")
     .toLowerCase()
-  const safeStem = /^[A-Za-z]/.test(stem) ? stem : `coach_${stem}`
-  const username = `${safeStem.slice(0, 28) || "praximo_coach"}_bot`.slice(0, 32)
-  return {
-    name: workspaceName.slice(0, 64),
-    username: username.length >= 5 ? username : "praximo_coach_bot",
-  }
+  // A name with nothing ASCII left in it — every character was punctuation, or
+  // it was written in a script the fold drops — gets the platform's own stem
+  // rather than a bare `coach_`, which the tag then still makes theirs.
+  // Stripping the leading separators is what makes this exhaustive: a stem is
+  // either empty or opens with a letter or a digit, never with `_`.
+  const usernameStem =
+    stem.length === 0 ? "praximo_coach" : /^[a-z]/.test(stem) ? stem : `coach_${stem}`
+  const tag = workspaceTag(workspaceId)
+  // What is left for the name once the tag and the ending have taken their room,
+  // including the `_` that joins them.
+  const room = UsernameMaxLength - UsernameEnding.length - TagLength - 1
+  // Stripped *after* the cut, the only place it can be done once and still hold:
+  // a stem that truncates exactly on a `_` would otherwise meet the joining one
+  // and read as `..__{tag}`.
+  const head = usernameStem.slice(0, room).replace(/_+$/, "")
+  return `${head}_${tag}${UsernameEnding}`
 }
 
 /**
@@ -323,12 +382,12 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
     )
   }
 
-  const suggestions = managedBotSuggestions(setup.workspace.name)
+  const suggested = suggestedBotUsername(setup.workspace.name, setup.workspaceId)
   const sent = yield* telegram("sendMessage", () =>
     api.sendMessage(chatId, copy.invitationReserved(setup.workspace.name), {
       reply_markup: new InlineKeyboard().url(
         copy.createBotButton,
-        createBotLink(env.MANAGER_BOT_USERNAME, suggestions.username),
+        createBotLink(env.MANAGER_BOT_USERNAME, suggested),
       ),
     }),
   )

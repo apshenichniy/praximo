@@ -50,6 +50,14 @@ bot** button on it — an inline link into Telegram's own managed-bot dialog, wi
 username suggested from the workspace name. The coach picks the final name and
 username there; one tap is the whole step.
 
+The suggestion carries a short tag, so "Ada Coaching" is offered as
+`ada_coaching_3pue_bot` rather than `ada_coaching_bot`: without it a plausible
+short name is almost always one somebody registered years ago, and the coach
+would have to think up a replacement inside Telegram's dialog
+([#147](https://github.com/apshenichniy/praximo/issues/147)). The tag is derived
+from the workspace, so reopening the link offers the same username again. It is a
+suggestion either way — a coach who wants a different one just edits the field.
+
 > **The button is a `t.me/newbot/…` deep link, on iPhone and on Desktop alike**
 > ([#134](https://github.com/apshenichniy/praximo/issues/134)). The
 > `request_managed_bot` **reply-keyboard** button this replaced never worked on

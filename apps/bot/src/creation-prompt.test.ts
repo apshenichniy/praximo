@@ -177,8 +177,8 @@ const bodyOf = (telegram: TelegramStub, method: string): Record<string, unknown>
 
 describe("the creation deep link", () => {
   it("carries the manager bot and the suggested username, and nothing else", () => {
-    expect(createBotLink("PraximoManagerBot", "ada_coaching_bot")).toBe(
-      "https://t.me/newbot/PraximoManagerBot/ada_coaching_bot",
+    expect(createBotLink("PraximoManagerBot", "ada_coaching_3pue_bot")).toBe(
+      "https://t.me/newbot/PraximoManagerBot/ada_coaching_3pue_bot",
     )
   })
 })
@@ -205,7 +205,10 @@ describe("offering bot creation", () => {
           [
             {
               text: messages("ru").createBotButton,
-              url: "https://t.me/newbot/PraximoManagerBot/ada_coaching_bot",
+              // The suggested username, tag and all, as the coach sees it — a
+              // golden value, so a change in how it is derived shows up here as
+              // the change to a tapped URL that it is (#147).
+              url: "https://t.me/newbot/PraximoManagerBot/ada_coaching_3pue_bot",
             },
           ],
         ],
