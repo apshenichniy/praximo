@@ -9,8 +9,17 @@
     },
     "test": {
       "dependsOn": ["^check"],
-      "inputs": ["src/**", "tsconfig.json", "package.json"],
-      "outputs": []
+      // `migrations/**` because the schema the database suites run against is
+      // built from it: a migration-only change (#54 dropped an index a live
+      // `on conflict` infers from) must invalidate the test hash, not replay a
+      // cached pass.
+      "inputs": ["src/**", "migrations/**", "tsconfig.json", "package.json"],
+      "outputs": [],
+      // turbo runs tasks in strict env mode: anything not listed here is
+      // stripped, which is how `@praximo/db`'s database suites silently skipped
+      // even when the caller had a `DATABASE_URL` (#136). `CI` carries the rule
+      // that a missing URL there is a failure, not a skip.
+      "env": ["DATABASE_URL", "CI"]
     },
     "build": {
       "dependsOn": ["^check"],

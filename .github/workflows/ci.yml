@@ -12,9 +12,9 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # The whole job normally finishes in ~1-1.5 minutes; this is a backstop
+    # The whole job normally finishes in ~2-3 minutes; this is a backstop
     # against a hung step, not a budget for legitimate work.
-    timeout-minutes: 6
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
@@ -33,6 +33,45 @@ jobs:
       # Typecheck every workspace, then lint the whole tree.
       - run: bun run check
 
+      # A cancelled run can die between creating its branch and deleting it, so
+      # every run reaps the leftovers first. Best-effort: a Neon hiccup here must
+      # not fail a PR.
+      - name: Reap Neon branches left behind by cancelled runs
+        continue-on-error: true
+        run: bun scripts/ci-neon-branch.ts prune
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+
+      # The database the `@praximo/db` suites run against (#136). A schema-only
+      # branch of the existing project: same neon-http driver as production, so
+      # the "no interactive transactions" constraint the repository layer is
+      # written around still holds. Exports a masked DATABASE_URL to the steps
+      # below via $GITHUB_ENV.
+      #
+      # A pull request from a fork cannot read the secret and fails here. That is
+      # the intended shape: no database means the suites cannot run, and #136 is
+      # precisely about never letting "did not run" look like "passed".
+      - name: Create this run's Neon branch
+        id: neon-branch
+        timeout-minutes: 3
+        run: bun scripts/ci-neon-branch.ts create
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+
+      # The same reset developers run: drop, replay `packages/db/migrations` from
+      # *this checkout*, seed. That is what makes a PR whose migration contradicts
+      # the code — a dropped index a live `on conflict` infers from — fail here.
+      - name: Migrate the branch
+        run: bun run db:reset
+        env:
+          # db:reset hard-refuses `prod`; this stage exists only to satisfy the guard.
+          APP_STAGE: ci
+          ADMIN_TELEGRAM_IDS: "700000000"
+
+      # `CI` (always set by Actions) turns a missing DATABASE_URL into a failure
+      # rather than a silent skip — see packages/db/src/test-database.ts.
       - run: bun run test
 
       # Bundles each Worker for workerd without deploying — the end-to-end
@@ -40,3 +79,17 @@ jobs:
       - run: bun run build
 
       - run: bun run format:check
+
+      # Last, so a hiccup deleting the branch cannot skip the build and format
+      # gates, and `always()` so the branch goes away whatever happened above —
+      # including a failed test run. Best-effort like the prune: a transient Neon
+      # error must not redden a PR whose code is fine; the next run's prune
+      # reclaims whatever is left.
+      - name: Delete this run's Neon branch
+        if: always() && steps.neon-branch.outputs.branch_id != ''
+        continue-on-error: true
+        run: bun scripts/ci-neon-branch.ts delete
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          NEON_BRANCH_ID: ${{ steps.neon-branch.outputs.branch_id }}

@@ -5,8 +5,7 @@ import { Effect, Layer } from "effect"
 import { Database } from "./client.ts"
 import { MemberRepo } from "./member-repo.ts"
 import * as schema from "./schema.ts"
-
-const DATABASE_URL = process.env.DATABASE_URL
+import { skipWithoutDatabase, testDatabaseUrl } from "./test-database.ts"
 
 const uid = () => crypto.randomUUID().replaceAll("-", "").slice(0, 12)
 
@@ -31,8 +30,8 @@ interface Fixture {
  * rows a real Postgres lets through — so these run against the dev Neon branch
  * rather than a fake.
  */
-describe.skipIf(!DATABASE_URL)("MemberRepo (dev Neon branch)", () => {
-  const appLayer = Layer.provideMerge(MemberRepo.layer, Database.testLayer(DATABASE_URL ?? ""))
+describe.skipIf(skipWithoutDatabase)("MemberRepo (dev Neon branch)", () => {
+  const appLayer = Layer.provideMerge(MemberRepo.layer, Database.testLayer(testDatabaseUrl))
 
   /**
    * An onboarded-but-for-the-terms coach: workspace, owner member bound to a

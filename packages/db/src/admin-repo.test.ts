@@ -5,19 +5,19 @@ import { Effect, Layer } from "effect"
 import { AdminRepo } from "./admin-repo.ts"
 import { Database } from "./client.ts"
 import * as schema from "./schema.ts"
+import { skipWithoutDatabase, testDatabaseUrl } from "./test-database.ts"
 
 /**
- * The admin seam backing the db:reset seed. Skips when `DATABASE_URL` is absent
- * (see the workspace-repo test). The seed re-runs on every reset, so the seam's
- * contract is idempotency.
+ * The admin seam backing the db:reset seed. Gated on a real database like every
+ * repository suite (see the workspace-repo test). The seed re-runs on every
+ * reset, so the seam's contract is idempotency.
  */
-const DATABASE_URL = process.env.DATABASE_URL
 
 const uniqueTelegramId = (): TelegramId =>
   TelegramId.make(`tg_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`)
 
-describe.skipIf(!DATABASE_URL)("AdminRepo (dev Neon branch)", () => {
-  const appLayer = Layer.provideMerge(AdminRepo.layer, Database.testLayer(DATABASE_URL ?? ""))
+describe.skipIf(skipWithoutDatabase)("AdminRepo (dev Neon branch)", () => {
+  const appLayer = Layer.provideMerge(AdminRepo.layer, Database.testLayer(testDatabaseUrl))
 
   it.effect("upsertByTelegramId is idempotent — a re-seed converges to one row", () =>
     Effect.gen(function* () {
