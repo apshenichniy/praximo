@@ -36,6 +36,7 @@ _Avoid_: verification, confirmation code
 **Creation Prompt**:
 The one message in the coach's manager chat whose button opens Telegram's bot-creation dialog. It is **armed** while that button is live and **disarmed** once the button is taken off it. At most one armed prompt exists in a chat at any moment, and none once the workspace has a Bot — so a prompt still armed means provisioning has not completed and re-tapping is the way to resume.
 _Avoid_: create button, keyboard, invite message
+_Note_: **armed** is also said of a *webhook* — a bot pointed at us with a secret we hold the hash of. Same word, unrelated subject: a prompt is armed for the coach to tap, a webhook is armed for Telegram to deliver to. Say which when it is not obvious from the sentence.
 
 ### Clients and onboarding
 

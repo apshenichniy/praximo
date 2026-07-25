@@ -168,11 +168,11 @@ export interface CoachBotConfiguration {
   readonly botId: string
   readonly workspace: CoachBotProvisioningRepo.WorkspaceProfile
   readonly coachName: string
-  readonly webhookOrigin: string
   /**
-   * The webhook secret to install, when one is already armed on this bot and
-   * recorded against it. The BotFather fallback (#95) passes the secret it armed
-   * to receive the ownership proof: rotating it mid-configuration would lock out
+   * The webhook secret to hand back for the caller to arm once the installation
+   * exists (#150) — supplied when one is already armed on this bot and recorded
+   * against it. The BotFather fallback (#95) passes the secret it armed to
+   * receive the ownership proof: rotating it mid-configuration would lock out
    * the very retry a partial failure depends on. Omitted, a fresh one is minted.
    */
   readonly secret?: string
@@ -221,7 +221,7 @@ export const coachMiniAppUrl = (baseUrl: string, botId: string): string => {
 export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
   input: CoachBotConfiguration,
 ) {
-  const { botId, coachName, env, token, webhookOrigin, workspace } = input
+  const { botId, coachName, env, token, workspace } = input
   const api = apiFor(token, input.telegramFetch)
   const botInfo = yield* telegram("getMe", () => api.getMe())
   const miniAppUrl = yield* Effect.try({
@@ -265,12 +265,6 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
   yield* telegram("setMyShortDescription", () =>
     api.setMyShortDescription(workspace.shortDescription ?? defaultBotShortDescription(coachName)),
   )
-  yield* telegram("setWebhook", () =>
-    api.setWebhook(`${webhookOrigin}/telegram/coach/${botId}`, {
-      secret_token: secret,
-      allowed_updates: ["message", "callback_query"],
-    }),
-  )
   yield* telegram("setChatMenuButton", () =>
     api.setChatMenuButton({
       menu_button: {
@@ -281,6 +275,48 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
     }),
   )
   return { secret, botInfo }
+})
+
+/**
+ * Point a coach bot at us. Its own step rather than part of configuration,
+ * because **when it runs relative to the database write is a decision each
+ * caller has to take, and the two callers take it differently** (#150).
+ *
+ * *A bot being connected for the first time arms last, after the activation
+ * transaction.* A bot whose webhook is set starts delivering immediately, and
+ * Telegram shows the coach their freshly created bot the moment it exists, so
+ * their first `/start` used to arrive while the transaction had not committed —
+ * into a route where `findByBotId` finds nothing and the handshake has nothing
+ * parked. Arming last removes that window rather than papering over what happens
+ * inside it: an update Telegram holds because no webhook is set is delivered once
+ * one is, and by then the installation is there to serve it. The trade is that a
+ * failure here leaves a *connected* workspace whose bot is deaf — repaired by the
+ * redelivery of the `managed_bot` update, and it cannot cost the coach a greeting
+ * they were never going to get from an unarmed bot anyway.
+ *
+ * *A bot being re-configured arms first, before the row is rewritten.* There the
+ * installation already exists, so there is no window to close — and there is a
+ * working bot to lose. Only the hash of a secret is ever stored, so a new hash
+ * committed before Telegram accepts the new secret would leave a healthy bot
+ * answering 401 to its own coach.
+ *
+ * The shared rule underneath both: **never let the stored hash and the secret
+ * Telegram presents diverge in the direction that costs more.**
+ */
+export const armCoachBotWebhook = Effect.fn("BotWorker.armCoachBotWebhook")(function* (input: {
+  readonly token: string
+  readonly botId: string
+  readonly secret: string
+  readonly webhookOrigin: string
+  readonly telegramFetch?: typeof globalThis.fetch
+}) {
+  const api = apiFor(input.token, input.telegramFetch)
+  yield* telegram("setWebhook", () =>
+    api.setWebhook(`${input.webhookOrigin}/telegram/coach/${input.botId}`, {
+      secret_token: input.secret,
+      allowed_updates: ["message", "callback_query"],
+    }),
+  )
 })
 
 export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(function* (
@@ -485,6 +521,23 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       botId: existing.success.telegramBotId,
       workspace: profile,
       coachName: coachDisplayName(user, profile.name),
+      ...injectedFetch,
+    })
+    // Armed *before* the write here, which is the opposite of the first-time
+    // branch below, and deliberately so. This bot already has an installation —
+    // that is how we got into this branch — so there is no window of the kind
+    // #150 closes: no update can arrive before a row that already exists. What
+    // there is instead is a working bot to lose. This branch mints a fresh secret
+    // and the row only ever holds its hash, so committing the new hash before
+    // Telegram accepts the new secret is what would strand a healthy bot on a
+    // secret nothing recognises, and every coach message would 401 until another
+    // `managed_bot` update happened along. Arming first keeps a failure here
+    // exactly as harmless as it was before the reorder: we return, the row still
+    // carries the secret Telegram is still presenting, and the bot keeps working.
+    yield* armCoachBotWebhook({
+      token,
+      botId: existing.success.telegramBotId,
+      secret: configured.secret,
       webhookOrigin,
       ...injectedFetch,
     })
@@ -529,7 +582,6 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     botId: String(managedBot.id),
     workspace: provisioning.workspace,
     coachName: coachDisplayName(user, provisioning.workspace.name),
-    webhookOrigin,
     ...injectedFetch,
   })
   const installation = yield* repo.complete({
@@ -541,9 +593,22 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   })
   // The bot is connected, so the button that created it has no business staying
   // live — and only a *completed* activation retires it. A partial failure above
-  // returns before this point, leaving the prompt armed so the coach can resume,
-  // which is exactly what the runbook tells them to do.
+  // returns before this point, leaving that button tappable so the coach can
+  // resume, which is exactly what the runbook tells them to do.
+  //
+  // Before the webhook step, deliberately: that step is the one thing that can
+  // now fail *after* the workspace is connected, and the coach must not be left
+  // looking at a live creation button for a bot they already have.
   yield* settleCreationPrompt(env, provisioning, installation.username, telegramFetch)
+  // Last, so no update can reach the bot's route before the row that serves it
+  // exists (#150).
+  yield* armCoachBotWebhook({
+    token,
+    botId: String(managedBot.id),
+    secret: configured.secret,
+    webhookOrigin,
+    ...injectedFetch,
+  })
   return { _tag: "Connected", installation } as const
 })
 

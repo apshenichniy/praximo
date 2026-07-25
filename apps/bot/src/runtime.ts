@@ -27,6 +27,7 @@ import {
   completeOwnershipProof,
   ingestBotFatherToken,
 } from "./token-fallback.ts"
+import { refusalFor, refusalStatus, UndecidedRefusalStatus } from "./coach-webhook-refusal.ts"
 import * as CoachBotReleaseLive from "./coach-bot-release.ts"
 
 export interface Env {
@@ -344,6 +345,12 @@ const handleCoachWebhook = async (
   }
   const receivedHash = createHash("sha256").update(received).digest("hex")
   if (!constantTimeEqual(receivedHash, installed.webhookSecretHash)) {
+    // An installed bot whose secret does not match is either a stale webhook
+    // Telegram has not caught up to or somebody guessing at the route; logged
+    // because a route that refuses in silence is what made #150 hard to see.
+    await getRuntime(env).runPromise(
+      Effect.logWarning(`coach bot ${botId}: update refused — webhook secret does not match`),
+    )
     return new Response(null, { status: 401 })
   }
   await installed.bot.handleUpdate((await request.json()) as Update)
@@ -363,11 +370,28 @@ const handleOwnershipProof = async (
   telegramFetch: typeof globalThis.fetch,
 ): Promise<Response> => {
   const candidate = await getRuntime(env).runPromise(
-    authenticateProof(botId, secretToken).pipe(Effect.result),
+    authenticateProof(botId, secretToken).pipe(
+      Effect.tapError((failure) =>
+        Effect.logWarning(
+          `coach bot ${botId}: could not read its parked candidate, answering 500 — ${failure._tag}`,
+        ),
+      ),
+      Effect.result,
+    ),
   )
   if (Result.isFailure(candidate)) return new Response(null, { status: 500 })
-  // Nothing parked, or the wrong secret: the body is never even read.
-  if (candidate.success === undefined) return new Response(null, { status: 401 })
+  // Nothing parked, or the wrong secret: the body is never even read. Decided
+  // after the handshake has had its chance, so a redelivered proof update can
+  // still resume a half-configured attempt of its own.
+  if (candidate.success === undefined) {
+    const refusal = await getRuntime(env).runPromise(
+      refusalFor(botId).pipe(
+        Effect.map(refusalStatus),
+        Effect.orElseSucceed(() => UndecidedRefusalStatus),
+      ),
+    )
+    return new Response(null, { status: refusal })
+  }
   const outcome = await getRuntime(env).runPromise(
     completeOwnershipProof(env, {
       candidate: candidate.success,

@@ -77,7 +77,6 @@ const configure = (
     botId: BOT_ID,
     workspace: profile,
     coachName: "Ada",
-    webhookOrigin: "https://bot.praximo.test",
     telegramFetch: telegram.fetch,
   })
 
@@ -149,11 +148,11 @@ describe("coach bot configuration", () => {
 
       yield* configure(telegram, { UPLOADS: uploadsStub().bucket })
 
-      // A missing picture costs the bot its photo and nothing else: the webhook
-      // and the menu button — the parts that make the bot usable — still land.
+      // A missing picture costs the bot its photo and nothing else: the menu
+      // button — the part of configuration that makes the bot usable — still
+      // lands, and the caller goes on to arm the webhook (#150).
       const methods = telegram.calls.map((call) => call.method)
       expect(methods).not.toContain("setMyProfilePhoto")
-      expect(methods).toContain("setWebhook")
       expect(methods).toContain("setChatMenuButton")
     }),
   )
@@ -170,7 +169,6 @@ describe("coach bot configuration", () => {
       // is dropped rather than the onboarding.
       const methods = telegram.calls.map((call) => call.method)
       expect(methods).toContain("setMyProfilePhoto")
-      expect(methods).toContain("setWebhook")
       expect(methods).toContain("setChatMenuButton")
     }),
   )

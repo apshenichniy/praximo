@@ -78,6 +78,7 @@ const repoStub = (
       complete: record("complete"),
       findByBotId: (telegramBotId) =>
         Effect.fail(new CoachBotProvisioningRepo.InstallationNotFound({ key: telegramBotId })),
+      findInFlightManagedAttempt: unsupported,
       findByWorkspace: unsupported,
       workspaceProfile: unsupported,
       rotate: record("rotate"),
