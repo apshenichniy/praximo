@@ -163,6 +163,30 @@ describe.skipIf(skipWithoutDatabase)("coach bot re-link (dev Neon branch)", () =
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
+  it.effect("reopens a re-link whose own activation failed halfway", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachBotProvisioningRepo.Service
+      const health = yield* CoachBotHealthRepo.Service
+      const { aggregate, attempt } = yield* connectedWorkspace("relink-stalled")
+      yield* health.flagNeedsRelink(aggregate.workspace.id, BROKE_AT)
+
+      // The coach came back, tapped, created a bot — and activation failed, so
+      // the row is parked at `configuring`.
+      yield* repo.reopenForRelink(coach, RECONNECTED_AT)
+      yield* repo.claim(coach, SECOND_BOT, "ada_second_bot", RECONNECTED_AT)
+
+      // Their next `/start` must offer them the button again, not the advice to
+      // open a link they cannot have.
+      const reopened = yield* repo.reopenForRelink(coach, RECONNECTED_AT)
+      expect(reopened?.id).toBe(attempt.id)
+      expect(reopened?.status).toBe("requested")
+
+      // …and a third bot still lands on the same row.
+      const claimed = yield* repo.claim(coach, "9300012", "ada_third_bot", RECONNECTED_AT)
+      expect(claimed.id).toBe(attempt.id)
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
   it.effect("has nothing to reopen for a coach whose bot is fine", () =>
     Effect.gen(function* () {
       const repo = yield* CoachBotProvisioningRepo.Service

@@ -261,7 +261,7 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
     env,
     claimed,
     candidate.botUsername,
-    activation.reconnected,
+    activation.reconnected ? "reconnected" : "connected",
     input.telegramFetch,
   )
   // Re-armed with the very secret this request authenticated against, which the

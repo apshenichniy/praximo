@@ -370,6 +370,81 @@ export const armCoachBotWebhook = Effect.fn("BotWorker.armCoachBotWebhook")(func
   )
 })
 
+export interface CoachBotReconfiguration {
+  readonly env: ProvisioningEnv
+  readonly token: string
+  readonly botId: string
+  readonly workspace: CoachBotProvisioningRepo.WorkspaceProfile
+  readonly coachName: string
+  /**
+   * The coach's own chat, for the addressed menu button. Absent only where no
+   * owner is bound, which a connected workspace does not produce — the default
+   * button still goes on, so the bot is never left without one.
+   */
+  readonly coachChatId?: TelegramId
+  /**
+   * Where to point the webhook. Absent leaves it exactly as Telegram already has
+   * it, which is what the returned `armed` reports: a caller that did not arm
+   * must not record a secret Telegram has never seen (ADR 0004).
+   */
+  readonly webhookOrigin?: string
+  readonly telegramFetch?: typeof globalThis.fetch
+}
+
+/**
+ * Everything an *already installed* bot needs done to it, in the one order ADR
+ * 0004 fixes — menu button, branding, then the webhook, and only then may the
+ * caller rewrite the row.
+ *
+ * It exists because two callers now re-configure a live bot: a redelivered
+ * `managed_bot` update, and the health repair that follows a refreshed
+ * credential (#55). The order is the load-bearing part — arming before the write
+ * is what stops a new secret hash landing on a bot Telegram has not accepted it
+ * for — so it may not exist twice.
+ *
+ * Deliberately *not* the first-time path, which arms last and for the opposite
+ * reason: there the window #150 closes is a bot delivering before its row
+ * exists, and there is no working configuration to lose.
+ */
+export const reconfigureCoachBot = Effect.fn("BotWorker.reconfigureCoachBot")(function* (
+  input: CoachBotReconfiguration,
+) {
+  const injectedFetch =
+    input.telegramFetch === undefined ? {} : { telegramFetch: input.telegramFetch }
+  // The coach's own chat first: a client caches the menu button when it opens
+  // the chat, and a default is the one thing Telegram never pushes (#156).
+  if (input.coachChatId !== undefined) {
+    yield* setCoachBotMenuButton({
+      token: input.token,
+      botId: input.botId,
+      coachChatId: input.coachChatId,
+      miniAppBaseUrl: input.env.COACH_MINI_APP_URL,
+      ...injectedFetch,
+    })
+  }
+  const configured = yield* configureCoachBot({
+    env: input.env,
+    token: input.token,
+    botId: input.botId,
+    workspace: input.workspace,
+    coachName: input.coachName,
+    ...injectedFetch,
+  })
+  // No `dropPendingUpdates`, deliberately: this bot has been listening for a
+  // while, so its queue is the coach's and their clients' ordinary messages.
+  // Dropping them to tidy up a re-configuration would throw away conversation.
+  if (input.webhookOrigin !== undefined) {
+    yield* armCoachBotWebhook({
+      token: input.token,
+      botId: input.botId,
+      secret: configured.secret,
+      webhookOrigin: input.webhookOrigin,
+      ...injectedFetch,
+    })
+  }
+  return { ...configured, armed: input.webhookOrigin !== undefined }
+})
+
 /**
  * The coach's own bot, talking to the coach while it is still being set up — and
  * then in place, once it is (#154).
@@ -694,11 +769,11 @@ export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(
   prompt: CoachBotProvisioningRepo.Provisioning,
   botUsername: string,
   /**
-   * Whether this closed a re-link rather than a first setup (#55). "Setup
-   * finished" is the wrong end of the sentence for a workspace that was set up
-   * months ago and has just come back.
+   * What this closed (#55). Named rather than a boolean, and the same shape
+   * `offerBotCreation` opens with: "Setup finished" is the wrong end of the
+   * sentence for a workspace that was set up months ago and has just come back.
    */
-  reconnected: boolean = false,
+  outcome: "connected" | "reconnected" = "connected",
   telegramFetch?: typeof globalThis.fetch,
 ) {
   const messageId = prompt.promptMessageId
@@ -710,7 +785,9 @@ export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(
       api.editMessageText(
         prompt.coachTelegramId,
         messageId,
-        reconnected ? copy.promptReconnected(botUsername) : copy.promptConnected(botUsername),
+        outcome === "reconnected"
+          ? copy.promptReconnected(botUsername)
+          : copy.promptConnected(botUsername),
       ),
     ),
     (operation) =>
@@ -758,21 +835,6 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       managerApi.getManagedBotToken(managedBot.id),
     )
     const profile = yield* repo.workspaceProfile(existing.success.workspaceId)
-    yield* setCoachBotMenuButton({
-      token,
-      botId: existing.success.telegramBotId,
-      coachChatId: TelegramId.make(String(user.id)),
-      miniAppBaseUrl: env.COACH_MINI_APP_URL,
-      ...injectedFetch,
-    })
-    const configured = yield* configureCoachBot({
-      env,
-      token,
-      botId: existing.success.telegramBotId,
-      workspace: profile,
-      coachName: coachDisplayName(user, profile.name),
-      ...injectedFetch,
-    })
     // Armed *before* the write here, which is the opposite of the first-time
     // branch below, and deliberately so. This bot already has an installation —
     // that is how we got into this branch — so there is no window of the kind
@@ -784,16 +846,15 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     // `managed_bot` update happened along. Arming first keeps a failure here
     // exactly as harmless as it was before the reorder: we return, the row still
     // carries the secret Telegram is still presenting, and the bot keeps working.
-    //
-    // And no `dropPendingUpdates`, also deliberately: this bot has been listening
-    // for a while, so its queue is the coach's and their clients' ordinary
-    // messages. Dropping them here would throw away conversation to tidy up a
-    // re-configuration — the first-time branch drops because the only thing queued
-    // there is a `/start` it has already answered itself (#154).
-    yield* armCoachBotWebhook({
+    // That whole order lives in `reconfigureCoachBot`, which the health repair
+    // shares (#55).
+    const configured = yield* reconfigureCoachBot({
+      env,
       token,
       botId: existing.success.telegramBotId,
-      secret: configured.secret,
+      workspace: profile,
+      coachName: coachDisplayName(user, profile.name),
+      coachChatId: TelegramId.make(String(user.id)),
       webhookOrigin,
       ...injectedFetch,
     })
@@ -902,7 +963,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     env,
     provisioning,
     installation.username,
-    installation.reconnected,
+    installation.reconnected ? "reconnected" : "connected",
     telegramFetch,
   )
   // The end of the sentence the announcement started, in the same message — and

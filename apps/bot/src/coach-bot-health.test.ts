@@ -1,17 +1,20 @@
 import { describe, expect, it } from "@effect/vitest"
 import { CoachBotHealthRepo, CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, TelegramId, WorkspaceId } from "@praximo/domain"
-import { CoachBotCredential } from "@praximo/telegram"
+import { BotRegistry, CoachBotCredential } from "@praximo/telegram"
 import { GrammyError, HttpError } from "grammy"
-import { Effect, Layer } from "effect"
+import { Clock, Effect, Layer } from "effect"
 import {
   checkCoachBot,
   classifyCoachBotFailure,
   classifyManagementFailure,
+  HEALTH_CHECK_INTERVAL_MILLIS,
+  HEALTH_RETRY_INTERVAL_MILLIS,
   sweepCoachBotHealth,
   webhookOriginFrom,
 } from "./coach-bot-health.ts"
 import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
+import * as BotRegistryLive from "./bot-registry.ts"
 
 /**
  * The repair-before-report fence (#55).
@@ -66,8 +69,12 @@ const credentialLayer = Layer.succeed(
 interface HealthStub {
   readonly layer: Layer.Layer<CoachBotHealthRepo.Service>
   readonly checked: Array<WorkspaceId>
+  /** What `markChecked` wrote, so a deferral can be told from a full pass. */
+  readonly stamps: Array<Date>
   readonly flipped: Array<WorkspaceId>
   readonly repairNotices: Array<{ readonly workspaceId: WorkspaceId; readonly episode: number }>
+  /** Replace what `findTarget` answers, as a rotation does in the database. */
+  readonly setTarget: (target: CoachBotHealthRepo.HealthTarget) => void
 }
 
 /**
@@ -80,18 +87,21 @@ const healthStub = (
   options: { readonly alreadyFlagged?: boolean } = {},
 ): HealthStub => {
   const checked: Array<WorkspaceId> = []
+  const stamps: Array<Date> = []
   const flipped: Array<WorkspaceId> = []
   const repairNotices: Array<{ readonly workspaceId: WorkspaceId; readonly episode: number }> = []
   let connected = options.alreadyFlagged !== true
   let episode = 0
+  let current = due[0]
   const layer = Layer.succeed(
     CoachBotHealthRepo.Service,
     CoachBotHealthRepo.Service.of({
       dueForCheck: () => Effect.succeed(due),
-      findTarget: () => Effect.succeed(due[0]),
-      markChecked: (id) =>
+      findTarget: () => Effect.succeed(current),
+      markChecked: (id, at) =>
         Effect.sync(() => {
           checked.push(id)
+          stamps.push(at)
         }),
       flagNeedsRelink: (id) =>
         Effect.sync(() => {
@@ -107,7 +117,16 @@ const healthStub = (
         }),
     }),
   )
-  return { layer, checked, flipped, repairNotices }
+  return {
+    layer,
+    checked,
+    stamps,
+    flipped,
+    repairNotices,
+    setTarget: (replacement) => {
+      current = replacement
+    },
+  }
 }
 
 interface RotateRecord {
@@ -115,7 +134,10 @@ interface RotateRecord {
   readonly webhookSecretHash: string
 }
 
-const provisioningStub = (rotated: Array<RotateRecord>) =>
+const provisioningStub = (
+  rotated: Array<RotateRecord>,
+  onRotate?: (encryptedToken: string) => void,
+) =>
   Layer.succeed(
     CoachBotProvisioningRepo.Service,
     CoachBotProvisioningRepo.Service.of({
@@ -136,6 +158,7 @@ const provisioningStub = (rotated: Array<RotateRecord>) =>
             encryptedToken: input.encryptedToken,
             webhookSecretHash: input.webhookSecretHash,
           })
+          onRotate?.(input.encryptedToken)
           return {
             workspaceId,
             telegramBotId: input.telegramBotId,
@@ -345,8 +368,25 @@ describe("checking one coach bot", () => {
 
       expect(outcome).toEqual({ _tag: "Unchanged", operation: "getManagedBotToken" })
       expect(health.flipped).toEqual([])
-      // Not marked either: the next tick has to find it again.
-      expect(health.checked).toEqual([])
+      // Stamped, but back-dated: the question is still open, so the bot comes
+      // back in an hour rather than holding the batch on every five-minute tick.
+      expect(health.checked).toEqual([workspaceId])
+      // `dueForCheck` selects on `health_checked_at < now - INTERVAL`, so the
+      // back-dated stamp lands this bot back in the batch exactly one retry
+      // interval from now.
+      const now = yield* Clock.currentTimeMillis
+      const dueIn = (health.stamps[0]?.getTime() ?? 0) + HEALTH_CHECK_INTERVAL_MILLIS - now
+      expect(dueIn).toBe(HEALTH_RETRY_INTERVAL_MILLIS)
+    }),
+  )
+
+  it.effect("stamps a healthy bot with now, so it waits the full day", () =>
+    Effect.gen(function* () {
+      const health = healthStub()
+
+      yield* check(health, telegramStub(), [], target({ encryptedToken: "sealed:fine" }))
+
+      expect(health.stamps[0]?.getTime()).toBe(yield* Clock.currentTimeMillis)
     }),
   )
 
@@ -404,4 +444,60 @@ describe("the origin a repaired webhook is re-armed at", () => {
     expect(webhookOriginFrom("")).toBeUndefined()
     expect(webhookOriginFrom(undefined)).toBeUndefined()
   })
+})
+
+/**
+ * The reactive half of detection (#55). The sweep alone would be correct and a
+ * day late: the first message after a coach's `/revoke` is the one that proves
+ * the channel matters, so a send that meets a 401 repairs and tries again.
+ */
+describe("sending through a workspace's own bot", () => {
+  const send = (health: HealthStub, telegram: TelegramStub, rotated: Array<RotateRecord> = []) =>
+    Effect.flatMap(BotRegistry.Service, (registry) => registry.send(workspaceId, "hello")).pipe(
+      Effect.provide(
+        BotRegistryLive.layerWithFetch(env, telegram.fetch).pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              health.layer,
+              // A rotation is what the retry depends on: without it the second
+              // attempt would reach for the same refused credential.
+              provisioningStub(rotated, (encryptedToken) =>
+                health.setTarget(target({ encryptedToken })),
+              ),
+              credentialLayer,
+            ),
+          ),
+        ),
+      ),
+    )
+
+  it.effect("repairs a refused credential inline and lands the message on the retry", () =>
+    Effect.gen(function* () {
+      const health = healthStub([target()])
+      const telegram = telegramStub()
+
+      yield* send(health, telegram)
+
+      // Two sends: the one the stale token refused, and the one the refreshed
+      // credential carried.
+      const sends = telegram.calls.filter((call) => call.method === "sendMessage")
+      expect(sends.map((call) => call.token)).toEqual([STALE_TOKEN, FRESH_TOKEN])
+      expect(health.flipped).toEqual([])
+    }),
+  )
+
+  it.effect("fails the send once the bot turns out to be unrepairable", () =>
+    Effect.gen(function* () {
+      const health = healthStub([target()])
+
+      const failure = yield* Effect.flip(send(health, telegramStub({ management: "deleted" })))
+
+      expect(failure).toMatchObject({
+        _tag: "BotRegistry.SendFailed",
+        reason: "bot needs re-link",
+      })
+      // And the same flip the sweep would have taken, from the same seam.
+      expect(health.flipped).toEqual([workspaceId])
+    }),
+  )
 })

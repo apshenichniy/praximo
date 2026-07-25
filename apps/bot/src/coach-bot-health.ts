@@ -3,14 +3,7 @@ import type { WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
 import { GrammyError, HttpError } from "grammy"
 import { Clock, Effect, Result } from "effect"
-import {
-  apiFor,
-  armCoachBotWebhook,
-  configureCoachBot,
-  type ProvisioningEnv,
-  setCoachBotMenuButton,
-  sha256,
-} from "./provisioning.ts"
+import { apiFor, type ProvisioningEnv, reconfigureCoachBot, sha256 } from "./provisioning.ts"
 
 /**
  * A coach bot that stops answering Telegram is **repaired first, and only
@@ -50,6 +43,18 @@ export interface HealthEnv extends ProvisioningEnv {
  * discovery, not to notice it within minutes.
  */
 export const HEALTH_CHECK_INTERVAL_MILLIS = 24 * 60 * 60 * 1_000
+
+/**
+ * How long a bot the sweep could not decide about waits before it is asked
+ * again — sooner than the daily pass, because it *is* still an open question,
+ * but not on the next tick.
+ *
+ * Without it the batch starves. `dueForCheck` takes the oldest checks first, so
+ * a handful of bots that answer neither yes nor no — a Telegram outage, a
+ * credential this Worker cannot open — would hold the whole batch and be
+ * re-probed every five minutes while every other bot waited behind them.
+ */
+export const HEALTH_RETRY_INTERVAL_MILLIS = 60 * 60 * 1_000
 
 /**
  * How many bots one cron tick may probe. The cron fires every five minutes and
@@ -198,57 +203,30 @@ export const repairCoachBot = Effect.fn("BotWorker.repairCoachBot")(function* (
   }
 
   const token = refreshed.success
-  const configured = yield* Effect.gen(function* () {
-    // The coach's own chat first, exactly as provisioning does it: a client
-    // caches the menu button when it opens the chat, and a repaired bot is one
-    // the coach may well be staring at (#156).
-    if (target.coachTelegramId !== undefined) {
-      yield* setCoachBotMenuButton({
-        token,
-        botId: target.telegramBotId,
-        coachChatId: target.coachTelegramId,
-        miniAppBaseUrl: env.COACH_MINI_APP_URL,
-        ...injectedFetch,
-      })
-    }
-    return yield* configureCoachBot({
-      env,
-      token,
-      botId: target.telegramBotId,
-      workspace: target.workspace,
-      // No Telegram user travels with a sweep, so the workspace label is the
-      // only name available — which is the fallback `coachDisplayName` already
-      // takes when a coach has no name of their own.
-      coachName: target.workspace.name,
-      ...injectedFetch,
-    })
+  const origin = webhookOriginFrom(env.MANAGER_BOT_WEBHOOK_URL)
+  if (origin === undefined) {
+    yield* Effect.logWarning(
+      `coach bot @${target.username}: repairing without re-arming its webhook — no public origin is configured for this stage`,
+    )
+  }
+  const configured = yield* reconfigureCoachBot({
+    env,
+    token,
+    botId: target.telegramBotId,
+    workspace: target.workspace,
+    // No Telegram user travels with a sweep, so the workspace label is the only
+    // name available — which is the fallback `coachDisplayName` already takes
+    // when a coach has no name of their own.
+    coachName: target.workspace.name,
+    ...(target.coachTelegramId === undefined ? {} : { coachChatId: target.coachTelegramId }),
+    ...(origin === undefined ? {} : { webhookOrigin: origin }),
+    ...injectedFetch,
   }).pipe(Effect.result)
   if (Result.isFailure(configured)) {
     yield* Effect.logWarning(
       `coach bot @${target.username}: credential refreshed but reconfiguration failed at ${configured.failure.operation}; leaving ${target.workspaceId} connected`,
     )
     return unchanged(configured.failure.operation)
-  }
-
-  const origin = webhookOriginFrom(env.MANAGER_BOT_WEBHOOK_URL)
-  if (origin === undefined) {
-    yield* Effect.logWarning(
-      `coach bot @${target.username}: repaired without re-arming its webhook — no public origin is configured for this stage`,
-    )
-  } else {
-    const armed = yield* armCoachBotWebhook({
-      token,
-      botId: target.telegramBotId,
-      secret: configured.success.secret,
-      webhookOrigin: origin,
-      ...injectedFetch,
-    }).pipe(Effect.result)
-    if (Result.isFailure(armed)) {
-      yield* Effect.logWarning(
-        `coach bot @${target.username}: credential refreshed but its webhook stayed as it was — ${armed.failure.operation}`,
-      )
-      return unchanged("setWebhook")
-    }
   }
 
   const now = new Date(yield* Clock.currentTimeMillis)
@@ -268,8 +246,9 @@ export const repairCoachBot = Effect.fn("BotWorker.repairCoachBot")(function* (
       // The fresh secret is only ever recorded once Telegram has accepted it. A
       // stage with no configured origin never armed anything, so the row keeps
       // the hash of the secret Telegram is still presenting.
-      webhookSecretHash:
-        origin === undefined ? target.webhookSecretHash : yield* sha256(configured.success.secret),
+      webhookSecretHash: configured.success.armed
+        ? yield* sha256(configured.success.secret)
+        : target.webhookSecretHash,
       botInfo: configured.success.botInfo,
       username: configured.success.botInfo.username,
       now,
@@ -303,6 +282,12 @@ export const repairCoachBot = Effect.fn("BotWorker.repairCoachBot")(function* (
  *
  * `getMe` is the probe because it is the cheapest call that exercises exactly
  * the thing in question — the token — and touches nothing else about the bot.
+ *
+ * Every outcome moves `health_checked_at`, including the ones that decided
+ * nothing. A repaired or flagged bot is stamped by the write that settled it;
+ * an undecided one is stamped *back-dated*, so it falls due again in an hour
+ * rather than on the next tick — which is what keeps a handful of unanswerable
+ * bots from holding the batch and starving the daily pass.
  */
 export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
   env: HealthEnv,
@@ -312,6 +297,18 @@ export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
   const health = yield* CoachBotHealthRepo.Service
   const credentials = yield* CoachBotCredential.Service
 
+  /** Back-dated so `dueForCheck`'s own window brings this bot back in an hour. */
+  const deferCheck = (): Effect.Effect<void> =>
+    Clock.currentTimeMillis.pipe(
+      Effect.flatMap((now) =>
+        health.markChecked(
+          target.workspaceId,
+          new Date(now - HEALTH_CHECK_INTERVAL_MILLIS + HEALTH_RETRY_INTERVAL_MILLIS),
+        ),
+      ),
+      Effect.ignore,
+    )
+
   const token = yield* credentials.decrypt(target.encryptedToken).pipe(Effect.result)
   if (Result.isFailure(token)) {
     // A credential this Worker cannot open says nothing about Telegram, and
@@ -319,6 +316,7 @@ export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
     yield* Effect.logWarning(
       `coach bot @${target.username}: its stored credential could not be decrypted; leaving ${target.workspaceId} alone`,
     )
+    yield* deferCheck()
     return unchanged("decrypt")
   }
 
@@ -333,9 +331,14 @@ export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
     yield* health.markChecked(target.workspaceId, now).pipe(Effect.ignore)
     return { _tag: "Healthy" } as const satisfies HealthOutcome
   }
-  if (probe.failure === "transient") return unchanged("getMe")
+  if (probe.failure === "transient") {
+    yield* deferCheck()
+    return unchanged("getMe")
+  }
 
-  return yield* repairCoachBot(env, target, telegramFetch)
+  const repaired = yield* repairCoachBot(env, target, telegramFetch)
+  if (repaired._tag === "Unchanged") yield* deferCheck()
+  return repaired
 })
 
 /**

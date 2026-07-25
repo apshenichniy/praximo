@@ -23,14 +23,19 @@ export class SendFailed extends Schema.TaggedErrorClass<SendFailed>()("BotRegist
 }) {}
 
 /**
- * The live implementation is deliberately unwired: bot provisioning and the
- * shared grammY client arrive with their own tickets. It fails loudly rather
- * than pretending a message was delivered.
+ * Truthful fallback for runtimes that hold no Telegram credentials.
+ *
+ * The real implementation lives in the bot Worker (`apps/bot/src/bot-registry.ts`),
+ * because sending through a workspace's own bot means decrypting its token,
+ * classifying what Telegram answers, and repairing a refused credential — none
+ * of which a package may do (ADR 0002: packages carry no app wiring). Anything
+ * else that resolves this service gets a typed failure rather than the pretence
+ * that a message was delivered.
  */
 export const layer = Layer.sync(Service, () => {
   const send = Effect.fn("BotRegistry.send")(function* (workspace: WorkspaceId, _text: string) {
     return yield* Effect.fail(
-      new SendFailed({ workspace, reason: "telegram delivery is not wired yet" }),
+      new SendFailed({ workspace, reason: "no coach-bot transport in this runtime" }),
     )
   })
 

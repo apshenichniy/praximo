@@ -1043,7 +1043,12 @@ export const layer = Layer.effect(
               "bot"."workspace_id" = "attempt"."workspace_id"
               and "bot"."connection_status" = 'needs_relink'
               and "attempt"."coach_telegram_id" = ${coachTelegramId}
-              and "attempt"."status" = 'completed'
+              -- Configuring as well as completed: a re-link whose activation
+              -- failed halfway leaves the row there, and refusing it would
+              -- answer the coach with advice to open a link they cannot have.
+              -- Moving it back to requested is also what frees it from
+              -- one_claim_per_invite so the next bot can claim it.
+              and "attempt"."status" in ('completed', 'configuring')
               and exists (
                 select 1
                 from "member" as "owner"

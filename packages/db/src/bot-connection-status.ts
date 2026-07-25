@@ -22,3 +22,5 @@ export const botConnectionStatus = (value: string | null): BotConnectionStatus =
     : value === "needs_relink"
       ? "needs-relink"
       : "connected"
+
+export * as BotConnection from "./bot-connection-status.ts"
