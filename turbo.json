@@ -13,7 +13,7 @@
       // built from it: a migration-only change (#54 dropped an index a live
       // `on conflict` infers from) must invalidate the test hash, not replay a
       // cached pass.
-      "inputs": ["src/**", "migrations/**", "tsconfig.json", "package.json"],
+      "inputs": ["src/**", "migrations/**", "tsconfig.json", "package.json", "vitest.config.ts"],
       "outputs": [],
       // turbo runs tasks in strict env mode: anything not listed here is
       // stripped, which is how `@praximo/db`'s database suites silently skipped
