@@ -1,8 +1,9 @@
-import { CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
+import { CoachInitData, CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
 import {
   AdminRepo,
   CoachOnboardingRepo,
   Database,
+  MemberRepo,
   WorkspaceDeletionRepo,
   WorkspaceRepo,
 } from "@praximo/db"
@@ -10,6 +11,9 @@ import type { WorkspaceRunCancellationRpcClient } from "@praximo/domain"
 import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
+import { CoachSession } from "./coach-session.ts"
+import { CoachSurface } from "./coach-surface.ts"
+import type { LaunchCredential } from "./launch-credential.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
 import { ViewerRole } from "./viewer-role.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
@@ -18,6 +22,8 @@ interface Env {
   readonly DATABASE_URL: string
   readonly MANAGER_BOT_TOKEN: string
   readonly MANAGER_BOT_USERNAME: string
+  /** Selects Telegram's Ed25519 public key for the coach path (ADR 0006). */
+  readonly TELEGRAM_ENV: string
   readonly MANAGER_BOT?: ManagerBotSender.RpcClient & CoachBotRelease.RpcClient
   readonly PIPELINE?: WorkspaceRunCancellationRpcClient
 }
@@ -28,6 +34,7 @@ const runtimeFromEnv = (env: Env) => {
     WorkspaceRepo.layer,
     CoachOnboardingRepo.layer,
     WorkspaceDeletionRepo.layer,
+    MemberRepo.layer,
   ).pipe(Layer.provide(Database.layer))
   const sender =
     env.MANAGER_BOT === undefined
@@ -43,13 +50,18 @@ const runtimeFromEnv = (env: Env) => {
       : WorkspaceRunCancellation.rpcLayer(env.PIPELINE)
   const dependencies = Layer.mergeAll(
     ManagerInitData.layer,
+    CoachInitData.layer,
     CoachOnboardingToken.layer,
     sender,
     coachBotRelease,
     runCancellation,
     repositories,
   )
-  const app = Layer.mergeAll(AdminSurface.layer, ViewerRole.layer).pipe(Layer.provide(dependencies))
+  const app = Layer.mergeAll(
+    AdminSurface.layer,
+    ViewerRole.layer,
+    CoachSurface.layer.pipe(Layer.provide(CoachSession.layer)),
+  ).pipe(Layer.provide(dependencies))
   return ManagedRuntime.make(
     Layer.provide(app, ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
   )
@@ -71,6 +83,7 @@ const resolveEnv = async (): Promise<Env> => {
       DATABASE_URL: requireString(process.env.DATABASE_URL, "DATABASE_URL"),
       MANAGER_BOT_TOKEN: requireString(process.env.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
       MANAGER_BOT_USERNAME: requireString(process.env.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
+      TELEGRAM_ENV: requireString(process.env.TELEGRAM_ENV, "TELEGRAM_ENV"),
     }
   }
 
@@ -80,6 +93,7 @@ const resolveEnv = async (): Promise<Env> => {
     DATABASE_URL: requireString(workerEnv.DATABASE_URL, "DATABASE_URL"),
     MANAGER_BOT_TOKEN: requireString(workerEnv.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
     MANAGER_BOT_USERNAME: requireString(workerEnv.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
+    TELEGRAM_ENV: requireString(workerEnv.TELEGRAM_ENV, "TELEGRAM_ENV"),
     ...(workerEnv.MANAGER_BOT === undefined
       ? {}
       : {
@@ -101,6 +115,26 @@ export const resolveViewerRole = async (initData: string): Promise<ViewerRole.Ro
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(ViewerRole.Service, (service) => service.resolveRole(initData)),
+  )
+}
+
+/** The coach Mini App's entry (#54) — the one call every coach launch makes. */
+export const openCoachApp = async (
+  credential: LaunchCredential,
+): Promise<CoachSurface.CoachEntry> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachSurface.Service, (service) => service.openApp(credential)),
+  )
+}
+
+export const acceptCoachTerms = async (
+  credential: LaunchCredential,
+  version: unknown,
+): Promise<CoachSurface.CoachEntry> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachSurface.Service, (service) => service.acceptTerms(credential, version)),
   )
 }
 

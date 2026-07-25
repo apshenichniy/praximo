@@ -55,6 +55,10 @@ export default Alchemy.Stack(
     const coachBotCredentialKey = Config.redacted("COACH_BOT_CREDENTIAL_KEY")
     const coachMiniAppUrl = Config.string("COACH_MINI_APP_URL")
     const defaultCoachBotAvatarR2Key = Config.string("DEFAULT_COACH_BOT_AVATAR_R2_KEY")
+    // Selects which of Telegram's two published Ed25519 public keys the coach
+    // path verifies against — not a key, a choice between keys already in source
+    // (ADR 0006). `production` unless a stage is pointed at Telegram's test DC.
+    const telegramEnv = Config.string("TELEGRAM_ENV").pipe(Config.withDefault("production"))
 
     // ── Neon: one EU project, one branch per stage ──
     // region MUST be explicit — the default is aws-us-east-1 and the resource
@@ -133,6 +137,7 @@ export default Alchemy.Stack(
         // for outbound delivery; per-coach tokens remain runtime database data.
         MANAGER_BOT_TOKEN: managerBotToken,
         MANAGER_BOT_USERNAME: managerBotUsername,
+        TELEGRAM_ENV: telegramEnv,
       },
     })
 

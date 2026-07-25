@@ -43,6 +43,9 @@ export interface Interface {
     candidateBotId: string,
     maxAgeMillis: number,
   ) => Effect.Effect<VerifiedLaunch, VerificationFailed>
+  readonly unverifiedTelegramUserId: (
+    initData: string,
+  ) => Effect.Effect<TelegramId, VerificationFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/auth/CoachInitData") {}
@@ -103,6 +106,22 @@ const dataCheckString = (params: URLSearchParams, botId: string): string => {
   return [`${botId}${WEB_APP_DATA_SUFFIX}`, ...lines].join("\n")
 }
 
+/**
+ * The `user.id` a launch claims, with the manager path's own guard on it: an id
+ * that is not a safe positive integer would round-trip through `String()` into a
+ * key nothing can match, which reads as a lookup miss rather than as the parser
+ * differential it actually is.
+ */
+const readTelegramUserId = (params: URLSearchParams): TelegramId => {
+  const userJson = params.get("user")
+  if (!userJson) throw new Error("missing user")
+  const user = decodeTelegramUser(JSON.parse(userJson))
+  if (!Number.isSafeInteger(user.id) || user.id <= 0) {
+    throw new Error("invalid Telegram user id")
+  }
+  return TelegramId.make(String(user.id))
+}
+
 interface Launch {
   readonly signature: Uint8Array<ArrayBuffer>
   readonly signed: Uint8Array<ArrayBuffer>
@@ -139,20 +158,10 @@ const readLaunch = (
     throw new Error("auth_date outside the accepted window")
   }
 
-  const userJson = params.get("user")
-  if (!userJson) throw new Error("missing user")
-  const user = decodeTelegramUser(JSON.parse(userJson))
-  // The same guard the manager path applies: an id that is not a safe positive
-  // integer would round-trip through `String()` into a key nothing can match,
-  // which is a lookup miss rather than the parser differential it actually is.
-  if (!Number.isSafeInteger(user.id) || user.id <= 0) {
-    throw new Error("invalid Telegram user id")
-  }
-
   return {
     signature: decodeBase64Url(signature),
     signed: new TextEncoder().encode(dataCheckString(params, botId)),
-    telegramUserId: TelegramId.make(String(user.id)),
+    telegramUserId: readTelegramUserId(params),
     authDateMillis,
   }
 }
@@ -205,7 +214,31 @@ const makeLayer = (publicKeyHex: Config.Config<string>) =>
         } satisfies VerifiedLaunch
       })
 
-      return Service.of({ verify })
+      /**
+       * The user id a launch *claims*, read without checking anything.
+       *
+       * Named to be uncomfortable, because it is only ever allowed to do one
+       * thing: propose which bot to verify against, for a launch that carried no
+       * `?b=` — a bot provisioned before the Mini App URL grew the parameter, or
+       * a Main Mini App URL a coach pasted themselves. Ed25519 signs
+       * `<botId>:WebAppData`, so without a candidate bot there is nothing to
+       * verify against at all, and this is the only way to name one.
+       *
+       * It authorizes nothing. The caller must look a candidate up, verify
+       * against that candidate's bot, and then resolve the principal from the
+       * *verified* pair — so a launch claiming someone else's id selects a
+       * candidate whose signature check then fails.
+       */
+      const unverifiedTelegramUserId = Effect.fn("CoachInitData.unverifiedTelegramUserId")(
+        function* (initData: string) {
+          return yield* Effect.try({
+            try: () => readTelegramUserId(new URLSearchParams(initData)),
+            catch: () => new VerificationFailed({ reason: "coach init data is not readable" }),
+          })
+        },
+      )
+
+      return Service.of({ verify, unverifiedTelegramUserId })
     }),
   )
 

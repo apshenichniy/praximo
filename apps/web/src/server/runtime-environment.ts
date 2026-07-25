@@ -1,4 +1,9 @@
-const requiredLocalBindings = ["DATABASE_URL", "MANAGER_BOT_TOKEN", "MANAGER_BOT_USERNAME"] as const
+const requiredLocalBindings = [
+  "DATABASE_URL",
+  "MANAGER_BOT_TOKEN",
+  "MANAGER_BOT_USERNAME",
+  "TELEGRAM_ENV",
+] as const
 
 export const canUseLocalProcessEnvironment = (
   isDevelopment: boolean,

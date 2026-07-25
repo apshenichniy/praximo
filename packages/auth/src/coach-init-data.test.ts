@@ -235,6 +235,25 @@ describe("CoachInitData", () => {
     }).pipe(Effect.provide(verifier())),
   )
 
+  it.effect("reads the claimed user id without checking anything about it", () =>
+    Effect.gen(function* () {
+      const service = yield* CoachInitData.Service
+      const params = yield* Effect.promise(() => launch())
+
+      // Deliberately usable on a launch nothing has verified — that is the point
+      // of it, and why the name says so. It only ever names a candidate bot for
+      // a launch that arrived without `?b=`.
+      params.set("signature", "not-a-signature")
+      expect(yield* service.unverifiedTelegramUserId(params.toString())).toBe("700000103")
+
+      // The one thing it does refuse is an id that cannot be a Telegram id.
+      const malformed = yield* Effect.promise(() => launch({ user: { id: -1 } }))
+      expect(
+        (yield* Effect.flip(service.unverifiedTelegramUserId(malformed.toString())))._tag,
+      ).toBe("CoachInitData.VerificationFailed")
+    }).pipe(Effect.provide(verifier())),
+  )
+
   it.effect("rejects a bot id that is not a bot id", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(AUTH_DATE + 60_000)
