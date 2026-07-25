@@ -66,6 +66,12 @@ export interface IngestCandidateInput {
   readonly now: Date
 }
 
+/** An attempt that holds a managed bot it has not activated yet (#150). */
+export interface InFlightAttempt {
+  readonly id: string
+  readonly updatedAt: Date
+}
+
 export interface Installation {
   readonly workspaceId: WorkspaceId
   readonly telegramBotId: string
@@ -143,6 +149,19 @@ export interface Interface {
   readonly findByBotId: (
     telegramBotId: string,
   ) => Effect.Effect<Installation, InstallationNotFound | QueryFailed>
+  /**
+   * The attempt that has claimed this managed bot and not activated it yet, if
+   * there is one — `undefined` is the ordinary answer, not a failure.
+   *
+   * It exists so the bot's own route can tell "this bot is ours and we are not
+   * ready" from "we know nothing about this bot" (#150). Arming the webhook now
+   * happens after the activation transaction, so on the managed path this should
+   * find nothing; the row it returns is what a tripwire log needs to name when it
+   * does.
+   */
+  readonly findInFlightManagedAttempt: (
+    telegramBotId: string,
+  ) => Effect.Effect<InFlightAttempt | undefined, QueryFailed>
   readonly findByWorkspace: (
     workspaceId: WorkspaceId,
   ) => Effect.Effect<Installation, InstallationNotFound | QueryFailed>
@@ -899,6 +918,37 @@ export const layer = Layer.effect(
     const findByBotId = (id: string) => loadInstallation(id, "bot")
     const findByWorkspace = (id: WorkspaceId) => loadInstallation(id, "workspace")
 
+    /**
+     * Read straight off the attempt rather than inferring it from the absence of
+     * an installation: `configuring` on this bot id is the state that says *we*
+     * put the webhook there and have not finished, which is what makes an update
+     * arriving now worth redelivering rather than refusing (#150).
+     */
+    const findInFlightManagedAttempt = Effect.fn(
+      "CoachBotProvisioningRepo.findInFlightManagedAttempt",
+    )(function* (telegramBotId: string) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({
+              id: schema.coachBotProvisioning.id,
+              updatedAt: schema.coachBotProvisioning.updatedAt,
+            })
+            .from(schema.coachBotProvisioning)
+            .where(
+              and(
+                eq(schema.coachBotProvisioning.managedBotId, telegramBotId),
+                eq(schema.coachBotProvisioning.status, "configuring"),
+              ),
+            )
+            .limit(1),
+        catch: (cause) =>
+          new QueryFailed({ operation: "provisioning.findInFlightManagedAttempt", cause }),
+      })
+      const row = rows[0]
+      return row === undefined ? undefined : ({ ...row } satisfies InFlightAttempt)
+    })
+
     const workspaceProfile = Effect.fn("CoachBotProvisioningRepo.workspaceProfile")(function* (
       workspaceId: WorkspaceId,
     ) {
@@ -1073,6 +1123,7 @@ export const layer = Layer.effect(
       findCandidateByBotId,
       complete,
       findByBotId,
+      findInFlightManagedAttempt,
       findByWorkspace,
       workspaceProfile,
       rotate,

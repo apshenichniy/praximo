@@ -139,6 +139,7 @@ const repoStub = (
         options.installed === undefined
           ? Effect.fail(new CoachBotProvisioningRepo.InstallationNotFound({ key: telegramBotId }))
           : Effect.succeed(options.installed),
+      findInFlightManagedAttempt: unsupported,
       findByWorkspace: unsupported,
       workspaceProfile: unsupported,
       rotate: unsupported,
@@ -402,14 +403,18 @@ describe("BotFather token fallback", () => {
       expect(outcome).toEqual({ _tag: "Activated", username: BOT_USERNAME })
       expect(repo.claimed).toEqual([{ coach, botId: BOT_ID }])
       // Branding, webhook, and the Mini App menu button are the same steps the
-      // Managed Bots path runs, against the pasted bot's own credential.
+      // Managed Bots path runs, against the pasted bot's own credential — and in
+      // the same order, with `setWebhook` last, after the activation transaction
+      // (#150). On this path the bot has been pointed at us since the paste, so
+      // the re-arm is belt-and-braces rather than the fix; keeping one order for
+      // both paths is what stops them drifting.
       expect(telegram.calls.map((call) => call.method)).toEqual([
         "getMe",
         "setMyProfilePhoto",
         "setMyDescription",
         "setMyShortDescription",
-        "setWebhook",
         "setChatMenuButton",
+        "setWebhook",
         "sendMessage",
       ])
       expect(telegram.calls.every((call) => call.token === TOKEN)).toBe(true)

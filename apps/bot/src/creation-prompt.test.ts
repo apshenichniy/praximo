@@ -75,14 +75,23 @@ interface RepoStub {
   /** Prompt ids recorded against an attempt, in the order they were written. */
   readonly recorded: Array<{ readonly attemptId: string; readonly promptMessageId: number }>
   readonly completed: Array<string>
+  /** Secret hashes written by `rotate`, in order — empty if it never ran. */
+  readonly rotated: Array<string>
 }
 
 const repoStub = (
   claimed: CoachBotProvisioningRepo.Provisioning,
-  options: { readonly recordFails?: boolean } = {},
+  options: {
+    readonly recordFails?: boolean
+    readonly onComplete?: () => void
+    /** Take the already-installed branch, as a redelivery of the update does. */
+    readonly installed?: CoachBotProvisioningRepo.Installation
+    readonly onRotate?: () => void
+  } = {},
 ): RepoStub => {
   const recorded: Array<{ readonly attemptId: string; readonly promptMessageId: number }> = []
   const completed: Array<string> = []
+  const rotated: Array<string> = []
   const layer = Layer.succeed(
     CoachBotProvisioningRepo.Service,
     CoachBotProvisioningRepo.Service.of({
@@ -104,19 +113,27 @@ const repoStub = (
       findCandidateByBotId: unsupported,
       complete: (input) => {
         completed.push(input.provisioningId)
+        options.onComplete?.()
         return Effect.succeed(installation)
       },
       findByBotId: (telegramBotId) =>
-        Effect.fail(new CoachBotProvisioningRepo.InstallationNotFound({ key: telegramBotId })),
+        options.installed === undefined
+          ? Effect.fail(new CoachBotProvisioningRepo.InstallationNotFound({ key: telegramBotId }))
+          : Effect.succeed(options.installed),
+      findInFlightManagedAttempt: unsupported,
       findByWorkspace: unsupported,
-      workspaceProfile: unsupported,
-      rotate: unsupported,
+      workspaceProfile: () => Effect.succeed({ name: "Ada Coaching" }),
+      rotate: (input) => {
+        rotated.push(input.webhookSecretHash)
+        options.onRotate?.()
+        return Effect.succeed(installation)
+      },
       pendingNotifications: unsupported,
       markNotificationDelivered: unsupported,
       deferNotification: unsupported,
     }),
   )
-  return { layer, recorded, completed }
+  return { layer, recorded, completed, rotated }
 }
 
 interface TelegramCall {
@@ -343,6 +360,98 @@ describe("activation and the prompt", () => {
       // again — disarming here would strand them.
       expect(repo.completed).toEqual([])
       expect(telegram.calls.map((call) => call.method)).not.toContain("editMessageText")
+    }),
+  )
+
+  it.effect("arms the bot's webhook only once the installation exists", () =>
+    Effect.gen(function* () {
+      // The coach's very first `/start` reaches the bot the moment its webhook is
+      // armed, and Telegram shows them the bot as soon as it is created. If the
+      // installation is not there by then, the update finds neither the installed
+      // route nor the handshake — which is how a coach came to tap Start twice to
+      // be greeted once (#150). Arming last is what removes that window, so the
+      // order is the assertion.
+      const telegram = telegramStub()
+      let completedBeforeArming: boolean | undefined
+      const repo = repoStub(attempt({ status: "configuring", promptMessageId: 401 }), {
+        onComplete: () => {
+          completedBeforeArming = !telegram.calls.some((call) => call.method === "setWebhook")
+        },
+      })
+
+      yield* provision(repo, telegram)
+
+      // Nothing had armed the webhook by the time the transaction ran…
+      expect(completedBeforeArming).toBe(true)
+      // …and it is armed by the time provisioning returns.
+      const methods = telegram.calls.map((call) => call.method)
+      expect(methods).toContain("setWebhook")
+      expect(methods.indexOf("setWebhook")).toBeGreaterThan(methods.indexOf("setChatMenuButton"))
+      expect(repo.completed).toEqual(["cbp_test_800000101"])
+    }),
+  )
+
+  it.effect("leaves the workspace connected when arming the webhook fails", () =>
+    Effect.gen(function* () {
+      const repo = repoStub(attempt({ status: "configuring", promptMessageId: 401 }))
+      const telegram = telegramStub(["setWebhook"])
+
+      const failure = yield* Effect.flip(provision(repo, telegram))
+
+      // The trade this order makes, stated: a failure here leaves a connected
+      // workspace whose bot is deaf, where the old order left an unconnected
+      // workspace whose bot was armed. Both are repaired by the same redelivery —
+      // the caller answers 500, and the already-installed branch reconfigures and
+      // re-arms — and this direction cannot cost the coach their greeting.
+      expect(failure).toMatchObject({
+        _tag: "BotWorker.TelegramSetupFailed",
+        operation: "setWebhook",
+      })
+      expect(repo.completed).toEqual(["cbp_test_800000101"])
+      // The prompt is settled before arming, so the one step that can fail after
+      // the workspace is connected cannot leave a live creation button behind.
+      expect(telegram.calls.map((call) => call.method)).toContain("editMessageText")
+    }),
+  )
+
+  it.effect("re-arms an already-connected bot before rewriting its stored secret", () =>
+    Effect.gen(function* () {
+      // The opposite order from a first-time connection, and the reason is that
+      // this branch has something to lose. The bot is already installed, so #150's
+      // window cannot exist here — but only the *hash* of a secret is ever stored,
+      // so committing a new hash before Telegram accepts the new secret would
+      // leave a working bot answering 401 to its own coach.
+      const telegram = telegramStub()
+      let armedBeforeRotate: boolean | undefined
+      const repo = repoStub(attempt({ status: "configuring" }), {
+        installed: installation,
+        onRotate: () => {
+          armedBeforeRotate = telegram.calls.some((call) => call.method === "setWebhook")
+        },
+      })
+
+      yield* provision(repo, telegram)
+
+      expect(armedBeforeRotate).toBe(true)
+      expect(repo.rotated).toHaveLength(1)
+    }),
+  )
+
+  it.effect("keeps a connected bot on its working secret when re-arming fails", () =>
+    Effect.gen(function* () {
+      const telegram = telegramStub(["setWebhook"])
+      const repo = repoStub(attempt({ status: "configuring" }), { installed: installation })
+
+      const failure = yield* Effect.flip(provision(repo, telegram))
+
+      expect(failure).toMatchObject({
+        _tag: "BotWorker.TelegramSetupFailed",
+        operation: "setWebhook",
+      })
+      // Nothing was written, so the row still carries the secret Telegram is still
+      // presenting and the bot goes on working — exactly as harmless as this
+      // failure was before the webhook moved out of configuration.
+      expect(repo.rotated).toEqual([])
     }),
   )
 

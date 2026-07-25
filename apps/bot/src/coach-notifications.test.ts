@@ -44,6 +44,7 @@ const run = (queued: ReadonlyArray<CoachBotProvisioningRepo.PendingNotification>
         findCandidateByBotId: unsupported,
         complete: unsupported,
         findByBotId: unsupported,
+        findInFlightManagedAttempt: unsupported,
         findByWorkspace: unsupported,
         workspaceProfile: unsupported,
         rotate: unsupported,

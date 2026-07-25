@@ -110,6 +110,26 @@ Everything downstream is automatic — nothing here is an operator action:
 - the workspace flips to `connected`, the invite is consumed, and the manager
   bot notifies the admin.
 
+The webhook is armed **last**, after the workspace flips to `connected`
+([#150](https://github.com/apshenichniy/praximo/issues/150)). That ordering is
+what lets a coach tap **Start** the instant Telegram hands them their new bot: an
+update sent before the webhook exists is held by Telegram and delivered once it
+does, by which time the installation is there to answer it. Two operator
+consequences:
+
+- If a coach reports that **Start did nothing**, check the Worker log for the bot
+  id. Every refusal on a coach bot's route now logs — no installation, no
+  candidate, secret mismatch, or an attempt still configuring — so the reason is
+  one `grep` away rather than a reconstruction from database timestamps.
+- A failure at the arming step leaves a workspace **`connected` with a bot that
+  hears nothing**. Telegram repeats the `managed_bot` update and the retry
+  re-arms, so it normally heals itself; if a coach's bot stays mute while the
+  admin surface says `connected`, that is the shape to suspect, and re-running
+  provisioning is the repair. Two log lines tell the two cases apart: *no
+  installation* means the row is missing, while **`webhook secret does not match`
+  means the bot is delivering and being refused** — its stored secret and the one
+  Telegram presents have diverged, and only re-provisioning re-aligns them.
+
 **Fallback — the coach already owns a bot.** Instead of tapping, the coach sends
 that bot's @BotFather token as a private message to the manager bot. The message
 is deleted, the token validated, and the coach proves ownership by opening the

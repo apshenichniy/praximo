@@ -6,6 +6,7 @@ import type { Update } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
 import { clientLanguage, messages } from "./messages.ts"
 import {
+  armCoachBotWebhook,
   coachDisplayName,
   coachMiniAppUrl,
   configureCoachBot,
@@ -222,15 +223,16 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
     candidate.botUsername,
     now,
   )
+  const injectedFetch =
+    input.telegramFetch === undefined ? {} : { telegramFetch: input.telegramFetch }
   const configured = yield* configureCoachBot({
     env,
     token,
     botId: candidate.botId,
     workspace: claimed.workspace,
     coachName: coachDisplayName(from, claimed.workspace.name),
-    webhookOrigin: input.webhookOrigin,
     secret: input.secretToken,
-    ...(input.telegramFetch === undefined ? {} : { telegramFetch: input.telegramFetch }),
+    ...injectedFetch,
   })
   yield* repo.complete({
     provisioningId: claimed.id,
@@ -245,6 +247,18 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
   // the manager chat from before they gave up on it. Their bot is connected now,
   // whichever path got them here, so that button is retired the same way (#134).
   yield* settleCreationPrompt(env, claimed, candidate.botUsername, input.telegramFetch)
+  // Re-armed with the very secret this request authenticated against, which the
+  // activation transaction has just recorded the hash of. On this path the bot has
+  // been pointed at us since the paste — that is how the proof arrived — so there
+  // is no window to close here; keeping the call in the same place as the managed
+  // path is what stops the two drifting apart (#150).
+  yield* armCoachBotWebhook({
+    token,
+    botId: candidate.botId,
+    secret: input.secretToken,
+    webhookOrigin: input.webhookOrigin,
+    ...injectedFetch,
+  })
 
   const copy = messages(candidate.coachLanguage)
   // The bot is connected the moment the transaction commits; a greeting that

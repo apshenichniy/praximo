@@ -412,6 +412,42 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
+  it.effect("holds a managed bot as in flight only between its claim and activation", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachBotProvisioningRepo.Service
+      const aggregate = yield* inviteFor("in-flight", ISSUED_AT)
+      const botId = "9100013"
+      const claimedAt = new Date("2026-07-23T19:10:00.000Z")
+
+      // Nothing claimed yet: the bot is not ours to be waiting on.
+      expect(yield* repo.findInFlightManagedAttempt(botId)).toBeUndefined()
+
+      const prepared = yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      expect(yield* repo.findInFlightManagedAttempt(botId)).toBeUndefined()
+
+      // Claimed and configuring: this bot is ours and unfinished, which is what a
+      // tripwire on its own route needs to tell from a bot id nobody has seen.
+      yield* repo.claim(coach, botId, "ada_in_flight_bot", claimedAt)
+      // The row itself, so the log can name the attempt and when it was touched.
+      expect(yield* repo.findInFlightManagedAttempt(botId)).toEqual({
+        id: prepared.id,
+        updatedAt: claimedAt,
+      })
+      // Only that bot: another id is not in flight just because this one is.
+      expect(yield* repo.findInFlightManagedAttempt("9100014")).toBeUndefined()
+
+      yield* repo.complete({
+        provisioningId: prepared.id,
+        encryptedToken: "sealed:9100013:token",
+        webhookSecretHash: "in-flight-hash",
+        botInfo: { id: 9100013, is_bot: true, first_name: "Ada In Flight" },
+        now: new Date("2026-07-23T19:11:00.000Z"),
+      })
+      // Activation committed, so the installation route serves it from here on.
+      expect(yield* repo.findInFlightManagedAttempt(botId)).toBeUndefined()
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
   it.effect("names the invitation's own lifecycle when it refuses a claim", () =>
     Effect.gen(function* () {
       const repo = yield* CoachBotProvisioningRepo.Service
