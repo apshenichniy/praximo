@@ -1,4 +1,4 @@
-import { AdminShell } from "@/components/admin-shell.tsx"
+import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { Skeleton } from "@/components/ui/skeleton.tsx"
 import { entryFrameClass, entryMarkClass } from "@/features/entry/components/entry-frame.tsx"
 
@@ -15,7 +15,7 @@ import { entryFrameClass, entryMarkClass } from "@/features/entry/components/ent
  */
 export function EntryLoading() {
   return (
-    <AdminShell>
+    <MiniAppShell>
       <main className={entryFrameClass}>
         <div className="flex flex-col items-center text-center">
           <div
@@ -30,6 +30,6 @@ export function EntryLoading() {
           <Skeleton className="mt-2 h-4 w-40 rounded-md" />
         </div>
       </main>
-    </AdminShell>
+    </MiniAppShell>
   )
 }

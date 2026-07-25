@@ -2,7 +2,7 @@ import { Outlet, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback } from "react"
 
 import { AdminNotFound } from "@/components/admin-not-found.tsx"
-import { AdminShell } from "@/components/admin-shell.tsx"
+import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import { Toaster } from "@/components/ui/toast.tsx"
@@ -60,11 +60,11 @@ function EntryLayout() {
   const retry = useCallback(() => void router.invalidate(), [router])
 
   return (
-    <AdminShell>
+    <MiniAppShell>
       <TelegramFullscreen />
       <Toaster>
         {view.kind === "admin" ? <Outlet /> : <EntryScreen view={view} onRetry={retry} />}
       </Toaster>
-    </AdminShell>
+    </MiniAppShell>
   )
 }

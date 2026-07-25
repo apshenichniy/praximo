@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
+import { Route as LegalTermsRouteImport } from './routes/legal/terms'
 import { Route as AdminWorkspacesWorkspaceIdRouteImport } from './routes/admin/workspaces/$workspaceId'
 import { Route as AdminWorkspacesNewRouteImport } from './routes/admin/workspaces/new'
 
@@ -36,6 +38,16 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
+  id: '/legal/privacy',
+  path: '/legal/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalTermsRoute = LegalTermsRouteImport.update({
+  id: '/legal/terms',
+  path: '/legal/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminWorkspacesWorkspaceIdRoute =
   AdminWorkspacesWorkspaceIdRouteImport.update({
     id: '/workspaces/$workspaceId',
@@ -52,6 +64,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/health': typeof HealthRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/workspaces/$workspaceId': typeof AdminWorkspacesWorkspaceIdRoute
   '/admin/workspaces/new': typeof AdminWorkspacesNewRoute
@@ -59,6 +73,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/admin': typeof AdminIndexRoute
   '/admin/workspaces/$workspaceId': typeof AdminWorkspacesWorkspaceIdRoute
   '/admin/workspaces/new': typeof AdminWorkspacesNewRoute
@@ -68,6 +84,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/health': typeof HealthRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/workspaces/$workspaceId': typeof AdminWorkspacesWorkspaceIdRoute
   '/admin/workspaces/new': typeof AdminWorkspacesNewRoute
@@ -78,6 +96,8 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/health'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/admin/'
     | '/admin/workspaces/$workspaceId'
     | '/admin/workspaces/new'
@@ -85,6 +105,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/health'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/admin'
     | '/admin/workspaces/$workspaceId'
     | '/admin/workspaces/new'
@@ -93,6 +115,8 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/health'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/admin/'
     | '/admin/workspaces/$workspaceId'
     | '/admin/workspaces/new'
@@ -102,6 +126,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
   HealthRoute: typeof HealthRoute
+  LegalPrivacyRoute: typeof LegalPrivacyRoute
+  LegalTermsRoute: typeof LegalTermsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -133,6 +159,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/legal/privacy': {
+      id: '/legal/privacy'
+      path: '/legal/privacy'
+      fullPath: '/legal/privacy'
+      preLoaderRoute: typeof LegalPrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal/terms': {
+      id: '/legal/terms'
+      path: '/legal/terms'
+      fullPath: '/legal/terms'
+      preLoaderRoute: typeof LegalTermsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/admin/workspaces/$workspaceId': {
       id: '/admin/workspaces/$workspaceId'
@@ -171,6 +211,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRouteRoute: AdminRouteRouteWithChildren,
   HealthRoute: HealthRoute,
+  LegalPrivacyRoute: LegalPrivacyRoute,
+  LegalTermsRoute: LegalTermsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

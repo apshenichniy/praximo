@@ -24,6 +24,12 @@ interface Env {
   readonly MANAGER_BOT_USERNAME: string
   /** Selects Telegram's Ed25519 public key for the coach path (ADR 0006). */
   readonly TELEGRAM_ENV: string
+  /**
+   * Local development only: the public half of the throwaway pair the dev
+   * credential minter signs with. Absent everywhere else, and the branch that
+   * populates it folds out of a production build.
+   */
+  readonly COACH_DEV_PUBLIC_KEY?: string
   readonly MANAGER_BOT?: ManagerBotSender.RpcClient & CoachBotRelease.RpcClient
   readonly PIPELINE?: WorkspaceRunCancellationRpcClient
 }
@@ -48,9 +54,16 @@ const runtimeFromEnv = (env: Env) => {
     env.PIPELINE === undefined
       ? WorkspaceRunCancellation.layer
       : WorkspaceRunCancellation.rpcLayer(env.PIPELINE)
+  // Config *selects* Telegram's trust anchor from two keys already in source;
+  // development anchors on the throwaway key it also signs with. Either way the
+  // real verifier runs — a wrong public key can only make verification fail.
+  const coachInitData =
+    env.COACH_DEV_PUBLIC_KEY === undefined
+      ? CoachInitData.layer
+      : CoachInitData.testLayer(env.COACH_DEV_PUBLIC_KEY)
   const dependencies = Layer.mergeAll(
     ManagerInitData.layer,
-    CoachInitData.layer,
+    coachInitData,
     CoachOnboardingToken.layer,
     sender,
     coachBotRelease,
@@ -84,6 +97,17 @@ const resolveEnv = async (): Promise<Env> => {
       MANAGER_BOT_TOKEN: requireString(process.env.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
       MANAGER_BOT_USERNAME: requireString(process.env.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
       TELEGRAM_ENV: requireString(process.env.TELEGRAM_ENV, "TELEGRAM_ENV"),
+      // The guard is a bare `import.meta.env.DEV`, not the binding-source check
+      // above it: only a foldable constant lets Vite drop the dynamic import and
+      // with it every line of the development credential minter. A call whose
+      // argument happens to be `false` keeps the module in the bundle.
+      ...(import.meta.env.DEV
+        ? {
+            COACH_DEV_PUBLIC_KEY: await import("./development-coach-credential.ts").then((module) =>
+              module.developmentCoachPublicKey(),
+            ),
+          }
+        : {}),
     }
   }
 

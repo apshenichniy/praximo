@@ -1,8 +1,8 @@
-import { AdminShell } from "@/components/admin-shell.tsx"
+import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 
 export function AdminNotFound() {
   return (
-    <AdminShell>
+    <MiniAppShell>
       <main className="flex min-h-svh items-center justify-center px-6 text-center">
         <div>
           <div className="bg-card ring-border mx-auto flex size-16 items-center justify-center rounded-full text-2xl font-semibold ring-1">
@@ -11,6 +11,6 @@ export function AdminNotFound() {
           <h1 className="mt-6 text-xl font-semibold">Page not found</h1>
         </div>
       </main>
-    </AdminShell>
+    </MiniAppShell>
   )
 }

@@ -1,4 +1,5 @@
-import { loadDevelopmentAdminInitData } from "@/server/admin-workspaces.functions.ts"
+import { loadDevelopmentAdminInitData } from "@/server/development-admin-credential.ts"
+import { loadDevelopmentCoachInitData } from "@/server/development-coach-credential.ts"
 import { loadTelegramWebApp, readTelegramInitData, revealTelegramWebApp } from "@/lib/telegram.ts"
 
 /**
@@ -28,8 +29,15 @@ const read = async (): Promise<LaunchCredential> => {
 
   // Local Vite only: a short-lived signed credential, so the real verifier and
   // the real database gate run in development instead of being stubbed out.
+  // Which one is minted follows the same thing that distinguishes the two trees
+  // in a Telegram host — a coach bot's Mini App URL names its bot, the manager
+  // bot's does not.
   if (import.meta.env.DEV) {
-    return { initData: await loadDevelopmentAdminInitData().catch(() => ""), botId }
+    const minted =
+      botId.length === 0
+        ? await loadDevelopmentAdminInitData().catch(() => "")
+        : await loadDevelopmentCoachInitData({ data: { botId } }).catch(() => "")
+    return { initData: minted, botId }
   }
 
   // Outside a Telegram host there is nobody to identify. That is an answer, not

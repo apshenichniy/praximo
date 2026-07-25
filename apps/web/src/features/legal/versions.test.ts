@@ -34,7 +34,7 @@ describe("legal versions", () => {
 
     // A marker in the text that nobody registered would ship as a launch blocker
     // nobody knew about; a registered one nothing uses is a stale checklist item.
-    expect([...used].sort()).toEqual([...registered].sort())
+    expect(used).toEqual(registered)
   })
 
   it("says who is the controller and what the AI output is worth", () => {

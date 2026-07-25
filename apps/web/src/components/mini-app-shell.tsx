@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from "react"
 
 /**
- * Mini App frame carrying the safe-area insets the fullscreen
- * requirement asks for (mini-app.md). Telegram publishes the device safe area
+ * The frame both Mini Apps sit in — the manager one and the coach one — carrying
+ * the safe-area insets the fullscreen requirement asks for (mini-app.md). Telegram publishes the device safe area
  * and its own overlay (the fullscreen close/minimize controls) as CSS variables;
  * padding by their sum keeps content clear of both. Every variable falls back to
  * `0px`, so outside fullscreen — and outside Telegram entirely — the frame is
@@ -20,7 +20,7 @@ const safeAreaInsets: CSSProperties = {
     "calc(var(--tg-safe-area-inset-left, 0px) + var(--tg-content-safe-area-inset-left, 0px))",
 }
 
-export function AdminShell({ children }: { children: ReactNode }) {
+export function MiniAppShell({ children }: { children: ReactNode }) {
   return (
     <div className="bg-background text-foreground font-sans min-h-svh" style={safeAreaInsets}>
       {children}
