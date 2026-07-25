@@ -97,7 +97,7 @@ Three **delivery actions**; tapping one creates the workspace (`awaiting setup`)
 2. **Send by email** ([#105](https://github.com/apshenichniy/praximo/issues/105)) — bottom sheet with the address and invite-language chips. **MVP ships the UI as a stub** ("coming soon" toast); delivery lands later on **Cloudflare Email Service + React Email** ([#114](https://github.com/apshenichniy/praximo/issues/114) research).
 3. **Copy invite** — copies the full forwardable message (with the deep link) via `navigator.clipboard.writeText`, for any other channel.
 
-Backing out before any delivery action creates nothing. Success is a toast + the pending card in the coaches list — there is no separate "created" screen. Everything downstream of the coach opening the link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) through Managed Bots one-tap; manual token ingestion is a separate follow-up ([#95](https://github.com/apshenichniy/praximo/issues/95)).
+Backing out before any delivery action creates nothing. Success is a toast + the pending card in the coaches list — there is no separate "created" screen. Everything downstream of the coach opening the link is automatic per [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) through Managed Bots one-tap; a coach who already owns a bot can instead paste its @BotFather token into the manager chat and confirm ownership through that bot ([#95](https://github.com/apshenichniy/praximo/issues/95)). Both paths end in the same connected workspace and the same admin notification, so the admin surface shows no difference.
 
 ### Default coach-bot avatar operations
 

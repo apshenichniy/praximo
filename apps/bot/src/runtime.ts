@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto"
+import { createHash } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
 import { CoachBotProvisioningRepo, CoachOnboardingRepo, Database, WorkspaceRepo } from "@praximo/db"
 import { TelegramId, WorkspaceId } from "@praximo/domain"
@@ -9,14 +9,22 @@ import {
   ManagerBotSender,
 } from "@praximo/telegram"
 import { Bot, InlineKeyboard, Keyboard } from "grammy"
-import type { User, UserFromGetMe } from "grammy/types"
-import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
+import type { Update, User, UserFromGetMe } from "grammy/types"
+import { ConfigProvider, Effect, Layer, ManagedRuntime, Result } from "effect"
+import { clientLanguage, type Copy, messages } from "./messages.ts"
 import {
+  constantTimeEqual,
   deliverProvisioningNotifications,
   managedBotSuggestions,
   prepareOnboarding,
   provisionManagedBot,
 } from "./provisioning.ts"
+import {
+  authenticateProof,
+  botFatherToken,
+  completeOwnershipProof,
+  ingestBotFatherToken,
+} from "./token-fallback.ts"
 import * as CoachBotReleaseLive from "./coach-bot-release.ts"
 
 export interface Env {
@@ -64,37 +72,63 @@ const health = Effect.gen(function* () {
   return { app: "bot", status: "ok" } as const
 })
 
-const constantTimeEqual = (received: string, expected: string): boolean => {
-  const left = Buffer.from(received)
-  const right = Buffer.from(expected)
-  return left.length === right.length && timingSafeEqual(left, right)
-}
-
-const errorText = (tag: string, reason?: string): string => {
+/**
+ * The copy for a failure that never reached a workspace row, so the coach's own
+ * language is unknown and the sender's Telegram client language is all there is.
+ */
+const errorText = (copy: Copy, tag: string, reason?: string): string => {
   if (
     tag === "CoachOnboardingToken.InvalidToken" ||
     tag === "CoachOnboardingRepo.InviteCodeUnresolved"
   ) {
-    return "This setup link is invalid. Ask your Praximo administrator for a fresh link."
+    return copy.linkInvalid
   }
   if (reason === "expired" || reason === "cancelled") {
     // A cancelled invite reads as expired on purpose: the coach only needs to
     // know the link is dead and where a fresh one comes from, not that an
     // administrator reset it.
-    return "This setup link has expired. Ask your Praximo administrator to reissue it."
+    return copy.linkExpired
   }
   if (reason === "used" || reason === "claimed") {
-    return "This setup link has already been used."
+    return copy.linkUsed
   }
-  return "Bot setup could not be started. Please try again or ask your administrator for help."
+  return copy.setupUnavailable
 }
 
-const makeManagerBot = (env: Env, telegramFetch: typeof globalThis.fetch): Bot => {
+/**
+ * The reply to a pasted credential, once it is no longer a Telegram message.
+ * Only an identity with no attempt at all is told to open its link first; every
+ * other refusal is about the invitation, and says so.
+ */
+const ingestionText = (copy: Copy, tag: string, reason?: string): string => {
+  if (tag === "BotWorker.TokenIngestionFailed") {
+    return reason === "bot-taken" ? copy.tokenBotTaken : copy.tokenInvalid
+  }
+  if (tag === "CoachBotProvisioningRepo.ProvisioningUnavailable") {
+    return reason === "not-found" ? copy.tokenNoActiveSetup : errorText(copy, tag, reason)
+  }
+  return copy.tokenSetupFailed
+}
+
+/**
+ * Telegram permits deleting a message in a private chat for 48 hours, but not
+ * every failure is a permission one. When the credential is still sitting in the
+ * chat the coach has to be told, whatever else the reply says.
+ */
+const withDeletionNotice = (text: string, deleted: boolean, copy: Copy): string =>
+  deleted ? text : `${text}\n\n${copy.tokenNotDeleted}`
+
+const makeManagerBot = (
+  env: Env,
+  telegramFetch: typeof globalThis.fetch,
+  webhookOrigin: string,
+): Bot => {
   const bot = new Bot(env.MANAGER_BOT_TOKEN, { client: { fetch: telegramFetch } })
 
   bot.command("start", async (ctx) => {
+    const language = clientLanguage(ctx.from?.language_code)
     if (ctx.from === undefined || typeof ctx.match !== "string" || ctx.match.length === 0) {
-      await ctx.reply("Open the one-time Praximo setup link sent by your administrator.")
+      await ctx.reply(messages(language).openLinkFirst)
       return
     }
     const result = await getRuntime(env).runPromise(
@@ -102,39 +136,83 @@ const makeManagerBot = (env: Env, telegramFetch: typeof globalThis.fetch): Bot =
     )
     if (result._tag === "Failure") {
       const failure = result.failure as { readonly _tag?: string; readonly reason?: string }
-      await ctx.reply(errorText(failure._tag ?? "unknown", failure.reason))
+      await ctx.reply(errorText(messages(language), failure._tag ?? "unknown", failure.reason))
       return
     }
     const setup = result.success
+    const copy = messages(setup.coachLanguage)
     if (setup.status !== "requested") {
-      await ctx.reply(
-        setup.status === "completed"
-          ? "This setup link has already been used."
-          : "This bot setup is already in progress. Telegram will retry the saved configuration automatically.",
-      )
+      await ctx.reply(setup.status === "completed" ? copy.linkUsed : copy.setupInProgress)
       return
     }
     const suggestions = managedBotSuggestions(setup.workspace.name)
     const keyboard = new Keyboard()
-      .requestManagedBot("Create coach bot", setup.keyboardRequestId, {
+      .requestManagedBot(copy.createBotButton, setup.keyboardRequestId, {
         suggested_name: suggestions.name,
         suggested_username: suggestions.username,
       })
       .resized()
       .oneTime()
+    await ctx.reply(copy.invitationReserved(setup.workspace.name), { reply_markup: keyboard })
+  })
+
+  /**
+   * The BotFather fallback (#95). Registered after `/start` so a command update
+   * never reaches it, and gated on a private chat: a full-control credential is
+   * only ever accepted from the coach's own conversation with the manager bot.
+   */
+  bot.on("message:text", async (ctx) => {
+    if (ctx.chat.type !== "private" || ctx.from === undefined) return
+    const token = botFatherToken(ctx.message.text)
+    if (token === undefined) return
+    // Before validation, before anything else: the credential stops being a
+    // Telegram message. An invalid or refused token is just as exposed sitting
+    // in the chat as a working one.
+    const deleted = await ctx.deleteMessage().then(
+      () => true,
+      () => false,
+    )
+    const outcome = await getRuntime(env).runPromise(
+      ingestBotFatherToken(
+        TelegramId.make(String(ctx.from.id)),
+        token,
+        webhookOrigin,
+        telegramFetch,
+      ).pipe(Effect.result),
+    )
+    if (Result.isSuccess(outcome)) {
+      const copy = messages(outcome.success.coachLanguage)
+      await ctx.reply(
+        withDeletionNotice(
+          copy.proofPrompt(outcome.success.username, outcome.success.proofLink),
+          deleted,
+          copy,
+        ),
+      )
+      return
+    }
+    const failure = outcome.failure as { readonly _tag?: string; readonly reason?: string }
+    const copy = messages(clientLanguage(ctx.from.language_code))
     await ctx.reply(
-      `This invitation is now reserved for you${setup.workspace.name.length === 0 ? "" : ` (“${setup.workspace.name}”)`}. Create your coach bot to finish the setup — you can come back to this chat and continue any time.`,
-      { reply_markup: keyboard },
+      withDeletionNotice(
+        ingestionText(copy, failure._tag ?? "unknown", failure.reason),
+        deleted,
+        copy,
+      ),
     )
   })
 
   return bot
 }
 
-const managerBotFor = (env: Env, telegramFetch: typeof globalThis.fetch): Promise<Bot> => {
+const managerBotFor = (
+  env: Env,
+  telegramFetch: typeof globalThis.fetch,
+  webhookOrigin: string,
+): Promise<Bot> => {
   if (managerBot !== undefined) return Promise.resolve(managerBot)
   managerBotInitialization ??= (async () => {
-    const bot = makeManagerBot(env, telegramFetch)
+    const bot = makeManagerBot(env, telegramFetch, webhookOrigin)
     await bot.init()
     managerBot = bot
     return bot
@@ -160,21 +238,21 @@ const handleManagerWebhook = async (
   }
   // The webhook's public origin is the canonical endpoint installed on every
   // coach bot. Attach it to this dispatch without persisting another secret.
-  const bot = await managerBotFor(env, telegramFetch)
+  const webhookOrigin = new URL(request.url).origin
+  const bot = await managerBotFor(env, telegramFetch, webhookOrigin)
   if (update.managed_bot !== undefined) {
     const result = await getRuntime(env).runPromise(
-      provisionManagedBot(
-        env,
-        update.managed_bot.user,
-        update.managed_bot.bot,
-        new URL(request.url).origin,
-      ).pipe(Effect.result),
+      provisionManagedBot(env, update.managed_bot.user, update.managed_bot.bot, webhookOrigin).pipe(
+        Effect.result,
+      ),
     )
     if (result._tag === "Failure") return new Response(null, { status: 500 })
     coachBots.delete(String(update.managed_bot.bot.id))
     await bot.api.sendMessage(
       update.managed_bot.user.id,
-      `Your coach bot @${result.success.username} is connected. Open it to continue.`,
+      messages(clientLanguage(update.managed_bot.user.language_code)).botConnected(
+        result.success.username,
+      ),
     )
     return new Response(null, { status: 200 })
   }
@@ -182,41 +260,95 @@ const handleManagerWebhook = async (
   return new Response(null, { status: 200 })
 }
 
+/**
+ * `undefined` means this bot has no installation yet — on its own route that is
+ * not an error but the other state the route serves: a bot whose credential was
+ * pasted and which is answering its ownership handshake (#95).
+ */
 const coachBotFor = async (
   env: Env,
   botId: string,
-): Promise<{ readonly bot: Bot; readonly webhookSecretHash: string }> => {
+): Promise<{ readonly bot: Bot; readonly webhookSecretHash: string } | undefined> => {
   const installation = await getRuntime(env).runPromise(
     Effect.gen(function* () {
       const repo = yield* CoachBotProvisioningRepo.Service
       const credentials = yield* CoachBotCredential.Service
       const installed = yield* repo.findByBotId(botId)
       return { installed, token: yield* credentials.decrypt(installed.encryptedToken) }
-    }),
+    }).pipe(Effect.result),
   )
+  if (Result.isFailure(installation)) {
+    if (installation.failure._tag === "CoachBotProvisioningRepo.InstallationNotFound") {
+      return undefined
+    }
+    throw installation.failure
+  }
   let bot = coachBots.get(botId)
   if (bot === undefined) {
-    bot = new Bot(installation.token, {
-      botInfo: installation.installed.botInfo as UserFromGetMe,
+    bot = new Bot(installation.success.token, {
+      botInfo: installation.success.installed.botInfo as UserFromGetMe,
     })
-    bot.command("start", (ctx) =>
-      ctx.reply("Praximo is ready.", {
-        reply_markup: new InlineKeyboard().webApp("Open", env.COACH_MINI_APP_URL),
-      }),
-    )
+    // The bot instance outlives the update that built it, so the greeting reads
+    // its language off whoever is actually typing rather than off construction.
+    bot.command("start", (ctx) => {
+      const copy = messages(clientLanguage(ctx.from?.language_code))
+      return ctx.reply(copy.botReady, {
+        reply_markup: new InlineKeyboard().webApp(copy.openButton, env.COACH_MINI_APP_URL),
+      })
+    })
     coachBots.set(botId, bot)
   }
-  return { bot, webhookSecretHash: installation.installed.webhookSecretHash }
+  return { bot, webhookSecretHash: installation.success.installed.webhookSecretHash }
 }
 
-const handleCoachWebhook = async (request: Request, env: Env, botId: string): Promise<Response> => {
-  const installed = await coachBotFor(env, botId)
+const handleCoachWebhook = async (
+  request: Request,
+  env: Env,
+  botId: string,
+  telegramFetch: typeof globalThis.fetch,
+): Promise<Response> => {
   const received = request.headers.get("x-telegram-bot-api-secret-token") ?? ""
+  const installed = await coachBotFor(env, botId)
+  if (installed === undefined) {
+    return handleOwnershipProof(request, env, botId, received, telegramFetch)
+  }
   const receivedHash = createHash("sha256").update(received).digest("hex")
   if (!constantTimeEqual(receivedHash, installed.webhookSecretHash)) {
     return new Response(null, { status: 401 })
   }
-  await installed.bot.handleUpdate((await request.json()) as { update_id: number })
+  await installed.bot.handleUpdate((await request.json()) as Update)
+  return new Response(null, { status: 200 })
+}
+
+/**
+ * The pasted bot's own route before it is installed. A failure answers 500 on
+ * purpose: Telegram retries the handshake update, which is what makes a
+ * half-configured attempt resumable without the coach doing anything.
+ */
+const handleOwnershipProof = async (
+  request: Request,
+  env: Env,
+  botId: string,
+  secretToken: string,
+  telegramFetch: typeof globalThis.fetch,
+): Promise<Response> => {
+  const candidate = await getRuntime(env).runPromise(
+    authenticateProof(botId, secretToken).pipe(Effect.result),
+  )
+  if (Result.isFailure(candidate)) return new Response(null, { status: 500 })
+  // Nothing parked, or the wrong secret: the body is never even read.
+  if (candidate.success === undefined) return new Response(null, { status: 401 })
+  const outcome = await getRuntime(env).runPromise(
+    completeOwnershipProof(env, {
+      candidate: candidate.success,
+      secretToken,
+      update: (await request.json()) as Update,
+      webhookOrigin: new URL(request.url).origin,
+      telegramFetch,
+    }).pipe(Effect.result),
+  )
+  if (Result.isFailure(outcome)) return new Response(null, { status: 500 })
+  if (outcome.success._tag === "Activated") coachBots.delete(botId)
   return new Response(null, { status: 200 })
 }
 
@@ -271,7 +403,7 @@ export const handleRequest = async (
   if (request.method !== "POST") return new Response(null, { status: 404 })
   if (pathname === "/telegram/manager") return handleManagerWebhook(request, env, telegramFetch)
   const match = /^\/telegram\/coach\/([0-9]+)$/.exec(pathname)
-  if (match?.[1] !== undefined) return handleCoachWebhook(request, env, match[1])
+  if (match?.[1] !== undefined) return handleCoachWebhook(request, env, match[1], telegramFetch)
   return new Response(null, { status: 404 })
 }
 

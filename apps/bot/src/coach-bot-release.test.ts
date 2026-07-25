@@ -16,6 +16,8 @@ const dependencies = (findByWorkspace: CoachBotProvisioningRepo.Interface["findB
       CoachBotProvisioningRepo.Service.of({
         prepare: unsupported,
         claim: unsupported,
+        ingestCandidate: unsupported,
+        findCandidateByBotId: unsupported,
         complete: unsupported,
         findByBotId: unsupported,
         findByWorkspace,

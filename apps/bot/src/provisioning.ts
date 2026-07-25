@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
 import { CoachBotProvisioningRepo, CoachOnboardingRepo } from "@praximo/db"
 import { TelegramId } from "@praximo/domain"
@@ -45,18 +46,23 @@ export const managedBotSuggestions = (
  * the honest answer — the workspace label is the admin's private shorthand and
  * the coach never sees it — so the label is only the fallback.
  */
-const coachDisplayName = (user: User, workspaceName: string): string => {
+export const coachDisplayName = (user: User, workspaceName: string): string => {
   const telegramName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim()
   return telegramName.length === 0 ? workspaceName : telegramName
 }
 
-const telegram = <A>(operation: string, run: () => Promise<A>) =>
+/**
+ * Every Telegram call the provisioning paths make. The cause is dropped on
+ * purpose: a grammY failure carries the request URL, and for a coach bot that
+ * URL carries its token (ADR 0004).
+ */
+export const telegram = <A>(operation: string, run: () => Promise<A>) =>
   Effect.tryPromise({
     try: run,
     catch: () => new TelegramSetupFailed({ operation }),
   })
 
-const webhookSecret = (): string => {
+export const webhookSecret = (): string => {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
   return btoa(String.fromCharCode(...bytes))
     .replaceAll("+", "-")
@@ -64,7 +70,13 @@ const webhookSecret = (): string => {
     .replace(/=+$/, "")
 }
 
-const sha256 = (value: string) =>
+export const constantTimeEqual = (received: string, expected: string): boolean => {
+  const left = Buffer.from(received)
+  const right = Buffer.from(expected)
+  return left.length === right.length && timingSafeEqual(left, right)
+}
+
+export const sha256 = (value: string) =>
   Effect.promise(() =>
     crypto.subtle
       .digest("SHA-256", new TextEncoder().encode(value))
@@ -110,15 +122,31 @@ const resolveAvatarBytes = Effect.fn("BotWorker.resolveAvatarBytes")(function* (
   return yield* loadAvatarObject(env, env.DEFAULT_COACH_BOT_AVATAR_R2_KEY)
 })
 
-const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
-  env: ProvisioningEnv,
-  token: string,
-  botId: string,
-  workspace: CoachBotProvisioningRepo.WorkspaceProfile,
-  coachName: string,
-  webhookOrigin: string,
+export interface CoachBotConfiguration {
+  readonly env: ProvisioningEnv
+  readonly token: string
+  readonly botId: string
+  readonly workspace: CoachBotProvisioningRepo.WorkspaceProfile
+  readonly coachName: string
+  readonly webhookOrigin: string
+  /**
+   * The webhook secret to install, when one is already armed on this bot and
+   * recorded against it. The BotFather fallback (#95) passes the secret it armed
+   * to receive the ownership proof: rotating it mid-configuration would lock out
+   * the very retry a partial failure depends on. Omitted, a fresh one is minted.
+   */
+  readonly secret?: string
+  readonly telegramFetch?: typeof globalThis.fetch
+}
+
+export const apiFor = (token: string, telegramFetch?: typeof globalThis.fetch): Api =>
+  new Api(token, telegramFetch === undefined ? undefined : { fetch: telegramFetch })
+
+export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
+  input: CoachBotConfiguration,
 ) {
-  const api = new Api(token)
+  const { botId, coachName, env, token, webhookOrigin, workspace } = input
+  const api = apiFor(token, input.telegramFetch)
   const botInfo = yield* telegram("getMe", () => api.getMe())
   const miniAppUrl = yield* Effect.try({
     try: () => {
@@ -131,7 +159,7 @@ const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
   // Seeded by the bot id so a re-provisioning of the same bot reproduces the
   // same avatar rather than re-skinning a profile the coach may already own.
   const avatarBytes = yield* resolveAvatarBytes(env, workspace, botId)
-  const secret = webhookSecret()
+  const secret = input.secret ?? webhookSecret()
 
   yield* telegram("setMyProfilePhoto", () =>
     api.setMyProfilePhoto({
@@ -200,14 +228,14 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       new Api(env.MANAGER_BOT_TOKEN).getManagedBotToken(managedBot.id),
     )
     const profile = yield* repo.workspaceProfile(existing.success.workspaceId)
-    const configured = yield* configureCoachBot(
+    const configured = yield* configureCoachBot({
       env,
       token,
-      existing.success.telegramBotId,
-      profile,
-      coachDisplayName(user, profile.name),
+      botId: existing.success.telegramBotId,
+      workspace: profile,
+      coachName: coachDisplayName(user, profile.name),
       webhookOrigin,
-    )
+    })
     return yield* repo.rotate({
       telegramBotId: String(managedBot.id),
       encryptedToken: yield* credentials.encrypt(token),
@@ -230,14 +258,14 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   const token = yield* telegram("getManagedBotToken", () =>
     new Api(env.MANAGER_BOT_TOKEN).getManagedBotToken(managedBot.id),
   )
-  const configured = yield* configureCoachBot(
+  const configured = yield* configureCoachBot({
     env,
     token,
-    String(managedBot.id),
-    provisioning.workspace,
-    coachDisplayName(user, provisioning.workspace.name),
+    botId: String(managedBot.id),
+    workspace: provisioning.workspace,
+    coachName: coachDisplayName(user, provisioning.workspace.name),
     webhookOrigin,
-  )
+  })
   return yield* repo.complete({
     provisioningId: provisioning.id,
     encryptedToken: yield* credentials.encrypt(token),

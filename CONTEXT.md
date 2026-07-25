@@ -25,6 +25,14 @@ _Avoid_: practitioner
 **Bot**:
 The workspace's dedicated Telegram bot — the delivery channel for reminders, join links, and artifacts.
 
+**Candidate Bot**:
+A bot a coach offered for their workspace that is not connected yet — created in one tap through Managed Bots, or identified by a @BotFather token pasted into the manager chat. It becomes the workspace's Bot only once it is configured and activated.
+_Avoid_: pending bot, unclaimed bot
+
+**Ownership Proof**:
+The handshake that lets a pasted credential connect a Candidate Bot: the coach opens that bot with a one-shot nonce only their manager chat received, from the same Telegram account that pasted the token. Possession of a token is not proof it is the coach's to hand over.
+_Avoid_: verification, confirmation code
+
 ### Clients and onboarding
 
 **Client**:

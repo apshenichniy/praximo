@@ -14,10 +14,11 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
 
 ### Mechanism
 
-- **MVP: Managed Bots one-tap provisioning only.** Manual BotFather token
-  ingestion is a separate follow-up
-  ([#95](https://github.com/apshenichniy/praximo/issues/95)) with an
-  ownership-proof handshake; it is not a second path inside this slice.
+- **Managed Bots one-tap provisioning is the primary path.** Manual BotFather
+  token ingestion shipped separately
+  ([#95](https://github.com/apshenichniy/praximo/issues/95)) as the fallback for
+  a coach who already owns a bot or whom Managed Bots fails; it carries its own
+  ownership-proof handshake and joins the one-tap pipeline at activation.
 - **No shared-single-bot mode**, not even as a degraded state: it breaks branding and forfeits per-coach rate limits.
 
 ### Bot roles
@@ -38,12 +39,29 @@ begins, and a repeated update resumes the same installation. Only the final
 database transaction sets the owner and `connected`, consumes the invite, and
 queues the manager-bot notification.
 
-### Follow-up fallback
+### BotFather token fallback
 
-- Ticket [#95](https://github.com/apshenichniy/praximo/issues/95) owns this
-  path. The intended contract is: validate with `getMe`, require a `/start`
-  ownership handshake, delete the credential-bearing message, then reuse the
-  downstream configuration pipeline.
+Implemented by [#95](https://github.com/apshenichniy/praximo/issues/95). A token
+is accepted only as a private message to the manager bot, and only while that
+Telegram identity holds an open onboarding attempt:
+
+1. The message is deleted before the token is validated; a deletion Telegram
+   refuses is reported to the coach rather than passed over.
+2. `getMe` validates the credential. It is then encrypted with the same envelope
+   an installed token uses and parked on the attempt row, which also holds the
+   SHA-256 of a one-shot proof nonce and of the webhook secret armed on that bot.
+   The plaintext never reaches Postgres, a log, a URL, or a typed error payload.
+3. The coach proves ownership by opening the candidate bot with that nonce. Only
+   a `/start` carrying both the nonce and the Telegram identity that pasted the
+   token activates; the bot's route serves the handshake until an installation
+   exists, authenticated by the candidate's own webhook-secret hash.
+4. From the proof on it is the one-tap path: the same claim, branding, webhook,
+   menu button, activation transaction, and admin notification. Activation wipes
+   the parked envelope and both proof hashes.
+
+Every refusal — no open attempt, invalid token, a bot another workspace runs, a
+foreign identity, a partial configuration failure — leaves the workspace
+unconnected, and a fresh paste supersedes the previous nonce and secret.
 
 ### Webhook architecture and storage
 
