@@ -281,6 +281,35 @@ describe.skipIf(!DATABASE_URL)("WorkspaceDeletionRepo (dev Neon branch)", () => 
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
+  it.effect("reads the receipt of a workspace that was never labelled", () =>
+    Effect.gen(function* () {
+      const repo = yield* WorkspaceDeletionRepo.Service
+      const { client } = yield* Database.Service
+      const workspaceId = WorkspaceId.make(uniqueId("ws_unnamed"))
+      const requestId = WorkspaceDeletionRequestId.make(crypto.randomUUID())
+      yield* Effect.addFinalizer(() =>
+        Effect.promise(async () => {
+          await client
+            .delete(schema.workspaceDeletionOperation)
+            .where(eq(schema.workspaceDeletionOperation.workspaceId, workspaceId))
+          await client.delete(schema.workspace).where(eq(schema.workspace.id, workspaceId))
+        }).pipe(Effect.asVoid),
+      )
+
+      // An invite-first workspace the admin never labelled. Its empty name is a
+      // real value, so the receipt must read it rather than refuse the row —
+      // refusing it stranded the coach's card mid-deletion with no way back in.
+      yield* Effect.promise(() =>
+        client.insert(schema.workspace).values({ id: workspaceId, name: "" }),
+      )
+      yield* repo.prepare(workspaceId, requestId, new Date("2026-07-24T10:00:00.000Z"))
+
+      const prepared = yield* repo.findByWorkspace(workspaceId)
+      expect(prepared?.state).toBe("prepared")
+      expect(prepared?.workspaceName).toBe("")
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
   it.effect("adopts an interrupted operation for a fresh requestId and resumes to completion", () =>
     Effect.gen(function* () {
       const repo = yield* WorkspaceDeletionRepo.Service

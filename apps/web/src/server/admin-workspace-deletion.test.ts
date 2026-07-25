@@ -292,6 +292,54 @@ describe("AdminSurface workspace deletion", () => {
     }),
   )
 
+  it.effect("says goodbye without quoting a label the workspace never had", () =>
+    Effect.gen(function* () {
+      // An invite-first workspace the admin never labelled. Its empty name is a
+      // real value that reaches the coach's farewell, so the message drops the
+      // quotes rather than shipping «» to a person.
+      const deletions = yield* deletionRepoDouble({ ...pendingOperation, workspaceName: "" })
+      const cancellationLayer = Layer.succeed(
+        WorkspaceRunCancellation.Service,
+        WorkspaceRunCancellation.Service.of({
+          cancel: Effect.fn("WorkspaceRunCancellation.UnnamedTest.cancel")(() =>
+            Effect.succeed(WorkspaceRunCancellationResult.cases.NothingActive.make({})),
+          ),
+          kickObjectCleanup: Effect.fn("WorkspaceRunCancellation.UnnamedTest.kick")(
+            () => Effect.void,
+          ),
+        }),
+      )
+      const appLayer = Layer.provideMerge(
+        AdminSurface.layer,
+        Layer.mergeAll(
+          authLayer,
+          unusedWorkspaceLayer,
+          unusedOnboardingLayer,
+          deletions.layer,
+          cancellationLayer,
+          CoachOnboardingToken.testLayer("PraximoMotherBot"),
+          ManagerBotSender.testLayer,
+          CoachBotRelease.testLayer,
+        ),
+      )
+
+      yield* Effect.gen(function* () {
+        const admin = yield* AdminSurface.Service
+        yield* admin.deleteWorkspace("valid", workspaceId, { requestId })
+        const messages = yield* ManagerBotSender.TestService.pipe(
+          Effect.flatMap((sender) => sender.sent()),
+        )
+
+        expect(messages).toEqual([
+          {
+            recipient: adminTelegramId,
+            text: "Your Praximo workspace has been deleted. The bot is no longer connected to Praximo.",
+          },
+        ])
+      }).pipe(Effect.provide(appLayer))
+    }),
+  )
+
   it.effect("adopts an interrupted operation and resumes it by its own requestId", () =>
     Effect.gen(function* () {
       // The client mints a fresh requestId on the retry after an interruption.

@@ -428,15 +428,32 @@ const presentCoach = (
   }
 }
 
-const deletionFarewell = (language: CoachLanguage, name: string): string => {
-  switch (language) {
-    case "uk":
-      return `Ваш простір Praximo «${name}» видалено. Бот більше не підключений до Praximo.`
-    case "ru":
-      return `Ваше пространство Praximo «${name}» удалено. Бот больше не подключён к Praximo.`
-    case "en":
-      return `Your Praximo workspace “${name}” has been deleted. The bot is no longer connected to Praximo.`
-  }
+/**
+ * The coach's goodbye. The label is the admin's private shorthand and may never
+ * have been set, so — as with the invite message — each language carries a named
+ * and an unnamed opening rather than quoting an empty string at the coach.
+ */
+const deletionFarewellCopy = {
+  uk: {
+    named: (name: string) => `Ваш простір Praximo «${name}» видалено.`,
+    unnamed: "Ваш простір Praximo видалено.",
+    tail: "Бот більше не підключений до Praximo.",
+  },
+  ru: {
+    named: (name: string) => `Ваше пространство Praximo «${name}» удалено.`,
+    unnamed: "Ваше пространство Praximo удалено.",
+    tail: "Бот больше не подключён к Praximo.",
+  },
+  en: {
+    named: (name: string) => `Your Praximo workspace “${name}” has been deleted.`,
+    unnamed: "Your Praximo workspace has been deleted.",
+    tail: "The bot is no longer connected to Praximo.",
+  },
+} as const
+
+export const deletionFarewell = (language: CoachLanguage, name: string): string => {
+  const copy = deletionFarewellCopy[language]
+  return `${name.length === 0 ? copy.unnamed : copy.named(name)} ${copy.tail}`
 }
 
 export const layer = Layer.effect(
