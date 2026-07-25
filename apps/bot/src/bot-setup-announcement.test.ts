@@ -188,6 +188,23 @@ describe("what the coach sees while their bot is set up", () => {
     }),
   )
 
+  it.effect("puts the menu button on the bot before telling the coach anything", () =>
+    Effect.gen(function* () {
+      const telegram = telegramStub()
+
+      yield* provision(telegram)
+
+      // The coach's client caches the bot's menu button when it opens the chat,
+      // and it opens the chat on the same tap that brought this update here. So
+      // the button goes on first — ahead of the announcement, and ahead of every
+      // slow step (#156). Verified live: setting it last left the coach without an
+      // Open button until they reopened the chat.
+      const methods = telegram.calls.map((call) => call.method)
+      expect(methods.indexOf("setChatMenuButton")).toBeGreaterThanOrEqual(0)
+      expect(methods.indexOf("setChatMenuButton")).toBeLessThan(methods.indexOf("sendMessage"))
+    }),
+  )
+
   it.effect("turns that message into the greeting rather than sending a second one", () =>
     Effect.gen(function* () {
       const telegram = telegramStub()

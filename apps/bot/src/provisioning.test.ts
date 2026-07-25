@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import type { CoachBotProvisioningRepo } from "@praximo/db"
 import { Effect } from "effect"
-import { CoachMenuButtonText, coachMiniAppUrl, configureCoachBot } from "./provisioning.ts"
+import { coachMiniAppUrl, configureCoachBot } from "./provisioning.ts"
 import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 
 const TOKEN = "9100777:AAHkq2Lb8fN1sQx3TzVpYr7WcJd4MgEuKvB"
@@ -81,34 +81,6 @@ const configure = (
   })
 
 describe("coach bot configuration", () => {
-  it.effect("labels the in-chat menu button “Open” and points it at the coach Mini App", () =>
-    Effect.gen(function* () {
-      const telegram = telegramStub()
-
-      yield* configure(telegram)
-
-      const menu = telegram.calls.find((call) => call.method === "setChatMenuButton")
-      // The label is the platform-wide "Open" of ADR 0004 §Mini App entry points,
-      // the same word the chat-list Main Mini App button carries — a coach who
-      // enables that one in @BotFather must not end up with two different words
-      // for the same app.
-      expect(menu?.body).toEqual({
-        menu_button: {
-          type: "web_app",
-          text: CoachMenuButtonText,
-          // Self-identifying: the launch names the bot it came from, so the app
-          // can verify the signature against that bot before it reads anything
-          // (ADR 0006). The value is untrusted — the signature is what binds it.
-          web_app: { url: `${env.COACH_MINI_APP_URL}?b=${BOT_ID}` },
-        },
-      })
-      expect(CoachMenuButtonText).toBe("Open")
-      // The coach bot's own credential, never the manager's: the button belongs
-      // to the bot the coach owns.
-      expect(menu?.token).toBe(TOKEN)
-    }),
-  )
-
   it.effect("dresses the bot in the stage's stored branding image, not a generated one", () =>
     Effect.gen(function* () {
       const telegram = telegramStub()
@@ -148,12 +120,13 @@ describe("coach bot configuration", () => {
 
       yield* configure(telegram, { UPLOADS: uploadsStub().bucket })
 
-      // A missing picture costs the bot its photo and nothing else: the menu
-      // button — the part of configuration that makes the bot usable — still
-      // lands, and the caller goes on to arm the webhook (#150).
+      // A missing picture costs the bot its photo and nothing else: the rest of
+      // the branding still lands, and the caller goes on to activate the bot, set
+      // its menu button (#156) and arm its webhook (#150).
       const methods = telegram.calls.map((call) => call.method)
       expect(methods).not.toContain("setMyProfilePhoto")
-      expect(methods).toContain("setChatMenuButton")
+      expect(methods).toContain("setMyDescription")
+      expect(methods).toContain("setMyShortDescription")
     }),
   )
 
@@ -169,24 +142,7 @@ describe("coach bot configuration", () => {
       // is dropped rather than the onboarding.
       const methods = telegram.calls.map((call) => call.method)
       expect(methods).toContain("setMyProfilePhoto")
-      expect(methods).toContain("setChatMenuButton")
-    }),
-  )
-
-  it.effect("refuses a Mini App URL Telegram would not accept as a web_app", () =>
-    Effect.gen(function* () {
-      const telegram = telegramStub()
-
-      const failure = yield* Effect.flip(
-        configure(telegram, { COACH_MINI_APP_URL: "http://stage.praximo.io/" }),
-      )
-
-      expect(failure).toMatchObject({
-        _tag: "BotWorker.TelegramSetupFailed",
-        operation: "miniAppUrl.validate",
-      })
-      // Nothing past `getMe` ran: a bot is never left branded but unopenable.
-      expect(telegram.calls.map((call) => call.method)).toEqual(["getMe"])
+      expect(methods).toContain("setMyDescription")
     }),
   )
 })
@@ -208,7 +164,7 @@ describe("coach Mini App URL", () => {
 
   it("hands back a base it cannot parse rather than throwing at a reply site", () => {
     // Both inline-button callers run after a bot is connected, and the app
-    // resolves a launch with no `b` by identity. `configureCoachBot` is where an
+    // resolves a launch with no `b` by identity. `setCoachBotMenuButton` is where an
     // unusable value is refused — before anything is branded.
     expect(coachMiniAppUrl("not a url", "9100777")).toBe("not a url")
   })

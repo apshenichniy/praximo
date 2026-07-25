@@ -205,8 +205,9 @@ export const apiFor = (token: string, telegramFetch?: typeof globalThis.fetch): 
  *
  * A base the URL parser rejects is handed back unchanged rather than throwing.
  * Every caller here is on a path where a connected bot already exists, and the
- * app still resolves such a launch by identity; `configureCoachBot` is where an
- * unusable value is refused outright, before a bot is branded.
+ * app still resolves such a launch by identity; `setCoachBotMenuButton` is where
+ * an unusable value is refused outright — the first step of provisioning, so
+ * before a bot is branded and before its coach is promised anything (#156).
  */
 export const coachMiniAppUrl = (baseUrl: string, botId: string): string => {
   try {
@@ -224,14 +225,6 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
   const { botId, coachName, env, token, workspace } = input
   const api = apiFor(token, input.telegramFetch)
   const botInfo = yield* telegram("getMe", () => api.getMe())
-  const miniAppUrl = yield* Effect.try({
-    try: () => {
-      const url = new URL(env.COACH_MINI_APP_URL)
-      if (url.protocol !== "https:") throw new Error("Mini App URL must use HTTPS")
-      return coachMiniAppUrl(url.toString(), botId)
-    },
-    catch: () => new TelegramSetupFailed({ operation: "miniAppUrl.validate" }),
-  })
   // A workspace that still carries its own avatar key (from before manager-side
   // branding was removed, #108) keeps it; every other bot wears the stage's
   // platform image.
@@ -265,17 +258,52 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
   yield* telegram("setMyShortDescription", () =>
     api.setMyShortDescription(workspace.shortDescription ?? defaultBotShortDescription(coachName)),
   )
-  yield* telegram("setChatMenuButton", () =>
-    api.setChatMenuButton({
-      menu_button: {
-        type: "web_app",
-        text: CoachMenuButtonText,
-        web_app: { url: miniAppUrl },
-      },
-    }),
-  )
   return { secret, botInfo }
 })
+
+/**
+ * Put the Mini App on the bot's in-chat menu button — **the first thing done to a
+ * new bot, before the coach is told anything.**
+ *
+ * A Telegram client caches a bot's menu button when it opens the chat, and the
+ * coach opens theirs by tapping **Start bot** the moment the bot exists — which is
+ * the same moment the `managed_bot` update reaches us. Setting the button at the
+ * end of configuration meant their client had already looked and cached its
+ * absence: verified by `getChatMenuButton` returning the right `web_app` button
+ * while the coach saw none, and by the button appearing as soon as they reopened
+ * the chat (#156).
+ *
+ * This wins that race rather than removing it — their tap and our first call are
+ * simultaneous. What makes that acceptable is that the greeting carries its own
+ * inline **Open** button, so the coach is never without a way in, and the menu
+ * button materialises on their next visit regardless.
+ *
+ * The Mini App URL is validated here because this is what consumes it, which also
+ * means an unusable one fails before the coach has been promised anything.
+ */
+export const setCoachBotMenuButton = Effect.fn("BotWorker.setCoachBotMenuButton")(
+  function* (input: {
+    readonly token: string
+    readonly botId: string
+    readonly miniAppBaseUrl: string
+    readonly telegramFetch?: typeof globalThis.fetch
+  }) {
+    const miniAppUrl = yield* Effect.try({
+      try: () => {
+        const url = new URL(input.miniAppBaseUrl)
+        if (url.protocol !== "https:") throw new Error("Mini App URL must use HTTPS")
+        return coachMiniAppUrl(url.toString(), input.botId)
+      },
+      catch: () => new TelegramSetupFailed({ operation: "miniAppUrl.validate" }),
+    })
+    const api = apiFor(input.token, input.telegramFetch)
+    yield* telegram("setChatMenuButton", () =>
+      api.setChatMenuButton({
+        menu_button: { type: "web_app", text: CoachMenuButtonText, web_app: { url: miniAppUrl } },
+      }),
+    )
+  },
+)
 
 /**
  * Point a coach bot at us. Its own step rather than part of configuration,
@@ -633,6 +661,12 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
       managerApi.getManagedBotToken(managedBot.id),
     )
     const profile = yield* repo.workspaceProfile(existing.success.workspaceId)
+    yield* setCoachBotMenuButton({
+      token,
+      botId: existing.success.telegramBotId,
+      miniAppBaseUrl: env.COACH_MINI_APP_URL,
+      ...injectedFetch,
+    })
     const configured = yield* configureCoachBot({
       env,
       token,
@@ -700,11 +734,20 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   const token = yield* telegram("getManagedBotToken", () =>
     managerApi.getManagedBotToken(managedBot.id),
   )
-  // Before anything slow, because this is the message that has to beat the
-  // coach's own thumb: Telegram has already offered them **Start bot**, and
-  // everything below — an avatar upload, two descriptions, the menu button, the
-  // activation transaction — is the several seconds they used to spend looking at
-  // an empty chat (#154).
+  // First of all, and before the coach is told anything: their client caches the
+  // menu button when it opens the chat, and it opens the chat on the same tap that
+  // brought us here (#156). Also the step that validates the Mini App URL, so an
+  // unusable one fails before any promise is made.
+  yield* setCoachBotMenuButton({
+    token,
+    botId: String(managedBot.id),
+    miniAppBaseUrl: env.COACH_MINI_APP_URL,
+    ...injectedFetch,
+  })
+  // Then the message that has to beat the coach's own thumb: Telegram has already
+  // offered them **Start bot**, and everything below — an avatar upload, two
+  // descriptions, the activation transaction — is the several seconds they used to
+  // spend looking at an empty chat (#154).
   const announcement = yield* announceCoachBotSetup({
     token,
     chatId: provisioning.coachTelegramId,
