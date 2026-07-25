@@ -43,7 +43,13 @@ export const Operation = Schema.Struct({
    * other signal on the receipt records what has already landed.
    */
   leaseUntil: Schema.optionalKey(Schema.instanceOf(Date)),
-  workspaceName: Schema.optionalKey(Schema.NonEmptyString),
+  /**
+   * The label the workspace carried, joined live off its row: `""` is a real
+   * value — an invite-first workspace the admin never labelled — so absence is
+   * reserved for the one thing it can honestly mean, that the cascade has
+   * already removed the workspace.
+   */
+  workspaceName: Schema.optionalKey(Schema.String),
   coachTelegramId: Schema.optionalKey(Schema.NonEmptyString),
   coachLanguage: Schema.optionalKey(CoachLanguage),
 })
