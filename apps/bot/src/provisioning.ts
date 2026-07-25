@@ -404,6 +404,12 @@ export const announcementFailure = (cause: unknown): "unopened" | "undelivered" 
 export const announceCoachBotSetup = Effect.fn("BotWorker.announceCoachBotSetup")(
   function* (input: {
     readonly token: string
+    /**
+     * The bot this is about. Carried for the log alone: the runbook tells an
+     * operator to grep the Worker log by bot id, and every other line on this
+     * path already answers to that (#160).
+     */
+    readonly botId: string
     readonly chatId: TelegramId
     readonly language: CoachLanguage
     readonly telegramFetch?: typeof globalThis.fetch
@@ -421,7 +427,7 @@ export const announceCoachBotSetup = Effect.fn("BotWorker.announceCoachBotSetup"
       // The ordinary case, and a useful signal rather than a fault: the coach has
       // not tapped **Start bot**, so there is nobody in the chat to tell.
       yield* Effect.logInfo(
-        `coach bot ${input.chatId}: nothing to announce to — the coach has not opened it yet`,
+        `coach bot ${input.botId}: nothing to announce to — chat ${input.chatId} has not been opened by its coach yet`,
       )
       return undefined
     }
@@ -429,7 +435,7 @@ export const announceCoachBotSetup = Effect.fn("BotWorker.announceCoachBotSetup"
     // without us learning its id — in which case the greeting becomes its own
     // message rather than an edit of this one. A warning, not a shrug.
     yield* Effect.logWarning(
-      `coach bot ${input.chatId}: setup announcement undelivered; the greeting will be a new message`,
+      `coach bot ${input.botId}: setup announcement to chat ${input.chatId} undelivered; the greeting will be a new message`,
     )
     return undefined
   },
@@ -808,6 +814,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   // spend looking at an empty chat (#154).
   const announcement = yield* announceCoachBotSetup({
     token,
+    botId: String(managedBot.id),
     chatId: provisioning.coachTelegramId,
     language: provisioning.coachLanguage,
     ...injectedFetch,
