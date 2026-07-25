@@ -51,23 +51,18 @@ const requireProjectId = (projectId: string): string => {
 /**
  * `init_source: "schema-only"` is the point: CI needs a migrated schema, never
  * the parent branch's rows, and `db:reset` drops and replays the migrations from
- * this checkout anyway. Omitting `parent_id` branches from the project default.
+ * this checkout anyway. No `parent_id`, so the branch is taken from the project
+ * default — which of the two it comes off makes no difference to a branch whose
+ * schema is about to be dropped.
  */
 export const createBranchRequest = (input: {
   readonly projectId: string
   readonly name: string
-  readonly parentId?: string | undefined
 }): NeonRequest => ({
   method: "POST",
   url: `${NEON_API_BASE}/projects/${requireProjectId(input.projectId)}/branches`,
   body: {
-    branch: {
-      name: input.name,
-      init_source: "schema-only",
-      ...(input.parentId === undefined || input.parentId === ""
-        ? {}
-        : { parent_id: input.parentId }),
-    },
+    branch: { name: input.name, init_source: "schema-only" },
     // No endpoint means no compute and no connection URI to hand the suites.
     endpoints: [{ type: "read_write" }],
   },
@@ -198,17 +193,16 @@ const callNeon = async (request: NeonRequest, apiKey: string): Promise<unknown> 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** A fresh branch reports `init` for a few seconds; connecting before `ready` fails. */
-const awaitBranchReady = async (input: {
-  readonly projectId: string
-  readonly branchId: string
-  readonly apiKey: string
-}): Promise<void> => {
+const awaitBranchReady = async (
+  branch: { readonly projectId: string; readonly branchId: string },
+  apiKey: string,
+): Promise<void> => {
   const deadline = Date.now() + 120_000
   for (;;) {
-    const state = parseBranchState(await callNeon(branchStateRequest({ ...input }), input.apiKey))
+    const state = parseBranchState(await callNeon(branchStateRequest(branch), apiKey))
     if (isBranchReady(state)) return
     if (Date.now() > deadline) {
-      throw new Error(`Neon branch ${input.branchId} was still "${state}" after 120s`)
+      throw new Error(`Neon branch ${branch.branchId} was still "${state}" after 120s`)
     }
     await sleep(2_000)
   }
@@ -274,18 +268,20 @@ const main = async (): Promise<void> => {
     runAttempt: process.env["GITHUB_RUN_ATTEMPT"] ?? "1",
   })
   const created = parseCreateBranchResponse(
-    await callNeon(
-      createBranchRequest({ projectId, name, parentId: process.env["NEON_PARENT_BRANCH_ID"] }),
-      apiKey,
-    ),
+    await callNeon(createBranchRequest({ projectId, name }), apiKey),
   )
-  await awaitBranchReady({ projectId, branchId: created.branchId, apiKey })
+
+  // Export the id *before* waiting: the cleanup step keys off this output, and a
+  // run cancelled during the readiness poll would otherwise leave a live branch
+  // that only the 3-hour prune reclaims.
+  appendGithubFile("GITHUB_OUTPUT", `branch_id=${created.branchId}`)
+
+  await awaitBranchReady({ projectId, branchId: created.branchId }, apiKey)
 
   // Mask before exporting: the URI carries the branch role's password, and the
   // steps that follow print their own command lines.
   console.log(`::add-mask::${created.connectionUri}`)
   appendGithubFile("GITHUB_ENV", `DATABASE_URL=${created.connectionUri}`)
-  appendGithubFile("GITHUB_OUTPUT", `branch_id=${created.branchId}`)
   console.log(`ci-neon-branch — created ${name} (${created.branchId}), schema-only, ready`)
 }
 

@@ -43,19 +43,6 @@ describe("createBranchRequest", () => {
     })
   })
 
-  it("branches from an explicit parent when one is configured", () => {
-    const request = createBranchRequest({
-      projectId: "icy-sunset-1",
-      name: "ci-run-42-1",
-      parentId: "br-curly-forest",
-    })
-
-    expect(request.body).toEqual({
-      branch: { name: "ci-run-42-1", init_source: "schema-only", parent_id: "br-curly-forest" },
-      endpoints: [{ type: "read_write" }],
-    })
-  })
-
   it("rejects an empty project id rather than calling /projects//branches", () => {
     expect(() => createBranchRequest({ projectId: "", name: "ci-run-42-1" })).toThrow(
       /missing Neon project id/,

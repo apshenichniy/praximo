@@ -12,17 +12,22 @@
  * CI provisions an ephemeral Neon branch per run (`scripts/ci-neon-branch.ts`)
  * and exports its URI, so reaching the throw below means that provisioning
  * broke — never that the suites are legitimately unrunnable.
+ *
+ * This is test support, not a config seam: ADR 0002 keeps packages from reading
+ * the environment, and the seam the *runtime* resolves `DATABASE_URL` through is
+ * still `Database.layer` over the app's ConfigProvider. Nothing here is exported
+ * from `index.ts`.
  */
 
 const databaseUrl = process.env.DATABASE_URL
 
 /**
- * Keyed on `CI` (which GitHub Actions always sets) rather than on a flag the
- * workflow has to remember: a variable that must be present to enforce the rule
- * can be dropped from the workflow and put us straight back to silent skipping.
- * `REQUIRE_DATABASE_TESTS=0` is the deliberate opt-out.
+ * Keyed on `CI` (which GitHub Actions always sets) and nothing else. A flag the
+ * workflow has to remember to pass could be dropped from it and put us straight
+ * back to silent skipping, and an opt-out would reinstate exactly the failure
+ * this closes — so there is neither.
  */
-const databaseTestsRequired = Boolean(process.env.CI) && process.env.REQUIRE_DATABASE_TESTS !== "0"
+const databaseTestsRequired = Boolean(process.env.CI)
 
 const missingUrlExplanation =
   "@praximo/db database suites need DATABASE_URL — a migrated Postgres branch (`bun run db:reset`)."
@@ -31,8 +36,8 @@ if (databaseUrl === undefined || databaseUrl === "") {
   if (databaseTestsRequired) {
     throw new Error(
       `${missingUrlExplanation} CI must not skip them: a skipped database suite is indistinguishable ` +
-        `from a passing one, which is the failure #136 exists to close. Check the "Create ephemeral ` +
-        `Neon branch" step; set REQUIRE_DATABASE_TESTS=0 only to opt out on purpose.`,
+        `from a passing one, which is the failure #136 exists to close. Check the workflow's ` +
+        `"Create this run's Neon branch" step — reaching this means its provisioning broke.`,
     )
   }
   process.stderr.write(`\n!!  SKIPPED, NOT PASSED: ${missingUrlExplanation}\n\n`)
