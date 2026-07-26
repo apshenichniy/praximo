@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { CoachLanguages } from "@praximo/domain"
-import { type Copy, escapeHtml, messages } from "./messages.ts"
+import { makeCatalogue } from "@praximo/i18n"
+import { botCatalog, CatalogueFile, type Copy, escapeHtml, messages } from "./messages.ts"
 
 /**
  * The catalogue's two rules, pinned (#164). Both are invisible in review — a URL
@@ -94,5 +95,25 @@ describe("the coach-facing catalogue", () => {
   it("escapes only what HTML reads", () => {
     expect(escapeHtml("a & b <c> d")).toBe("a &amp; b &lt;c&gt; d")
     expect(escapeHtml("Ada Coaching")).toBe("Ada Coaching")
+  })
+
+  /**
+   * The strict half of the shared gap filling (#167). At runtime this Worker
+   * falls back to English rather than throwing — a Worker has no development
+   * build to fail in — so the failure has to happen here instead, before a blank
+   * can be committed. Without it the fallback would quietly hide exactly the
+   * mistake it exists to survive.
+   */
+  it("carries no gaps: every locale fills out against English with none left", () => {
+    const strict = makeCatalogue<Copy>({
+      reference: "en",
+      byLocale: botCatalog,
+      strict: true,
+      where: CatalogueFile,
+    })
+
+    for (const language of CoachLanguages) {
+      expect(() => strict(language), language).not.toThrow()
+    }
   })
 })

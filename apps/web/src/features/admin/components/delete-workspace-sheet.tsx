@@ -13,7 +13,7 @@ import {
   DeletionError,
   DeletionStageList,
 } from "@/features/admin/components/deletion-progress.tsx"
-import { notifyHaptic } from "@/features/admin/haptics.ts"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
 import type { WorkspaceDetail } from "@/features/admin/workspace-detail.ts"
 import {
   type DeletionProgress,

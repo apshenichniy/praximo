@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-import { notifyHaptic } from "@/features/admin/haptics.ts"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
 
 export interface CopyLinkController {
   readonly copied: boolean

@@ -4,11 +4,15 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { Button } from "@/components/ui/button.tsx"
 import { Card, CardContent } from "@/components/ui/card.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
-import { DetailCard, DetailRow, TimestampValue } from "@/features/admin/components/detail-card.tsx"
-import { InviteLinkPanel } from "@/features/admin/components/invite-link-panel.tsx"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
+import {
+  DetailCard,
+  DetailRow,
+  TimestampValue,
+} from "@/features/mini-app/components/detail-card.tsx"
+import { InviteLinkPanel } from "@/features/mini-app/components/invite-link-panel.tsx"
+import { Section, SectionTitle } from "@/features/mini-app/components/section.tsx"
 import { formatDate, formatExpiresIn } from "@/features/admin/formatting.ts"
-import { useCopyLink } from "@/features/admin/hooks/use-copy-link.ts"
+import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
 import {
   inviteChannel,
   inviteExplanation,

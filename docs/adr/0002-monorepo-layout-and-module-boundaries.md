@@ -43,6 +43,7 @@ npm scope **`@praximo/*`**, all private:
 | `@praximo/analysis` | Prompts + Vercel AI SDK for Brief / Debrief / Mentor Review. |
 | `@praximo/telegram` | Shared grammY client, bot registry, message sending (used by `bot`; `pipeline` delivers through the `pipeline → bot` service binding and shares only the types). |
 | `@praximo/auth` | Telegram Mini App credential verification — manager HMAC for the admin, Ed25519 `validate3rd` for the coach ([ADR 0006](0006-coach-authentication-in-mvp.md)) — plus the coach onboarding deep-link token. Pure crypto and config: composition with the member lookup lives in `apps/web`, since packages carry no app wiring. The Better-Auth plugin arrives with ADR 0006's adoption step. |
+| `@praximo/i18n` | The i18n **mechanism** shared by `web` and `bot` ([#167](https://github.com/apshenichniy/praximo/issues/167)): gap filling with the `MissingTranslation` marker, plural forms over `Intl.PluralRules`, locale-aware date formatters, and the content digest that versions a text from its own content. Catalogues are **not** here — each surface owns the words it says. Depends on `domain` for the language literal; no Effect, no infrastructure. |
 | `@praximo/tooling` | tsconfig and oxlint presets. |
 
 ### Effect conventions

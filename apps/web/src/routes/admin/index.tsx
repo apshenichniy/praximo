@@ -13,7 +13,7 @@ import {
   InviteCoachLink,
   ViewerCoachCard,
 } from "@/features/admin/components/coach-list.tsx"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
+import { Section, SectionTitle } from "@/features/mini-app/components/section.tsx"
 import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
 import { openTelegramLink } from "@/lib/telegram.ts"
 

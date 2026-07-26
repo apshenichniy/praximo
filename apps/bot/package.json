@@ -12,6 +12,7 @@
     "@praximo/auth": "workspace:*",
     "@praximo/db": "workspace:*",
     "@praximo/domain": "workspace:*",
+    "@praximo/i18n": "workspace:*",
     "@praximo/telegram": "workspace:*",
     "effect": "catalog:",
     "grammy": "catalog:"

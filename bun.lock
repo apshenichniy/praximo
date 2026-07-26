@@ -33,6 +33,7 @@
         "@praximo/auth": "workspace:*",
         "@praximo/db": "workspace:*",
         "@praximo/domain": "workspace:*",
+        "@praximo/i18n": "workspace:*",
         "@praximo/telegram": "workspace:*",
         "effect": "catalog:",
         "grammy": "catalog:",
@@ -79,6 +80,7 @@
         "@praximo/auth": "workspace:*",
         "@praximo/db": "workspace:*",
         "@praximo/domain": "workspace:*",
+        "@praximo/i18n": "workspace:*",
         "@praximo/telegram": "workspace:*",
         "@tanstack/react-query": "catalog:",
         "@tanstack/react-router": "catalog:",
@@ -163,6 +165,18 @@
       },
       "devDependencies": {
         "@effect/vitest": "catalog:",
+        "@praximo/tooling": "workspace:*",
+        "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
+    "packages/i18n": {
+      "name": "@praximo/i18n",
+      "version": "0.0.0",
+      "dependencies": {
+        "@praximo/domain": "workspace:*",
+      },
+      "devDependencies": {
         "@praximo/tooling": "workspace:*",
         "typescript": "catalog:",
         "vitest": "catalog:",
@@ -760,6 +774,8 @@
     "@praximo/db": ["@praximo/db@workspace:packages/db"],
 
     "@praximo/domain": ["@praximo/domain@workspace:packages/domain"],
+
+    "@praximo/i18n": ["@praximo/i18n@workspace:packages/i18n"],
 
     "@praximo/pipeline": ["@praximo/pipeline@workspace:apps/pipeline"],
 

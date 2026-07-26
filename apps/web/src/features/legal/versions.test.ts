@@ -80,6 +80,21 @@ describe("legal versions", () => {
     expect(TERMS_VERSION).not.toBe(PRIVACY_VERSION)
   })
 
+  /**
+   * The literal values, pinned.
+   *
+   * `member.terms_version` records one of these against a coach who read the
+   * text, so the version is a fact about the past, not a derived convenience: a
+   * refactor that moves the digest — #167 lifted it into `@praximo/i18n` — must
+   * produce the same string, or every recorded acceptance starts pointing at a
+   * document nobody can identify. Editing a legal text is what may change these;
+   * touching the machinery is not.
+   */
+  it("has not changed value", () => {
+    expect(TERMS_VERSION).toBe("2026-08-01+72f5ad2")
+    expect(PRIVACY_VERSION).toBe("2026-08-01+acb0203")
+  })
+
   it("keeps the placeholder registry and the texts in step", () => {
     const registered = new Set(Object.keys(legalPlaceholders))
     const used = new Set(documents.flatMap(([, document]) => [...placeholdersIn(document)]))

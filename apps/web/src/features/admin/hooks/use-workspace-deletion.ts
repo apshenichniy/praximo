@@ -3,7 +3,7 @@ import { useRouter } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
 
 import { setAdminNotice } from "@/features/admin/admin-notice.ts"
-import { notifyHaptic } from "@/features/admin/haptics.ts"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
 import {
   type DeletionProgress,
   deletionAdvancing,

@@ -2,7 +2,7 @@ import { Alert01Icon, Tick02Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { Card, CardContent } from "@/components/ui/card.tsx"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
+import { Section, SectionTitle } from "@/features/mini-app/components/section.tsx"
 import {
   onboardingSteps,
   type StepState,

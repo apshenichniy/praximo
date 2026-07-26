@@ -7,7 +7,7 @@ import {
   DeletionError,
   DeletionStageList,
 } from "@/features/admin/components/deletion-progress.tsx"
-import { Section } from "@/features/admin/components/section.tsx"
+import { Section } from "@/features/mini-app/components/section.tsx"
 import {
   type DeletionProgress,
   deletionHeadline,
