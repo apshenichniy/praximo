@@ -1,3 +1,4 @@
+import { CalendarAdd01Icon } from "@hugeicons-pro/core-stroke-rounded"
 import { Calendar03Icon, FlagIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { CoachLanguage } from "@praximo/domain"
@@ -220,7 +221,7 @@ export function ClientScreen({
                   <span className="flex-1 text-body tabular-nums">
                     {sessionFormat.format(new Date(session.scheduledAt))}
                   </span>
-                  <span className="text-muted-foreground text-caption">
+                  <span className="text-muted-foreground text-footnote">
                     {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
                     {" · "}
                     {session.durationMinutes}
@@ -233,8 +234,14 @@ export function ClientScreen({
               <button
                 type="button"
                 onClick={onSchedule}
-                className="text-primary w-full px-5 py-4 text-left text-body font-semibold"
+                className="text-primary flex min-h-11 w-full items-center gap-3 px-5 py-4 text-left text-body font-semibold"
               >
+                {/*
+                  The same 16px glyph column the session rows above use, so the
+                  action reads as the next line of the list rather than as a
+                  caption under it.
+                */}
+                <HugeiconsIcon icon={CalendarAdd01Icon} size={16} strokeWidth={2} />
                 {copy.clients.scheduleAction}
               </button>
             </li>
