@@ -39,11 +39,14 @@ export const CARD_FRESHNESS_MARGIN_MILLIS = 10_000
 export const shareClientInvite = async (options: {
   readonly clientId: string
   readonly link: string
-  readonly name: string
-  /** The same sentence the invitation card shows, minus the link. */
-  readonly lead: string
+  /**
+   * The whole forwardable message, ending with the link — the same string the
+   * copy button copies. `shareInviteMessage` strips that last line back off for
+   * the `t.me/share/url` form, where the link is a parameter of its own.
+   */
+  readonly message: string
 }): Promise<ShareClientInviteOutcome> => {
-  const message = `${options.name}${options.lead}`
+  const message = options.message
   const webApp = await loadTelegramWebApp()
   if (webApp === undefined) {
     globalThis.open?.(

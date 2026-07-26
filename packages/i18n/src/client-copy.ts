@@ -28,7 +28,31 @@ export interface ConfirmationInput {
   readonly durationMinutes: number
 }
 
+/** The two names the invitation puts in one sentence, and never separately. */
+export interface InvitationInput {
+  readonly client: string
+  readonly coach: string
+}
+
 export interface ClientCopy {
+  /**
+   * The message a coach hands to a client to bring them in (#181).
+   *
+   * The **first** thing the product ever says to this person, and until now the
+   * only string in the client's journey written to the coach instead: it told
+   * Anna that "Anna opens your bot", in whatever language the coach's own
+   * interface happened to be. It is here because the reader is the client, and
+   * in the invitation's language because that is what the coach chose for them.
+   *
+   * One body serves all three deliveries — the bot-authored card, the
+   * `t.me/share/url` fallback, and a paste into WhatsApp — so it carries no
+   * link: the card and the fallback attach one, and the paste appends it.
+   */
+  readonly invitation: {
+    readonly message: (input: InvitationInput) => string
+    /** The card's inline button. Names what happens, not what it is. */
+    readonly button: string
+  }
   readonly languageStep: {
     readonly title: string
     readonly lead: (coach: string) => string
@@ -92,6 +116,11 @@ const minutes = (locale: CoachLanguage, count: number): string =>
   )
 
 const en: ClientCopy = {
+  invitation: {
+    message: (input) =>
+      `Hi ${input.client}! 👋\n\nI am ${input.coach}'s assistant. Once you are set up, your session times and reminders will come from me.\n\nIt takes about a minute: pick a language, agree to one thing about your data, and you are done.\n\n⏳ The link works once, and only for 7 days.`,
+    button: "Set up my profile",
+  },
   languageStep: {
     title: "<b>Which language should I write in?</b>",
     lead: (coach) =>
@@ -134,6 +163,11 @@ const en: ClientCopy = {
 }
 
 const uk: ClientCopy = {
+  invitation: {
+    message: (input) =>
+      `Вітаю, ${input.client}! 👋\n\nЯ помічник ${input.coach}. Щойно все буде налаштовано, час зустрічей і нагадування надходитимуть від мене.\n\nЦе займе близько хвилини: оберете мову, погодитесь з одним пунктом щодо ваших даних — і готово.\n\n⏳ Посилання одноразове й діє 7 днів.`,
+    button: "Налаштувати профіль",
+  },
   languageStep: {
     title: "<b>Якою мовою мені писати?</b>",
     lead: (coach) =>
@@ -176,6 +210,11 @@ const uk: ClientCopy = {
 }
 
 const ru: ClientCopy = {
+  invitation: {
+    message: (input) =>
+      `Здравствуйте, ${input.client}! 👋\n\nЯ помощник ${input.coach}. Как только всё будет настроено, время встреч и напоминания будут приходить от меня.\n\nЭто займёт около минуты: выберете язык, согласитесь с одним пунктом о ваших данных — и готово.\n\n⏳ Ссылка одноразовая и действует 7 дней.`,
+    button: "Настроить профиль",
+  },
   languageStep: {
     title: "<b>На каком языке мне писать?</b>",
     lead: (coach) =>

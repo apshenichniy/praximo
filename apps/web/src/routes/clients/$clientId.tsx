@@ -200,8 +200,7 @@ function ClientRoute() {
     void shareClientInvite({
       clientId: client.id,
       link: invite.url,
-      name: client.name,
-      lead: copy.clients.invitationLeadTail,
+      message: invite.message,
     })
       .then(async (outcome) => {
         if (outcome === "gone") await router.invalidate()

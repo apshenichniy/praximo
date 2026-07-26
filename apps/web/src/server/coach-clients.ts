@@ -1,4 +1,4 @@
-import { ClientRepo, MemberRepo, SessionRepo } from "@praximo/db"
+import { ClientRepo, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
 import {
   type BusyInterval,
   ClientInviteTokenAlphabet,
@@ -13,11 +13,11 @@ import {
   PlannedDurations,
   readMemberSettings,
   SessionKind,
+  type WorkspaceId,
 } from "@praximo/domain"
-import { DefaultTimeZone } from "@praximo/i18n"
+import { clientCopy, DefaultTimeZone } from "@praximo/i18n"
 import { BotRegistry } from "@praximo/telegram"
 import { Clock, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
-import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
@@ -77,6 +77,18 @@ export interface ClientDetail {
     readonly language: CoachLanguage
     /** The whole door, assembled here so no screen has to know its shape. */
     readonly url: string
+    /**
+     * The forwardable message, written to the client in the invitation's own
+     * language, with the link on the end (#181).
+     *
+     * Assembled here rather than on each screen because there are three ways to
+     * send it — the bot-authored card, the `t.me/share/url` fallback, and a
+     * paste into WhatsApp — and one invitation may not say three different
+     * things. The card is the exception that proves it: it drops this string's
+     * last line because its link is a button, and it builds that from the same
+     * copy rather than from a second sentence.
+     */
+    readonly message: string
   }
   readonly channel?: {
     readonly kind: string
@@ -213,18 +225,21 @@ export class CardPreparationFailed extends Schema.TaggedErrorClass<CardPreparati
 ) {}
 
 /**
- * The card's one string of its own.
+ * What the client reads, in the language the coach chose for them (#181).
  *
- * Everything else it says is #56's invitation sentence, read from the same
- * catalogue the screen reads — a card whose words were written twice is a card
- * that drifts. A button label has nowhere else to come from: the screen has no
- * button that says this, because until now there was no card.
+ * The coach's own language never reaches this: the New client screen asks for an
+ * invitation language and says what it is for, and a screen that collects an
+ * answer and ignores it is worse than one that never asked.
+ *
+ * The coach is named by their workspace label — the same name their bot
+ * introduces itself with throughout the acceptance conversation, so the client
+ * meets one assistant rather than two.
  */
-const openInvitationLabel: Record<CoachLanguage, string> = {
-  uk: "Відкрити запрошення",
-  ru: "Открыть приглашение",
-  en: "Open the invitation",
-}
+const invitationBody = (
+  language: CoachLanguage,
+  client: string,
+  coach: string,
+): string => clientCopy(language).invitation.message({ client, coach })
 
 const MinutesInDay = 24 * 60
 
@@ -313,6 +328,25 @@ export const layer = Layer.effect(
     const sessions = yield* SessionRepo.Service
     const members = yield* MemberRepo.Service
     const registry = yield* BotRegistry.Service
+    const workspaces = yield* WorkspaceRepo.Service
+
+    /**
+     * How the client is told who this is. The workspace label is the coach's
+     * name everywhere in the client's journey — the bot reads the same column
+     * when it introduces itself — so the invitation and the conversation it
+     * opens name the same person.
+     *
+     * Read only for a client who still has an invitation to send, and allowed to
+     * fail the screen: an authenticated coach whose workspace cannot be read has
+     * lost more than a sentence, and an invitation addressed by nobody is worse
+     * than a retry.
+     */
+    const coachName = Effect.fn("CoachClients.coachName")(function* (workspaceId: WorkspaceId) {
+      const workspace = yield* workspaces
+        .findById(workspaceId)
+        .pipe(Effect.mapError(failed("workspace.findById")))
+      return workspace.name
+    })
 
     const home = Effect.fn("CoachClients.home")(function* (credential: LaunchCredential) {
       const principal = yield* session.requireOnboardedCoach(credential, READ_WINDOW_MILLIS)
@@ -349,23 +383,35 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failed("clients.find")))
       if (row === undefined) return undefined
 
+      const invite = row.invite
+      const url =
+        invite === undefined
+          ? undefined
+          : `https://t.me/${principal.botUsername}?start=${clientInviteStartParameter(invite.token)}`
+      // The one place a name-bearing sentence is assembled for this screen, and
+      // skipped entirely for a client who has already accepted — there is no
+      // message left to send them.
+      const coach = invite === undefined ? "" : yield* coachName(principal.workspaceId)
+
       return {
         id: row.id,
         name: row.name,
         state: row.state,
         ...(row.language === undefined ? {} : { language: row.language }),
         createdAt: iso(row.createdAt),
-        ...(row.invite === undefined
+        ...(invite === undefined || url === undefined
           ? {}
           : {
               invite: {
-                token: row.invite.token,
-                status: row.invite.status,
-                expiresAt: iso(row.invite.expiresAt),
-                language: row.invite.language,
-                url: `https://t.me/${principal.botUsername}?start=${clientInviteStartParameter(
-                  row.invite.token,
-                )}`,
+                token: invite.token,
+                status: invite.status,
+                expiresAt: iso(invite.expiresAt),
+                language: invite.language,
+                url,
+                // The paste channel has no button, so the link travels in the
+                // body. `shareInviteMessage` strips this last line back off for
+                // the `t.me/share/url` form, where it is the `url` parameter.
+                message: `${invitationBody(invite.language, row.name, coach)}\n\n${url}`,
               },
             }),
         ...(row.channel === undefined
@@ -574,17 +620,10 @@ export const layer = Layer.effect(
      * is why this is an operation of its own rather than another field on the
      * detail the screen already loaded.
      *
-     * The message is the same sentence the screen shows and the copy button
-     * copies, in the coach's own language, so the three forms of one invitation
-     * cannot drift. The link is not repeated in the body: it is the button.
-     *
-     * **The coach's language and not `invite.language`**, deliberately. The
-     * invitation language is what the client is *meant* to be written in, and
-     * this sentence is #56's, which every other form of it already renders in
-     * the coach's own. Reading the other column here would make the card
-     * disagree with the copy button and with the sub-8.0 form beside it — one
-     * invitation saying two things is worse than one saying the wrong thing, and
-     * moving all three belongs to whoever owns that copy, not to this ticket.
+     * The body is the same string `detailFor` puts on the screen, from the same
+     * catalogue and the same language, minus its last line: here the link is the
+     * button, and repeating it would only make the card longer and scarier
+     * (#164).
      */
     const prepareInviteCard = Effect.fn("CoachClients.prepareInviteCard")(function* (
       credential: LaunchCredential,
@@ -602,12 +641,13 @@ export const layer = Layer.effect(
       // the form beside this one would share it either way.
       if (row?.invite === undefined || row.invite.status !== "pending") return undefined
 
-      const copy = coachCopy(principal.language).clients
+      const language = row.invite.language
+      const coach = yield* coachName(principal.workspaceId)
       const prepared = yield* registry
         .prepareCard(principal.workspaceId, {
           title: row.name,
-          text: `${row.name}${copy.invitationLeadTail}`,
-          buttonText: openInvitationLabel[principal.language],
+          text: invitationBody(language, row.name, coach),
+          buttonText: clientCopy(language).invitation.button,
           buttonUrl: `https://t.me/${principal.botUsername}?start=${clientInviteStartParameter(
             row.invite.token,
           )}`,

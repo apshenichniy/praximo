@@ -1,12 +1,12 @@
 import { describe, expect, it } from "@effect/vitest"
 import { CoachInitData } from "@praximo/auth"
-import { ClientRepo, MemberRepo, SessionRepo } from "@praximo/db"
+import { ClientRepo, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
 import { WorkspaceId } from "@praximo/domain"
+import { clientCopy } from "@praximo/i18n"
 import { BotRegistry } from "@praximo/telegram"
 import { Effect, Layer } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { launchFor, TEST_PUBLIC_KEY } from "@/__tests__/coach-launch.ts"
-import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { CoachClients } from "./coach-clients.ts"
 import { CoachSession } from "./coach-session.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
@@ -24,14 +24,21 @@ import type { LaunchCredential } from "./launch-credential.ts"
 const BOT_ID = "9100777"
 const BOT_USERNAME = "ada_coach_bot"
 const WORKSPACE = WorkspaceId.make("ws_ada")
+/** The workspace label is the coach's name everywhere the client meets it. */
+const COACH_NAME = "Olena"
 const AUTH_DATE = Date.parse("2026-07-26T12:00:00.000Z")
 const NOW = AUTH_DATE + 60_000
 const TOKEN = "ABCDEFGH2345"
 
+/**
+ * The coach reads their own app in Ukrainian and picked English for this client
+ * (#181). The two differ on purpose: they were the same in every earlier fixture,
+ * which is exactly why nothing noticed the invitation ignoring the second one.
+ */
 const principal: MemberRepo.CoachPrincipalRow = {
   memberId: "mem_ada",
   workspaceId: WORKSPACE,
-  language: "en",
+  language: "uk",
   botUsername: BOT_USERNAME,
   telegramBotId: BOT_ID,
   botConnectionStatus: "connected",
@@ -106,6 +113,19 @@ const run = <A, E>(
     SessionRepo.Service,
     SessionRepo.Service.of({ schedule: unused, between: unused }),
   )
+  const workspaces = Layer.succeed(
+    WorkspaceRepo.Service,
+    WorkspaceRepo.Service.of({
+      findById: Effect.fn("WorkspaceRepo.Test.findById")(() =>
+        Effect.succeed({ id: WORKSPACE, name: COACH_NAME, createdAt: new Date(NOW) }),
+      ),
+      create: unused,
+      list: unused,
+      getDetail: unused,
+      findCoachByTelegramId: unused,
+      rename: unused,
+    }),
+  )
 
   return body.pipe(
     Effect.provide(
@@ -116,6 +136,7 @@ const run = <A, E>(
               members,
               clients,
               sessions,
+              workspaces,
               BotRegistry.testLayer,
               CoachSession.layer.pipe(
                 Layer.provide(
@@ -156,17 +177,46 @@ describe("preparing the invitation card", () => {
         expect(minted?.card.buttonUrl).toBe(
           `https://t.me/${BOT_USERNAME}?start=inv_${TOKEN}`,
         )
-        // The sentence the screen shows and the copy button copies — one
-        // invitation cannot say three different things.
+        // Written to Anna, in the language the coach picked *for Anna* — not in
+        // the Ukrainian this coach reads their own app in.
         expect(minted?.card.text).toBe(
-          `Anna${coachCopy("en").clients.invitationLeadTail}`,
+          clientCopy("en").invitation.message({ client: "Anna", coach: COACH_NAME }),
         )
+        expect(minted?.card.buttonText).toBe(clientCopy("en").invitation.button)
+        // It addresses her, names her coach, and says neither in the third person.
+        expect(minted?.card.text).toContain("Anna")
+        expect(minted?.card.text).toContain(COACH_NAME)
         // The link is the button, so the body never repeats it.
         expect(minted?.card.text).not.toContain("t.me")
         expect(prepared?.preparedMessageId).toBe("prepared-card-0")
         expect(prepared?.expiresAt).toBe(
           new Date(NOW + BotRegistry.PreparedCardLifetimeMillis).toISOString(),
         )
+      }),
+    ),
+  )
+
+  /**
+   * The property the whole shape exists for (#181): the card, the copy button
+   * and the `t.me/share/url` fallback send one message, not three.
+   *
+   * `detailFor` hands the screen the same body the card carries, with the link
+   * appended — the paste channel has no button to put it on. Assert the
+   * relationship rather than the text, so a copy edit does not have to be made
+   * twice here either.
+   */
+  it.effect("gives the screen the same message the card carries", () =>
+    run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachClients.Service
+        const launch = yield* Effect.promise(() => credential())
+        const detail = yield* service.detail(launch, "cl_anna")
+        yield* service.prepareInviteCard(launch, "cl_anna")
+
+        const [minted] = yield* Effect.flatMap(BotRegistry.TestService, (stub) => stub.prepared())
+        expect(detail?.invite?.message).toBe(`${minted?.card.text}\n\n${detail?.invite?.url}`)
       }),
     ),
   )

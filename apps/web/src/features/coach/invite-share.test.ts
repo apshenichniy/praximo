@@ -24,11 +24,12 @@ vi.mock("@/lib/telegram.ts", async (importOriginal) => ({
 const { CARD_FRESHNESS_MARGIN_MILLIS, shareClientInvite } = await import("./invite-share.ts")
 
 const LINK = "https://t.me/ada_coach_bot?start=inv_ABCDEFGH2345"
+/** As the server assembles it: the body written to the client, then the link. */
+const BODY = "Hi Anna! 👋\n\nI am Olena's assistant."
 const invite = {
   clientId: "cl_anna",
   link: LINK,
-  name: "Anna",
-  lead: " opens your bot in Telegram and accepts there.",
+  message: `${BODY}\n\n${LINK}`,
 }
 
 const webApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp =>
@@ -101,10 +102,10 @@ describe("sharing a client's invitation", () => {
     expect(await shareClientInvite(invite)).toBe("fallback")
     expect(prepareInviteCard).not.toHaveBeenCalled()
     // The `t.me/share/url` form, unchanged: the link as the url, the prose
-    // beside it as the text.
+    // beside it as the text — the same body the card carries, never twice.
     const [url] = vi.mocked(host.openTelegramLink).mock.calls[0] ?? []
     expect(url).toContain(`url=${encodeURIComponent(LINK)}`)
-    expect(new URL(url ?? "").searchParams.get("text")).toBe(`${invite.name}${invite.lead}`)
+    expect(new URL(url ?? "").searchParams.get("text")).toBe(BODY)
   })
 
   it("tells a caller apart: an invitation that is gone from a bot that refused", async () => {

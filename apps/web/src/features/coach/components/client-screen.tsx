@@ -78,13 +78,14 @@ export function ClientScreen({
    * is showing. «Copy invite» copies the **whole forwardable message** — the
    * sentence plus the link — because a coach pasting into WhatsApp is sending a
    * message, not a URL.
+   *
+   * That message is not assembled here (#181). It is written to the *client*, in
+   * the language the coach chose for them, and the screen around it is written
+   * to the coach in theirs — two readers, two languages, and the server is where
+   * the one meant for the client is put together.
    */
   const copyLink = useCopyLink(client.invite?.url)
-  const forwardable =
-    client.invite === undefined
-      ? undefined
-      : `${client.name}${copy.clients.invitationLeadTail}\n\n${client.invite.url}`
-  const copyMessage = useCopyLink(forwardable)
+  const copyMessage = useCopyLink(client.invite?.message)
 
   const sessionFormat = useMemo(
     () =>
