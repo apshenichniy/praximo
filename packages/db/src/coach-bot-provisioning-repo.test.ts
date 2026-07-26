@@ -156,9 +156,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
           client
             .select({ language: schema.member.language })
             .from(schema.member)
-            .where(
-              and(eq(schema.member.workspaceId, workspaceId), eq(schema.member.role, "owner")),
-            )
+            .where(and(eq(schema.member.workspaceId, workspaceId), eq(schema.member.role, "owner")))
             .limit(1),
         )
         return rows[0]?.language
