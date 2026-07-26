@@ -106,10 +106,12 @@ describe("the “I already have a bot” button", () => {
 
     // Data that made a round trip is still narrowed on the way back in, so a
     // language we do not speak answers in the one everything is authored in.
+    const beforeSecondTap = telegram.calls.length
     await handleRequest(callbackUpdate("have-bot:kl"), env, telegram.fetch)
 
-    expect(telegram.calls.findLast((call) => call.method === "sendMessage")?.body.text).toBe(
-      messages("en").haveBotInstructions,
-    )
+    const fallback = telegram.calls
+      .slice(beforeSecondTap)
+      .find((call) => call.method === "sendMessage")
+    expect(fallback?.body.text).toBe(messages("en").haveBotInstructions)
   })
 })
