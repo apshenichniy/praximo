@@ -114,7 +114,7 @@ export function ClientScreen({
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
-      <TelegramBackButton onBack={onBack} />
+      <TelegramBackButton onBack={onBack} label={copy.common.back} />
 
       <header className="flex flex-col items-center gap-2 text-center">
         <span className="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-full text-lg font-semibold">

@@ -18,6 +18,7 @@ import { Calendar } from "@/components/ui/calendar.tsx"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
+import { calendarLocale } from "@/features/i18n/calendar-locale.ts"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
 import { cn } from "@/lib/utils.ts"
@@ -265,8 +266,10 @@ export function SchedulingSheet({
                   disabled={{ before: today }}
                   startMonth={today}
                   // Weekday and month names in the coach's language, like every
-                  // other word on the screen.
-                  locale={{ code: localeTag(language) }}
+                  // other word on the screen — and the picker's own aria labels
+                  // with them. A bare `{ code }` is not a locale and left all
+                  // three in English (#56's defect, found walking #61).
+                  locale={calendarLocale(language)}
                   className="w-full bg-transparent"
                 />
                 <div className="border-border flex items-center gap-3 border-t px-4 py-3">
