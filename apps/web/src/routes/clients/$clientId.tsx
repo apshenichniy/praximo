@@ -1,16 +1,10 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import { ClientScreen } from "@/features/coach/components/client-screen.tsx"
-import {
-  calendarDate,
-  type DayScheduleData,
-  type SchedulingDraft,
-  SchedulingSheet,
-} from "@/features/coach/components/scheduling-sheet.tsx"
 import { WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
@@ -19,16 +13,9 @@ import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { acceptOnce } from "@/routes/index.tsx"
-import { bookedDates } from "@/features/coach/session-days.ts"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
 import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
-import {
-  deleteClient,
-  getClient,
-  getDaySchedule,
-  resetInvite,
-  scheduleSession,
-} from "@/server/coach-clients.functions.ts"
+import { deleteClient, getClient, resetInvite } from "@/server/coach-clients.functions.ts"
 import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
@@ -60,9 +47,6 @@ function ClientRoute() {
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [day, setDay] = useState<DayScheduleData>()
-  const [date, setDate] = useState(() => calendarDate(new Date()))
   const inFlight = useRef(false)
 
   const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
@@ -71,71 +55,6 @@ function ClientRoute() {
   useCoachTimezone(entry.ok && entry.entry.kind === "home")
   const copy = coachCopy(language)
   const client = detail.ok ? detail.client : undefined
-
-  /**
-   * The day the sheet is looking at, loaded whenever it changes. The grid is
-   * drawn from the coach's own bookings, so it cannot be computed in the
-   * browser alone — and the sheet must never offer a slot the server refuses.
-   */
-  useEffect(() => {
-    if (!sheetOpen) return
-    let cancelled = false
-    setDay(undefined)
-    void getDaySchedule({ data: { date } })
-      .then((result) => {
-        if (cancelled) return
-        setDay(result.ok ? result.day : { busy: [], timezone: "UTC" })
-      })
-      .catch(() => {
-        if (!cancelled) setDay({ busy: [], timezone: "UTC" })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [date, sheetOpen])
-
-  const schedule = useCallback(
-    (draft: SchedulingDraft) => {
-      if (client === undefined) return
-      acceptOnce(inFlight, async () => {
-        setPending(true)
-        setError(undefined)
-        try {
-          const result = await scheduleSession({
-            data: {
-              clientId: client.id,
-              date: draft.date,
-              startMinutes: draft.startMinutes,
-              durationMinutes: draft.durationMinutes,
-              kind: draft.kind,
-            },
-          })
-          if (result.ok && result.outcome.scheduled) {
-            setSheetOpen(false)
-            // The sessions section is the proof the scheduling worked: a toast
-            // cannot be checked afterwards, so the list is re-read.
-            await router.invalidate()
-            return
-          }
-          const reason = result.ok && !result.outcome.scheduled ? result.outcome.reason : "failed"
-          setError(
-            reason === "overlap"
-              ? copy.clients.overlapError
-              : reason === "past"
-                ? copy.clients.pastError
-                : reason === "invalid"
-                  ? copy.clients.invalidError
-                  : copy.common.failed,
-          )
-        } catch {
-          setError(copy.common.failed)
-        } finally {
-          setPending(false)
-        }
-      })
-    },
-    [client, copy, router],
-  )
 
   const reset = useCallback(() => {
     if (client === undefined) return
@@ -233,28 +152,18 @@ function ClientRoute() {
           language={language}
           client={client}
           onBack={() => router.history.back()}
+          // Scheduling is a route of its own (#186), entered with the client
+          // already answered. `from` is what sends the booked session back
+          // here rather than to the sessions list.
           onSchedule={() => {
-            setError(undefined)
-            setDate(calendarDate(new Date()))
-            setSheetOpen(true)
+            void navigate({
+              to: "/sessions/new",
+              search: { client: client.id, from: "client" },
+            })
           }}
           onShare={share}
           onResetInvite={reset}
           onDelete={remove}
-          pending={pending}
-          error={error}
-        />
-        <SchedulingSheet
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          copy={copy.clients}
-          language={language}
-          clientName={client.name}
-          firstSession={client.sessions.length === 0}
-          bookedDates={bookedDates(client)}
-          schedule={day}
-          onDateChange={setDate}
-          onSubmit={schedule}
           pending={pending}
           error={error}
         />

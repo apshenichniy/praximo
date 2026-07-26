@@ -9,7 +9,12 @@ import type { CSSProperties, ReactNode } from "react"
  * flush. The paint (`bg-background`) still fills the inset band behind the host
  * controls; only the content is pushed in.
  */
-const safeAreaInsets: CSSProperties = {
+const safeAreaInsets: CSSProperties & Record<"--mini-app-safe-top", string> = {
+  // Published to the page as well as applied here: a `sticky` heading anchors
+  // to the viewport, not to this frame's padding box, so a screen that has one
+  // needs the same number the padding is made of (#186).
+  "--mini-app-safe-top":
+    "calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px))",
   paddingTop:
     "calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px))",
   paddingRight:

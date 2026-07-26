@@ -11,8 +11,9 @@ import {
   calendarDate,
   type DayScheduleData,
   type SchedulingDraft,
-  SchedulingSheet,
-} from "@/features/coach/components/scheduling-sheet.tsx"
+  SchedulingScreen,
+} from "@/features/coach/components/scheduling-screen.tsx"
+import { validateSchedulingSearch } from "@/features/coach/scheduling-search.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
@@ -30,18 +31,23 @@ import {
 import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
- * New session, started from Today (#61).
+ * The whole booking, on one route (#61, routed in #186).
  *
- * One step precedes #56's sheet — **pick the client** — because from the
- * dashboard the coach has nobody in hand. From the client route that step does
- * not exist, and the sheet itself is the same component either way, so duration
- * and kind cannot drift apart between the two entrances.
+ * Two steps, told apart by the `client` search parameter: **pick the client**,
+ * then **schedule**. From the client route the first step is already answered,
+ * so that entrance links straight past it — same route, same screen, no second
+ * copy of the form that could drift from this one.
+ *
+ * The step being a URL is the point. The sheet this replaced was local state,
+ * which left Telegram's BackButton and a swipe down disagreeing about what
+ * "back" meant, and made a mis-swipe cost the whole draft.
  */
 export const Route = createFileRoute("/sessions/new")({
   ssr: false,
   pendingMs: 0,
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
+  validateSearch: validateSchedulingSearch,
   loader: async () => {
     const [entry, clients, credential] = await Promise.all([
       loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
@@ -55,9 +61,11 @@ export const Route = createFileRoute("/sessions/new")({
 
 function NewSessionRoute() {
   const { entry, clients, launchLanguage } = Route.useLoaderData()
+  const { client: clientId, from } = Route.useSearch()
   const navigate = useNavigate()
   const router = useRouter()
   const [chosen, setChosen] = useState<CoachClients.ClientDetail>()
+  const [unreadable, setUnreadable] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const [day, setDay] = useState<DayScheduleData>()
@@ -68,40 +76,39 @@ function NewSessionRoute() {
   const copy = coachCopy(language)
 
   /**
-   * The chosen client, read in full before the sheet opens.
+   * The chosen client, read in full whenever the URL names one.
    *
-   * The sheet needs their name for its footnote and their existing sessions for
+   * The screen needs their name for its footnote and their existing sessions for
    * the dots on the month — and the client route already loads exactly this, so
    * both entrances draw the same calendar from the same read rather than from
-   * two different summaries of it.
+   * two different summaries of it. Reading it here rather than carrying it from
+   * the tap is what makes the link openable at all: a coach can arrive on this
+   * URL from history, from a reload, or from the client route.
    */
-  const pick = useCallback(
-    (clientId: string) => {
-      acceptOnce(inFlight, async () => {
-        setPending(true)
-        setError(undefined)
-        try {
-          const result = await getClient({ data: { clientId } })
-          if (result.ok && result.client !== undefined) {
-            setDate(calendarDate(new Date()))
-            setChosen(result.client)
-            return
-          }
-          setError(copy.common.failed)
-        } catch {
-          setError(copy.common.failed)
-        } finally {
-          setPending(false)
-        }
+  useEffect(() => {
+    setChosen(undefined)
+    setUnreadable(false)
+    if (clientId === undefined) return
+    let cancelled = false
+    setDate(calendarDate(new Date()))
+    void getClient({ data: { clientId } })
+      .then((result) => {
+        if (cancelled) return
+        if (result.ok && result.client !== undefined) setChosen(result.client)
+        else setUnreadable(true)
       })
-    },
-    [copy],
-  )
+      .catch(() => {
+        if (!cancelled) setUnreadable(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [clientId])
 
   /**
-   * The day the sheet is looking at, loaded whenever it changes. The grid is
+   * The day the screen is looking at, loaded whenever it changes. The grid is
    * drawn from the coach's own bookings, so it cannot be computed in the browser
-   * alone — and the sheet must never offer a slot the server refuses.
+   * alone — and the screen must never offer a slot the server refuses.
    */
   useEffect(() => {
     if (chosen === undefined) return
@@ -119,6 +126,13 @@ function NewSessionRoute() {
       cancelled = true
     }
   }, [chosen, date])
+
+  const pick = useCallback(
+    (picked: string) => {
+      void navigate({ to: "/sessions/new", search: { client: picked } })
+    },
+    [navigate],
+  )
 
   const schedule = useCallback(
     (draft: SchedulingDraft) => {
@@ -138,9 +152,18 @@ function NewSessionRoute() {
           })
           if (result.ok && result.outcome.scheduled) {
             // The list is the proof: a toast cannot be checked afterwards, and
-            // the session the coach just booked is the first thing on it.
+            // the session the coach just booked is the first thing on it. A
+            // booking that began on a client goes back to that client instead —
+            // their own sessions section is the same proof, and it is where the
+            // coach was.
             await router.invalidate()
-            await navigate({ to: "/sessions" })
+            await (from === "client"
+              ? navigate({
+                  to: "/clients/$clientId",
+                  params: { clientId: chosen.id },
+                  replace: true,
+                })
+              : navigate({ to: "/sessions", replace: true }))
             return
           }
           const reason = result.ok && !result.outcome.scheduled ? result.outcome.reason : "failed"
@@ -160,7 +183,7 @@ function NewSessionRoute() {
         }
       })
     },
-    [chosen, copy, navigate, router],
+    [chosen, copy, from, navigate, router],
   )
 
   if (!clients.ok) {
@@ -177,18 +200,38 @@ function NewSessionRoute() {
     )
   }
 
+  // A named client who cannot be read is a dead end rather than a slow one: the
+  // picker underneath would offer to start the booking the URL says is already
+  // under way.
+  if (unreadable) {
+    return (
+      <MiniAppShell>
+        <TelegramFullscreen />
+        <EntryFrame
+          icon={WifiDisconnected01Icon}
+          tone="muted"
+          title={copy.entry.unavailableTitle}
+          body={copy.entry.unavailableBody}
+        />
+      </MiniAppShell>
+    )
+  }
+
+  if (clientId !== undefined && chosen === undefined) return <EntryLoading />
+
   return (
     <MiniAppShell>
       <TelegramFullscreen />
       <TimestampFormatProvider value={coachTimestampFormat(language)}>
-        <ClientPickerScreen copy={copy} clients={clients.home.clients} onPick={pick} />
-        {chosen === undefined ? null : (
-          <SchedulingSheet
-            open
-            onOpenChange={(open) => {
-              if (!open) setChosen(undefined)
-            }}
+        {chosen === undefined ? (
+          <ClientPickerScreen copy={copy} clients={clients.home.clients} onPick={pick} />
+        ) : (
+          <SchedulingScreen
+            // Keyed on the client so a second booking starts clean: every field
+            // the screen owns is initialised at mount.
+            key={chosen.id}
             copy={copy.clients}
+            backLabel={copy.common.back}
             language={language}
             clientName={chosen.name}
             firstSession={chosen.sessions.length === 0}
