@@ -48,7 +48,7 @@ export function NewClientScreen({
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-28">
-      <TelegramBackButton onBack={onBack} />
+      <TelegramBackButton onBack={onBack} label={copy.common.back} />
       <h1 className="text-2xl font-semibold tracking-tight">{copy.clients.newTitle}</h1>
 
       <div className="mt-8 flex flex-col gap-2">
