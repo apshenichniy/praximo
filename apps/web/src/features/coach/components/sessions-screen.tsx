@@ -69,7 +69,7 @@ export function SessionsScreen({
                     <Link
                       to="/sessions/$sessionId"
                       params={{ sessionId: session.id }}
-                      className="flex min-h-16 items-center gap-4 px-5 py-3 text-left"
+                      className="pressable-row flex min-h-16 items-center gap-4 px-5 py-3 text-left"
                     >
                       <span className="text-body font-semibold tabular-nums">
                         {clock.format(new Date(session.scheduledAt))}

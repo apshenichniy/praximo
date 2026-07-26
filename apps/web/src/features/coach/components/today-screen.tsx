@@ -148,7 +148,10 @@ export function TodayScreen({
       */}
       {!today.mainMiniAppHintVisible ? null : (
         <Card className="mt-8 gap-0 overflow-hidden py-0">
-          <Link to="/main-mini-app" className="flex items-center gap-4 px-5 py-4 text-left">
+          <Link
+            to="/main-mini-app"
+            className="pressable-row flex items-center gap-4 px-5 py-4 text-left"
+          >
             <span className="min-w-0 flex-1">
               <span className="block truncate text-body font-medium">
                 {copy.home.mainMiniAppRow}
@@ -196,7 +199,7 @@ function SessionCard({
       <Link
         to="/sessions/$sessionId"
         params={{ sessionId: session.id }}
-        className="flex items-center gap-4 px-5 py-4 text-left"
+        className="pressable-row flex items-center gap-4 px-5 py-4 text-left"
       >
         <span className="text-heading font-semibold tabular-nums">{time}</span>
         <span className="min-w-0 flex-1">
@@ -254,7 +257,7 @@ function AttentionRow({
     <Link
       to="/clients/$clientId"
       params={{ clientId: item.clientId }}
-      className="flex min-h-14 items-center gap-3 px-5 py-3 text-left"
+      className="pressable-row flex min-h-14 items-center gap-3 px-5 py-3 text-left"
     >
       <HugeiconsIcon
         icon={Alert01Icon}

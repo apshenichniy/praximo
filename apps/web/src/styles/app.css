@@ -10,6 +10,16 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/**
+ * A full-width row that is a control — a client, a session, an action at the
+ * end of a card (§Motion). Rows take a press as a wash of colour rather than as
+ * the 0.97 a chip takes: scaling something the width of the screen reads as the
+ * page flexing, and the platform's own lists light up instead.
+ */
+@utility pressable-row {
+  @apply ease-out-strong transition-colors duration-(--duration-press) active:bg-accent/40;
+}
+
 @utility admin-avatar {
   @apply bg-gradient-to-br from-violet-700 to-indigo-950 text-white;
 }

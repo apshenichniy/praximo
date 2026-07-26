@@ -234,7 +234,7 @@ export function ClientScreen({
               <button
                 type="button"
                 onClick={onSchedule}
-                className="text-primary flex min-h-11 w-full items-center gap-3 px-5 py-4 text-left text-body font-semibold"
+                className="text-primary pressable-row flex min-h-11 w-full items-center gap-3 px-5 py-4 text-left text-body font-semibold"
               >
                 {/*
                   The same 16px glyph column the session rows above use, so the
