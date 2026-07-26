@@ -58,7 +58,7 @@ export function MainMiniAppScreen({
         {copy.home.mainMiniAppTail}
       </p>
 
-      <p className="text-muted-foreground mt-8 px-1 text-[10px] font-semibold tracking-widest uppercase">
+      <p className="text-muted-foreground mt-8 px-1 text-xs font-semibold tracking-wide uppercase">
         {copy.home.mainMiniAppUrlLabel}
       </p>
       <p className="border-border/60 bg-card text-foreground mt-2 overflow-x-auto rounded-xl border px-3 py-2 font-mono text-[12px] break-all">

@@ -412,7 +412,7 @@ export function SchedulingScreen({
                 aria-pressed={kind === option}
                 onClick={() => chooseKind(option)}
                 className={cn(
-                  "relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold",
+                  "relative z-10 flex min-h-10 flex-1 items-center justify-center rounded-lg py-2 text-sm font-semibold",
                   "transition-colors duration-(--duration-press)",
                   kind === option ? "text-foreground" : "text-muted-foreground",
                 )}
@@ -431,7 +431,7 @@ export function SchedulingScreen({
           trailing={
             <span
               key={monthFormat.format(visibleMonth)}
-              className="animate-in fade-in slide-in-from-bottom-1 text-muted-foreground text-[10px] font-semibold tracking-widest uppercase duration-(--duration-swap)"
+              className="animate-in fade-in slide-in-from-bottom-1 text-muted-foreground text-xs font-semibold tracking-wide uppercase duration-(--duration-swap)"
             >
               {monthFormat.format(visibleMonth)}
             </span>
@@ -531,7 +531,7 @@ export function SchedulingScreen({
                 aria-pressed={durationMinutes === minutes}
                 onClick={() => chooseDuration(minutes)}
                 className={cn(
-                  "flex-1 rounded-full border py-2 text-sm font-semibold tabular-nums",
+                  "flex min-h-11 flex-1 items-center justify-center rounded-full border py-2 text-sm font-semibold tabular-nums",
                   "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press) active:scale-[0.97]",
                   durationMinutes === minutes
                     ? "bg-primary text-primary-foreground border-transparent"
@@ -586,7 +586,7 @@ export function SchedulingScreen({
                       className="border-border text-muted-foreground flex-1 border-b-2 pb-1 text-xs font-semibold"
                     >
                       {partLabel(copy, part)}
-                      <span className="text-muted-foreground/70 block text-[10px] font-normal tabular-nums">
+                      <span className="text-muted-foreground block text-xs font-normal tabular-nums">
                         {counts[part]}
                         {copy.freeSuffix}
                       </span>
@@ -608,7 +608,7 @@ export function SchedulingScreen({
                       top of a popup — hence the safe-area offset, and the page
                       background behind it instead of the drawer's card.
                     */}
-                    <p className="bg-background text-muted-foreground sticky top-(--mini-app-safe-top,0px) z-10 py-2 text-[10px] font-semibold tracking-widest uppercase">
+                    <p className="bg-background text-muted-foreground sticky top-(--mini-app-safe-top,0px) z-10 py-2 text-xs font-semibold tracking-wide uppercase">
                       {partLabel(copy, part)}
                     </p>
                     <div className="grid grid-cols-3 gap-2">
@@ -628,7 +628,7 @@ export function SchedulingScreen({
                               setStartMinutes(slot.startMinutes)
                             }}
                             className={cn(
-                              "rounded-xl border py-2 text-sm font-semibold tabular-nums",
+                              "flex min-h-11 items-center justify-center rounded-xl border py-2 text-sm font-semibold tabular-nums",
                               "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press)",
                               "enabled:active:scale-[0.97]",
                               startMinutes === slot.startMinutes
@@ -711,7 +711,7 @@ function Field({
   return (
     <div className="mt-5 flex flex-col gap-2 first:mt-0">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-muted-foreground text-[10px] font-semibold tracking-widest uppercase">
+        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
           {label}
         </p>
         {trailing}

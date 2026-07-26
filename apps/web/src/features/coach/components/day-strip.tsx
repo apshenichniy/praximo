@@ -219,7 +219,7 @@ export function DayStrip({
                   : "border-border text-muted-foreground",
             )}
           >
-            <span className="text-[10px] font-semibold tracking-wide uppercase opacity-70">
+            <span className="text-xs font-semibold tracking-wide uppercase">
               {weekdayFormat.format(day)}
             </span>
             <span className="text-base font-semibold tabular-nums">{dayFormat.format(day)}</span>
@@ -237,10 +237,10 @@ export function DayStrip({
       <button
         type="button"
         onClick={onOpenMonth}
-        className="border-border text-muted-foreground ease-out-strong flex w-14 flex-none flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-2 transition-[scale] duration-(--duration-press) active:scale-[0.97]"
+        className="border-border text-muted-foreground ease-out-strong flex w-16 flex-none flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-2 transition-[scale] duration-(--duration-press) active:scale-[0.97]"
       >
         <HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={2} />
-        <span className="text-[10px] font-semibold tracking-wide uppercase">{monthLabel}</span>
+        <span className="text-xs font-semibold uppercase">{monthLabel}</span>
       </button>
     </div>
   )

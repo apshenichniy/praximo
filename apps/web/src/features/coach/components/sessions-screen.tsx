@@ -59,7 +59,7 @@ export function SessionsScreen({
       ) : (
         days.map((day) => (
           <Section key={day.date} className="mt-8">
-            <h2 className="text-muted-foreground px-1 text-[10px] font-semibold tracking-widest uppercase">
+            <h2 className="text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase">
               {day.heading}
             </h2>
             <Card className="mt-3 gap-0 overflow-hidden py-0">

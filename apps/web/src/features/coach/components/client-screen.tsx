@@ -138,7 +138,7 @@ export function ClientScreen({
 
       {!showInvitation || client.invite === undefined ? null : (
         <Section>
-          <p className="text-muted-foreground px-1 text-[10px] font-semibold tracking-widest uppercase">
+          <p className="text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase">
             {copy.clients.invitationEyebrow}
           </p>
           <p className="text-muted-foreground mt-2 px-1 text-sm leading-5">

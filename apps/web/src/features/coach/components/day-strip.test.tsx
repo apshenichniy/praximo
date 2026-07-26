@@ -36,15 +36,17 @@ const markup = (selected: Date, booked: ReadonlyArray<Date> = []): string =>
 describe("DayStrip", () => {
   it("lays every day out as a fixed-width column", () => {
     const html = markup(TODAY)
-    const days = [...html.matchAll(/class="([^"]*)"/g)]
-      .map(([, value]) => value ?? "")
-      .filter((value) => value.includes("w-14"))
+    const classNames = [...html.matchAll(/class="([^"]*)"/g)].map(([, value]) => value ?? "")
+    const days = classNames.filter((value) => value.includes("w-14"))
 
-    expect(days).toHaveLength(DAYS.length + 1) // the days, plus the month control
+    expect(days).toHaveLength(DAYS.length)
     for (const value of days) {
       expect(value.split(/\s+/)).toContain("flex-none")
       expect(value.split(/\s+/)).toContain("flex-col")
     }
+    // The month control ends the strip and is wider than a day, because the
+    // word inside it is a word rather than two letters.
+    expect(classNames.filter((value) => value.includes("w-16"))).toHaveLength(1)
   })
 
   it("marks the chosen day and nothing else", () => {
