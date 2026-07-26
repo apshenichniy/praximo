@@ -101,7 +101,12 @@ export function DayStrip({
         if (day !== undefined) onVisibleMonth(day)
       }
 
-      if (container.scrollLeft + container.clientWidth >= container.scrollWidth - ExtendMargin) {
+      // Not while gliding: an animation travelling to the end would keep asking
+      // for more days and chase a row that grows ahead of it.
+      if (
+        glideFrame.current === undefined &&
+        container.scrollLeft + container.clientWidth >= container.scrollWidth - ExtendMargin
+      ) {
         onExtend()
       }
     })

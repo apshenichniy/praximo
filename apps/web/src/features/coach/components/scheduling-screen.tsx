@@ -11,7 +11,7 @@ import {
   type SessionKind,
 } from "@praximo/domain"
 import { localeTag, sessionMoment } from "@praximo/i18n"
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { Button } from "@/components/ui/button.tsx"
@@ -132,6 +132,10 @@ export function SchedulingScreen({
   /** The month under the thumb, which is not always the chosen day's month. */
   const [visibleMonth, setVisibleMonth] = useState<Date>(today)
   const [monthOpen, setMonthOpen] = useState(false)
+  /** The month the calendar is showing, which follows the day when it opens. */
+  const [month, setMonth] = useState<Date>(today)
+  const [monthHeight, setMonthHeight] = useState(0)
+  const monthRef = useRef<HTMLDivElement>(null)
   const [startMinutes, setStartMinutes] = useState<number>()
   const groupRefs = useRef(new Map<PartOfDay, HTMLDivElement>())
   const timeRef = useRef<HTMLDivElement>(null)
@@ -193,16 +197,41 @@ export function SchedulingScreen({
     (day: Date | undefined) => {
       if (day === undefined) return
       chooseDay(day)
-      // The window re-anchors on the day just chosen, so the fortnight it grew
-      // scrolling forward is not a fortnight *behind* where the strip now opens.
-      setStripLength(StripDays)
+      // Only a day the strip does not already carry re-anchors it. Trimming the
+      // window on a day it *does* carry — «Today» on a strip scrolled weeks out —
+      // cut the row's width from under its own scroll offset, and the strip
+      // jumped before it glided.
+      if (!days.some((carried) => sameDay(carried, day))) setStripLength(StripDays)
       setVisibleMonth(day)
       setCentreRequest((count) => count + 1)
       setMonthOpen(false)
       scrollAfterMonth.current = true
     },
-    [chooseDay],
+    [chooseDay, days],
   )
+
+  /** Opening the month shows the month of the day in hand, not the current one. */
+  const toggleMonth = useCallback(() => {
+    setMonthOpen((open) => {
+      if (!open) setMonth(selectedDay)
+      return !open
+    })
+  }, [selectedDay])
+
+  /**
+   * The month's own height, watched rather than assumed: five week-rows and six
+   * are different heights, and the fold animates between measured numbers.
+   */
+  useEffect(() => {
+    const node = monthRef.current
+    if (node === null) return
+    const observer = new ResizeObserver((entries) => {
+      const measured = entries[0]?.contentRect.height
+      if (measured !== undefined && measured > 0) setMonthHeight(measured)
+    })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
 
   /** The strip reports every frame it scrolls; only a new month is a change. */
   const noteVisibleMonth = useCallback((day: Date) => {
@@ -213,8 +242,9 @@ export function SchedulingScreen({
     )
   }, [])
 
-  const revealTime = useCallback(() => {
-    if (!scrollAfterMonth.current) return
+  const revealTime = useCallback((event: React.TransitionEvent<HTMLDivElement>) => {
+    // The fold's own height, not a colour or a transform on something inside it.
+    if (event.propertyName !== "height" || !scrollAfterMonth.current) return
     scrollAfterMonth.current = false
     timeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }, [])
@@ -354,7 +384,7 @@ export function SchedulingScreen({
             monthLabel={copy.monthLabel}
             onPick={chooseDay}
             onExtend={() => setStripLength(extendStrip)}
-            onOpenMonth={() => setMonthOpen(true)}
+            onOpenMonth={toggleMonth}
             onVisibleMonth={noteVisibleMonth}
             centreRequest={centreRequest}
           />
@@ -365,29 +395,30 @@ export function SchedulingScreen({
                 ? `${copy.today}, ${dayFormat.format(selectedDay)}`
                 : dayFormat.format(selectedDay)}
             </span>
-            <Button
-              size="sm"
-              variant="outline"
-              aria-expanded={monthOpen}
-              onClick={() => setMonthOpen((open) => !open)}
-            >
+            <Button size="sm" variant="outline" aria-expanded={monthOpen} onClick={toggleMonth}>
               {copy.monthLabel}
             </Button>
           </div>
 
           {/*
-            Rows rather than height: `0fr → 1fr` animates a box whose content is
-            300px of month without anybody having to measure it, and the grid
-            keeps that content laid out at its real width while it is closed.
+            A measured `height`, not `grid-template-rows`.
+
+            `0fr → 1fr` needs no measuring and reads beautifully in Chrome — and
+            does not animate at all in the WebView Telegram runs on iOS. What
+            arrived on a phone was the month vanishing in one frame, taking the page's
+            scroll position with it: the coach was scrolled down to reach the
+            month, the page lost 370px, and the scroll offset was clamped mid-tap.
+            `height` interpolates everywhere; the number comes from an observer,
+            so a month with six week-rows is as right as one with five.
           */}
           <div
+            style={{ height: monthOpen ? monthHeight : 0 }}
             onTransitionEnd={revealTime}
-            className={cn(
-              "ease-out-strong grid transition-[grid-template-rows] duration-250 motion-reduce:transition-none",
-              monthOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-            )}
+            className="ease-out-strong overflow-hidden transition-[height] duration-250 motion-reduce:transition-none"
+            aria-hidden={!monthOpen}
+            inert={!monthOpen}
           >
-            <div className="overflow-hidden">
+            <div ref={monthRef}>
               <div className="border-border overflow-hidden rounded-2xl border">
                 <Calendar
                   mode="single"
@@ -396,6 +427,11 @@ export function SchedulingScreen({
                   onSelect={chooseMonthDay}
                   disabled={{ before: today }}
                   startMonth={today}
+                  // Controlled, because the calendar never unmounts — it is
+                  // folded, not removed — and an uncontrolled month would stay
+                  // on July while the coach was looking at a day in October.
+                  month={month}
+                  onMonthChange={setMonth}
                   // A day this client already has a session on, marked rather
                   // than blocked: two sessions on one day is a legitimate thing
                   // to book, and the dot is there so it is never an accident.
