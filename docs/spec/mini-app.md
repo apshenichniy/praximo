@@ -265,6 +265,29 @@ which *are* answers. One haptic per action, never for a system event (a fetch
 resolving, a prefetch arriving, the strip scrolling itself), and never for a tap
 that chose what was already chosen.
 
+### Where the feedback lives
+
+Applying this contract screen by screen is a plan checked by memory, so it is
+applied by *kind of thing* instead — and each kind is found by one command:
+
+| Kind | Found by | Where it is implemented |
+| --- | --- | --- |
+| Anything pressable | `<Button>`, `<button>`, `<Link>` | `ui/button.tsx` for the forty-five buttons; the `pressable-row` utility for full-width rows |
+| One value replacing another | `aria-pressed` | `ui/toggle.tsx` covers both chip sets; hand-rolled chips call `selectionHaptic()` themselves |
+| An action with an outcome | `acceptOnce(`, `useMutation(` | `notifyHaptic()` on both branches, beside the branch |
+| Navigation | — | view transitions, nothing per screen |
+
+Rows take their press as a wash of colour rather than the 0.97 a chip takes:
+scaling something the width of the screen reads as the page flexing, and the
+platform's own lists light up. That is what `pressable-row` is.
+
+The last two rows of that table are invariants, and
+`src/__tests__/feedback-invariants.test.ts` holds them: a file that mutates says
+how it went, a file with `aria-pressed` ticks. A hook may hand its outcome out
+as a value instead — `useInviteShare` does, because only the screen knows what
+«dismissed» means there — and says so in a comment the test reads. Neither check
+can tell a right haptic from a wrong one; that is what the phone is for.
+
 ### Reduced motion
 
 `prefers-reduced-motion` removes movement, not meaning: opacity and colour stay,
