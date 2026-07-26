@@ -123,7 +123,9 @@ export function ClientScreen({
         {client.channel?.telegramUsername === undefined ? null : (
           <p className="text-muted-foreground text-sm">@{client.channel.telegramUsername}</p>
         )}
-        <p className={cn("flex items-center gap-1.5 text-sm font-medium", stateStyles[client.state])}>
+        <p
+          className={cn("flex items-center gap-1.5 text-sm font-medium", stateStyles[client.state])}
+        >
           <span className="size-1.5 rounded-full bg-current" />
           {stateWord}
         </p>

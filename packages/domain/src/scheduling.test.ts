@@ -110,7 +110,9 @@ describe("daySlots", () => {
   })
 
   it("returns nothing when the day is too far gone for the chosen duration", () => {
-    expect(daySlots({ durationMinutes: 60, busy: [], earliestStartMinutes: at(21, 15) })).toEqual([])
+    expect(daySlots({ durationMinutes: 60, busy: [], earliestStartMinutes: at(21, 15) })).toEqual(
+      [],
+    )
   })
 })
 

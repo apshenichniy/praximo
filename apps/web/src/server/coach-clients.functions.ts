@@ -81,21 +81,22 @@ export type CreateClientResult =
  */
 export const createClient = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(
-    (input: unknown): { readonly name: string; readonly inviteLanguage: string } => ({
-      name:
-        typeof input === "object" && input !== null && "name" in input && typeof input.name === "string"
-          ? input.name
-          : "",
-      inviteLanguage:
-        typeof input === "object" &&
-        input !== null &&
-        "inviteLanguage" in input &&
-        typeof input.inviteLanguage === "string"
-          ? input.inviteLanguage
-          : "",
-    }),
-  )
+  .validator((input: unknown): { readonly name: string; readonly inviteLanguage: string } => ({
+    name:
+      typeof input === "object" &&
+      input !== null &&
+      "name" in input &&
+      typeof input.name === "string"
+        ? input.name
+        : "",
+    inviteLanguage:
+      typeof input === "object" &&
+      input !== null &&
+      "inviteLanguage" in input &&
+      typeof input.inviteLanguage === "string"
+        ? input.inviteLanguage
+        : "",
+  }))
   .handler(async ({ context, data }): Promise<CreateClientResult> => {
     if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
     try {
@@ -122,7 +123,10 @@ export const getDaySchedule = createServerFn({ method: "POST" })
   .middleware([launchCredential])
   .validator((input: unknown): { readonly date: string } => ({
     date:
-      typeof input === "object" && input !== null && "date" in input && typeof input.date === "string"
+      typeof input === "object" &&
+      input !== null &&
+      "date" in input &&
+      typeof input.date === "string"
         ? input.date
         : "",
   }))

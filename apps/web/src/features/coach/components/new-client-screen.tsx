@@ -29,7 +29,10 @@ export function NewClientScreen({
   readonly copy: CoachCopy
   /** The chips default to the coach's own language — the likeliest answer. */
   readonly coachLanguage: CoachLanguage
-  readonly onCreate: (input: { readonly name: string; readonly inviteLanguage: CoachLanguage }) => void
+  readonly onCreate: (input: {
+    readonly name: string
+    readonly inviteLanguage: CoachLanguage
+  }) => void
   readonly onBack: () => void
   readonly pending: boolean
   readonly error: string | undefined

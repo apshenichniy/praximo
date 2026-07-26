@@ -87,11 +87,8 @@ export interface DaySlotsInput {
 export const nextSlotStart = (minutes: number): number =>
   (Math.floor(minutes / SlotStepMinutes) + 1) * SlotStepMinutes
 
-const overlaps = (
-  startMinutes: number,
-  endMinutes: number,
-  interval: BusyInterval,
-): boolean => startMinutes < interval.endMinutes && endMinutes > interval.startMinutes
+const overlaps = (startMinutes: number, endMinutes: number, interval: BusyInterval): boolean =>
+  startMinutes < interval.endMinutes && endMinutes > interval.startMinutes
 
 /**
  * The whole grid for one day: every start that could still happen, each marked
@@ -125,9 +122,7 @@ export const daySlots = (input: DaySlotsInput): ReadonlyArray<DaySlot> => {
 }
 
 /** How many of a day's slots are still free, per part of day — the anchors' counts. */
-export const freeSlotCounts = (
-  slots: ReadonlyArray<DaySlot>,
-): Record<PartOfDay, number> => {
+export const freeSlotCounts = (slots: ReadonlyArray<DaySlot>): Record<PartOfDay, number> => {
   const counts: Record<PartOfDay, number> = { morning: 0, afternoon: 0, evening: 0 }
   for (const slot of slots) {
     if (slot.available) counts[partOfDay(slot.startMinutes)] += 1

@@ -45,8 +45,7 @@ function NewClientRoute() {
   const [error, setError] = useState<string>()
   const inFlight = useRef(false)
 
-  const language =
-    entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
+  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
 
   const create = useCallback(

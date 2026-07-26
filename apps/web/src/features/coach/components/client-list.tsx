@@ -44,10 +44,7 @@ export function ClientList({
     <Card className="mt-4 gap-0 overflow-hidden py-0">
       <ul className="divide-border divide-y">
         <li>
-          <Link
-            to="/clients/new"
-            className="flex min-h-16 items-center gap-4 px-5 py-3 text-left"
-          >
+          <Link to="/clients/new" className="flex min-h-16 items-center gap-4 px-5 py-3 text-left">
             <span className="bg-primary/15 text-primary flex size-10 shrink-0 items-center justify-center rounded-full">
               <HugeiconsIcon icon={UserAdd01Icon} size={18} strokeWidth={2} />
             </span>

@@ -116,8 +116,7 @@ function ClientRoute() {
             await router.invalidate()
             return
           }
-          const reason =
-            result.ok && !result.outcome.scheduled ? result.outcome.reason : "failed"
+          const reason = result.ok && !result.outcome.scheduled ? result.outcome.reason : "failed"
           setError(
             reason === "overlap"
               ? copy.clients.overlapError

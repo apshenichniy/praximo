@@ -80,9 +80,7 @@ export interface Interface {
     token: string,
     telegramBotId: string,
   ) => Effect.Effect<InviteLookup | undefined, QueryFailed>
-  readonly findBotOwner: (
-    telegramBotId: string,
-  ) => Effect.Effect<BotOwner | undefined, QueryFailed>
+  readonly findBotOwner: (telegramBotId: string) => Effect.Effect<BotOwner | undefined, QueryFailed>
   readonly findAcceptedClient: (
     clientId: string,
   ) => Effect.Effect<AcceptedClient | undefined, QueryFailed>

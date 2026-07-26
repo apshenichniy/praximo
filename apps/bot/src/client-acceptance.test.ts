@@ -50,8 +50,7 @@ const repoLayer = (found: ClientAcceptanceRepo.InviteLookup | undefined, accepts
       layer: Layer.succeed(
         ClientAcceptanceRepo.Service,
         ClientAcceptanceRepo.Service.of({
-          findByToken: (_token, botId) =>
-            Effect.succeed(botId === BOT_ID ? found : undefined),
+          findByToken: (_token, botId) => Effect.succeed(botId === BOT_ID ? found : undefined),
           findBotOwner: unsupported,
           findAcceptedClient: unsupported,
           accept: (input) =>
@@ -81,8 +80,12 @@ describe("callback data", () => {
   // is re-checked rather than trusted.
   it("refuses anything it did not write", () => {
     expect(parseCallback(LanguageCallbackPrefix, "cl:short:ru")).toBeUndefined()
-    expect(parseCallback(LanguageCallbackPrefix, `${LanguageCallbackPrefix}${TOKEN}:de`)).toBeUndefined()
-    expect(parseCallback(LanguageCallbackPrefix, `${AcceptCallbackPrefix}${TOKEN}:ru`)).toBeUndefined()
+    expect(
+      parseCallback(LanguageCallbackPrefix, `${LanguageCallbackPrefix}${TOKEN}:de`),
+    ).toBeUndefined()
+    expect(
+      parseCallback(LanguageCallbackPrefix, `${AcceptCallbackPrefix}${TOKEN}:ru`),
+    ).toBeUndefined()
   })
 })
 
@@ -129,12 +132,12 @@ describe("refusals", () => {
   }
 
   it("tells the client who came back apart from the stranger who followed the link", () => {
-    expect(
-      refusalFor({ ...base, status: "accepted", acceptedByTelegramId: CLIENT_ID }),
-    ).toBe("already-set-up")
-    expect(
-      refusalFor({ ...base, status: "accepted", acceptedByTelegramId: "810000999" }),
-    ).toBe("link-used")
+    expect(refusalFor({ ...base, status: "accepted", acceptedByTelegramId: CLIENT_ID })).toBe(
+      "already-set-up",
+    )
+    expect(refusalFor({ ...base, status: "accepted", acceptedByTelegramId: "810000999" })).toBe(
+      "link-used",
+    )
   })
 
   it("reads a closed window as expired whatever the column says", () => {
@@ -152,7 +155,9 @@ describe("refusals", () => {
   })
 
   it("lets a live invitation through", () => {
-    expect(refusalFor({ ...base, status: "pending", acceptedByTelegramId: undefined })).toBeUndefined()
+    expect(
+      refusalFor({ ...base, status: "pending", acceptedByTelegramId: undefined }),
+    ).toBeUndefined()
   })
 })
 
@@ -199,7 +204,9 @@ describe("opening an invitation", () => {
         clientLanguageCode: "de",
       }).pipe(Effect.provide(repo.layer))
 
-      expect(outcome._tag === "Language" && outcome.message.buttons[0]?.text).toContain("Українська")
+      expect(outcome._tag === "Language" && outcome.message.buttons[0]?.text).toContain(
+        "Українська",
+      )
     }),
   )
 })

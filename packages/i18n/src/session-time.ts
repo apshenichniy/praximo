@@ -54,24 +54,28 @@ const readOffset = (formatted: string): string => {
   return minutes === undefined || minutes === "00" ? `UTC${hour}` : `UTC${hour}:${minutes}`
 }
 
-export const sessionMoment = (
-  locale: CoachLanguage,
-  at: Date,
-  timeZone: string,
-): SessionMoment => {
+export const sessionMoment = (locale: CoachLanguage, at: Date, timeZone: string): SessionMoment => {
   const tag = localeTag(locale)
   const key = `${tag}|${timeZone}`
 
-  const day = cached(dayFormats, key, () =>
-    new Intl.DateTimeFormat(tag, { timeZone, weekday: "long", day: "numeric", month: "long" }),
+  const day = cached(
+    dayFormats,
+    key,
+    () =>
+      new Intl.DateTimeFormat(tag, { timeZone, weekday: "long", day: "numeric", month: "long" }),
   ).format(at)
 
-  const time = cached(timeFormats, key, () =>
-    new Intl.DateTimeFormat(tag, { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }),
+  const time = cached(
+    timeFormats,
+    key,
+    () =>
+      new Intl.DateTimeFormat(tag, { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }),
   ).format(at)
 
-  const offsetParts = cached(offsetFormats, key, () =>
-    new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" }),
+  const offsetParts = cached(
+    offsetFormats,
+    key,
+    () => new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" }),
   ).formatToParts(at)
   const offset = offsetParts.find((part) => part.type === "timeZoneName")?.value ?? "GMT"
 

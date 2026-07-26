@@ -71,21 +71,25 @@ export const ClientLanguageNames: Record<CoachLanguage, string> = {
 export const SuggestedLanguageMark = "• "
 
 const minutes = (locale: CoachLanguage, count: number): string =>
-  plural(locale, count, {
-    en: { one: "{count} minute", other: "{count} minutes" },
-    uk: {
-      one: "{count} хвилина",
-      few: "{count} хвилини",
-      many: "{count} хвилин",
-      other: "{count} хвилини",
-    },
-    ru: {
-      one: "{count} минута",
-      few: "{count} минуты",
-      many: "{count} минут",
-      other: "{count} минуты",
-    },
-  }[locale])
+  plural(
+    locale,
+    count,
+    {
+      en: { one: "{count} minute", other: "{count} minutes" },
+      uk: {
+        one: "{count} хвилина",
+        few: "{count} хвилини",
+        many: "{count} хвилин",
+        other: "{count} хвилини",
+      },
+      ru: {
+        one: "{count} минута",
+        few: "{count} минуты",
+        many: "{count} минут",
+        other: "{count} минуты",
+      },
+    }[locale],
+  )
 
 const en: ClientCopy = {
   languageStep: {
@@ -263,7 +267,6 @@ export const clientConsentVersion = (locale: CoachLanguage): string =>
 
 /** Every version this build can record, for the parity test and for #57. */
 export const clientConsentVersions = (): Record<CoachLanguage, string> =>
-  Object.fromEntries(CoachLanguages.map((locale) => [locale, clientConsentVersion(locale)])) as Record<
-    CoachLanguage,
-    string
-  >
+  Object.fromEntries(
+    CoachLanguages.map((locale) => [locale, clientConsentVersion(locale)]),
+  ) as Record<CoachLanguage, string>

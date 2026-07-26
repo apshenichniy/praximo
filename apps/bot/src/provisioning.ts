@@ -1134,7 +1134,9 @@ const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(funct
   const clientId = acceptedClientId(notification.dedupeKey)
   if (clientId === undefined) return false
   const clients = yield* ClientAcceptanceRepo.Service
-  const client = yield* clients.findAcceptedClient(clientId).pipe(Effect.orElseSucceed(() => undefined))
+  const client = yield* clients
+    .findAcceptedClient(clientId)
+    .pipe(Effect.orElseSucceed(() => undefined))
   if (client === undefined) return false
 
   const registry = yield* BotRegistry.Service
@@ -1165,7 +1167,10 @@ const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(funct
         button: { text: copy.openClientButton, webAppUrl: route.toString() },
       },
     )
-    .pipe(Effect.as(true), Effect.orElseSucceed(() => false))
+    .pipe(
+      Effect.as(true),
+      Effect.orElseSucceed(() => false),
+    )
   return sent
 })
 

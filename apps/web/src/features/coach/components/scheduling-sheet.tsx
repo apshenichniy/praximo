@@ -15,12 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
 import { Calendar } from "@/components/ui/calendar.tsx"
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer.tsx"
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
@@ -377,9 +372,7 @@ export function SchedulingSheet({
                               // Taken, not gone: hiding it would reflow a
                               // three-column grid between days and cost the
                               // positional memory the layout trades on.
-                              slot.available
-                                ? undefined
-                                : "text-muted-foreground/40 border-dashed",
+                              slot.available ? undefined : "text-muted-foreground/40 border-dashed",
                             )}
                           >
                             {clock(slot.startMinutes)}

@@ -327,11 +327,7 @@ export const layer = Layer.effect(
       return {
         id: String(record.id),
         name: String(record.name),
-        state: clientState(
-          acceptedAt === undefined ? inviteStatus : "accepted",
-          expiresAt,
-          now,
-        ),
+        state: clientState(acceptedAt === undefined ? inviteStatus : "accepted", expiresAt, now),
         ...(clientLanguage === undefined ? {} : { language: clientLanguage }),
         createdAt: readDate(record.created_at) ?? now,
         ...(record.invite_id === null || record.invite_id === undefined || expiresAt === undefined

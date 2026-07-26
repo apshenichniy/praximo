@@ -2,120 +2,70 @@
   "version": "8",
   "dialect": "postgres",
   "id": "b043c0b7-7543-41ef-94a6-18ccdcbf98b6",
-  "prevIds": [
-    "e6754530-3be3-4785-aac5-8e485a5a1539"
-  ],
+  "prevIds": ["e6754530-3be3-4785-aac5-8e485a5a1539"],
   "ddl": [
     {
-      "values": [
-        "coach_cancelled",
-        "no_show",
-        "room_unavailable"
-      ],
+      "values": ["coach_cancelled", "no_show", "room_unavailable"],
       "name": "cancel_reason",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "coach_end",
-        "empty_room_idle",
-        "grace_due",
-        "room_cap",
-        "next_session_start"
-      ],
+      "values": ["coach_end", "empty_room_idle", "grace_due", "room_cap", "next_session_start"],
       "name": "close_reason",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "pending",
-        "delivered"
-      ],
+      "values": ["pending", "delivered"],
       "name": "coach_bot_notification_status",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "requested",
-        "configuring",
-        "completed"
-      ],
+      "values": ["requested", "configuring", "completed"],
       "name": "coach_bot_provisioning_status",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "declined_by_coach",
-        "reset_by_admin",
-        "reissued"
-      ],
+      "values": ["declined_by_coach", "reset_by_admin", "reissued"],
       "name": "coach_onboarding_invite_cancellation_reason",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "pending",
-        "accepted",
-        "used",
-        "expired",
-        "cancelled"
-      ],
+      "values": ["pending", "accepted", "used", "expired", "cancelled"],
       "name": "coach_onboarding_invite_status",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "pending",
-        "accepted",
-        "expired"
-      ],
+      "values": ["pending", "accepted", "expired"],
       "name": "invite_status",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "en",
-        "uk",
-        "ru"
-      ],
+      "values": ["en", "uk", "ru"],
       "name": "language",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "both_absent",
-        "coach_absent",
-        "client_absent",
-        "no_overlap"
-      ],
+      "values": ["both_absent", "coach_absent", "client_absent", "no_overlap"],
       "name": "no_show_detail",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "scheduled",
-        "in_progress",
-        "completed",
-        "cancelled"
-      ],
+      "values": ["scheduled", "in_progress", "completed", "cancelled"],
       "name": "session_state",
       "entityType": "enums",
       "schema": "public"
     },
     {
-      "values": [
-        "coach",
-        "client"
-      ],
+      "values": ["coach", "client"],
       "name": "track_participant",
       "entityType": "enums",
       "schema": "public"
@@ -3369,14 +3319,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "schemaTo": "public",
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "artifact_session_id_session_id_fkey",
@@ -3386,14 +3332,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "schemaTo": "public",
       "tableTo": "workspace",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "bot_workspace_id_workspace_id_fkey",
@@ -3403,14 +3345,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "client_id"
-      ],
+      "columns": ["client_id"],
       "schemaTo": "public",
       "tableTo": "client",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "channel_client_id_client_id_fkey",
@@ -3420,14 +3358,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "schemaTo": "public",
       "tableTo": "workspace",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "client_workspace_id_workspace_id_fkey",
@@ -3437,14 +3371,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "schemaTo": "public",
       "tableTo": "workspace",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "coach_bot_notification_workspace_id_workspace_id_fkey",
@@ -3454,14 +3384,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "invite_id"
-      ],
+      "columns": ["invite_id"],
       "schemaTo": "public",
       "tableTo": "coach_onboarding_invite",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "coach_bot_provisioning_QphlPRLibWTf_fkey",
@@ -3471,14 +3397,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "schemaTo": "public",
       "tableTo": "workspace",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "coach_bot_provisioning_workspace_id_workspace_id_fkey",
@@ -3488,14 +3410,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "schemaTo": "public",
       "tableTo": "workspace",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "coach_onboarding_invite_workspace_id_workspace_id_fkey",
@@ -3505,14 +3423,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "client_id"
-      ],
+      "columns": ["client_id"],
       "schemaTo": "public",
       "tableTo": "client",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "consent_grant_client_id_client_id_fkey",
@@ -3522,14 +3436,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "schemaTo": "public",
       "tableTo": "workspace",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "invite_workspace_id_workspace_id_fkey",
@@ -3539,14 +3449,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "client_id"
-      ],
+      "columns": ["client_id"],
       "schemaTo": "public",
       "tableTo": "client",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "invite_client_id_client_id_fkey",
@@ -3556,14 +3462,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "schemaTo": "public",
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "join_link_session_id_session_id_fkey",
@@ -3573,14 +3475,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "schemaTo": "public",
       "tableTo": "workspace",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "member_workspace_id_workspace_id_fkey",
@@ -3590,14 +3488,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "schemaTo": "public",
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "recording_session_id_session_id_fkey",
@@ -3607,14 +3501,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "schemaTo": "public",
       "tableTo": "workspace",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "session_workspace_id_workspace_id_fkey",
@@ -3624,14 +3514,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "client_id"
-      ],
+      "columns": ["client_id"],
       "schemaTo": "public",
       "tableTo": "client",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "session_client_id_client_id_fkey",
@@ -3641,14 +3527,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "recording_id"
-      ],
+      "columns": ["recording_id"],
       "schemaTo": "public",
       "tableTo": "recording",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "track_recording_id_recording_id_fkey",
@@ -3658,14 +3540,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "track_id"
-      ],
+      "columns": ["track_id"],
       "schemaTo": "public",
       "tableTo": "track",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "track_transcript_track_id_track_id_fkey",
@@ -3675,14 +3553,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "schemaTo": "public",
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "transcript_session_id_session_id_fkey",
@@ -3691,9 +3565,7 @@
       "table": "transcript"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "admin_pkey",
       "schema": "public",
@@ -3701,9 +3573,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "artifact_pkey",
       "schema": "public",
@@ -3711,9 +3581,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "workspace_id"
-      ],
+      "columns": ["workspace_id"],
       "nameExplicit": false,
       "name": "bot_pkey",
       "schema": "public",
@@ -3721,9 +3589,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "channel_pkey",
       "schema": "public",
@@ -3731,9 +3597,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "client_pkey",
       "schema": "public",
@@ -3741,9 +3605,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "coach_bot_notification_pkey",
       "schema": "public",
@@ -3751,9 +3613,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "coach_bot_provisioning_pkey",
       "schema": "public",
@@ -3761,9 +3621,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "coach_onboarding_invite_pkey",
       "schema": "public",
@@ -3771,9 +3629,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "consent_grant_pkey",
       "schema": "public",
@@ -3781,9 +3637,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "invite_pkey",
       "schema": "public",
@@ -3791,9 +3645,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "join_link_pkey",
       "schema": "public",
@@ -3801,9 +3653,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "member_pkey",
       "schema": "public",
@@ -3811,9 +3661,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "object_cleanup_job_pkey",
       "schema": "public",
@@ -3821,9 +3669,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "recording_pkey",
       "schema": "public",
@@ -3831,9 +3677,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_pkey",
       "schema": "public",
@@ -3841,9 +3685,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "track_pkey",
       "schema": "public",
@@ -3851,9 +3693,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "track_transcript_pkey",
       "schema": "public",
@@ -3861,9 +3701,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "transcript_pkey",
       "schema": "public",
@@ -3871,9 +3709,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "workspace_pkey",
       "schema": "public",
@@ -3881,9 +3717,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "request_id"
-      ],
+      "columns": ["request_id"],
       "nameExplicit": false,
       "name": "workspace_deletion_operation_pkey",
       "schema": "public",
@@ -3892,9 +3726,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "telegram_id"
-      ],
+      "columns": ["telegram_id"],
       "nullsNotDistinct": false,
       "name": "admin_telegram_id_key",
       "schema": "public",
@@ -3903,9 +3735,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "telegram_bot_id"
-      ],
+      "columns": ["telegram_bot_id"],
       "nullsNotDistinct": false,
       "name": "bot_telegram_bot_id_key",
       "schema": "public",
@@ -3914,9 +3744,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "request_id"
-      ],
+      "columns": ["request_id"],
       "nullsNotDistinct": false,
       "name": "coach_onboarding_invite_request_id_key",
       "schema": "public",
@@ -3925,9 +3753,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "code"
-      ],
+      "columns": ["code"],
       "nullsNotDistinct": false,
       "name": "coach_onboarding_invite_code_key",
       "schema": "public",
@@ -3936,9 +3762,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "token"
-      ],
+      "columns": ["token"],
       "nullsNotDistinct": false,
       "name": "invite_token_key",
       "schema": "public",
@@ -3947,9 +3771,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "token"
-      ],
+      "columns": ["token"],
       "nullsNotDistinct": false,
       "name": "join_link_token_key",
       "schema": "public",
@@ -3958,9 +3780,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "object_key"
-      ],
+      "columns": ["object_key"],
       "nullsNotDistinct": false,
       "name": "object_cleanup_job_object_key_key",
       "schema": "public",
@@ -3969,9 +3789,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "nullsNotDistinct": false,
       "name": "recording_session_id_key",
       "schema": "public",
@@ -3980,9 +3798,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "track_id"
-      ],
+      "columns": ["track_id"],
       "nullsNotDistinct": false,
       "name": "track_transcript_track_id_key",
       "schema": "public",
@@ -3991,9 +3807,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "nullsNotDistinct": false,
       "name": "transcript_session_id_key",
       "schema": "public",

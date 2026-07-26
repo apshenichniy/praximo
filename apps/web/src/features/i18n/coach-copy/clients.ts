@@ -204,7 +204,8 @@ const uk: ClientsCopy = {
   nameRequired: "Потрібне ім'я — саме за ним ви знайдете клієнта у списку.",
 
   invitationEyebrow: "Запрошення · Telegram",
-  invitationLeadTail: " відкриє вашого бота в Telegram і прийме запрошення там. Посилання діє 7 днів.",
+  invitationLeadTail:
+    " відкриє вашого бота в Telegram і прийме запрошення там. Посилання діє 7 днів.",
   sendCard: "Надіслати картку в Telegram",
   copyInvite: "Скопіювати запрошення",
   copied: "Скопійовано",

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "@effect/vitest"
-import { DefaultMemberSettings, isSupportedTimeZone, readMemberSettings } from "./member-settings.ts"
+import {
+  DefaultMemberSettings,
+  isSupportedTimeZone,
+  readMemberSettings,
+} from "./member-settings.ts"
 
 describe("readMemberSettings", () => {
   // The column is jsonb and arrives from a row that may predate every key in it.

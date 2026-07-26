@@ -111,7 +111,10 @@ export interface ScheduleSessionInput {
 
 export type ScheduleOutcome =
   | { readonly scheduled: true }
-  | { readonly scheduled: false; readonly reason: "overlap" | "past" | "invalid" | "unknown-client" }
+  | {
+      readonly scheduled: false
+      readonly reason: "overlap" | "past" | "invalid" | "unknown-client"
+    }
 
 export interface Interface {
   readonly home: (
