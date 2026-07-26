@@ -204,7 +204,7 @@ export function DayStrip({
             aria-pressed={chosen}
             onClick={() => onPick(day)}
             className={cn(
-              "flex w-14 flex-noneflex-col items-center gap-0.5 rounded-2xl border py-2",
+              "flex w-14 flex-none flex-col items-center gap-0.5 rounded-2xl border py-2",
               "ease-out-strong transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97]",
               chosen
                 ? "bg-primary text-primary-foreground border-transparent"
@@ -231,7 +231,7 @@ export function DayStrip({
       <button
         type="button"
         onClick={onOpenMonth}
-        className="border-border text-muted-foreground ease-out-strong flex w-14 flex-noneflex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-2 transition-transform duration-150 active:scale-[0.97]"
+        className="border-border text-muted-foreground ease-out-strong flex w-14 flex-none flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-2 transition-transform duration-150 active:scale-[0.97]"
       >
         <HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={2} />
         <span className="text-[10px] font-semibold tracking-wide uppercase">{monthLabel}</span>
