@@ -86,7 +86,8 @@ export interface ClientsCopy {
   readonly sheetTitle: string
   readonly kindLabel: string
   readonly dateLabel: string
-  readonly changeDate: string
+  /** Opens the full month behind the day strip. */
+  readonly monthLabel: string
   readonly today: string
   readonly durationLabel: string
   readonly durationSuffix: string
@@ -172,7 +173,7 @@ const en: ClientsCopy = {
   sheetTitle: "New session",
   kindLabel: "Kind",
   dateLabel: "Date",
-  changeDate: "Change",
+  monthLabel: "Month",
   today: "Today",
   durationLabel: "Duration",
   durationSuffix: " min",
@@ -257,7 +258,7 @@ const uk: ClientsCopy = {
   sheetTitle: "Нова сесія",
   kindLabel: "Тип",
   dateLabel: "Дата",
-  changeDate: "Змінити",
+  monthLabel: "Місяць",
   today: "Сьогодні",
   durationLabel: "Тривалість",
   durationSuffix: " хв",
@@ -342,7 +343,7 @@ const ru: ClientsCopy = {
   sheetTitle: "Новая сессия",
   kindLabel: "Тип",
   dateLabel: "Дата",
-  changeDate: "Изменить",
+  monthLabel: "Месяц",
   today: "Сегодня",
   durationLabel: "Длительность",
   durationSuffix: " мин",

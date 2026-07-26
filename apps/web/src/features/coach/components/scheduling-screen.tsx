@@ -11,13 +11,15 @@ import {
   type SessionKind,
 } from "@praximo/domain"
 import { localeTag, sessionMoment } from "@praximo/i18n"
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { Calendar } from "@/components/ui/calendar.tsx"
-import { Spinner } from "@/components/ui/spinner.tsx"
+import { Skeleton } from "@/components/ui/skeleton.tsx"
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
+import { DayStrip } from "@/features/coach/components/day-strip.tsx"
+import { sameDay, stripWindow } from "@/features/coach/day-strip.ts"
 import { calendarLocale } from "@/features/i18n/calendar-locale.ts"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
@@ -120,12 +122,22 @@ export function SchedulingScreen({
     defaultDurationForKind(firstSession ? "intake" : "regular"),
   )
   const [selectedDay, setSelectedDay] = useState<Date>(today)
-  const [calendarOpen, setCalendarOpen] = useState(true)
+  const [monthOpen, setMonthOpen] = useState(false)
   const [startMinutes, setStartMinutes] = useState<number>()
   const groupRefs = useRef(new Map<PartOfDay, HTMLDivElement>())
+  const timeRef = useRef<HTMLDivElement>(null)
+  /**
+   * How tall the time field was the last time it held a grid. A day change
+   * empties it for as long as the fetch takes, and a section that collapses to
+   * a spinner and grows back is the layout jump this screen is being cured of.
+   */
+  const lastTimeHeight = useRef<number>(undefined)
+  /** Set when the month collapses on a pick, so the scroll waits for it. */
+  const scrollAfterMonth = useRef(false)
 
   const date = calendarDate(selectedDay)
   const booked = useMemo(() => new Set(bookedDates), [bookedDates])
+  const days = useMemo(() => stripWindow(today, selectedDay), [today, selectedDay])
 
   /**
    * The default follows the kind — intake 30, regular 60 — and stops following
@@ -153,12 +165,33 @@ export function SchedulingScreen({
     (day: Date | undefined) => {
       if (day === undefined) return
       setSelectedDay(day)
-      setCalendarOpen(false)
       setStartMinutes(undefined)
       onDateChange(calendarDate(day))
     },
     [onDateChange],
   )
+
+  /**
+   * A day taken from the month, which then folds away. That fold is the one
+   * large height change left on this screen, so the time field is scrolled to
+   * once it has finished — the coach asked for a date and what they want next
+   * is the times on it.
+   */
+  const chooseMonthDay = useCallback(
+    (day: Date | undefined) => {
+      if (day === undefined) return
+      chooseDay(day)
+      setMonthOpen(false)
+      scrollAfterMonth.current = true
+    },
+    [chooseDay],
+  )
+
+  const revealTime = useCallback(() => {
+    if (!scrollAfterMonth.current) return
+    scrollAfterMonth.current = false
+    timeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [])
 
   const slots = useMemo(
     () =>
@@ -186,6 +219,18 @@ export function SchedulingScreen({
    * dead end gets an exit rather than a wall of unpressable buttons.
    */
   const anyFree = useMemo(() => slots.some((slot) => slot.available), [slots])
+
+  /**
+   * The height of the grid, measured with it on screen and before the next day
+   * empties it. Layout rather than effect: the number has to be the one the
+   * browser just painted, not the one it paints after the section has already
+   * collapsed.
+   */
+  useLayoutEffect(() => {
+    if (schedule === undefined) return
+    const node = timeRef.current
+    if (node !== null) lastTimeHeight.current = node.offsetHeight
+  }, [schedule, slots])
 
   const dayFormat = useMemo(
     () =>
@@ -257,47 +302,76 @@ export function SchedulingScreen({
         </Field>
 
         <Field label={copy.dateLabel}>
-          {calendarOpen ? (
-            <div className="border-border overflow-hidden rounded-2xl border">
-              <Calendar
-                mode="single"
-                required={false}
-                selected={selectedDay}
-                onSelect={chooseDay}
-                disabled={{ before: today }}
-                startMonth={today}
-                // A day this client already has a session on, marked rather
-                // than blocked: two sessions on one day is a legitimate thing
-                // to book, and the dot is there so it is never an accident.
-                modifiers={{ booked: (day) => booked.has(calendarDate(day)) }}
-                modifiersClassNames={{
-                  booked:
-                    "after:bg-primary after:absolute after:bottom-1 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:content-['']",
-                }}
-                // Weekday and month names in the coach's language, like every
-                // other word on the screen — and the picker's own aria labels
-                // with them. A bare `{ code }` is not a locale and left all
-                // three in English (#56's defect, found walking #61).
-                locale={calendarLocale(language)}
-                className="w-full bg-transparent"
-              />
-              <div className="border-border flex items-center gap-3 border-t px-4 py-3">
-                <Button size="sm" variant="outline" onClick={() => chooseDay(today)}>
-                  {copy.today}
-                </Button>
-                <span className="text-muted-foreground text-xs">{dayFormat.format(today)}</span>
+          <DayStrip
+            days={days}
+            selected={selectedDay}
+            today={today}
+            isBooked={(day) => booked.has(calendarDate(day))}
+            language={language}
+            onPick={chooseDay}
+          />
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold">
+              {sameDay(selectedDay, today)
+                ? `${copy.today}, ${dayFormat.format(selectedDay)}`
+                : dayFormat.format(selectedDay)}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-expanded={monthOpen}
+              onClick={() => setMonthOpen((open) => !open)}
+            >
+              {copy.monthLabel}
+            </Button>
+          </div>
+
+          {/*
+            Rows rather than height: `0fr → 1fr` animates a box whose content is
+            300px of month without anybody having to measure it, and the grid
+            keeps that content laid out at its real width while it is closed.
+          */}
+          <div
+            onTransitionEnd={revealTime}
+            className={cn(
+              "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
+              monthOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+            )}
+          >
+            <div className="overflow-hidden">
+              <div className="border-border overflow-hidden rounded-2xl border">
+                <Calendar
+                  mode="single"
+                  required={false}
+                  selected={selectedDay}
+                  onSelect={chooseMonthDay}
+                  disabled={{ before: today }}
+                  startMonth={today}
+                  // A day this client already has a session on, marked rather
+                  // than blocked: two sessions on one day is a legitimate thing
+                  // to book, and the dot is there so it is never an accident.
+                  modifiers={{ booked: (day) => booked.has(calendarDate(day)) }}
+                  modifiersClassNames={{
+                    booked:
+                      "after:bg-primary after:absolute after:bottom-1 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:content-['']",
+                  }}
+                  // Weekday and month names in the coach's language, like every
+                  // other word on the screen — and the picker's own aria labels
+                  // with them. A bare `{ code }` is not a locale and left all
+                  // three in English (#56's defect, found walking #61).
+                  locale={calendarLocale(language)}
+                  className="w-full bg-transparent"
+                />
+                <div className="border-border flex items-center gap-3 border-t px-4 py-3">
+                  <Button size="sm" variant="outline" onClick={() => chooseMonthDay(today)}>
+                    {copy.today}
+                  </Button>
+                  <span className="text-muted-foreground text-xs">{dayFormat.format(today)}</span>
+                </div>
               </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setCalendarOpen(true)}
-              className="border-border flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left"
-            >
-              <span className="text-sm font-semibold">{dayFormat.format(selectedDay)}</span>
-              <span className="text-muted-foreground text-xs">{copy.changeDate}</span>
-            </button>
-          )}
+          </div>
         </Field>
 
         <Field label={copy.durationLabel}>
@@ -323,85 +397,96 @@ export function SchedulingScreen({
         </Field>
 
         <Field label={copy.timeLabel}>
-          {schedule === undefined ? (
-            <div className="flex justify-center py-8">
-              <Spinner />
-            </div>
-          ) : !anyFree ? (
-            <EmptyDay
-              copy={copy}
-              day={dayFormat.format(selectedDay)}
-              onNextDay={() => {
-                const next = new Date(selectedDay)
-                next.setDate(next.getDate() + 1)
-                chooseDay(next)
-              }}
-            />
-          ) : (
-            <>
-              <div className="flex gap-1">
-                {present.map((part) => (
-                  <button
-                    key={part}
-                    type="button"
-                    onClick={() => scrollTo(part)}
-                    className="border-border text-muted-foreground flex-1 border-b-2 pb-1 text-xs font-semibold"
-                  >
-                    {partLabel(copy, part)}
-                    <span className="text-muted-foreground/70 block text-[10px] font-normal tabular-nums">
-                      {counts[part]}
-                      {copy.freeSuffix}
-                    </span>
-                  </button>
-                ))}
-              </div>
+          <div
+            ref={timeRef}
+            className="flex scroll-mt-(--mini-app-safe-top,0px) flex-col gap-2"
+            // Held at the height it had a moment ago while the next day loads.
+            // Without it the section shrinks to a spinner and grows back, which
+            // reads as the screen jumping under a thumb that only picked a day.
+            style={
+              schedule === undefined && lastTimeHeight.current !== undefined
+                ? { minHeight: lastTimeHeight.current }
+                : undefined
+            }
+          >
+            {schedule === undefined ? (
+              <SlotSkeleton />
+            ) : !anyFree ? (
+              <EmptyDay
+                copy={copy}
+                day={dayFormat.format(selectedDay)}
+                onNextDay={() => {
+                  const next = new Date(selectedDay)
+                  next.setDate(next.getDate() + 1)
+                  chooseDay(next)
+                }}
+              />
+            ) : (
+              <>
+                <div className="flex gap-1">
+                  {present.map((part) => (
+                    <button
+                      key={part}
+                      type="button"
+                      onClick={() => scrollTo(part)}
+                      className="border-border text-muted-foreground flex-1 border-b-2 pb-1 text-xs font-semibold"
+                    >
+                      {partLabel(copy, part)}
+                      <span className="text-muted-foreground/70 block text-[10px] font-normal tabular-nums">
+                        {counts[part]}
+                        {copy.freeSuffix}
+                      </span>
+                    </button>
+                  ))}
+                </div>
 
-              {present.map((part) => (
-                <div
-                  key={part}
-                  className="scroll-mt-(--mini-app-safe-top,0px)"
-                  ref={(node) => {
-                    if (node !== null) groupRefs.current.set(part, node)
-                  }}
-                >
-                  {/*
+                {present.map((part) => (
+                  <div
+                    key={part}
+                    className="scroll-mt-(--mini-app-safe-top,0px)"
+                    ref={(node) => {
+                      if (node !== null) groupRefs.current.set(part, node)
+                    }}
+                  >
+                    {/*
                       The page scrolls now, not a drawer body, so the heading
                       sticks under the host's own controls rather than to the
                       top of a popup — hence the safe-area offset, and the page
                       background behind it instead of the drawer's card.
                     */}
-                  <p className="bg-background text-muted-foreground sticky top-(--mini-app-safe-top,0px) z-10 py-2 text-[10px] font-semibold tracking-widest uppercase">
-                    {partLabel(copy, part)}
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {slots
-                      .filter((slot) => partOfDay(slot.startMinutes) === part)
-                      .map((slot) => (
-                        <button
-                          key={slot.startMinutes}
-                          type="button"
-                          disabled={!slot.available}
-                          aria-pressed={startMinutes === slot.startMinutes}
-                          onClick={() => setStartMinutes(slot.startMinutes)}
-                          className={cn(
-                            "rounded-xl border py-2 text-sm font-semibold tabular-nums transition-colors",
-                            startMinutes === slot.startMinutes
-                              ? "bg-primary text-primary-foreground border-transparent"
-                              : "border-border",
-                            // Taken, not gone: hiding it would reflow a
-                            // three-column grid between days and cost the
-                            // positional memory the layout trades on.
-                            slot.available ? undefined : "text-muted-foreground/40 border-dashed",
-                          )}
-                        >
-                          {clock(slot.startMinutes)}
-                        </button>
-                      ))}
+                    <p className="bg-background text-muted-foreground sticky top-(--mini-app-safe-top,0px) z-10 py-2 text-[10px] font-semibold tracking-widest uppercase">
+                      {partLabel(copy, part)}
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {slots
+                        .filter((slot) => partOfDay(slot.startMinutes) === part)
+                        .map((slot) => (
+                          <button
+                            key={slot.startMinutes}
+                            type="button"
+                            disabled={!slot.available}
+                            aria-pressed={startMinutes === slot.startMinutes}
+                            onClick={() => setStartMinutes(slot.startMinutes)}
+                            className={cn(
+                              "rounded-xl border py-2 text-sm font-semibold tabular-nums transition-colors",
+                              startMinutes === slot.startMinutes
+                                ? "bg-primary text-primary-foreground border-transparent"
+                                : "border-border",
+                              // Taken, not gone: hiding it would reflow a
+                              // three-column grid between days and cost the
+                              // positional memory the layout trades on.
+                              slot.available ? undefined : "text-muted-foreground/40 border-dashed",
+                            )}
+                          >
+                            {clock(slot.startMinutes)}
+                          </button>
+                        ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </>
-          )}
+                ))}
+              </>
+            )}
+          </div>
         </Field>
 
         <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-xs leading-5">
@@ -463,6 +548,35 @@ function Field({
       </p>
       {children}
     </div>
+  )
+}
+
+/**
+ * The time field while a day is being read.
+ *
+ * Shaped like the grid it precedes rather than centred on a spinner: the coach
+ * is looking at where the times will be, and something the size and rhythm of
+ * them keeps that place. The section is held at its previous height around
+ * this, so between two days nothing below it moves.
+ */
+function SlotSkeleton() {
+  return (
+    <>
+      <div className="flex gap-1">
+        {[0, 1, 2].map((column) => (
+          <div key={column} className="border-border flex-1 border-b-2 pb-1">
+            <Skeleton className="h-3 w-14 rounded-md" />
+            <Skeleton className="mt-1 h-2 w-8 rounded-md" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="mt-1 h-2.5 w-16 rounded-md" />
+      <div className="grid grid-cols-3 gap-2">
+        {Array.from({ length: 9 }, (_, index) => (
+          <Skeleton key={index} className="h-9 rounded-xl" />
+        ))}
+      </div>
+    </>
   )
 }
 
