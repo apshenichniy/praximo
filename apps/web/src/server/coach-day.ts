@@ -1,6 +1,7 @@
-import { isSupportedTimeZone } from "@praximo/domain"
+import { type BusyInterval, isSupportedTimeZone } from "@praximo/domain"
 import { DefaultTimeZone } from "@praximo/i18n"
 import { DateTime, Option } from "effect"
+import { localParts } from "@/lib/coach-calendar.ts"
 import type { CoachSession } from "./coach-session.ts"
 
 /**
@@ -33,6 +34,28 @@ export const instantOf = (
     adjustForTimeZone: true,
   })
   return Option.isSome(zoned) ? DateTime.toDateUtc(zoned.value) : undefined
+}
+
+/**
+ * Which of the coach's days each booking falls on, as minutes-of-day (#186).
+ *
+ * The range read asks for a fortnight in one query and has to file the answers
+ * per day — and "which day is this instant on" is the coach's zone's business,
+ * not the browser's. A session at 21:30Z in July belongs to *tomorrow* in Kyiv,
+ * and getting that wrong would show a slot as free on the day it is taken.
+ */
+export const busyByDate = (
+  bookings: ReadonlyArray<{ readonly scheduledAt: Date; readonly durationMinutes: number }>,
+  timezone: string,
+): ReadonlyMap<string, ReadonlyArray<BusyInterval>> => {
+  const days = new Map<string, Array<BusyInterval>>()
+  for (const booking of bookings) {
+    const at = localParts(booking.scheduledAt, timezone)
+    const busy = days.get(at.date) ?? []
+    busy.push({ startMinutes: at.minutes, endMinutes: at.minutes + booking.durationMinutes })
+    days.set(at.date, busy)
+  }
+  return days
 }
 
 /**

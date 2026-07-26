@@ -86,6 +86,7 @@ export function SchedulingScreen({
   bookedDates,
   schedule,
   onDateChange,
+  onDaysVisible,
   onSubmit,
   pending,
   error,
@@ -111,6 +112,14 @@ export function SchedulingScreen({
   readonly schedule: DayScheduleData | undefined
   /** The screen owns the fetch, so a new day has to travel back out. */
   readonly onDateChange: (date: string) => void
+  /**
+   * The run of days the strip is offering, whenever it changes.
+   *
+   * The strip decides its own window — a fortnight, growing as the thumb runs
+   * forward — and the screen above owns the reading, so the window has to travel
+   * out for it to be read in one go instead of a day at a time.
+   */
+  readonly onDaysVisible: (from: string, days: number) => void
   readonly onSubmit: (draft: SchedulingDraft) => void
   readonly pending: boolean
   readonly error: string | undefined
@@ -209,6 +218,12 @@ export function SchedulingScreen({
     },
     [chooseDay, days],
   )
+
+  /** The window the strip shows, announced so it can be read in one request. */
+  useEffect(() => {
+    const first = days[0]
+    if (first !== undefined) onDaysVisible(calendarDate(first), days.length)
+  }, [days, onDaysVisible])
 
   /** Opening the month shows the month of the day in hand, not the current one. */
   const toggleMonth = useCallback(() => {

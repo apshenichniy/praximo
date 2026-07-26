@@ -97,6 +97,12 @@ export interface ClientsCopy {
   readonly evening: string
   readonly freeSuffix: string
   /** "No 60-minute slot fits on " · day · " before 22:00." */
+  /**
+   * The day is set off by punctuation rather than joined by a preposition. The
+   * date reads «воскресенье, 26 июля» — nominative, as `Intl` gives it — and
+   * Russian and Ukrainian want the accusative after «в»: «в среду», not «в
+   * среда». A dash is right for all seven days in all three languages.
+   */
   readonly emptyDayLead: string
   readonly emptyDayTail: string
   readonly nextDay: string
@@ -267,8 +273,8 @@ const uk: ClientsCopy = {
   afternoon: "День",
   evening: "Вечір",
   freeSuffix: " вільно",
-  emptyDayLead: "Сесія такої тривалості не вміщається ",
-  emptyDayTail: " до 22:00.",
+  emptyDayLead: "Сесія такої тривалості не вміщається — ",
+  emptyDayTail: ", до 22:00.",
   nextDay: "Спробувати наступний день",
   pickTime: "Оберіть час",
   scheduleSubmit: "Запланувати",
@@ -352,8 +358,8 @@ const ru: ClientsCopy = {
   afternoon: "День",
   evening: "Вечер",
   freeSuffix: " свободно",
-  emptyDayLead: "Сессия такой длительности не помещается ",
-  emptyDayTail: " до 22:00.",
+  emptyDayLead: "Сессия такой длительности не помещается — ",
+  emptyDayTail: ", до 22:00.",
   nextDay: "Попробовать следующий день",
   pickTime: "Выберите время",
   scheduleSubmit: "Запланировать",

@@ -19,8 +19,8 @@ import { clientCopy } from "@praximo/i18n"
 import { BotRegistry } from "@praximo/telegram"
 import { Clock, Context, Effect, Layer, Schema } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
-import { localParts } from "@/lib/coach-calendar.ts"
-import { instantOf, MinutesInDay, zoneOf } from "./coach-day.ts"
+import { localParts, nextDate } from "@/lib/coach-calendar.ts"
+import { busyByDate, instantOf, MinutesInDay, zoneOf } from "./coach-day.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
 /**
@@ -116,6 +116,24 @@ export interface DaySchedule {
   readonly timezone: string
 }
 
+/**
+ * One day of a range read, carrying the date it answers for.
+ *
+ * The strip offers a fortnight and the coach walks along it, so asking day by
+ * day is fourteen round-trips and fourteen queries for a few dozen intervals.
+ * The range is one of each; the browser files the answers per day.
+ */
+export interface DatedDaySchedule extends DaySchedule {
+  /** `YYYY-MM-DD` in the coach's own zone. */
+  readonly date: string
+}
+
+/**
+ * The longest range one read will answer for. The strip grows to a quarter but
+ * asks in fortnights, and a request for a year is a bug rather than a coach.
+ */
+export const MaxRangeDays = 31
+
 export interface ScheduleSessionInput {
   readonly clientId: string
   /** `YYYY-MM-DD` as the coach's own calendar reads it. */
@@ -185,6 +203,14 @@ export interface Interface {
     credential: LaunchCredential,
     date: string,
   ) => Effect.Effect<DaySchedule, CoachSession.Unauthenticated | CoachSession.LoadFailed>
+  readonly rangeSchedule: (
+    credential: LaunchCredential,
+    from: string,
+    days: number,
+  ) => Effect.Effect<
+    ReadonlyArray<DatedDaySchedule>,
+    CoachSession.Unauthenticated | CoachSession.LoadFailed
+  >
   readonly schedule: (
     credential: LaunchCredential,
     input: ScheduleSessionInput,
@@ -488,6 +514,57 @@ export const layer = Layer.effect(
     })
 
     /**
+     * The same answer for a run of consecutive days, in one query.
+     *
+     * The strip the coach walks along offers a fortnight, and a day at a time
+     * meant a round-trip and a query per glance. One window, one read, filed per
+     * day here rather than in the browser — which day an instant falls on is the
+     * coach's zone's business, and that lives on this side.
+     *
+     * A session that started the previous day and runs into the first one is
+     * outside the window, exactly as it is for `daySchedule`: the two must agree,
+     * because the browser caches whichever answered first.
+     */
+    const rangeSchedule = Effect.fn("CoachClients.rangeSchedule")(function* (
+      credential: LaunchCredential,
+      from: string,
+      days: number,
+    ) {
+      const principal = yield* session.requireOnboardedCoach(credential, READ_WINDOW_MILLIS)
+      const timezone = zoneOf(principal)
+      const span = Math.max(1, Math.min(Math.trunc(days), MaxRangeDays))
+
+      const dates: Array<string> = []
+      let cursor = from
+      for (let index = 0; index < span; index++) {
+        dates.push(cursor)
+        cursor = nextDate(cursor)
+      }
+
+      const start = instantOf(from, 0, timezone)
+      // The midnight *after* the last day, so the window is closed by a day
+      // boundary rather than by a minute count that a clock change would move.
+      const end = instantOf(cursor, 0, timezone)
+      if (start === undefined || end === undefined) return []
+
+      const booked = yield* sessions
+        .between(principal.workspaceId, start, end)
+        .pipe(Effect.mapError(failed("sessions.between")))
+
+      const busy = busyByDate(booked, timezone)
+
+      const now = new Date(yield* Clock.currentTimeMillis)
+      const here = localParts(now, timezone)
+
+      return dates.map((date) => ({
+        date,
+        busy: busy.get(date) ?? [],
+        ...(here.date === date ? { earliestStartMinutes: nextSlotStart(here.minutes) } : {}),
+        timezone,
+      })) satisfies ReadonlyArray<DatedDaySchedule>
+    })
+
+    /**
      * The booking itself, refused in four different ways.
      *
      * `invalid` and `past` are decided here because they are decidable here: a
@@ -735,6 +812,7 @@ export const layer = Layer.effect(
       create,
       detail,
       daySchedule,
+      rangeSchedule,
       schedule,
       remove,
       resetInvite,

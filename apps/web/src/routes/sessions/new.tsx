@@ -10,6 +10,7 @@ import { ClientPickerScreen } from "@/features/coach/components/client-picker-sc
 import {
   daySchedule,
   dayScheduleKeys,
+  primeDayRange,
   UnknownDaySchedule,
 } from "@/features/coach/day-schedule-queries.ts"
 import { bookedDates } from "@/features/coach/session-days.ts"
@@ -25,7 +26,6 @@ import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
-import { nextDate, previousDate } from "@/lib/coach-calendar.ts"
 import { acceptOnce } from "@/routes/index.tsx"
 import type { CoachClients } from "@/server/coach-clients.ts"
 import { getClient, listClients, scheduleSession } from "@/server/coach-clients.functions.ts"
@@ -120,19 +120,19 @@ function NewSessionRoute() {
   const day = dayQuery.data ?? (dayQuery.isError ? UnknownDaySchedule : undefined)
 
   /**
-   * The days on either side, fetched quietly once this one has landed. A coach
-   * moving along the strip almost always goes next door, and by the time they
-   * do the answer is already in hand.
+   * The strip's whole window, read in one request and filed per day.
+   *
+   * A day is a handful of intervals, so a fortnight of them is a couple of
+   * kilobytes — the cost of a day-at-a-time strip is the fourteen round-trips,
+   * not the bytes. Asked for as soon as the strip says what it is showing, so
+   * walking along it is answered from memory rather than from Neon.
    */
-  useEffect(() => {
-    if (chosen === undefined || day === undefined) return
-    const today = calendarDate(new Date())
-    for (const neighbour of [previousDate(date), nextDate(date)]) {
-      // Never yesterday: the past cannot be booked, so it would be a read of a
-      // day the calendar will not even offer.
-      if (neighbour >= today) void queryClient.prefetchQuery(daySchedule(neighbour))
-    }
-  }, [chosen, date, day, queryClient])
+  const readDays = useCallback(
+    (start: string, days: number) => {
+      void primeDayRange(queryClient, start, days)
+    },
+    [queryClient],
+  )
 
   const pick = useCallback(
     (picked: string) => {
@@ -249,6 +249,7 @@ function NewSessionRoute() {
             bookedDates={bookedDates(chosen)}
             schedule={day}
             onDateChange={setDate}
+            onDaysVisible={readDays}
             onSubmit={schedule}
             pending={pending}
             error={error}

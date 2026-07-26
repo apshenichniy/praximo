@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { instantOf } from "@/server/coach-day.ts"
+import { busyByDate, instantOf } from "@/server/coach-day.ts"
 
 /**
  * The conversion every scheduled session passes through, and the one place this
@@ -37,5 +37,45 @@ describe("instantOf", () => {
 
   it("refuses a date it cannot read rather than inventing one", () => {
     expect(instantOf("not-a-date", 600, "Europe/Kyiv")).toBeUndefined()
+  })
+})
+
+/**
+ * The other half of the same offset problem, met when a fortnight is read in one
+ * query (#186): each booking has to be filed under the day it falls on *where
+ * the coach is*. File it under the UTC day and a slot reads as free on the
+ * evening it is taken.
+ */
+const booking = (scheduledAt: string, durationMinutes = 60) => ({
+  scheduledAt: new Date(scheduledAt),
+  durationMinutes,
+})
+
+describe("busyByDate", () => {
+  it("files a booking under the coach's day, as minutes of it", () => {
+    const days = busyByDate([booking("2026-07-27T07:00:00.000Z")], "Europe/Kyiv")
+    expect(days.get("2026-07-27")).toEqual([{ startMinutes: 600, endMinutes: 660 }])
+  })
+
+  it("moves a late-evening booking to the day the coach reads it on", () => {
+    // 22:30Z is 01:30 the next morning in Kyiv — tomorrow's grid, not tonight's.
+    const days = busyByDate([booking("2026-07-27T22:30:00.000Z", 30)], "Europe/Kyiv")
+    expect(days.has("2026-07-27")).toBe(false)
+    expect(days.get("2026-07-28")).toEqual([{ startMinutes: 90, endMinutes: 120 }])
+  })
+
+  it("keeps every booking of a day rather than the last one", () => {
+    const days = busyByDate(
+      [booking("2026-07-27T07:00:00.000Z", 30), booking("2026-07-27T09:00:00.000Z", 45)],
+      "Europe/Kyiv",
+    )
+    expect(days.get("2026-07-27")).toEqual([
+      { startMinutes: 600, endMinutes: 630 },
+      { startMinutes: 720, endMinutes: 765 },
+    ])
+  })
+
+  it("answers nothing for a day with nothing on it", () => {
+    expect(busyByDate([], "Europe/Kyiv").get("2026-07-27")).toBeUndefined()
   })
 })

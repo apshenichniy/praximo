@@ -52,7 +52,8 @@ export const nextDate = (date: string): string => shiftDate(date, 1)
 /** The calendar day before this one, on the same terms as `nextDate`. */
 export const previousDate = (date: string): string => shiftDate(date, -1)
 
-const shiftDate = (date: string, days: number): string => {
+/** The calendar day `days` from this one, in either direction. */
+export const shiftDate = (date: string, days: number): string => {
   const at = new Date(`${date}T00:00:00Z`)
   if (Number.isNaN(at.getTime())) return date
   at.setUTCDate(at.getUTCDate() + days)
