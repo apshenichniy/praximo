@@ -13,8 +13,21 @@
  * the month, and around the end of a month or a year.
  */
 
-/** How many days the strip carries. Two weeks of thumb travel. */
+/** How many days the strip opens with, and grows by. Two weeks of thumb travel. */
 export const StripDays = 14
+
+/**
+ * Where the strip stops growing — a quarter out.
+ *
+ * The scroll promises more days, so it hands them over; what it must not become
+ * is a way to thumb through a year one day at a time. Past this the month is
+ * simply the better instrument, and the strip ends in a control that opens it
+ * rather than in a wall.
+ */
+export const StripHorizon = 90
+
+/** One more fortnight, up to the horizon. */
+export const extendStrip = (length: number): number => Math.min(length + StripDays, StripHorizon)
 
 /** Midnight, locally — the strip compares days, never instants. */
 const startOfDay = (day: Date): Date => new Date(day.getFullYear(), day.getMonth(), day.getDate())

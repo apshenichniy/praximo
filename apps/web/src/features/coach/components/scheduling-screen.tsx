@@ -19,7 +19,7 @@ import { Calendar } from "@/components/ui/calendar.tsx"
 import { Skeleton } from "@/components/ui/skeleton.tsx"
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import { DayStrip } from "@/features/coach/components/day-strip.tsx"
-import { sameDay, stripWindow } from "@/features/coach/day-strip.ts"
+import { extendStrip, sameDay, StripDays, stripWindow } from "@/features/coach/day-strip.ts"
 import { calendarLocale } from "@/features/i18n/calendar-locale.ts"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
@@ -122,6 +122,9 @@ export function SchedulingScreen({
     defaultDurationForKind(firstSession ? "intake" : "regular"),
   )
   const [selectedDay, setSelectedDay] = useState<Date>(today)
+  const [stripLength, setStripLength] = useState(StripDays)
+  /** The month under the thumb, which is not always the chosen day's month. */
+  const [visibleMonth, setVisibleMonth] = useState<Date>(today)
   const [monthOpen, setMonthOpen] = useState(false)
   const [startMinutes, setStartMinutes] = useState<number>()
   const groupRefs = useRef(new Map<PartOfDay, HTMLDivElement>())
@@ -137,7 +140,10 @@ export function SchedulingScreen({
 
   const date = calendarDate(selectedDay)
   const booked = useMemo(() => new Set(bookedDates), [bookedDates])
-  const days = useMemo(() => stripWindow(today, selectedDay), [today, selectedDay])
+  const days = useMemo(
+    () => stripWindow(today, selectedDay, stripLength),
+    [today, selectedDay, stripLength],
+  )
 
   /**
    * The default follows the kind — intake 30, regular 60 — and stops following
@@ -181,11 +187,24 @@ export function SchedulingScreen({
     (day: Date | undefined) => {
       if (day === undefined) return
       chooseDay(day)
+      // The window re-anchors on the day just chosen, so the fortnight it grew
+      // scrolling forward is not a fortnight *behind* where the strip now opens.
+      setStripLength(StripDays)
+      setVisibleMonth(day)
       setMonthOpen(false)
       scrollAfterMonth.current = true
     },
     [chooseDay],
   )
+
+  /** The strip reports every frame it scrolls; only a new month is a change. */
+  const noteVisibleMonth = useCallback((day: Date) => {
+    setVisibleMonth((current) =>
+      current.getFullYear() === day.getFullYear() && current.getMonth() === day.getMonth()
+        ? current
+        : day,
+    )
+  }, [])
 
   const revealTime = useCallback(() => {
     if (!scrollAfterMonth.current) return
@@ -239,6 +258,10 @@ export function SchedulingScreen({
         day: "numeric",
         month: "long",
       }),
+    [language],
+  )
+  const monthFormat = useMemo(
+    () => new Intl.DateTimeFormat(localeTag(language), { month: "long" }),
     [language],
   )
 
@@ -301,14 +324,31 @@ export function SchedulingScreen({
           </div>
         </Field>
 
-        <Field label={copy.dateLabel}>
+        <Field
+          label={copy.dateLabel}
+          // Keyed on the month so the label crossfades when the strip crosses
+          // into the next one — a number changing under the thumb is easy to
+          // miss, and July 31 to August 1 is exactly where it matters.
+          trailing={
+            <span
+              key={monthFormat.format(visibleMonth)}
+              className="animate-in fade-in slide-in-from-bottom-1 text-muted-foreground text-[10px] font-semibold tracking-widest uppercase duration-200"
+            >
+              {monthFormat.format(visibleMonth)}
+            </span>
+          }
+        >
           <DayStrip
             days={days}
             selected={selectedDay}
             today={today}
             isBooked={(day) => booked.has(calendarDate(day))}
             language={language}
+            monthLabel={copy.monthLabel}
             onPick={chooseDay}
+            onExtend={() => setStripLength(extendStrip)}
+            onOpenMonth={() => setMonthOpen(true)}
+            onVisibleMonth={noteVisibleMonth}
           />
 
           <div className="flex items-center justify-between gap-3">
@@ -335,7 +375,7 @@ export function SchedulingScreen({
           <div
             onTransitionEnd={revealTime}
             className={cn(
-              "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
+              "ease-out-strong grid transition-[grid-template-rows] duration-250 motion-reduce:transition-none",
               monthOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
             )}
           >
@@ -536,16 +576,22 @@ export function SchedulingScreen({
 
 function Field({
   label,
+  trailing,
   children,
 }: {
   readonly label: string
+  /** Something the field says about itself, on the label's own line. */
+  readonly trailing?: React.ReactNode
   readonly children: React.ReactNode
 }) {
   return (
     <div className="mt-5 flex flex-col gap-2 first:mt-0">
-      <p className="text-muted-foreground text-[10px] font-semibold tracking-widest uppercase">
-        {label}
-      </p>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-muted-foreground text-[10px] font-semibold tracking-widest uppercase">
+          {label}
+        </p>
+        {trailing}
+      </div>
       {children}
     </div>
   )

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import {
   addDays,
+  extendStrip,
   sameDay,
   StripDays,
+  StripHorizon,
   stripAnchor,
   stripWindow,
 } from "@/features/coach/day-strip.ts"
@@ -42,6 +44,14 @@ describe("stripWindow", () => {
       expect(days).toHaveLength(StripDays)
       expect(days.some((day) => sameDay(day, chosen))).toBe(true)
     }
+  })
+
+  it("grows a fortnight at a time and stops at the horizon", () => {
+    let length = StripDays
+    for (let step = 0; step < 20; step++) length = extendStrip(length)
+    expect(length).toBe(StripHorizon)
+    expect(extendStrip(StripDays)).toBe(StripDays * 2)
+    expect(stripWindow(TODAY, TODAY, length)).toHaveLength(StripHorizon)
   })
 
   it("runs consecutive days across a month boundary", () => {

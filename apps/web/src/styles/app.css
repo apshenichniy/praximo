@@ -14,6 +14,16 @@
   @apply bg-gradient-to-br from-violet-700 to-indigo-950 text-white;
 }
 
+@theme {
+  /* Motion (#186). The built-in easings are too weak to read as deliberate:
+     `ease-out` on a 200ms transition looks like nothing was eased at all. These
+     are the two shapes the app needs — things arriving and leaving, and things
+     moving while they stay — plus the iOS drawer curve Base UI's own popups use. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 @theme inline {
   --font-sans: "Nunito Sans Variable", sans-serif;
   --font-heading: var(--font-sans);
@@ -91,6 +101,35 @@
   --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.56 0.021 213.5);
+}
+
+/* The day strip's edges (#186).
+   A day fades as it reaches either end of the scroller, so the strip reads as
+   something continuous the thumb is moving through rather than a row that stops.
+   Driven by the scroll itself, not by a timer, which is why it survives a flick
+   being interrupted mid-way. Opacity only: the buttons keep `transform` for
+   their press feedback, and an animation would otherwise win over it. Purely a
+   progressive enhancement — without scroll timelines the strip is simply flat. */
+@keyframes strip-edge {
+  0% {
+    opacity: 0.3;
+  }
+  14%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view(inline)) {
+    [data-strip-day] {
+      animation: strip-edge linear both;
+      animation-timeline: view(inline);
+    }
+  }
 }
 
 @layer base {
