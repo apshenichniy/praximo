@@ -37,7 +37,7 @@ export function InviteCoachLink() {
   return (
     <Link
       to="/admin/workspaces/new"
-      className="text-primary hover:bg-muted active:bg-accent/70 flex h-16 w-full items-center gap-3.5 px-4 text-left font-semibold transition-colors"
+      className="text-primary pressable-row hover:bg-muted flex h-16 w-full items-center gap-3.5 px-4 text-left font-semibold"
     >
       <span className="border-primary/50 flex size-[38px] items-center justify-center rounded-full border">
         <HugeiconsIcon icon={AddMaleIcon} size={22} strokeWidth={1.8} />
@@ -82,7 +82,7 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
   return (
     <Item
       render={<Link to="/admin/workspaces/$workspaceId" params={{ workspaceId: coach.id }} />}
-      className="active:bg-accent/70 h-16 gap-3.5 rounded-none border-0 px-4 py-0"
+      className="pressable-row h-16 gap-3.5 rounded-none border-0 px-4 py-0"
     >
       <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
         <WorkspaceAvatar
@@ -160,7 +160,7 @@ export function ViewerCoachCard({
     <Card className="gap-0 overflow-hidden py-0">
       <Item
         render={<button type="button" onClick={() => onOpen(viewerCoach.link)} />}
-        className="hover:bg-muted active:bg-accent/70 w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
+        className="pressable-row hover:bg-muted w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
       >
         <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
           <span className="border-primary/50 text-primary flex size-[38px] items-center justify-center rounded-full border">

@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react"
+
 import type { TelegramWebApp } from "@/lib/telegram.ts"
 
 /**
@@ -63,18 +65,20 @@ export const notifyHaptic = (type: "error" | "success" | "warning"): void => {
   fire((bridge) => bridge.notificationOccurred(type))
 }
 
-/** What the host says about itself, for the probe on the Main Mini App screen. */
-export const hapticSupport = (): {
-  readonly host: string
-  readonly version: string
-  readonly platform: string
-  readonly available: boolean
-} => {
-  const webApp = typeof window === "undefined" ? undefined : window.Telegram?.WebApp
-  return {
-    host: webApp === undefined ? "none" : "telegram",
-    version: webApp?.version ?? "—",
-    platform: webApp?.platform ?? "—",
-    available: webApp?.HapticFeedback !== undefined,
-  }
+/**
+ * The tick a surface makes when it arrives over the screen — a confirmation, a
+ * sheet, the host's own picker.
+ *
+ * A hook rather than a call at each trigger, because these surfaces are opened
+ * by a `open` prop the parent flips, so there is no single tap handler to hang
+ * it on. Opening is always the direct result of a press, so this stays within
+ * the rule: punctuation for a control that opens something, never a system
+ * event of its own.
+ */
+export const useOpenHaptic = (open: boolean): void => {
+  const wasOpen = useRef(open)
+  useEffect(() => {
+    if (open && !wasOpen.current) impactHaptic()
+    wasOpen.current = open
+  }, [open])
 }

@@ -13,7 +13,7 @@ import {
   DeletionError,
   DeletionStageList,
 } from "@/features/admin/components/deletion-progress.tsx"
-import { notifyHaptic } from "@/features/mini-app/haptics.ts"
+import { notifyHaptic, useOpenHaptic } from "@/features/mini-app/haptics.ts"
 import type { WorkspaceDetail } from "@/features/admin/workspace-detail.ts"
 import {
   type DeletionProgress,
@@ -67,6 +67,7 @@ export function DeleteWorkspaceSheet({
   readonly onOpenChange: (open: boolean) => void
   readonly onConfirm: () => void
 }) {
+  useOpenHaptic(open)
   const gate = deletionGate(workspace)
   const [phase, setPhase] = useState<Phase>("consequences")
   // Bumped on every entry into the arming step so the countdown remounts —

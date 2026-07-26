@@ -257,6 +257,7 @@ that survives a coach turning animations off.
 | --- | --- |
 | One value in a set replacing another: kind, duration, day, slot | `selectionHaptic()` |
 | A control that opens or closes something: «Month», «Today» | `impactHaptic("light")` |
+| A surface arriving over the screen: a sheet, a confirmation, the host's picker | `useOpenHaptic(open)`, or `impactHaptic()` beside the call that summons it |
 | The session was booked | `notifyHaptic("success")` |
 | The server refused it | `notifyHaptic("error")` |
 
@@ -275,7 +276,14 @@ applied by *kind of thing* instead — and each kind is found by one command:
 | Anything pressable | `<Button>`, `<button>`, `<Link>` | `ui/button.tsx` for the forty-five buttons; the `pressable-row` utility for full-width rows |
 | One value replacing another | `aria-pressed` | `ui/toggle.tsx` covers both chip sets; hand-rolled chips call `selectionHaptic()` themselves |
 | An action with an outcome | `acceptOnce(`, `useMutation(` | `notifyHaptic()` on both branches, beside the branch |
+| A surface opening over the screen | `Drawer`, `AlertDialog`, `shareMessage` | `useOpenHaptic(open)` inside the surface; the picker's tap says it itself |
 | Navigation | — | view transitions, nothing per screen |
+
+**Navigation does not tick.** A row that opens a screen lights up and says
+nothing: the platform reserves the Taptic Engine for choices, outcomes and
+gestures, and a tick on every tap becomes background — which costs the ticks
+that matter their meaning. This is why the scheduling screen buzzes and the
+lists do not: one is made of choices, the other of journeys.
 
 Rows take their press as a wash of colour rather than the 0.97 a chip takes:
 scaling something the width of the screen reads as the page flexing, and the

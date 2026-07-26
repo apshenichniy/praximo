@@ -12,7 +12,7 @@ import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
-import { notifyHaptic } from "@/features/mini-app/haptics.ts"
+import { impactHaptic, notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { acceptOnce } from "@/routes/index.tsx"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
 import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
@@ -124,6 +124,7 @@ function ClientRoute() {
     const invite = client?.invite
     if (client === undefined || invite === undefined) return
     setError(undefined)
+    impactHaptic()
     void shareClientInvite({
       clientId: client.id,
       link: invite.url,

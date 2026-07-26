@@ -17,7 +17,7 @@
  * page flexing, and the platform's own lists light up instead.
  */
 @utility pressable-row {
-  @apply ease-out-strong transition-colors duration-(--duration-press) active:bg-accent/40;
+  @apply ease-out-strong transition-colors duration-(--duration-press) active:bg-accent/70;
 }
 
 @utility admin-avatar {

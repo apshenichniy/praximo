@@ -17,7 +17,7 @@ import { TextField } from "@/features/admin/components/form-fields.tsx"
 import { InviteCopySheet } from "@/features/mini-app/components/invite-copy-sheet.tsx"
 import { InviteEmailSheet } from "@/features/admin/components/invite-email-sheet.tsx"
 import { InviteLanguageChips } from "@/features/admin/components/invite-language-chips.tsx"
-import { notifyHaptic } from "@/features/mini-app/haptics.ts"
+import { impactHaptic, notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
 import { sendCoachInviteEmail } from "@/features/admin/invite-email.ts"
 import { createCoachInviteMutation } from "@/features/admin/workspace-queries.ts"
@@ -102,6 +102,7 @@ function InviteCoachPage() {
     setCreated(true)
 
     const { inviteId, link, message } = response.value
+    impactHaptic()
     switch (await inviteShare.share({ inviteId, link, message, language })) {
       // A dismissed picker is not a failure: the invite stays pending, nothing
       // is recorded, and the manager can tap Share again. Leave the screen as is.
@@ -305,7 +306,7 @@ function InviteAction({
   return (
     <Item
       render={<button type="button" disabled={disabled} onClick={onClick} />}
-      className="hover:bg-muted active:bg-accent/70 min-h-[70px] w-full rounded-none border-0 text-left transition-colors disabled:opacity-60"
+      className="pressable-row hover:bg-muted min-h-[70px] w-full rounded-none border-0 text-left transition-colors disabled:opacity-60"
     >
       <ItemMedia>
         <span className="border-primary/50 text-primary flex size-11 items-center justify-center rounded-full border">

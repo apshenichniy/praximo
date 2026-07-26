@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/drawer.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { Textarea } from "@/components/ui/textarea.tsx"
+import { useOpenHaptic } from "@/features/mini-app/haptics.ts"
 
 /**
  * Bottom drawer for the Copy channel: copy the full forwardable message. When
@@ -36,6 +37,7 @@ export function InviteCopySheet({
   readonly onCopy: () => void
   readonly onCopyFallback: (message: string) => void
 }) {
+  useOpenHaptic(open)
   return (
     <Drawer
       open={open}

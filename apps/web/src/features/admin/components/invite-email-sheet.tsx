@@ -9,7 +9,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer.tsx"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
-import { notifyHaptic } from "@/features/mini-app/haptics.ts"
+import { notifyHaptic, useOpenHaptic } from "@/features/mini-app/haptics.ts"
 import { inviteEmail } from "@/features/admin/validation.ts"
 
 /** RFC 5321's ceiling for a whole address — a stop, not a budget, so no counter. */
@@ -34,6 +34,7 @@ export function InviteEmailSheet({
   readonly onOpenChange: (open: boolean) => void
   readonly onSend: (delivery: { readonly email: string }) => void
 }) {
+  useOpenHaptic(open)
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string>()
 

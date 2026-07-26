@@ -15,7 +15,7 @@ import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { notifyHaptic } from "@/features/mini-app/haptics.ts"
+import { impactHaptic, notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
@@ -211,6 +211,7 @@ function CoachEntry() {
             await router.invalidate()
             return
           }
+          impactHaptic()
           const outcome = await shareClientInvite({
             clientId,
             link: result.outcome.url,
