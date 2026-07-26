@@ -1,3 +1,5 @@
+import { Schema } from "effect"
+
 /**
  * `member.settings` — per-coach choices that are not worth a column each, and
  * `member.timezone`'s validation beside it.
@@ -7,7 +9,18 @@
  * they happen to be launching from.
  */
 
-/** The one key this slice writes: the manually hidden Main Mini App hint. */
+/**
+ * The shape, as a schema.
+ *
+ * `Schema.UnknownFromJson`-style openness is deliberate: the struct names the
+ * one key this slice writes and lets every other key through untouched, so a
+ * client on an older deploy writing its own setting cannot erase one a newer
+ * deploy wrote.
+ */
+export const MemberSettings = Schema.Struct({
+  mainMiniAppHintDismissed: Schema.optionalKey(Schema.Boolean),
+})
+
 export interface MemberSettings {
   readonly mainMiniAppHintDismissed?: boolean
   /** Keys written by a newer deploy, carried through untouched. */
@@ -30,8 +43,13 @@ export const readMemberSettings = (value: unknown): MemberSettings => {
     return DefaultMemberSettings
   }
   const record = value as Record<string, unknown>
+  // The schema decides whether the *known* key is readable; the rest of the
+  // blob is carried through whatever it holds.
   const dismissed = record.mainMiniAppHintDismissed
-  if (dismissed !== undefined && typeof dismissed !== "boolean") {
+  const known = Schema.decodeUnknownExit(MemberSettings)(
+    dismissed === undefined ? {} : { mainMiniAppHintDismissed: dismissed },
+  )
+  if (known._tag === "Failure") {
     const { mainMiniAppHintDismissed: _dropped, ...rest } = record
     return rest
   }

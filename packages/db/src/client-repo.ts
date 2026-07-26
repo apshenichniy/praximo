@@ -2,6 +2,7 @@ import type { CoachLanguage } from "@praximo/domain"
 import { and, asc, eq, gte, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database, QueryFailed } from "./client.ts"
+import { isoColumn, readDate, readLanguage } from "./row-readers.ts"
 import * as schema from "./schema.ts"
 
 /**
@@ -120,21 +121,6 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@praximo/db/ClientRepo") {}
 
 /**
- * Timestamps as ISO text.
- *
- * The raw statements below go through `execute`, which hands back whatever the
- * driver decoded rather than the typed columns the query builder maps — and
- * Postgres's own `2026-07-26 09:00:00+00` is not a format `new Date` is
- * required to parse. Formatting in SQL makes the boundary explicit instead of
- * leaving it to a parser's good will.
- */
-const iso = (column: string) =>
-  sql.raw(`to_char(${column} at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`)
-
-const readDate = (value: unknown): Date | undefined =>
-  typeof value === "string" ? new Date(value) : undefined
-
-/**
  * The state word the list and the header colour, derived rather than stored.
  *
  * Expiry by time is a *read*: `expires_at` in the past is expired whatever the
@@ -151,9 +137,6 @@ const clientState = (
   if (expiresAt !== undefined && expiresAt.getTime() <= now.getTime()) return "expired"
   return "invited"
 }
-
-const language = (value: unknown): CoachLanguage | undefined =>
-  value === "en" || value === "uk" || value === "ru" ? value : undefined
 
 export const layer = Layer.effect(
   Service,
@@ -209,9 +192,9 @@ export const layer = Layer.effect(
               "c"."id" as "id",
               "c"."name" as "name",
               "i"."status" as "invite_status",
-              ${iso('"i"."expires_at"')} as "expires_at",
-              ${iso('"i"."created_at"')} as "invited_at",
-              ${iso('"ch"."created_at"')} as "accepted_at"
+              ${isoColumn('"i"."expires_at"')} as "expires_at",
+              ${isoColumn('"i"."created_at"')} as "invited_at",
+              ${isoColumn('"ch"."created_at"')} as "accepted_at"
             from "client" as "c"
             left join lateral (
               select "status", "expires_at", "created_at"
@@ -268,17 +251,17 @@ export const layer = Layer.effect(
               "c"."id" as "id",
               "c"."name" as "name",
               "c"."language" as "language",
-              ${iso('"c"."created_at"')} as "created_at",
+              ${isoColumn('"c"."created_at"')} as "created_at",
               "i"."id" as "invite_id",
               "i"."token" as "token",
               "i"."status" as "invite_status",
               "i"."delivery" as "delivery",
-              ${iso('"i"."expires_at"')} as "expires_at",
+              ${isoColumn('"i"."expires_at"')} as "expires_at",
               "ch"."kind" as "channel_kind",
               "ch"."address" as "channel_address",
               "ch"."telegram_snapshot" as "telegram_snapshot",
-              ${iso('"ch"."created_at"')} as "accepted_at",
-              ${iso('"cg"."granted_at"')} as "consent_granted_at",
+              ${isoColumn('"ch"."created_at"')} as "accepted_at",
+              ${isoColumn('"cg"."granted_at"')} as "consent_granted_at",
               exists (
                 select 1 from "session" as "s" where "s"."client_id" = "c"."id"
               ) as "has_sessions"
@@ -333,7 +316,7 @@ export const layer = Layer.effect(
       const acceptedAt = readDate(record.accepted_at)
       const inviteStatus = record.invite_status as ClientInviteRow["status"] | undefined
       const expiresAt = readDate(record.expires_at)
-      const clientLanguage = language(record.language)
+      const clientLanguage = readLanguage(record.language)
       const consentGrantedAt = readDate(record.consent_granted_at)
       const delivery = record.delivery as { readonly language?: string } | null
       const snapshot = record.telegram_snapshot as {
@@ -359,7 +342,7 @@ export const layer = Layer.effect(
                 token: String(record.token),
                 status: inviteStatus ?? "pending",
                 expiresAt,
-                language: language(delivery?.language) ?? "en",
+                language: readLanguage(delivery?.language) ?? "en",
               },
             }),
         ...(record.channel_kind === null || record.channel_kind === undefined
@@ -458,7 +441,7 @@ export const layer = Layer.effect(
               ${input.inviteId}, "target"."workspace_id", "target"."id", ${input.token},
               'pending', ${delivery}::jsonb, ${input.expiresAt}, ${input.now}
             from "target"
-            returning "token", ${iso('"expires_at"')} as "expires_at"
+            returning "token", ${isoColumn('"expires_at"')} as "expires_at"
           `),
         catch: (cause) => new QueryFailed({ operation: "client.reissueInvite", cause }),
       })

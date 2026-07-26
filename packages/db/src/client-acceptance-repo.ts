@@ -1,8 +1,9 @@
 import type { CoachLanguage } from "@praximo/domain"
-import { and, asc, eq, gte, sql } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import { CoachNotification } from "./coach-notification.ts"
+import { isoColumn, readDate, readLanguage } from "./row-readers.ts"
 import * as schema from "./schema.ts"
 
 /**
@@ -94,15 +95,6 @@ export class Service extends Context.Service<Service, Interface>()(
   "@praximo/db/ClientAcceptanceRepo",
 ) {}
 
-const iso = (column: string) =>
-  sql.raw(`to_char(${column} at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`)
-
-const readDate = (value: unknown): Date | undefined =>
-  typeof value === "string" ? new Date(value) : undefined
-
-const language = (value: unknown): CoachLanguage | undefined =>
-  value === "en" || value === "uk" || value === "ru" ? value : undefined
-
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -130,14 +122,14 @@ export const layer = Layer.effect(
               "i"."id" as "invite_id",
               "i"."status" as "status",
               "i"."delivery" as "delivery",
-              ${iso('"i"."expires_at"')} as "expires_at",
+              ${isoColumn('"i"."expires_at"')} as "expires_at",
               "c"."id" as "client_id",
               "c"."name" as "client_name",
               "w"."id" as "workspace_id",
               "w"."name" as "coach_name",
               "m"."timezone" as "coach_timezone",
               "ch"."address" as "accepted_by",
-              ${iso('"s"."scheduled_at"')} as "session_at",
+              ${isoColumn('"s"."scheduled_at"')} as "session_at",
               "s"."duration_minutes" as "session_duration",
               "s"."kind" as "session_kind"
             from "invite" as "i"
@@ -153,7 +145,13 @@ export const layer = Layer.effect(
             left join lateral (
               select "scheduled_at", "duration_minutes", "kind"
               from "session"
-              where "session"."client_id" = "c"."id" and "session"."state" = 'scheduled'
+              where
+                "session"."client_id" = "c"."id"
+                and "session"."state" = 'scheduled'
+                -- The *next* session, not the earliest one on record: a client
+                -- accepting late must not be told about a meeting that has
+                -- already been and gone.
+                and "session"."scheduled_at" >= now()
               order by "session"."scheduled_at" asc
               limit 1
             ) as "s" on true
@@ -176,7 +174,7 @@ export const layer = Layer.effect(
         workspaceId: String(record.workspace_id),
         status: record.status as InviteLookup["status"],
         expiresAt: readDate(record.expires_at) ?? new Date(0),
-        inviteLanguage: language(delivery?.language) ?? "en",
+        inviteLanguage: readLanguage(delivery?.language) ?? "en",
         coachName: String(record.coach_name),
         ...(record.accepted_by === null || record.accepted_by === undefined
           ? {}
@@ -346,7 +344,7 @@ export const layer = Layer.effect(
               "c"."name" as "name",
               "c"."language" as "language",
               "ch"."telegram_snapshot" as "snapshot",
-              ${iso('"s"."scheduled_at"')} as "session_at"
+              ${isoColumn('"s"."scheduled_at"')} as "session_at"
             from "client" as "c"
             left join "channel" as "ch"
               on "ch"."client_id" = "c"."id" and "ch"."is_primary"
@@ -370,7 +368,7 @@ export const layer = Layer.effect(
         readonly name?: string
         readonly username?: string
       } | null
-      const chosen = language(record.language)
+      const chosen = readLanguage(record.language)
       const sessionAt = readDate(record.session_at)
 
       return {
@@ -386,33 +384,5 @@ export const layer = Layer.effect(
     return Service.of({ findByToken, findBotOwner, findAcceptedClient, accept })
   }),
 )
-
-/** The coach's own upcoming sessions with one client, for the confirmation copy. */
-export const upcomingSessions = Effect.fn("ClientAcceptanceRepo.upcomingSessions")(function* (
-  clientId: string,
-  now: Date,
-) {
-  const { client } = yield* Database.Service
-  return yield* Effect.tryPromise({
-    try: () =>
-      client
-        .select({
-          scheduledAt: schema.session.scheduledAt,
-          durationMinutes: schema.session.durationMinutes,
-          kind: schema.session.kind,
-        })
-        .from(schema.session)
-        .where(
-          and(
-            eq(schema.session.clientId, clientId),
-            eq(schema.session.state, "scheduled"),
-            gte(schema.session.scheduledAt, now),
-          ),
-        )
-        .orderBy(asc(schema.session.scheduledAt))
-        .limit(1),
-    catch: (cause) => new QueryFailed({ operation: "clientAcceptance.upcomingSessions", cause }),
-  })
-})
 
 export * as ClientAcceptanceRepo from "./client-acceptance-repo.ts"

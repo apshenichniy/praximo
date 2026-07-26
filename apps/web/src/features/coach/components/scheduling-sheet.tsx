@@ -1,5 +1,4 @@
 import {
-  BusinessDayEndMinutes,
   type BusyInterval,
   type CoachLanguage,
   daySlots,
@@ -11,7 +10,7 @@ import {
   PlannedDurations,
   type SessionKind,
 } from "@praximo/domain"
-import { localeTag } from "@praximo/i18n"
+import { localeTag, sessionMoment } from "@praximo/i18n"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -59,6 +58,17 @@ export const calendarDate = (day: Date): string =>
   `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
 
 const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
+
+/**
+ * The browser's own instant for a day and a minute of it. Good enough for
+ * *reading* an offset — a zone's offset does not change within a day — while
+ * the instant that gets stored is computed on the server, in the coach's zone.
+ */
+const instantAt = (day: Date, minutes: number): Date => {
+  const at = new Date(day)
+  at.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0)
+  return at
+}
 
 const partLabel = (copy: ClientsCopy, part: PartOfDay): string =>
   part === "morning" ? copy.morning : part === "afternoon" ? copy.afternoon : copy.evening
@@ -157,6 +167,13 @@ export function SchedulingSheet({
     () => PartsOfDay.filter((part) => slots.some((slot) => partOfDay(slot.startMinutes) === part)),
     [slots],
   )
+  /**
+   * Whether the day has anything at all. A part of day whose every start is
+   * taken keeps its group and its "0 free" anchor — the list must not change
+   * height between days — but a *day* with nothing left is a dead end, and a
+   * dead end gets an exit rather than a wall of unpressable buttons.
+   */
+  const anyFree = useMemo(() => slots.some((slot) => slot.available), [slots])
 
   const dayFormat = useMemo(
     () =>
@@ -173,11 +190,22 @@ export function SchedulingSheet({
     onSubmit({ date, startMinutes, durationMinutes, kind })
   }, [date, durationMinutes, kind, onSubmit, startMinutes])
 
-  // A sheet reopened after a booking starts where a coach expects it to: on the
-  // day they were looking at, with no time chosen.
+  /**
+   * A reopened sheet starts where a coach expects it to, not where they left it.
+   *
+   * Everything here is state the *sheet* owns, so without this a second booking
+   * opens showing Monday while the screen has already fetched Tuesday — and
+   * commits the day on screen rather than the day fetched.
+   */
   useEffect(() => {
-    if (!open) setStartMinutes(undefined)
-  }, [open])
+    if (!open) return
+    setStartMinutes(undefined)
+    setSelectedDay(today)
+    setCalendarOpen(true)
+    setKind(firstSession ? "intake" : "regular")
+    setDurationTouched(false)
+    setDurationMinutes(defaultDurationForKind(firstSession ? "intake" : "regular"))
+  }, [firstSession, open, today])
 
   const scrollTo = (part: PartOfDay) => {
     const group = groupRefs.current.get(part)
@@ -185,6 +213,19 @@ export function SchedulingSheet({
     if (group === undefined || body === null) return
     body.scrollTo({ top: group.offsetTop - body.offsetTop - 8, behavior: "smooth" })
   }
+
+  /**
+   * The footnote names the coach's zone as the *client* will read it — `UTC+3`,
+   * computed on the session's own date. `Europe/Kyiv` is an identifier, not
+   * something anybody can act on, and this line is the only place the app can
+   * state whose clock this is before the time reaches a stranger.
+   */
+  const offset = useMemo(() => {
+    const zone = schedule?.timezone
+    if (zone === undefined) return ""
+    const at = instantAt(selectedDay, startMinutes ?? 12 * 60)
+    return sessionMoment(language, at, zone).offset
+  }, [language, schedule, selectedDay, startMinutes])
 
   const label =
     startMinutes === undefined
@@ -228,6 +269,9 @@ export function SchedulingSheet({
                   onSelect={chooseDay}
                   disabled={{ before: today }}
                   startMonth={today}
+                  // Weekday and month names in the coach's language, like every
+                  // other word on the screen.
+                  locale={{ code: localeTag(language) }}
                   className="w-full bg-transparent"
                 />
                 <div className="border-border flex items-center gap-3 border-t px-4 py-3">
@@ -276,7 +320,7 @@ export function SchedulingSheet({
               <div className="flex justify-center py-8">
                 <Spinner />
               </div>
-            ) : present.length === 0 ? (
+            ) : !anyFree ? (
               <EmptyDay
                 copy={copy}
                 day={dayFormat.format(selectedDay)}
@@ -353,7 +397,7 @@ export function SchedulingSheet({
               <>
                 {clientName}
                 {copy.footnotePendingTail}
-                <span className="text-foreground font-semibold">{schedule?.timezone ?? ""}</span>.
+                <span className="text-foreground font-semibold">{offset}</span>.
               </>
             ) : (
               <>
@@ -363,7 +407,7 @@ export function SchedulingSheet({
                   {clock(startMinutes)}
                 </span>
                 {" ("}
-                <span className="text-foreground font-semibold">{schedule?.timezone ?? ""}</span>
+                <span className="text-foreground font-semibold">{offset}</span>
                 {")."}
               </>
             )}
@@ -438,7 +482,3 @@ function EmptyDay({
     </div>
   )
 }
-
-/** The last start a day of this length can still take — used by the empty state's copy. */
-export const lastStartMinutes = (durationMinutes: number): number =>
-  BusinessDayEndMinutes - durationMinutes

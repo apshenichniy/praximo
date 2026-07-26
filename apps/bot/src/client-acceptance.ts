@@ -33,6 +33,24 @@ export const LanguageCallbackPrefix = "cl:"
 /** `ca:<token>:<language>` — the consent step's answer. */
 export const AcceptCallbackPrefix = "ca:"
 
+/**
+ * Which language leads the row.
+ *
+ * A `language_code` the product speaks wins, because it is about the reader. An
+ * absent or unsupported one falls back to the language the invitation was
+ * written in rather than to English — the coach chose that on this client's
+ * behalf, and it is a better guess than the default.
+ */
+export const suggestedLanguage = (
+  clientLanguageCode: string | undefined,
+  inviteLanguage: CoachLanguage,
+): CoachLanguage => {
+  const base = (clientLanguageCode ?? "").toLowerCase().split("-")[0] ?? ""
+  return CoachLanguages.includes(base as CoachLanguage)
+    ? narrowCoachLanguage(clientLanguageCode)
+    : inviteLanguage
+}
+
 export interface CallbackChoice {
   readonly token: string
   readonly language: CoachLanguage
@@ -290,9 +308,11 @@ export const openInvitation = Effect.fn("ClientAcceptance.openInvitation")(funct
     message: languageStep({
       token: input.token,
       coachName: lookup.coachName,
-      // The invitation's own language is the coach's statement about this
-      // client; the sender's Telegram client is the fallback when there is none.
-      suggested: lookup.inviteLanguage ?? narrowCoachLanguage(input.clientLanguageCode),
+      // The sender's own Telegram client, which is the only thing this update
+      // knows about the person reading it. The invitation's language is the
+      // coach's guess about them, and stands in when the client's says nothing
+      // the product speaks.
+      suggested: suggestedLanguage(input.clientLanguageCode, lookup.inviteLanguage),
     }),
   } as const
 })

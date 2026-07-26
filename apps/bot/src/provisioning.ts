@@ -7,7 +7,7 @@ import {
   CoachOnboardingRepo,
 } from "@praximo/db"
 import { type CoachLanguage, TelegramId, type WorkspaceId } from "@praximo/domain"
-import { ClientLanguageNames } from "@praximo/i18n"
+import { ClientLanguageNames, formatters } from "@praximo/i18n"
 import { BotRegistry, CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Api, GrammyError, InlineKeyboard, InputFile } from "grammy"
 import type { User } from "grammy/types"
@@ -1139,8 +1139,16 @@ const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(funct
 
   const registry = yield* BotRegistry.Service
   const copy = messages(notification.coachLanguage)
+  // The coach reads their own zone; the *client's* copy of this moment is the
+  // bot's confirmation, which prints an offset instead.
+  const nextSession =
+    client.nextSessionAt === undefined
+      ? undefined
+      : formatters(notification.coachLanguage).timestamp(client.nextSessionAt)
+  // A path, not a hash: the Mini App is path-routed, and `#/clients/…` would
+  // open the home screen with a fragment nothing reads.
   const route = new URL(env.COACH_MINI_APP_URL)
-  route.hash = `#/clients/${clientId}`
+  route.pathname = `/clients/${clientId}`
 
   const sent = yield* registry
     .send(
@@ -1150,6 +1158,7 @@ const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(funct
         ...(client.telegramName === undefined ? {} : { telegramName: client.telegramName }),
         ...(client.telegramUsername === undefined ? {} : { username: client.telegramUsername }),
         language: ClientLanguageNames[client.language ?? notification.coachLanguage],
+        ...(nextSession === undefined ? {} : { nextSession }),
       }),
       {
         parseMode: "HTML",

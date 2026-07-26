@@ -71,7 +71,20 @@ export function ClientScreen({
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  /**
+   * Two controllers over one invitation, deliberately.
+   *
+   * The panel's inline button copies the **link**, because that is the thing it
+   * is showing. «Copy invite» copies the **whole forwardable message** — the
+   * sentence plus the link — because a coach pasting into WhatsApp is sending a
+   * message, not a URL.
+   */
   const copyLink = useCopyLink(client.invite?.url)
+  const forwardable =
+    client.invite === undefined
+      ? undefined
+      : `${client.name}${copy.clients.invitationLeadTail}\n\n${client.invite.url}`
+  const copyMessage = useCopyLink(forwardable)
 
   const sessionFormat = useMemo(
     () =>
@@ -151,10 +164,10 @@ export function ClientScreen({
             <Button
               variant="outline"
               className="w-full"
-              onClick={() => void copyLink.copy()}
+              onClick={() => void copyMessage.copy()}
               disabled={pending}
             >
-              {copy.clients.copyInvite}
+              {copyMessage.copied ? copy.clients.copied : copy.clients.copyInvite}
             </Button>
           </div>
         </Section>

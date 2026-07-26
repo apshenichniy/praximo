@@ -171,7 +171,10 @@ describe("opening an invitation", () => {
     }),
   )
 
-  it.effect("opens with the language step, pre-selected from the invitation", () =>
+  // The pre-selection is about the *reader*: their own Telegram client leads the
+  // row, and it is only ever a guess — the language that counts is the one they
+  // tap, because the consent version is derived from the text that gets shown.
+  it.effect("leads with the client's own Telegram language", () =>
     Effect.gen(function* () {
       const repo = yield* repoLayer(lookup({ inviteLanguage: "uk" }))
       const outcome = yield* openInvitation({
@@ -182,6 +185,20 @@ describe("opening an invitation", () => {
       }).pipe(Effect.provide(repo.layer))
 
       expect(outcome._tag).toBe("Language")
+      expect(outcome._tag === "Language" && outcome.message.buttons[0]?.text).toContain("English")
+    }),
+  )
+
+  it.effect("falls back to the invitation's language when the client's says nothing", () =>
+    Effect.gen(function* () {
+      const repo = yield* repoLayer(lookup({ inviteLanguage: "uk" }))
+      const outcome = yield* openInvitation({
+        token: TOKEN,
+        telegramBotId: BOT_ID,
+        telegramUserId: CLIENT_ID,
+        clientLanguageCode: "de",
+      }).pipe(Effect.provide(repo.layer))
+
       expect(outcome._tag === "Language" && outcome.message.buttons[0]?.text).toContain("Українська")
     }),
   )

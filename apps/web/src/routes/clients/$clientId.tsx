@@ -20,6 +20,7 @@ import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.ts
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { acceptOnce } from "@/routes/index.tsx"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
+import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
 import {
   deleteClient,
   getClient,
@@ -64,6 +65,9 @@ function ClientRoute() {
   const inFlight = useRef(false)
 
   const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
+  // A coach can land here straight from the client-accepted push, without ever
+  // passing through the home route.
+  useCoachTimezone(entry.ok && entry.entry.kind === "home")
   const copy = coachCopy(language)
   const client = detail.ok ? detail.client : undefined
 

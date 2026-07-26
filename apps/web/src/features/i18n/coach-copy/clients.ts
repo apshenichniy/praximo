@@ -39,6 +39,7 @@ export interface ClientsCopy {
   readonly invitationLeadTail: string
   readonly sendCard: string
   readonly copyInvite: string
+  readonly copied: string
   readonly linkLabel: string
   readonly reissueLead: string
 
@@ -122,6 +123,7 @@ const en: ClientsCopy = {
   invitationLeadTail: " opens your bot in Telegram and accepts there. The link works for 7 days.",
   sendCard: "Send a card in Telegram",
   copyInvite: "Copy invite",
+  copied: "Copied",
   linkLabel: "Invitation link",
   reissueLead: "This link is no longer valid. Issue a fresh one to invite them again.",
 
@@ -205,6 +207,7 @@ const uk: ClientsCopy = {
   invitationLeadTail: " відкриє вашого бота в Telegram і прийме запрошення там. Посилання діє 7 днів.",
   sendCard: "Надіслати картку в Telegram",
   copyInvite: "Скопіювати запрошення",
+  copied: "Скопійовано",
   linkLabel: "Посилання-запрошення",
   reissueLead: "Це посилання більше не діє. Випустіть нове, щоб запросити ще раз.",
 
@@ -289,6 +292,7 @@ const ru: ClientsCopy = {
     " откроет вашего бота в Telegram и примет приглашение там. Ссылка действует 7 дней.",
   sendCard: "Отправить карточку в Telegram",
   copyInvite: "Скопировать приглашение",
+  copied: "Скопировано",
   linkLabel: "Ссылка-приглашение",
   reissueLead: "Эта ссылка больше не действует. Выпустите новую, чтобы пригласить ещё раз.",
 

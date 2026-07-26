@@ -189,19 +189,29 @@ const mintToken = (): string => {
 const identifier = (prefix: string): string =>
   `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
 
-/** The instant a wall-clock minute-of-day names in the coach's own zone. */
-const instantOf = (date: string, startMinutes: number, timezone: string): Date | undefined => {
+/**
+ * The instant a wall-clock minute-of-day names in the coach's own zone.
+ *
+ * `toDateUtc`, never `toDate`: the latter hands back the *reading* — 10:00 in
+ * Kyiv as `10:00Z` — which would store every session off by the coach's offset
+ * and make the day window query the wrong day.
+ */
+export const instantOf = (
+  date: string,
+  startMinutes: number,
+  timezone: string,
+): Date | undefined => {
   const hours = String(Math.floor(startMinutes / 60)).padStart(2, "0")
   const minutes = String(startMinutes % 60).padStart(2, "0")
   const zoned = DateTime.makeZoned(`${date}T${hours}:${minutes}:00`, {
     timeZone: timezone,
     adjustForTimeZone: true,
   })
-  return Option.isSome(zoned) ? DateTime.toDate(zoned.value) : undefined
+  return Option.isSome(zoned) ? DateTime.toDateUtc(zoned.value) : undefined
 }
 
 /** Which minute of which day an instant falls on, read in the coach's zone. */
-const localParts = (
+export const localParts = (
   at: Date,
   timezone: string,
 ): { readonly date: string; readonly minutes: number } => {
@@ -480,7 +490,7 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failed("clients.find")))
       if (existing === undefined) return undefined
 
-      yield* clients
+      const reissued = yield* clients
         .reissueInvite({
           workspaceId: principal.workspaceId,
           clientId,
@@ -491,6 +501,11 @@ export const layer = Layer.effect(
           expiresAt: new Date(now.getTime() + ClientInviteTtlMillis),
         })
         .pipe(Effect.mapError(failed("clients.reissueInvite")))
+
+      // The repository refuses once the client has accepted — there is no door
+      // left to reopen. Handing the screen a detail it did not ask for would
+      // read as success.
+      if (reissued === undefined) return undefined
 
       return yield* detailFor(principal, clientId)
     })

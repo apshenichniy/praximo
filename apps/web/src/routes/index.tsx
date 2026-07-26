@@ -1,7 +1,7 @@
 import { BotIcon, WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
 import type { CoachLanguage } from "@praximo/domain"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
@@ -15,11 +15,11 @@ import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
+import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
 import {
   type CoachClientsResult,
   hideMainMiniAppHint,
   listClients,
-  saveTimezone,
 } from "@/server/coach-clients.functions.ts"
 import {
   acceptCoachTerms,
@@ -116,18 +116,7 @@ function CoachEntry() {
 
   const retry = useCallback(() => void router.invalidate(), [router])
 
-  /**
-   * The coach's zone, written silently on every launch that finds it changed
-   * (#56 §`member.timezone`). No UI, no reply worth waiting for: this is the
-   * precondition for the *bot* being able to print "10:00 (UTC+3)" at all, and
-   * a launch that fails to write it simply tries again next time.
-   */
-  useEffect(() => {
-    if (!entry.ok || entry.entry.kind !== "home") return
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    if (typeof timezone !== "string" || timezone.length === 0) return
-    void saveTimezone({ data: { timezone } }).catch(() => undefined)
-  }, [entry])
+  useCoachTimezone(entry.ok && entry.entry.kind === "home")
 
   const hideHint = useCallback(() => {
     void hideMainMiniAppHint()
