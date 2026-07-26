@@ -2,6 +2,7 @@ import { ArrowLeft01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { type LinkProps, useNavigate, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
+import { backAction } from "@/lib/back-navigation.ts"
 import { attachBackButton, loadTelegramWebApp, readTelegramInitData } from "@/lib/telegram.ts"
 
 export function TelegramBackButton({
@@ -30,11 +31,14 @@ export function TelegramBackButton({
       onBack()
       return
     }
-    if (router.history.canGoBack()) {
-      router.history.back()
-      return
-    }
-    void navigate({ to: fallbackTo })
+    const action = backAction({
+      canGoBack: router.history.canGoBack(),
+      fallbackTo: fallbackTo ?? "/",
+    })
+    if (action.kind === "history") router.history.back()
+    // Replaced, never pushed: pushing the parent leaves the screen the deep link
+    // opened sitting *behind* it, and back walks straight back down into it.
+    else void navigate({ to: action.to, replace: true })
   }, [fallbackTo, navigate, onBack, router])
 
   useEffect(() => {
