@@ -16,6 +16,7 @@ import { setAdminNotice } from "@/features/admin/admin-notice.ts"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
 import { InviteCopySheet } from "@/features/admin/components/invite-copy-sheet.tsx"
 import { InviteEmailSheet } from "@/features/admin/components/invite-email-sheet.tsx"
+import { InviteLanguageChips } from "@/features/admin/components/invite-language-chips.tsx"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
 import { sendCoachInviteEmail } from "@/features/admin/invite-email.ts"
@@ -31,9 +32,13 @@ const errorMessages = {
   server: "The invite could not be created. Check your connection and try again.",
 } as const
 
-// The Telegram share sends an English message today; a future language picker
-// (like Copy has) would replace this constant.
-const telegramInviteLanguage: CoachLanguage = "en"
+/**
+ * What the language starts at before the manager touches the chips. English is
+ * the language every string in the product is authored in, so it is the honest
+ * default rather than a guess about the coach — and the chips sit above the
+ * actions precisely so the guess gets corrected before anything is sent.
+ */
+const DefaultInviteLanguage: CoachLanguage = "en"
 
 /**
  * Action-first "Invite a coach" screen (#103): one optional internal label and
@@ -46,6 +51,10 @@ function InviteCoachPage() {
   const navigate = useNavigate()
   const [requestId] = useState(() => crypto.randomUUID())
   const [name, setName] = useState("")
+  // One choice for every channel (#164). It is no longer only the language of
+  // the message: the invite carries it to the claim, and it is what the coach's
+  // whole bot setup speaks until they change it themselves.
+  const [language, setLanguage] = useState<CoachLanguage>(DefaultInviteLanguage)
   // Once an invite exists, the label is committed — editing it would only
   // produce an idempotency conflict on the next tap.
   const [created, setCreated] = useState(false)
@@ -77,7 +86,7 @@ function InviteCoachPage() {
     const response = await mutation
       .mutateAsync({
         input: { requestId, name },
-        delivery: { channel: "telegram", language: telegramInviteLanguage },
+        delivery: { channel: "telegram", language },
       })
       .catch(() => undefined)
     if (response === undefined) {
@@ -93,9 +102,7 @@ function InviteCoachPage() {
     setCreated(true)
 
     const { inviteId, link, message } = response.value
-    switch (
-      await inviteShare.share({ inviteId, link, message, language: telegramInviteLanguage })
-    ) {
+    switch (await inviteShare.share({ inviteId, link, message, language })) {
       // A dismissed picker is not a failure: the invite stays pending, nothing
       // is recorded, and the manager can tap Share again. Leave the screen as is.
       case "dismissed":
@@ -123,11 +130,8 @@ function InviteCoachPage() {
    * created — no workspace, no invite, no delivery — which is why this path
    * never touches the create mutation.
    */
-  const sendByEmail = async (delivery: {
-    readonly email: string
-    readonly language: CoachLanguage
-  }) => {
-    const notice = await sendCoachInviteEmail({ requestId, name, ...delivery })
+  const sendByEmail = async (delivery: { readonly email: string }) => {
+    const notice = await sendCoachInviteEmail({ requestId, name, language, ...delivery })
     setEmailOpen(false)
     notifyHaptic("warning")
     // Toasted rather than shown in the sheet: the sheet is gone by then, and
@@ -135,7 +139,7 @@ function InviteCoachPage() {
     toast.add({ title: notice, type: "info" })
   }
 
-  const copyInvite = async (language: CoachLanguage) => {
+  const copyInvite = async () => {
     setCopyError(undefined)
     const response = await mutation
       .mutateAsync({ input: { requestId, name }, delivery: { channel: "copy", language } })
@@ -206,6 +210,15 @@ function InviteCoachPage() {
         </p>
       </div>
 
+      {/* Above the actions, not inside them: whichever channel the invite leaves
+          through, this is the language the coach's setup will speak (#164). */}
+      <InviteLanguageChips
+        className="mt-7"
+        value={language}
+        disabled={pending}
+        onChange={setLanguage}
+      />
+
       <h2 className="text-muted-foreground mt-8 text-xs font-semibold tracking-widest uppercase">
         Send the invite
       </h2>
@@ -269,7 +282,7 @@ function InviteCoachPage() {
         pending={pending}
         error={copyError}
         fallbackMessage={copyFallback}
-        onCopy={(language) => void copyInvite(language)}
+        onCopy={() => void copyInvite()}
         onCopyFallback={(message) => void copyFallbackDirect(message)}
       />
     </main>

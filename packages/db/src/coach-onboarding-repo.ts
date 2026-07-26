@@ -25,6 +25,14 @@ export interface CreateInput {
   readonly description?: string
   readonly shortDescription?: string
   readonly issuedByTelegramId: string
+  /**
+   * The language the invitation is written in — and, from #164, the language
+   * every message of the setup it opens is written in. The administrator picks
+   * it on the "Invite a coach" screen; the accepting `/start` prefers it over
+   * the coach's device locale, and the coach still overrides both on first
+   * login.
+   */
+  readonly language?: CoachLanguage
   readonly now: Date
 }
 
@@ -432,6 +440,7 @@ export const layer = Layer.effect(
               "request_id",
               "request_fingerprint",
               "issued_by_telegram_id",
+              "language",
               "issued_at",
               "expires_at"
             )
@@ -442,6 +451,7 @@ export const layer = Layer.effect(
               ${input.requestId},
               ${input.requestFingerprint},
               ${input.issuedByTelegramId},
+              ${input.language ?? null}::language,
               ${input.now},
               ${expiresAt}
             from inserted_workspace
@@ -589,7 +599,11 @@ export const layer = Layer.effect(
         try: () =>
           client
             .update(schema.coachOnboardingInvite)
-            .set({ delivery })
+            // The language travels with the delivery, not only with the create
+            // (#164): a reissued invite is minted before anybody has chosen one,
+            // and a resend in a different language is the administrator saying
+            // the first choice was wrong. Both land here.
+            .set({ delivery, language: delivery.language })
             .where(eq(schema.coachOnboardingInvite.id, id))
             .returning({ id: schema.coachOnboardingInvite.id }),
         catch: (cause) => new QueryFailed({ operation: "recordDelivery", cause }),

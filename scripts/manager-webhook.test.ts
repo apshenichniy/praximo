@@ -27,7 +27,10 @@ describe("manager webhook setup", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       url: "https://praximo-bot.example.workers.dev/telegram/manager",
       secret_token: "secret_value",
-      allowed_updates: ["message", "managed_bot"],
+      // `callback_query` is load-bearing, not decorative: the creation prompt's
+      // second button answers in place, and an update type left out of this list
+      // is one Telegram never delivers at all (#164).
+      allowed_updates: ["message", "callback_query", "managed_bot"],
     })
   })
 })

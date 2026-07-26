@@ -212,6 +212,7 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
       api.sendMessage(
         message.chat.id,
         provenNonce ? copy.proofIdentityMismatch : copy.proofLinkRequired,
+        { parse_mode: "HTML" },
       ),
     ).pipe(Effect.result)
     return { _tag: "Rejected", reason: provenNonce ? "identity" : "proof" } as const
@@ -282,6 +283,7 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
   // Telegram refuses must never undo that.
   yield* telegram("sendMessage", () =>
     api.sendMessage(message.chat.id, copy.botReady, {
+      parse_mode: "HTML",
       reply_markup: new InlineKeyboard().webApp(
         copy.openButton,
         coachMiniAppUrl(env.COACH_MINI_APP_URL, candidate.botId),

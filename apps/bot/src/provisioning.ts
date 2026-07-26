@@ -494,7 +494,10 @@ export const announceCoachBotSetup = Effect.fn("BotWorker.announceCoachBotSetup"
     // that has to tell "the coach is not in the chat" from "the send did not
     // land", and only the Bot API error code says which.
     const sent = yield* Effect.tryPromise({
-      try: () => api.sendMessage(input.chatId, messages(input.language).botSettingUp),
+      try: () =>
+        api.sendMessage(input.chatId, messages(input.language).botSettingUp, {
+          parse_mode: "HTML",
+        }),
       catch: announcementFailure,
     }).pipe(Effect.result)
     if (Result.isSuccess(sent)) return sent.success.message_id
@@ -551,10 +554,14 @@ export const greetCoachOnBotReady = Effect.fn("BotWorker.greetCoachOnBotReady")(
   const delivery =
     announced === undefined
       ? telegram("sendMessage", () =>
-          api.sendMessage(input.chatId, copy.botReady, { reply_markup: keyboard }),
+          api.sendMessage(input.chatId, copy.botReady, {
+            parse_mode: "HTML",
+            reply_markup: keyboard,
+          }),
         ).pipe(Effect.asVoid)
       : telegram("editMessageText", () =>
           api.editMessageText(input.chatId, announced, copy.botReady, {
+            parse_mode: "HTML",
             reply_markup: keyboard,
           }),
         ).pipe(Effect.asVoid)
@@ -684,6 +691,20 @@ export const suggestedBotName = (workspaceName: string): string => {
  * one. That is not a one-tap flow, and it reads to the coach as a broken button
  * rather than as a form they have not finished.
  */
+/**
+ * The creation prompt's second button (#164) — "I already have a bot", which
+ * answers with the @BotFather steps instead of navigating anywhere.
+ *
+ * The language rides in the callback data. It is bot-authored and Telegram
+ * echoes it back verbatim, so this is our own value coming home rather than a
+ * claim by the sender — and it spares a database round trip on a tap that
+ * changes no state. The handler still narrows it before use.
+ */
+export const HaveBotCallbackPrefix = "have-bot:"
+
+export const haveBotCallbackData = (language: CoachLanguage): string =>
+  `${HaveBotCallbackPrefix}${language}`
+
 export const createBotLink = (
   managerBotUsername: string,
   suggestedUsername: string,
@@ -742,10 +763,23 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
     intent === "relink" ? copy.relinkReserved : copy.invitationReserved(setup.workspace.name)
   const sent = yield* telegram("sendMessage", () =>
     api.sendMessage(chatId, opening, {
-      reply_markup: new InlineKeyboard().url(
-        copy.createBotButton,
-        createBotLink(env.MANAGER_BOT_USERNAME, suggested, suggestedBotName(setup.workspace.name)),
-      ),
+      parse_mode: "HTML",
+      // Two rows, one keyboard. The BotFather path used to be the tail paragraph
+      // of a message everybody reads for the sake of the few who take it; as the
+      // second button it is free until it is wanted (#164). Both come off
+      // together on the disarm below, which is what keeps the one-live-button
+      // invariant a property of the keyboard rather than of a button count.
+      reply_markup: new InlineKeyboard()
+        .url(
+          copy.createBotButton,
+          createBotLink(
+            env.MANAGER_BOT_USERNAME,
+            suggested,
+            suggestedBotName(setup.workspace.name),
+          ),
+        )
+        .row()
+        .text(copy.haveBotButton, haveBotCallbackData(setup.coachLanguage)),
     }),
   )
   // The asymmetry here is deliberate. The coach is looking at a working button,
@@ -798,6 +832,7 @@ export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(
         outcome === "reconnected"
           ? copy.promptReconnected(botUsername)
           : copy.promptConnected(botUsername),
+        { parse_mode: "HTML" },
       ),
     ),
     (operation) =>

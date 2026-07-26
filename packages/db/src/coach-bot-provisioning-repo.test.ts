@@ -33,10 +33,16 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
     Database.testLayer(testDatabaseUrl),
   )
 
-  const inviteFor = Effect.fnUntraced(function* (fingerprint: string, issuedAt: Date) {
+  const inviteFor = Effect.fnUntraced(function* (
+    fingerprint: string,
+    issuedAt: Date,
+    /** The language the administrator wrote this invitation in (#164). */
+    language?: CoachLanguage,
+  ) {
     const onboarding = yield* CoachOnboardingRepo.Service
     const { client } = yield* Database.Service
     const created = yield* onboarding.createOrGet({
+      ...(language === undefined ? {} : { language }),
       requestId: requestId(),
       requestFingerprint: fingerprint,
       name: "Claim Coaching",
@@ -130,6 +136,40 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       // back over it. The seed rides on the claim, which is already taken.
       yield* repo.prepare(aggregate.invite.id, coach, UK, new Date("2026-07-25T09:00:00.000Z"))
       expect(yield* ownerLanguage()).toBe("ru")
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  /**
+   * Which of the two signals wins (#164). The administrator wrote the invitation
+   * in Russian for a coach they know; the coach's phone is set to English. The
+   * invitation is the statement about the person, so the setup speaks Russian —
+   * and the coach still overrides it on first login, which the test above pins.
+   */
+  it.effect("seeds from the invitation's language ahead of the sender's client", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachBotProvisioningRepo.Service
+      const { client } = yield* Database.Service
+      const invited = yield* inviteFor("language-from-invite", ISSUED_AT, RU)
+
+      const ownerLanguage = Effect.fnUntraced(function* (workspaceId: string) {
+        const rows = yield* Effect.promise(() =>
+          client
+            .select({ language: schema.member.language })
+            .from(schema.member)
+            .where(and(eq(schema.member.workspaceId, workspaceId), eq(schema.member.role, "owner")))
+            .limit(1),
+        )
+        return rows[0]?.language
+      })
+
+      yield* repo.prepare(invited.invite.id, coach, EN, STARTED_AT)
+      expect(yield* ownerLanguage(invited.workspace.id)).toBe("ru")
+
+      // An invite minted before the column existed carries nothing, and the
+      // sender's client is then still the best guess there is.
+      const legacy = yield* inviteFor("language-from-client", ISSUED_AT)
+      yield* repo.prepare(legacy.invite.id, stranger, UK, STARTED_AT)
+      expect(yield* ownerLanguage(legacy.workspace.id)).toBe("uk")
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 

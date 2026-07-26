@@ -40,14 +40,27 @@ const WRITE_SITE =
 /**
  * How much of a statement to read when deciding whether it touches `language`.
  * Every write site in this repository sets its columns well inside this, and the
- * window ends at the statement's own error handler where one is closer.
+ * window ends early at whichever comes first: the statement's own error handler,
+ * or the next write in the same CTE chain.
+ *
+ * That second boundary is what keeps the scan honest about *whose* column a name
+ * belongs to. `createOrGet` inserts a member and then, in the same statement,
+ * inserts an invite carrying a `"language"` of its own (#164) — a window that
+ * ran past the second `insert into` would read the invite's column as a member
+ * writer and fail on a change that never touched `member`.
  */
 const STATEMENT_WINDOW = 1_400
 
+/** Where the next table write begins, and therefore where this one ends. */
+const NEXT_WRITE = /insert\s+into\s+"|update\s+"|\.(?:update|insert)\(schema\./g
+
 const statementAt = (source: string, index: number): string => {
   const rest = source.slice(index, index + STATEMENT_WINDOW)
-  const boundary = rest.indexOf("catch:")
-  return boundary === -1 ? rest : rest.slice(0, boundary)
+  const boundaries = [rest.indexOf("catch:")]
+  NEXT_WRITE.lastIndex = 1
+  boundaries.push(NEXT_WRITE.exec(rest)?.index ?? -1)
+  const boundary = Math.min(...boundaries.filter((at) => at !== -1), rest.length)
+  return rest.slice(0, boundary)
 }
 
 /**
@@ -112,8 +125,10 @@ describe("member.language", () => {
       `${repositoryRoot}packages/db/src/coach-onboarding-repo.ts`,
       "utf8",
     )
-    const insert = creation.slice(creation.indexOf('insert into "member"'))
+    // Bounded the same way as the scan: the invite insert that follows in the
+    // same statement has a `"language"` column, and it is not this one.
+    const insert = statementAt(creation, creation.indexOf('insert into "member"'))
 
-    expect(insert.slice(0, STATEMENT_WINDOW)).not.toMatch(/"language"/)
+    expect(insert).not.toMatch(/"language"/)
   })
 })
