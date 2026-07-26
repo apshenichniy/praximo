@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import type { CoachClients } from "./coach-clients.ts"
+import { type CoachTransportError, isTagged, transportError } from "./coach-transport.ts"
 import { launchCredential } from "./launch-credential.ts"
 import {
   createCoachClient,
@@ -9,27 +10,18 @@ import {
   loadCoachDaySchedule,
   prepareCoachInviteCard,
   removeCoachClient,
+  resendCoachClientInvite,
   resetCoachClientInvite,
   saveCoachTimezone,
   scheduleCoachSession,
 } from "./runtime.server.ts"
 
 /**
- * The client screens' transport. Same shape as the entry's beside it: a tagged
- * result rather than a thrown error, and one undifferentiated `unauthenticated`
- * so a refusal cannot be used to tell an unknown bot from a stale credential.
+ * The client screens' transport: a tagged result rather than a thrown error, and
+ * one undifferentiated `unauthenticated` so a refusal cannot be used to tell an
+ * unknown bot from a stale credential. The mapping itself is shared (#61).
  */
-export type CoachClientsTransportError = "unauthenticated" | "server"
-
-/**
- * Which typed failure crossed the runtime boundary. The tag is all that
- * survives `runPromise`, so this is the one thing every handler below asks.
- */
-const isTagged = (error: unknown, tag: string): boolean =>
-  typeof error === "object" && error !== null && "_tag" in error && error._tag === tag
-
-const transportError = (error: unknown): CoachClientsTransportError =>
-  isTagged(error, "CoachSession.Unauthenticated") ? "unauthenticated" : "server"
+export type CoachClientsTransportError = CoachTransportError
 
 export type CoachClientsResult =
   | { readonly ok: true; readonly home: CoachClients.CoachClientsHome }
@@ -184,6 +176,30 @@ export const resetInvite = createServerFn({ method: "POST" })
     if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
     try {
       return { ok: true, client: await resetCoachClientInvite(context.credential, data.clientId) }
+    } catch (error) {
+      return { ok: false, error: transportError(error) }
+    }
+  })
+
+export type ResendInviteResult =
+  | { readonly ok: true; readonly outcome: CoachClients.ResendOutcome }
+  | { readonly ok: false; readonly error: CoachClientsTransportError }
+
+/**
+ * Recovery behind the resend action (#61): the invitation to send again, minted
+ * fresh only when the one on file has lapsed.
+ *
+ * A `POST` like every other client operation and authenticated the same way —
+ * whether a fresh link is needed is decided server-side from the invitation's
+ * own state, never from what the screen believed when it drew the button.
+ */
+export const resendInvite = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator(clientIdOf)
+  .handler(async ({ context, data }): Promise<ResendInviteResult> => {
+    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
+    try {
+      return { ok: true, outcome: await resendCoachClientInvite(context.credential, data.clientId) }
     } catch (error) {
       return { ok: false, error: transportError(error) }
     }

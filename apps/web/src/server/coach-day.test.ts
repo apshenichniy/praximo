@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@effect/vitest"
-import { instantOf, localParts } from "./coach-clients.ts"
+import { instantOf } from "@/server/coach-day.ts"
 
 /**
- * The two conversions every scheduled session passes through, and the one place
- * this slice can be silently wrong by exactly one offset.
+ * The conversion every scheduled session passes through, and the one place this
+ * slice can be silently wrong by exactly one offset.
  *
  * A coach picks a wall-clock minute in their own zone; the column stores an
  * instant. Get that wrong and nothing fails loudly — sessions are simply booked
@@ -37,30 +37,5 @@ describe("instantOf", () => {
 
   it("refuses a date it cannot read rather than inventing one", () => {
     expect(instantOf("not-a-date", 600, "Europe/Kyiv")).toBeUndefined()
-  })
-})
-
-describe("localParts", () => {
-  it("reports the day and minute an instant falls on in the coach's zone", () => {
-    expect(localParts(new Date("2026-07-27T07:00:00.000Z"), "Europe/Kyiv")).toEqual({
-      date: "2026-07-27",
-      minutes: 10 * 60,
-    })
-  })
-
-  // Late in the coach's evening it is already tomorrow in UTC, and "is the day
-  // the sheet is looking at today?" must answer in the coach's calendar.
-  it("keeps a late evening on the coach's own day", () => {
-    expect(localParts(new Date("2026-07-27T20:30:00.000Z"), "Europe/Kyiv")).toEqual({
-      date: "2026-07-27",
-      minutes: 23 * 60 + 30,
-    })
-  })
-
-  it("reads midnight as minute zero rather than as 24 hours", () => {
-    expect(localParts(new Date("2026-07-26T21:00:00.000Z"), "Europe/Kyiv")).toEqual({
-      date: "2026-07-27",
-      minutes: 0,
-    })
   })
 })

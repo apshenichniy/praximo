@@ -13,6 +13,8 @@ export {
   ClientNameMaxLength,
   clientInviteStartParameter,
   CreateClientInput,
+  InviteAttentionWindowMillis,
+  inviteNeedsAttention,
   parseClientInviteStartParameter,
 } from "./client-onboarding.ts"
 export {

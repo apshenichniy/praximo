@@ -15,10 +15,12 @@ import {
   SessionKind,
   type WorkspaceId,
 } from "@praximo/domain"
-import { clientCopy, DefaultTimeZone } from "@praximo/i18n"
+import { clientCopy } from "@praximo/i18n"
 import { BotRegistry } from "@praximo/telegram"
-import { Clock, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
+import { Clock, Context, Effect, Layer, Schema } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
+import { localParts } from "@/lib/coach-calendar.ts"
+import { instantOf, MinutesInDay, zoneOf } from "./coach-day.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
 /**
@@ -144,6 +146,23 @@ export interface PreparedInviteCard {
   readonly expiresAt: string
 }
 
+/**
+ * What the resend action gets back: the invitation to hand to Telegram's picker,
+ * or the reason there is nothing to send.
+ *
+ * `reissued` is reported rather than assumed, so the screen can say a fresh link
+ * was minted — a coach who resends a dead invitation has just invalidated
+ * whatever the client was holding, even though it no longer worked.
+ */
+export type ResendOutcome =
+  | {
+      readonly resent: true
+      readonly reissued: boolean
+      readonly url: string
+      readonly message: string
+    }
+  | { readonly resent: false; readonly reason: "accepted" | "unknown-client" }
+
 export interface Interface {
   readonly home: (
     credential: LaunchCredential,
@@ -184,6 +203,19 @@ export interface Interface {
     ClientDetail | undefined,
     CoachSession.Unauthenticated | CoachSession.LoadFailed
   >
+  /**
+   * Recovery rather than reset (#61): hand back an invitation this client can
+   * still be sent, minting a fresh one **only** when the one on file has lapsed.
+   *
+   * Reset is destructive by definition — it kills a link the client is holding —
+   * and this is its mirror case: a coach looking at a session whose client never
+   * accepted wants to send the invitation again, and if that link is already
+   * dead there is nothing left to destroy by replacing it.
+   */
+  readonly resendInvite: (
+    credential: LaunchCredential,
+    clientId: string,
+  ) => Effect.Effect<ResendOutcome, CoachSession.Unauthenticated | CoachSession.LoadFailed>
   /**
    * `undefined` when there is no invitation left to share — the client was
    * deleted, or accepted between the screen drawing and the tap.
@@ -238,8 +270,6 @@ export class CardPreparationFailed extends Schema.TaggedErrorClass<CardPreparati
 const invitationBody = (language: CoachLanguage, client: string, coach: string): string =>
   clientCopy(language).invitation.message({ client, coach })
 
-const MinutesInDay = 24 * 60
-
 /**
  * A readable identifier, drawn from the same alphabet as the coach's code so a
  * client reading a link out loud has no `0`/`O` to get wrong. Twelve symbols:
@@ -256,66 +286,9 @@ const mintToken = (): string => {
 const identifier = (prefix: string): string =>
   `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
 
-/**
- * The instant a wall-clock minute-of-day names in the coach's own zone.
- *
- * `toDateUtc`, never `toDate`: the latter hands back the *reading* — 10:00 in
- * Kyiv as `10:00Z` — which would store every session off by the coach's offset
- * and make the day window query the wrong day.
- */
-export const instantOf = (
-  date: string,
-  startMinutes: number,
-  timezone: string,
-): Date | undefined => {
-  const hours = String(Math.floor(startMinutes / 60)).padStart(2, "0")
-  const minutes = String(startMinutes % 60).padStart(2, "0")
-  const zoned = DateTime.makeZoned(`${date}T${hours}:${minutes}:00`, {
-    timeZone: timezone,
-    adjustForTimeZone: true,
-  })
-  return Option.isSome(zoned) ? DateTime.toDateUtc(zoned.value) : undefined
-}
-
-/** Which minute of which day an instant falls on, read in the coach's zone. */
-export const localParts = (
-  at: Date,
-  timezone: string,
-): { readonly date: string; readonly minutes: number } => {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(at)
-  const value = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "00"
-  const hour = Number(value("hour")) % 24
-  return {
-    date: `${value("year")}-${value("month")}-${value("day")}`,
-    minutes: hour * 60 + Number(value("minute")),
-  }
-}
-
 const iso = (value: Date): string => value.toISOString()
 
 const failed = (operation: string) => () => new CoachSession.LoadFailed({ operation })
-
-/**
- * The coach's zone, or UTC.
- *
- * UTC is the honest fallback rather than a guess: the column is written by the
- * browser on launch, so it is only ever missing for a coach who has not opened
- * the app since this shipped, and a wrong guess would move every time on the
- * screen without saying so.
- */
-const zoneOf = (principal: CoachSession.CoachPrincipal): string =>
-  principal.timezone !== undefined && isSupportedTimeZone(principal.timezone)
-    ? principal.timezone
-    : DefaultTimeZone
 
 export const layer = Layer.effect(
   Service,
@@ -574,6 +547,31 @@ export const layer = Layer.effect(
     })
 
     /**
+     * Mint a fresh invitation for a client this coach owns, and say whether it
+     * took. Shared by the deliberate Reset and by recovery (#61), because the
+     * two differ in what they *mean*, not in what they write.
+     */
+    const reissueFor = Effect.fn("CoachClients.reissueFor")(function* (
+      principal: CoachSession.CoachPrincipal,
+      clientId: string,
+      now: Date,
+      fallbackLanguage: CoachLanguage,
+    ) {
+      const reissued = yield* clients
+        .reissueInvite({
+          workspaceId: principal.workspaceId,
+          clientId,
+          inviteId: identifier("iv"),
+          token: mintToken(),
+          inviteLanguage: fallbackLanguage,
+          now,
+          expiresAt: new Date(now.getTime() + ClientInviteTtlMillis),
+        })
+        .pipe(Effect.mapError(failed("clients.reissueInvite")))
+      return reissued !== undefined
+    })
+
+    /**
      * A fresh invitation, and the detail screen re-read through the same path
      * that drew it. Echoing the new token back would leave the rest of the
      * screen speaking for a state that no longer exists.
@@ -589,24 +587,70 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failed("clients.find")))
       if (existing === undefined) return undefined
 
-      const reissued = yield* clients
-        .reissueInvite({
-          workspaceId: principal.workspaceId,
-          clientId,
-          inviteId: identifier("iv"),
-          token: mintToken(),
-          inviteLanguage: existing.invite?.language ?? principal.language,
-          now,
-          expiresAt: new Date(now.getTime() + ClientInviteTtlMillis),
-        })
-        .pipe(Effect.mapError(failed("clients.reissueInvite")))
-
       // The repository refuses once the client has accepted — there is no door
       // left to reopen. Handing the screen a detail it did not ask for would
       // read as success.
-      if (reissued === undefined) return undefined
+      const reissued = yield* reissueFor(
+        principal,
+        clientId,
+        now,
+        existing.invite?.language ?? principal.language,
+      )
+      if (!reissued) return undefined
 
       return yield* detailFor(principal, clientId)
+    })
+
+    /**
+     * The invitation, ready to send again — reissued only if the one on file is
+     * dead (#61).
+     *
+     * This is what stops the resend action on an unaccepted session's card from
+     * dead-ending: the state it exists for is exactly the state where the link
+     * on file no longer opens anything, and a screen that offered "send it
+     * again" and then handed over a dead URL would be worse than no action.
+     */
+    const resendInvite = Effect.fn("CoachClients.resendInvite")(function* (
+      credential: LaunchCredential,
+      clientId: string,
+    ) {
+      const principal = yield* session.requireOnboardedCoach(credential, WRITE_WINDOW_MILLIS)
+      const now = new Date(yield* Clock.currentTimeMillis)
+      const existing = yield* detailFor(principal, clientId)
+      if (existing === undefined) return { resent: false, reason: "unknown-client" } as const
+      // Nothing to send: the client walked through the door already, and the
+      // screen that offered this has simply gone stale.
+      if (existing.state === "accepted") {
+        return { resent: false, reason: "accepted" } as const
+      }
+
+      if (existing.state !== "expired" && existing.invite !== undefined) {
+        return {
+          resent: true,
+          reissued: false,
+          url: existing.invite.url,
+          message: existing.invite.message,
+        } as const
+      }
+
+      const reissued = yield* reissueFor(
+        principal,
+        clientId,
+        now,
+        existing.invite?.language ?? principal.language,
+      )
+      if (!reissued) return { resent: false, reason: "accepted" } as const
+
+      const fresh = yield* detailFor(principal, clientId)
+      if (fresh?.invite === undefined) {
+        return { resent: false, reason: "unknown-client" } as const
+      }
+      return {
+        resent: true,
+        reissued: true,
+        url: fresh.invite.url,
+        message: fresh.invite.message,
+      } as const
     })
 
     /**
@@ -694,6 +738,7 @@ export const layer = Layer.effect(
       schedule,
       remove,
       resetInvite,
+      resendInvite,
       prepareInviteCard,
       saveTimezone,
       hideMainMiniAppHint,

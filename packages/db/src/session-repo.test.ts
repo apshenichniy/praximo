@@ -185,4 +185,135 @@ describe.skipIf(skipWithoutDatabase)("SessionRepo (dev Neon branch)", () => {
       expect(busy).toEqual([{ scheduledAt: MONDAY_TEN, durationMinutes: 60 }])
     }).pipe(Effect.provide(appLayer)),
   )
+
+  /**
+   * Today and the sessions list are the same query with and without a `to`
+   * (#61), and both of them have to name the client — a row that said "10:00,
+   * 60 min" and nothing else would be a row nobody can act on.
+   */
+  it.effect("lists live sessions in a window, earliest first, named by client", () =>
+    Effect.gen(function* () {
+      const made = yield* fixture()
+      yield* schedule(made, {
+        sessionId: `se_late_${made.suffix}`,
+        scheduledAt: new Date("2026-07-27T16:00:00.000Z"),
+      })
+      yield* schedule(made, {
+        sessionId: `se_early_${made.suffix}`,
+        scheduledAt: MONDAY_TEN,
+        clientId: made.otherClientId,
+      })
+      yield* schedule(made, {
+        sessionId: `se_outside_${made.suffix}`,
+        scheduledAt: new Date("2026-07-28T10:00:00.000Z"),
+      })
+
+      const repo = yield* SessionRepo.Service
+      const day = yield* repo.scheduled({
+        workspaceId: made.workspaceId,
+        from: new Date("2026-07-27T00:00:00.000Z"),
+        to: new Date("2026-07-28T00:00:00.000Z"),
+        limit: 50,
+      })
+
+      expect(day.map((row) => [row.id, row.clientName])).toEqual([
+        [`se_early_${made.suffix}`, "Anna P."],
+        [`se_late_${made.suffix}`, "Maria K."],
+      ])
+
+      // Without `to` the same statement is the flat upcoming list.
+      const ahead = yield* repo.scheduled({
+        workspaceId: made.workspaceId,
+        from: new Date("2026-07-27T00:00:00.000Z"),
+        limit: 50,
+      })
+      expect(ahead).toHaveLength(3)
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /**
+   * The one thing that can be wrong with an otherwise healthy session: the
+   * client never accepted, so there is no Channel and no way to send them a
+   * link. Its absence is what the screen reads.
+   */
+  it.effect("says whether the client ever accepted, from the channel's absence", () =>
+    Effect.gen(function* () {
+      const { client } = yield* Database.Service
+      const made = yield* fixture()
+      yield* schedule(made, { sessionId: `se_open_${made.suffix}`, scheduledAt: MONDAY_TEN })
+      yield* Effect.promise(() =>
+        client.insert(schema.channel).values({
+          id: `ch_${made.suffix}`,
+          clientId: made.clientId,
+          kind: "telegram",
+          address: "810000001",
+          isPrimary: true,
+        }),
+      )
+      yield* schedule(made, {
+        sessionId: `se_pending_${made.suffix}`,
+        scheduledAt: new Date("2026-07-27T14:00:00.000Z"),
+        clientId: made.otherClientId,
+      })
+
+      const repo = yield* SessionRepo.Service
+      const rows = yield* repo.scheduled({
+        workspaceId: made.workspaceId,
+        from: new Date("2026-07-27T00:00:00.000Z"),
+        limit: 50,
+      })
+
+      expect(rows.map((row) => row.clientAccepted)).toEqual([true, false])
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  it.effect("reads one session, and refuses another workspace's", () =>
+    Effect.gen(function* () {
+      const made = yield* fixture()
+      const other = yield* fixture()
+      yield* schedule(made, { sessionId: `se_one_${made.suffix}`, scheduledAt: MONDAY_TEN })
+
+      const repo = yield* SessionRepo.Service
+      const found = yield* repo.find(made.workspaceId, `se_one_${made.suffix}`)
+      expect(found?.clientName).toBe("Maria K.")
+      expect(found?.scheduledAt).toEqual(MONDAY_TEN)
+
+      // The tenant key comes from authentication, and the repository is the
+      // second fence: another workspace's session simply does not exist.
+      expect(yield* repo.find(other.workspaceId, `se_one_${made.suffix}`)).toBeUndefined()
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /**
+   * A cancelled session is still a session somebody can hold a link to, and the
+   * screen that reads it should say what it is rather than 404 (#62 develops
+   * that screen; this is the read it will build on).
+   */
+  it.effect("finds a session whatever state it is in", () =>
+    Effect.gen(function* () {
+      const { client } = yield* Database.Service
+      const made = yield* fixture()
+      yield* schedule(made, { sessionId: `se_gone_${made.suffix}`, scheduledAt: MONDAY_TEN })
+      yield* Effect.promise(() =>
+        client
+          .update(schema.session)
+          .set({ state: "cancelled", cancelReason: "coach_cancelled" })
+          .where(eq(schema.session.id, `se_gone_${made.suffix}`)),
+      )
+
+      const repo = yield* SessionRepo.Service
+      expect((yield* repo.find(made.workspaceId, `se_gone_${made.suffix}`))?.state).toBe(
+        "cancelled",
+      )
+      // The listing query is the one that filters: a cancelled session holds no
+      // slot and belongs on no upcoming list.
+      expect(
+        yield* repo.scheduled({
+          workspaceId: made.workspaceId,
+          from: new Date("2026-07-27T00:00:00.000Z"),
+          limit: 50,
+        }),
+      ).toEqual([])
+    }).pipe(Effect.provide(appLayer)),
+  )
 })

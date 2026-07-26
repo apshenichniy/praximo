@@ -47,12 +47,19 @@ describe("demo client fixture contract", () => {
       true,
     )
 
-    // A pending invitation *and* a scheduled session on the same client.
+    // A pending invitation *and* a scheduled session on the same client — and
+    // one of those sessions on today's calendar, because that is the card #61
+    // spends its amber on and Today only shows what is on the day.
     expect(
       demoClients.some(
         (demo) =>
           demo.invite?.status === "pending" &&
-          demo.sessions.some((session) => session.state === "scheduled"),
+          demo.sessions.some(
+            (session) =>
+              session.state === "scheduled" &&
+              session.startsInMinutes > 0 &&
+              session.startsInMinutes < 12 * 60,
+          ),
       ),
     ).toBe(true)
 

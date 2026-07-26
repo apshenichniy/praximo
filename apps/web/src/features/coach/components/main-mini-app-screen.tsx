@@ -1,0 +1,83 @@
+import { useState } from "react"
+
+import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
+import { Button } from "@/components/ui/button.tsx"
+import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
+
+/**
+ * The optional @BotFather steps, on a screen of their own (#61).
+ *
+ * #56 kept this as a standing instruction card on the home screen with a Hide
+ * control beside it. Today replaces that home, and the hint takes the shape it
+ * was always meant to have: **one row on the dashboard, reading as its payoff**,
+ * and everything else — the steps, the per-bot address, and Hide — here.
+ *
+ * **Hide lives on this screen and nowhere else.** A control that puts the row
+ * away from the dashboard is a control a coach uses without ever reading what
+ * they are putting away; here they have read it. And for everyone who actually
+ * did the steps the row dismisses itself, because Telegram then reports
+ * `has_main_web_app` and nobody has to tell us anything (#55, #56).
+ */
+export function MainMiniAppScreen({
+  copy,
+  mainMiniAppUrl,
+  onHide,
+}: {
+  readonly copy: CoachCopy
+  /** This coach's own bot's Mini App address — the exact string @BotFather wants. */
+  readonly mainMiniAppUrl: string
+  readonly onHide: () => void
+}) {
+  const [hidden, setHidden] = useState(false)
+
+  return (
+    <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
+      <TelegramBackButton label={copy.common.back} />
+
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{copy.home.mainMiniAppTitle}</h1>
+
+      {/*
+        Four steps, because the row on Today promised four. A run-on sentence
+        naming them would meet the letter of that promise and break it: this is a
+        sequence a coach follows with @BotFather open in the other chat.
+      */}
+      <ol className="mt-6 flex flex-col gap-3">
+        {copy.home.mainMiniAppSteps.map((step, index) => (
+          <li key={step} className="flex items-start gap-3">
+            <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums">
+              {index + 1}
+            </span>
+            <span className="text-[13px] leading-5">{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      <p className="text-muted-foreground mt-6 text-sm leading-6">
+        {copy.home.mainMiniAppLead}
+        <span className="text-foreground">{copy.home.mainMiniAppOpen}</span>
+        {copy.home.mainMiniAppTail}
+      </p>
+
+      <p className="text-muted-foreground mt-8 px-1 text-[10px] font-semibold tracking-widest uppercase">
+        {copy.home.mainMiniAppUrlLabel}
+      </p>
+      <p className="border-border/60 bg-card text-foreground mt-2 overflow-x-auto rounded-xl border px-3 py-2 font-mono text-[12px] break-all">
+        {mainMiniAppUrl}
+      </p>
+
+      <Button
+        variant="ghost"
+        className="text-muted-foreground mt-8 -ml-2"
+        disabled={hidden}
+        onClick={() => {
+          // Optimistic on purpose: this is a preference, and a coach who put a
+          // row away must not watch it sit there while a write lands.
+          setHidden(true)
+          onHide()
+        }}
+      >
+        {copy.home.mainMiniAppHide}
+      </Button>
+    </main>
+  )
+}

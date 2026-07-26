@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from "vitest"
 import { LegalPage } from "@/features/legal/components/legal-page.tsx"
 import { coachTermsFor, privacyPolicyFor } from "@/features/legal/content.ts"
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/features/legal/versions.ts"
-import { CoachHome } from "@/features/coach/components/coach-home.tsx"
+import { MainMiniAppScreen } from "@/features/coach/components/main-mini-app-screen.tsx"
 import { TermsScreen } from "@/features/coach/components/terms-screen.tsx"
 import { coachCatalog, coachCopy } from "@/features/i18n/coach-copy.ts"
 import { acceptOnce, CoachScreen, mainMiniAppUrlFor } from "@/routes/index.tsx"
@@ -37,10 +37,20 @@ const render = async (node: ReactNode): Promise<string> => {
   return renderToStaticMarkup(<RouterProvider router={router as never} />)
 }
 
-/** An onboarded coach's home always has a list — an empty practice is still one. */
+/**
+ * A practice with nothing in it — the state reachable without `db:demo`, and
+ * therefore the one every entry test runs against unless it says otherwise.
+ */
 const emptyPractice = {
   ok: true,
-  home: { clients: [], mainMiniAppHintVisible: true },
+  today: {
+    coachName: "Olena P.",
+    timezone: "Europe/Kyiv",
+    sessions: [],
+    attention: [],
+    emptyPractice: true,
+    mainMiniAppHintVisible: true,
+  },
 } as const
 
 const screen = (entry: CoachEntryTransportResult, launchLanguage: "en" | "uk" | "ru" = "en") =>
@@ -48,12 +58,14 @@ const screen = (entry: CoachEntryTransportResult, launchLanguage: "en" | "uk" | 
     <CoachScreen
       entry={entry}
       launchLanguage={launchLanguage}
-      clients={emptyPractice}
+      today={emptyPractice}
       onAccept={() => {}}
       onChooseLanguage={async () => true}
-      onHideHint={() => {}}
+      onCreate={() => {}}
+      onResend={() => {}}
       onRetry={() => {}}
       pending={false}
+      resending={undefined}
       error={undefined}
     />,
   )
@@ -139,44 +151,65 @@ describe("coach Mini App entry", () => {
     expect(html).toContain("/legal/privacy?lang=ru")
   })
 
-  // The home screen is the client list now (#56): «New client» is the list's own
-  // first row, and the setup hint sits last, under no heading of its own.
-  it("shows an onboarded coach their clients", async () => {
+  /**
+   * Today is the entrance now (#61), and the practice a coach reaches a minute
+   * after accepting the terms has nothing in it — so it opens on the checklist
+   * rather than on three ways of looking at nothing.
+   */
+  it("lands an onboarded coach on Today", async () => {
     const html = await screen(home())
-    expect(html).toContain(coachCatalog.en.clients.listTitle)
-    expect(html).toContain(coachCatalog.en.clients.newClient)
-    expect(html).toContain(coachCatalog.en.clients.empty)
-    expect(html.indexOf(coachCatalog.en.clients.listTitle)).toBeLessThan(
-      html.indexOf(coachCatalog.en.home.mainMiniAppTitle),
-    )
+    expect(html).toContain("Olena P.")
+    expect(html).toContain(coachCatalog.en.today.checklistTitle)
+    expect(html).toContain(coachCatalog.en.today.allSessions)
+    expect(html).toContain(coachCatalog.en.today.clients)
+    // The bot step opens ticked; the clients list has moved to its own route.
+    expect(html).toContain(coachCatalog.en.today.checklistBot)
+    expect(html).toContain('href="/clients"')
+    expect(html).toContain('href="/sessions"')
   })
 
-  it("speaks the home screen in the coach's own language", async () => {
+  it("speaks Today in the coach's own language", async () => {
     const html = await screen(home("ru"))
-    expect(html).toContain(coachCatalog.ru.clients.listTitle)
-    expect(html).toContain(coachCatalog.ru.home.mainMiniAppTitle)
+    expect(html).toContain(coachCatalog.ru.today.checklistTitle)
+    expect(html).toContain(coachCatalog.ru.home.mainMiniAppRow)
+  })
+
+  /**
+   * The hint is one row opening a screen (#61) — the steps, the address and the
+   * Hide control all live there, so Today carries no dismiss control at all.
+   */
+  it("offers the @BotFather hint as one row, and no way to dismiss it here", async () => {
+    const html = await screen(home())
+    expect(html).toContain(coachCatalog.en.home.mainMiniAppRow)
+    expect(html).toContain('href="/main-mini-app"')
+    expect(html).not.toContain(coachCatalog.en.home.mainMiniAppHide)
+    // The address itself belongs to the screen behind the row, not to Today.
+    expect(html).not.toContain(coachCatalog.en.home.mainMiniAppUrlLabel)
   })
 
   it("prints the exact per-bot address @BotFather asks for", async () => {
-    // The one operational element on the home stub: Telegram has no API for the
-    // chat-list button, so the coach pastes this themselves — and only the app
-    // knows the bot id.
+    // Telegram has no API for the chat-list button, so the coach pastes this
+    // themselves — and only the app knows the bot id. The path is reset along
+    // with the query: the address is printed on `/main-mini-app`, and one
+    // ending there would send every chat-list launch to the hint.
     expect(mainMiniAppUrlFor("https://stage.praximo.io/?b=old&x=1#frag", "9100777")).toBe(
+      "https://stage.praximo.io/?b=9100777",
+    )
+    expect(mainMiniAppUrlFor("https://stage.praximo.io/main-mini-app", "9100777")).toBe(
       "https://stage.praximo.io/?b=9100777",
     )
     expect(mainMiniAppUrlFor("", "9100777")).toBe("")
 
     const html = await render(
-      <CoachHome
+      <MainMiniAppScreen
         copy={coachCopy("en")}
-        botUsername="ada_coach_bot"
         mainMiniAppUrl="https://stage.praximo.io/?b=9100777"
-        clients={[]}
-        hintVisible
-        onHideHint={() => {}}
+        onHide={() => {}}
       />,
     )
     expect(html).toContain("https://stage.praximo.io/?b=9100777")
+    // Hide lives here and only here.
+    expect(html).toContain(coachCatalog.en.home.mainMiniAppHide)
   })
 
   it("says where the app opens from rather than showing a missing page", async () => {

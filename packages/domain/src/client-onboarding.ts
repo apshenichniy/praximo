@@ -51,6 +51,35 @@ export const ClientInviteTokenPattern = new RegExp(
 /** Single-use, seven days. The window starts at creation, not at delivery. */
 export const ClientInviteTtlMillis = 7 * 24 * 60 * 60 * 1_000
 
+/**
+ * How close to its expiry an invitation has to be before Today calls it out
+ * (#61).
+ *
+ * Two days of a seven-day window, so the section names the invitations a coach
+ * can still do something about rather than every one that is open. *Every*
+ * pending invitation would make needs-attention the biggest thing on a fresh
+ * practice and a duplicate of the clients list — a coach who has just invited
+ * five people would be reading a list of problems.
+ */
+export const InviteAttentionWindowMillis = 2 * 24 * 60 * 60 * 1_000
+
+/**
+ * Whether an invitation belongs in Today's needs-attention section: already
+ * lapsed, or inside its last two days.
+ *
+ * Derived from the moment rather than stored, exactly as the state word is —
+ * there is no cron writing `expired`, so "is this urgent" has to be a read.
+ */
+export const inviteNeedsAttention = (
+  state: "invited" | "expired" | "accepted",
+  expiresAt: Date,
+  now: Date,
+): boolean => {
+  if (state === "accepted") return false
+  if (state === "expired") return true
+  return expiresAt.getTime() - now.getTime() <= InviteAttentionWindowMillis
+}
+
 export const ClientInviteStatus = Schema.Literals(["pending", "accepted", "expired"])
 export type ClientInviteStatus = typeof ClientInviteStatus.Type
 

@@ -9,6 +9,8 @@ import {
   ClientInviteTtlMillis,
   clientInviteStartParameter,
   CreateClientInput,
+  InviteAttentionWindowMillis,
+  inviteNeedsAttention,
   parseClientInviteStartParameter,
 } from "./client-onboarding.ts"
 
@@ -31,6 +33,38 @@ describe("client invite token", () => {
 
   it("expires seven days out", () => {
     expect(ClientInviteTtlMillis).toBe(7 * 24 * 60 * 60 * 1_000)
+  })
+})
+
+/**
+ * The rule that keeps Today's needs-attention section from becoming a second
+ * clients list (#61): the last two days of the window, and everything past it.
+ */
+describe("needs attention", () => {
+  const NOW = new Date("2026-07-26T09:00:00.000Z")
+  const inDays = (days: number) => new Date(NOW.getTime() + days * 24 * 60 * 60 * 1_000)
+
+  it("takes an invitation inside its last two days", () => {
+    expect(inviteNeedsAttention("invited", inDays(1.5), NOW)).toBe(true)
+    expect(inviteNeedsAttention("invited", inDays(2), NOW)).toBe(true)
+  })
+
+  it("leaves a freshly sent invitation alone", () => {
+    // The common case on a practice a coach has just filled in: five open
+    // invitations, none of them a problem yet.
+    expect(inviteNeedsAttention("invited", inDays(6), NOW)).toBe(false)
+    expect(InviteAttentionWindowMillis).toBe(2 * 24 * 60 * 60 * 1_000)
+  })
+
+  it("takes one that has already lapsed, whatever its expiry says", () => {
+    expect(inviteNeedsAttention("expired", inDays(-1), NOW)).toBe(true)
+    // A reissue stores `expired` on the invitation it replaced, so the column
+    // can say expired while its window is still open.
+    expect(inviteNeedsAttention("expired", inDays(5), NOW)).toBe(true)
+  })
+
+  it("never asks anything of a client who is already in", () => {
+    expect(inviteNeedsAttention("accepted", inDays(-9), NOW)).toBe(false)
   })
 })
 

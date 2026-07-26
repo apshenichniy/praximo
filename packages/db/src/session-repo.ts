@@ -4,7 +4,8 @@ import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
 
 /**
- * Scheduling, and the day's bookings the sheet draws its grid from (#56).
+ * Scheduling, the day's bookings the sheet draws its grid from (#56), and the
+ * sessions Today and the sessions list are built out of (#61).
  *
  * The states that hold a slot. A cancelled session releases the time it was
  * holding, and a completed one is in the past by definition — only these two can
@@ -36,6 +37,36 @@ export interface BusySession {
   readonly durationMinutes: number
 }
 
+/**
+ * A session as every screen that lists one needs it (#61): the facts of the
+ * booking, the client it belongs to, and the one thing that can be wrong with an
+ * otherwise healthy session.
+ */
+export interface ScheduledSessionRow {
+  readonly id: string
+  readonly clientId: string
+  readonly clientName: string
+  readonly scheduledAt: Date
+  readonly durationMinutes: number
+  readonly kind: string
+  readonly state: string
+  /**
+   * Whether the client ever walked through the door. A Channel exists only after
+   * acceptance, and the join link travels through it — so a session for a client
+   * without one is real, on the day, and undeliverable
+   * (client-onboarding-auth.md §Session-first flow).
+   */
+  readonly clientAccepted: boolean
+}
+
+export interface ScheduledQuery {
+  readonly workspaceId: string
+  readonly from: Date
+  /** Absent for "everything ahead of `from`" — present for one day's window. */
+  readonly to?: Date
+  readonly limit: number
+}
+
 export interface Interface {
   readonly schedule: (input: ScheduleInput) => Effect.Effect<ScheduleOutcome, QueryFailed>
   readonly between: (
@@ -43,9 +74,43 @@ export interface Interface {
     from: Date,
     to: Date,
   ) => Effect.Effect<ReadonlyArray<BusySession>, QueryFailed>
+  /** Live sessions in a window, earliest first — Today's day and the flat list. */
+  readonly scheduled: (
+    query: ScheduledQuery,
+  ) => Effect.Effect<ReadonlyArray<ScheduledSessionRow>, QueryFailed>
+  /** One session, in whatever state it is in — the session screen's own read. */
+  readonly find: (
+    workspaceId: string,
+    sessionId: string,
+  ) => Effect.Effect<ScheduledSessionRow | undefined, QueryFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/db/SessionRepo") {}
+
+/**
+ * One joined row as every listing screen reads it. The channel is selected as an
+ * id so that its *absence* is the answer: no Channel, no accepted invitation, no
+ * way to send a join link.
+ */
+const readListing = (row: {
+  readonly id: string
+  readonly clientId: string
+  readonly clientName: string
+  readonly scheduledAt: Date
+  readonly durationMinutes: number
+  readonly kind: string
+  readonly state: string
+  readonly channelId: string | null
+}): ScheduledSessionRow => ({
+  id: row.id,
+  clientId: row.clientId,
+  clientName: row.clientName,
+  scheduledAt: row.scheduledAt,
+  durationMinutes: row.durationMinutes,
+  kind: row.kind,
+  state: row.state,
+  clientAccepted: row.channelId !== null,
+})
 
 export const layer = Layer.effect(
   Service,
@@ -154,7 +219,81 @@ export const layer = Layer.effect(
       })
     })
 
-    return Service.of({ schedule, between })
+    /**
+     * The columns every listing screen reads, joined once.
+     *
+     * The client is an inner join because a session without one cannot exist;
+     * the channel is a left join because its *absence* is the fact being read —
+     * that is what "the invitation was never accepted" looks like in the schema.
+     */
+    const listing = () =>
+      client
+        .select({
+          id: schema.session.id,
+          clientId: schema.client.id,
+          clientName: schema.client.name,
+          scheduledAt: schema.session.scheduledAt,
+          durationMinutes: schema.session.durationMinutes,
+          kind: schema.session.kind,
+          state: schema.session.state,
+          channelId: schema.channel.id,
+        })
+        .from(schema.session)
+        .innerJoin(schema.client, eq(schema.client.id, schema.session.clientId))
+        .leftJoin(
+          schema.channel,
+          and(eq(schema.channel.clientId, schema.client.id), eq(schema.channel.isPrimary, true)),
+        )
+
+    /**
+     * Today's day and the flat upcoming list, from the same statement.
+     *
+     * `to` is what tells them apart: Today asks for one day in the coach's own
+     * zone — including the sessions of it that have already started, because a
+     * day is what the screen is about — and the list asks for everything ahead.
+     * Both are bounded by `limit`, and the caller says what the bound means.
+     */
+    const scheduled = Effect.fn("SessionRepo.scheduled")(function* (query: ScheduledQuery) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          listing()
+            .where(
+              and(
+                eq(schema.session.workspaceId, query.workspaceId),
+                inArray(schema.session.state, [...LiveStates]),
+                gte(schema.session.scheduledAt, query.from),
+                ...(query.to === undefined ? [] : [lt(schema.session.scheduledAt, query.to)]),
+              ),
+            )
+            .orderBy(asc(schema.session.scheduledAt))
+            .limit(query.limit),
+        catch: (cause) => new QueryFailed({ operation: "session.scheduled", cause }),
+      })
+      return rows.map(readListing)
+    })
+
+    /**
+     * One session, whatever state it is in.
+     *
+     * Deliberately not filtered by state: the screen this feeds says what the
+     * session *is*, and a cancelled session a coach reached from an old link
+     * should read as cancelled rather than as missing.
+     */
+    const find = Effect.fn("SessionRepo.find")(function* (workspaceId: string, sessionId: string) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          listing()
+            .where(
+              and(eq(schema.session.workspaceId, workspaceId), eq(schema.session.id, sessionId)),
+            )
+            .limit(1),
+        catch: (cause) => new QueryFailed({ operation: "session.find", cause }),
+      })
+      const row = rows[0]
+      return row === undefined ? undefined : readListing(row)
+    })
+
+    return Service.of({ schedule, between, scheduled, find })
   }),
 )
 

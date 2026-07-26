@@ -162,6 +162,30 @@ export const demoClients: ReadonlyArray<DemoClient> = [
     },
     sessions: [
       {
+        // Today, and undeliverable: this is the card #61 spends its amber on —
+        // the state word plus its consequence plus the action that fixes it.
+        //
+        // **Two of them, one ahead and one behind**, because Today shows the
+        // coach's *day* and every offset rolls over it eventually: seeded at
+        // 22:00 a `+2h` session lands on tomorrow, seeded at 00:30 a `-1h` one
+        // landed yesterday. Between the pair at least one is always on today's
+        // calendar, which is what the acceptance criterion actually asks for.
+        // A `scheduled` session an hour into the past is honest until #42:
+        // nothing transitions it, because nothing can yet.
+        id: "demo_session_sofia_today",
+        startsInMinutes: 2 * Hour,
+        durationMinutes: 60,
+        kind: "regular",
+        state: "scheduled",
+      },
+      {
+        id: "demo_session_sofia_started",
+        startsInMinutes: -1 * Hour,
+        durationMinutes: 60,
+        kind: "regular",
+        state: "scheduled",
+      },
+      {
         id: "demo_session_sofia_first",
         startsInMinutes: 4 * Day + 2 * Hour,
         durationMinutes: 90,
