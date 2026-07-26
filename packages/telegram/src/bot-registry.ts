@@ -108,10 +108,7 @@ export const PrepareCardRpcResult = Schema.TaggedUnion({
 export type PrepareCardRpcResult = typeof PrepareCardRpcResult.Type
 
 export interface RpcClient {
-  readonly prepareCoachInviteCard: (
-    workspace: WorkspaceId,
-    card: InviteCard,
-  ) => Promise<unknown>
+  readonly prepareCoachInviteCard: (workspace: WorkspaceId, card: InviteCard) => Promise<unknown>
 }
 
 /**

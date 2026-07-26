@@ -214,7 +214,8 @@ export const prepareInviteCard = createServerFn({ method: "POST" })
       const card = await prepareCoachInviteCard(context.credential, data.clientId)
       return card === undefined ? { ok: false, error: "gone" } : { ok: true, card }
     } catch (error) {
-      if (isTagged(error, "CoachClients.CardPreparationFailed")) return { ok: false, error: "failed" }
+      if (isTagged(error, "CoachClients.CardPreparationFailed"))
+        return { ok: false, error: "failed" }
       return { ok: false, error: transportError(error) }
     }
   })

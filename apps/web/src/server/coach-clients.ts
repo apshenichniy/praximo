@@ -235,11 +235,8 @@ export class CardPreparationFailed extends Schema.TaggedErrorClass<CardPreparati
  * introduces itself with throughout the acceptance conversation, so the client
  * meets one assistant rather than two.
  */
-const invitationBody = (
-  language: CoachLanguage,
-  client: string,
-  coach: string,
-): string => clientCopy(language).invitation.message({ client, coach })
+const invitationBody = (language: CoachLanguage, client: string, coach: string): string =>
+  clientCopy(language).invitation.message({ client, coach })
 
 const MinutesInDay = 24 * 60
 

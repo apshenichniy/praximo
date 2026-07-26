@@ -48,9 +48,7 @@ const principal: MemberRepo.CoachPrincipalRow = {
   termsAcceptedAt: new Date(AUTH_DATE - 24 * 60 * 60 * 1_000),
 }
 
-const invite = (
-  status: ClientRepo.ClientInviteRow["status"],
-): ClientRepo.ClientInviteRow => ({
+const invite = (status: ClientRepo.ClientInviteRow["status"]): ClientRepo.ClientInviteRow => ({
   id: "iv_1",
   token: TOKEN,
   status,
@@ -81,8 +79,7 @@ const run = <A, E>(
     MemberRepo.Service,
     MemberRepo.Service.of({
       findCoachPrincipalByBot: Effect.fn("MemberRepo.Test.findCoachPrincipalByBot")(
-        (telegramBotId) =>
-          Effect.succeed(telegramBotId === BOT_ID ? principal : undefined),
+        (telegramBotId) => Effect.succeed(telegramBotId === BOT_ID ? principal : undefined),
       ),
       findCoachPrincipalByIdentity: Effect.fn("MemberRepo.Test.findCoachPrincipalByIdentity")(() =>
         Effect.succeed(principal),
@@ -139,9 +136,7 @@ const run = <A, E>(
               workspaces,
               BotRegistry.testLayer,
               CoachSession.layer.pipe(
-                Layer.provide(
-                  Layer.mergeAll(CoachInitData.testLayer(TEST_PUBLIC_KEY), members),
-                ),
+                Layer.provide(Layer.mergeAll(CoachInitData.testLayer(TEST_PUBLIC_KEY), members)),
               ),
             ),
           ),
@@ -174,9 +169,7 @@ describe("preparing the invitation card", () => {
         // The coach's own bot, named by the workspace the launch authenticated.
         expect(minted?.workspace).toBe(WORKSPACE)
         // Into that same bot, and carrying the invitation's own token.
-        expect(minted?.card.buttonUrl).toBe(
-          `https://t.me/${BOT_USERNAME}?start=inv_${TOKEN}`,
-        )
+        expect(minted?.card.buttonUrl).toBe(`https://t.me/${BOT_USERNAME}?start=inv_${TOKEN}`)
         // Written to Anna, in the language the coach picked *for Anna* — not in
         // the Ukrainian this coach reads their own app in.
         expect(minted?.card.text).toBe(
@@ -236,7 +229,9 @@ describe("preparing the invitation card", () => {
         )
 
         expect(prepared).toBeUndefined()
-        expect(yield* Effect.flatMap(BotRegistry.TestService, (stub) => stub.prepared())).toEqual([])
+        expect(yield* Effect.flatMap(BotRegistry.TestService, (stub) => stub.prepared())).toEqual(
+          [],
+        )
       }),
     ),
   )

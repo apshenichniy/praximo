@@ -81,9 +81,7 @@ describe("BotRegistry over the bot Worker's binding", () => {
       expect(error._tag).toBe("BotRegistry.PrepareFailed")
       expect(error.reason).toBe("bot needs re-link")
     }).pipe(
-      Effect.provide(
-        rpc(async () => ({ _tag: "Failed", workspace, reason: "bot needs re-link" })),
-      ),
+      Effect.provide(rpc(async () => ({ _tag: "Failed", workspace, reason: "bot needs re-link" }))),
     ),
   )
 
@@ -93,10 +91,6 @@ describe("BotRegistry over the bot Worker's binding", () => {
       const error = yield* Effect.flip(registry.prepareCard(workspace, card))
 
       expect(error.reason).toBe("bot worker unreachable")
-    }).pipe(
-      Effect.provide(
-        rpc(() => Promise.reject(new Error("service binding down"))),
-      ),
-    ),
+    }).pipe(Effect.provide(rpc(() => Promise.reject(new Error("service binding down"))))),
   )
 })

@@ -588,9 +588,7 @@ describe("sending through a workspace's own bot", () => {
 
       const prepared = yield* prepare(health, telegram)
 
-      const mints = telegram.calls.filter(
-        (entry) => entry.method === "savePreparedInlineMessage",
-      )
+      const mints = telegram.calls.filter((entry) => entry.method === "savePreparedInlineMessage")
       expect(mints.map((entry) => entry.token)).toEqual([STALE_TOKEN, FRESH_TOKEN])
       expect(prepared.id).toBe("prepared-card-1")
       expect(health.flipped).toEqual([])
