@@ -33,8 +33,8 @@ export function ClientPickerScreen({
       <TelegramBackButton label={copy.common.back} />
 
       <header className="mt-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{copy.sessions.pickTitle}</h1>
-        <p className="text-muted-foreground mt-1 text-sm leading-5">
+        <h1 className="text-title font-semibold tracking-tight">{copy.sessions.pickTitle}</h1>
+        <p className="text-muted-foreground mt-1 text-body leading-5">
           {clients.length === 0 ? copy.sessions.pickEmpty : copy.sessions.pickLead}
         </p>
       </header>

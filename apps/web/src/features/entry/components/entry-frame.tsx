@@ -44,8 +44,8 @@ export function EntryFrame({
         <span aria-hidden="true" className={entryMarkClass(tone)}>
           <HugeiconsIcon icon={icon} size={34} strokeWidth={1.6} />
         </span>
-        <h1 className="mt-7 text-2xl font-semibold tracking-tight text-pretty">{title}</h1>
-        <p className="text-muted-foreground mt-3 text-[15px] leading-6 text-pretty">{body}</p>
+        <h1 className="mt-7 text-title font-semibold tracking-tight text-pretty">{title}</h1>
+        <p className="text-muted-foreground mt-3 text-body leading-6 text-pretty">{body}</p>
       </header>
       {children}
     </main>

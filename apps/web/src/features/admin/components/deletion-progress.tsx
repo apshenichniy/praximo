@@ -31,7 +31,7 @@ export function DeletionStageList({
           </span>
           <span
             className={cn(
-              "text-sm",
+              "text-body",
               stage.state === "pending"
                 ? "text-muted-foreground"
                 : stage.state === "warned"
@@ -100,7 +100,7 @@ export function DeletionActionButton({
       disabled={running}
       aria-busy={running || undefined}
       className={cn(
-        "bg-destructive text-background hover:bg-destructive/90 h-13 w-full text-base font-semibold",
+        "bg-destructive text-background hover:bg-destructive/90 h-13 w-full text-emphasis font-semibold",
         className,
       )}
       onClick={onClick}

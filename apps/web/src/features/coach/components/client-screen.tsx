@@ -50,7 +50,6 @@ export function ClientScreen({
   copy,
   language,
   client,
-  onBack,
   onSchedule,
   onShare,
   onResetInvite,
@@ -61,7 +60,6 @@ export function ClientScreen({
   readonly copy: CoachCopy
   readonly language: CoachLanguage
   readonly client: CoachClients.ClientDetail
-  readonly onBack: () => void
   readonly onSchedule: () => void
   readonly onShare: () => void
   readonly onResetInvite: () => void
@@ -114,18 +112,21 @@ export function ClientScreen({
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
-      <TelegramBackButton onBack={onBack} label={copy.common.back} />
+      <TelegramBackButton label={copy.common.back} fallbackTo="/clients" />
 
       <header className="flex flex-col items-center gap-2 text-center">
-        <span className="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-full text-lg font-semibold">
+        <span className="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-full text-heading font-semibold">
           {initials(client.name)}
         </span>
-        <h1 className="text-2xl font-semibold tracking-tight">{client.name}</h1>
+        <h1 className="text-title font-semibold tracking-tight">{client.name}</h1>
         {client.channel?.telegramUsername === undefined ? null : (
-          <p className="text-muted-foreground text-sm">@{client.channel.telegramUsername}</p>
+          <p className="text-muted-foreground text-body">@{client.channel.telegramUsername}</p>
         )}
         <p
-          className={cn("flex items-center gap-1.5 text-sm font-medium", stateStyles[client.state])}
+          className={cn(
+            "flex items-center gap-1.5 text-body font-medium",
+            stateStyles[client.state],
+          )}
         >
           <span className="size-1.5 rounded-full bg-current" />
           {stateWord}
@@ -133,15 +134,15 @@ export function ClientScreen({
       </header>
 
       {error === undefined ? null : (
-        <p className="text-destructive mt-6 text-sm leading-5">{error}</p>
+        <p className="text-destructive mt-6 text-body leading-5">{error}</p>
       )}
 
       {!showInvitation || client.invite === undefined ? null : (
         <Section>
-          <p className="text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase">
+          <p className="text-muted-foreground px-1 text-caption font-semibold tracking-wide uppercase">
             {copy.clients.invitationEyebrow}
           </p>
-          <p className="text-muted-foreground mt-2 px-1 text-sm leading-5">
+          <p className="text-muted-foreground mt-2 px-1 text-body leading-5">
             {client.state === "expired" ? (
               copy.clients.reissueLead
             ) : (
@@ -199,7 +200,9 @@ export function ClientScreen({
         <Card className="mt-4 gap-0 overflow-hidden py-0">
           <ul className="divide-border divide-y">
             {client.sessions.length === 0 ? (
-              <li className="text-muted-foreground px-5 py-4 text-sm">{copy.clients.noSessions}</li>
+              <li className="text-muted-foreground px-5 py-4 text-body">
+                {copy.clients.noSessions}
+              </li>
             ) : (
               client.sessions.map((session) => (
                 <li key={session.id} className="flex items-center gap-3 px-5 py-4">
@@ -214,10 +217,10 @@ export function ClientScreen({
                     strokeWidth={2}
                     className="text-muted-foreground"
                   />
-                  <span className="flex-1 text-sm tabular-nums">
+                  <span className="flex-1 text-body tabular-nums">
                     {sessionFormat.format(new Date(session.scheduledAt))}
                   </span>
-                  <span className="text-muted-foreground text-xs">
+                  <span className="text-muted-foreground text-caption">
                     {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
                     {" · "}
                     {session.durationMinutes}
@@ -230,7 +233,7 @@ export function ClientScreen({
               <button
                 type="button"
                 onClick={onSchedule}
-                className="text-primary w-full px-5 py-4 text-left text-sm font-semibold"
+                className="text-primary w-full px-5 py-4 text-left text-body font-semibold"
               >
                 {copy.clients.scheduleAction}
               </button>

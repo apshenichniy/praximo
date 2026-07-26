@@ -45,17 +45,17 @@ export function WorkspaceDetailHeader({
       <WorkspaceAvatar
         name={workspace.name}
         className="ring-primary/25 shadow-primary/20 size-24 shadow-2xl ring-1"
-        fallbackClassName="text-3xl"
+        fallbackClassName="text-display"
       />
-      <h1 className="mt-6 text-3xl font-semibold tracking-tight text-balance">
+      <h1 className="mt-6 text-display font-semibold tracking-tight text-balance">
         {displayName(workspace.name)}
       </h1>
       {botUsername === undefined ? null : (
-        <p className="text-muted-foreground mt-1.5 text-sm">@{botUsername}</p>
+        <p className="text-muted-foreground mt-1.5 text-body">@{botUsername}</p>
       )}
       <p
         className={cn(
-          "mt-3 flex items-center gap-2 text-[17px] font-bold tracking-tight",
+          "mt-3 flex items-center gap-2 text-emphasis font-bold tracking-tight",
           toneClass[status.tone],
         )}
       >

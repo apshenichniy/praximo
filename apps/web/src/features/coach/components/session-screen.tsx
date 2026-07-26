@@ -33,11 +33,11 @@ export function SessionScreen({
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
-      <TelegramBackButton label={copy.common.back} />
+      <TelegramBackButton label={copy.common.back} fallbackTo="/sessions" />
 
       <header className="mt-2">
-        <h1 className="text-2xl font-semibold tracking-tight">{copy.sessions.detailTitle}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
+        <h1 className="text-title font-semibold tracking-tight">{copy.sessions.detailTitle}</h1>
+        <p className="text-muted-foreground mt-1 text-body">
           {moment.day}
           {", "}
           <span className="tabular-nums">{moment.time}</span>
@@ -64,7 +64,7 @@ export function SessionScreen({
             copy={copy.clients}
             kind={session.kind}
             durationMinutes={session.durationMinutes}
-            className="text-foreground justify-end text-sm"
+            className="text-foreground justify-end text-body"
           />
         </DetailRow>
         {/*

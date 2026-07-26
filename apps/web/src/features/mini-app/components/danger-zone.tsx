@@ -38,8 +38,8 @@ export function DangerCard({
   return (
     <Card size="sm" className="border-destructive/40 bg-destructive/5 border shadow-none">
       <CardContent>
-        <p className="text-base font-semibold">{title}</p>
-        <p className="text-muted-foreground mt-2 text-sm leading-5">{description}</p>
+        <p className="text-emphasis font-semibold">{title}</p>
+        <p className="text-muted-foreground mt-2 text-body leading-5">{description}</p>
         {action}
       </CardContent>
     </Card>

@@ -282,3 +282,51 @@ only for scroll position and haptics. A motion library is worth its bundle when 
 and not before — the app grows a gesture that can be interrupted mid-flight
 (swipe-to-cancel on a session, drag-to-reschedule); the first candidate then is
 `motion/mini`, on the Web Animations API, not the full package.
+
+## Typography
+
+Decided in #186, on a phone, for the same reason as §Motion: what was there had
+accumulated rather than been chosen. Eight sizes were crowded into the seven
+pixels between 10 and 17, half of them written as one-off `text-[13px]`s, and the
+smallest of them — the one carrying every field label — sat below the 11pt that
+is the smallest style Apple itself ships.
+
+### The scale
+
+Seven steps, in `apps/web/src/styles/app.css`. Tailwind's own `--text-*`
+namespace is switched **off**, so this is the only scale there is: `text-sm` and
+friends do not exist here.
+
+| Step | Size | Line | For |
+| --- | --- | --- | --- |
+| `text-caption` | 12px | 16 | labels, counts, state words |
+| `text-footnote` | 13px | 18 | descriptions, leads |
+| `text-body` | 15px | 21 | running text, buttons, slots |
+| `text-emphasis` | 17px | 23 | card titles, the line that matters |
+| `text-heading` | 20px | 26 | dialog and section headings |
+| `text-title` | 24px | 30 | screen titles |
+| `text-display` | 30px | 34 | the one number a screen is about |
+
+Two numbers deserve their reasons. **The floor is 12px** because this typeface
+is not SF Pro: Nunito Sans has neither its x-height nor its optical sizing, so a
+native app's 11pt is not our 11px, and 12 is where Nunito starts being read
+rather than decoded. **Body is 15px, not 14**, which is the single change with
+the widest reach — it is the size of nearly every sentence, button and slot in
+the app.
+
+### Rules
+
+- **Nothing outside the scale.** `src/__tests__/type-scale.test.ts` fails on a
+  retired utility or an arbitrary `text-[…]`, in components as well as screens. A
+  component pulled fresh from the shadcn CLI is the likeliest way one returns,
+  and switching the namespace off means it would otherwise render at the
+  inherited size instead of failing.
+- **Size carries weight, not opacity.** A caption is small enough already; the
+  strip's weekday was `text-[10px]` *and* `opacity-70`, and the free-slot count
+  added `text-muted-foreground/70` on top of `font-normal`. Small text takes the
+  full foreground colour, and emphasis comes from weight.
+- **Tracking belongs to the small end only.** `tracking-widest` earns its place
+  under 12px and makes a word loose above it; uppercase labels take
+  `tracking-wide`.
+- **Touch targets are 44px**, per the platform, regardless of the type inside
+  them: `min-h-11` on anything a thumb chooses — slots, chips, rows.

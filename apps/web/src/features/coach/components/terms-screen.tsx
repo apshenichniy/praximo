@@ -42,14 +42,16 @@ export function TermsScreen({
     <main className="mx-auto w-full max-w-md px-5 pt-10 pb-24">
       <OnboardingProgress step={2} label={copy.terms.step} />
 
-      <h1 className="mt-9 text-2xl font-semibold tracking-tight text-pretty">{copy.terms.title}</h1>
-      <p className="text-muted-foreground mt-3 text-[15px] leading-6 text-pretty">
+      <h1 className="mt-9 text-title font-semibold tracking-tight text-pretty">
+        {copy.terms.title}
+      </h1>
+      <p className="text-muted-foreground mt-3 text-body leading-6 text-pretty">
         {copy.terms.lead}
       </p>
 
       <ul className="mt-7 space-y-4">
         {copy.terms.points.map((line) => (
-          <li key={line} className="text-foreground/90 flex gap-3 text-[15px] leading-6">
+          <li key={line} className="text-foreground/90 flex gap-3 text-body leading-6">
             <span
               aria-hidden="true"
               className="bg-primary/60 mt-2.5 size-1.5 shrink-0 rounded-full"
@@ -59,7 +61,7 @@ export function TermsScreen({
         ))}
       </ul>
 
-      <p className="text-muted-foreground mt-8 text-[13px] leading-5">
+      <p className="text-muted-foreground mt-8 text-footnote leading-5">
         {copy.terms.legalLead}
         <Link
           to={LEGAL_PATHS.terms}
@@ -80,7 +82,7 @@ export function TermsScreen({
       </p>
 
       {error === undefined ? null : (
-        <p role="alert" className="text-destructive mt-6 text-sm">
+        <p role="alert" className="text-destructive mt-6 text-body">
           {error}
         </p>
       )}
@@ -90,7 +92,7 @@ export function TermsScreen({
         onClick={onAccept}
         fallback={
           <div className="mt-8">
-            <Button className="h-12 w-full text-[15px]" disabled={pending} onClick={onAccept}>
+            <Button className="h-12 w-full text-body" disabled={pending} onClick={onAccept}>
               {label}
             </Button>
           </div>

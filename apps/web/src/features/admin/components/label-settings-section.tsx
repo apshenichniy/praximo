@@ -101,7 +101,7 @@ export function LabelSettingsSection({ workspace }: { readonly workspace: Worksp
               setError(undefined)
             }}
           />
-          <p className="text-muted-foreground mt-2 text-xs leading-5">
+          <p className="text-muted-foreground mt-2 text-caption leading-5">
             Your own name for this coach: it labels them in your list and titles the invite message.
             Their clients only ever see the coach&rsquo;s own Telegram name.
           </p>
@@ -136,7 +136,7 @@ export function LabelSettingsSection({ workspace }: { readonly workspace: Worksp
               )}
             </Button>
           ) : saved ? (
-            <p className="mt-4 text-sm text-emerald-300">Label saved</p>
+            <p className="mt-4 text-body text-emerald-300">Label saved</p>
           ) : null}
         </CardContent>
       </Card>

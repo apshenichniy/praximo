@@ -56,7 +56,7 @@ export function ClientList({
         <span className="bg-primary/15 text-primary flex size-10 shrink-0 items-center justify-center rounded-full">
           <HugeiconsIcon icon={UserAdd01Icon} size={18} strokeWidth={2} />
         </span>
-        <span className="text-primary text-[15px] font-semibold">{copy.newClient}</span>
+        <span className="text-primary text-body font-semibold">{copy.newClient}</span>
       </Link>
     </li>
   )
@@ -64,7 +64,7 @@ export function ClientList({
   const rows =
     clients.length === 0
       ? [
-          <li key="empty" className="text-muted-foreground px-5 py-5 text-sm leading-5">
+          <li key="empty" className="text-muted-foreground px-5 py-5 text-body leading-5">
             {copy.empty}
           </li>,
         ]
@@ -100,11 +100,11 @@ function ClientRow({
 }) {
   const body: ReactNode = (
     <>
-      <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+      <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-caption font-semibold">
         {initials(client.name)}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-medium">{client.name}</span>
+        <span className="block truncate text-body font-medium">{client.name}</span>
         <ClientStateLine copy={copy} client={client} />
       </span>
     </>
@@ -150,7 +150,7 @@ export function ClientStateLine({
         : `${copy.invitedPrefix}${format.relative(client.invitedAt)}`
 
   return (
-    <span className="mt-0.5 flex items-center gap-2 text-xs">
+    <span className="mt-0.5 flex items-center gap-2 text-caption">
       <span className={cn("flex items-center gap-1.5 font-medium", stateStyles[client.state])}>
         <span className="size-1.5 rounded-full bg-current" />
         {word}

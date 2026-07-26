@@ -44,7 +44,7 @@ export function InviteCopySheet({
     >
       <DrawerContent className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <DrawerHeader className="p-0 pt-2 text-left group-data-[swipe-axis=y]/drawer-popup:text-left">
-          <DrawerTitle className="text-lg font-semibold">Copy invite</DrawerTitle>
+          <DrawerTitle className="text-heading font-semibold">Copy invite</DrawerTitle>
           <DrawerDescription>
             The full invite message is copied — paste it anywhere: WhatsApp, Slack, SMS.
           </DrawerDescription>
@@ -92,7 +92,7 @@ export function InviteCopySheet({
                 readOnly
                 value={fallbackMessage}
                 rows={6}
-                className="bg-muted rounded-2xl p-4 text-sm"
+                className="bg-muted rounded-2xl p-4 text-body"
                 onFocus={(event) => event.target.select()}
               />
               <Button

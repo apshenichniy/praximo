@@ -386,7 +386,7 @@ export function SchedulingScreen({
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-28">
       <TelegramBackButton label={backLabel} />
 
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{copy.sheetTitle}</h1>
+      <h1 className="mt-2 text-title font-semibold tracking-tight">{copy.sheetTitle}</h1>
 
       <div className="mt-6">
         <Field label={copy.kindLabel}>
@@ -412,7 +412,7 @@ export function SchedulingScreen({
                 aria-pressed={kind === option}
                 onClick={() => chooseKind(option)}
                 className={cn(
-                  "relative z-10 flex min-h-10 flex-1 items-center justify-center rounded-lg py-2 text-sm font-semibold",
+                  "relative z-10 flex min-h-10 flex-1 items-center justify-center rounded-lg py-2 text-body font-semibold",
                   "transition-colors duration-(--duration-press)",
                   kind === option ? "text-foreground" : "text-muted-foreground",
                 )}
@@ -431,7 +431,7 @@ export function SchedulingScreen({
           trailing={
             <span
               key={monthFormat.format(visibleMonth)}
-              className="animate-in fade-in slide-in-from-bottom-1 text-muted-foreground text-xs font-semibold tracking-wide uppercase duration-(--duration-swap)"
+              className="animate-in fade-in slide-in-from-bottom-1 text-muted-foreground text-caption font-semibold tracking-wide uppercase duration-(--duration-swap)"
             >
               {monthFormat.format(visibleMonth)}
             </span>
@@ -452,7 +452,7 @@ export function SchedulingScreen({
           />
 
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-semibold">
+            <span className="text-body font-semibold">
               {sameDay(selectedDay, today)
                 ? `${copy.today}, ${dateFormat.format(selectedDay)}`
                 : dateFormat.format(selectedDay)}
@@ -513,7 +513,7 @@ export function SchedulingScreen({
                   <Button size="sm" variant="outline" onClick={() => chooseMonthDay(today)}>
                     {copy.today}
                   </Button>
-                  <span className="text-muted-foreground text-xs">
+                  <span className="text-muted-foreground text-caption">
                     {shortDayFormat.format(today)}
                   </span>
                 </div>
@@ -531,7 +531,7 @@ export function SchedulingScreen({
                 aria-pressed={durationMinutes === minutes}
                 onClick={() => chooseDuration(minutes)}
                 className={cn(
-                  "flex min-h-11 flex-1 items-center justify-center rounded-full border py-2 text-sm font-semibold tabular-nums",
+                  "flex min-h-11 flex-1 items-center justify-center rounded-full border py-2 text-body font-semibold tabular-nums",
                   "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press) active:scale-[0.97]",
                   durationMinutes === minutes
                     ? "bg-primary text-primary-foreground border-transparent"
@@ -583,10 +583,10 @@ export function SchedulingScreen({
                       key={part}
                       type="button"
                       onClick={() => scrollTo(part)}
-                      className="border-border text-muted-foreground flex-1 border-b-2 pb-1 text-xs font-semibold"
+                      className="border-border text-muted-foreground flex-1 border-b-2 pb-1 text-caption font-semibold"
                     >
                       {partLabel(copy, part)}
-                      <span className="text-muted-foreground block text-xs font-normal tabular-nums">
+                      <span className="text-muted-foreground block text-caption font-normal tabular-nums">
                         {counts[part]}
                         {copy.freeSuffix}
                       </span>
@@ -608,7 +608,7 @@ export function SchedulingScreen({
                       top of a popup — hence the safe-area offset, and the page
                       background behind it instead of the drawer's card.
                     */}
-                    <p className="bg-background text-muted-foreground sticky top-(--mini-app-safe-top,0px) z-10 py-2 text-xs font-semibold tracking-wide uppercase">
+                    <p className="bg-background text-muted-foreground sticky top-(--mini-app-safe-top,0px) z-10 py-2 text-caption font-semibold tracking-wide uppercase">
                       {partLabel(copy, part)}
                     </p>
                     <div className="grid grid-cols-3 gap-2">
@@ -628,7 +628,7 @@ export function SchedulingScreen({
                               setStartMinutes(slot.startMinutes)
                             }}
                             className={cn(
-                              "flex min-h-11 items-center justify-center rounded-xl border py-2 text-sm font-semibold tabular-nums",
+                              "flex min-h-11 items-center justify-center rounded-xl border py-2 text-body font-semibold tabular-nums",
                               "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press)",
                               "enabled:active:scale-[0.97]",
                               startMinutes === slot.startMinutes
@@ -651,7 +651,7 @@ export function SchedulingScreen({
           </div>
         </Field>
 
-        <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-xs leading-5">
+        <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-caption leading-5">
           {startMinutes === undefined ? (
             <>
               {clientName}
@@ -673,7 +673,7 @@ export function SchedulingScreen({
         </p>
 
         {error === undefined ? null : (
-          <p className="text-destructive animate-in fade-in slide-in-from-bottom-1 mt-3 text-sm leading-5 duration-(--duration-swap)">
+          <p className="text-destructive animate-in fade-in slide-in-from-bottom-1 mt-3 text-body leading-5 duration-(--duration-swap)">
             {error}
           </p>
         )}
@@ -711,7 +711,7 @@ function Field({
   return (
     <div className="mt-5 flex flex-col gap-2 first:mt-0">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+        <p className="text-muted-foreground text-caption font-semibold tracking-wide uppercase">
           {label}
         </p>
         {trailing}
@@ -766,7 +766,7 @@ function EmptyDay({
 }) {
   return (
     <div className="border-border flex flex-col items-start gap-3 rounded-xl border border-dashed px-4 py-5">
-      <p className="text-muted-foreground text-sm leading-5">
+      <p className="text-muted-foreground text-body leading-5">
         {copy.emptyDayLead}
         <span className="text-foreground font-semibold">{day}</span>
         {copy.emptyDayTail}

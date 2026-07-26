@@ -19,7 +19,7 @@ export function EntryLoading() {
       <main className={entryFrameClass}>
         <div className="flex flex-col items-center text-center">
           <div
-            className={`${entryMarkClass("brand")} animate-pulse text-3xl font-semibold`}
+            className={`${entryMarkClass("brand")} animate-pulse text-display font-semibold`}
             role="status"
             aria-label="Loading Praximo"
           >

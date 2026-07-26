@@ -182,8 +182,8 @@ function InviteCoachPage() {
       <TelegramBackButton onBack={() => void navigate({ to: "/admin" })} />
 
       <header className="mt-7">
-        <h1 className="text-3xl font-semibold tracking-tight">Invite a coach</h1>
-        <p className="text-muted-foreground mt-2 text-sm leading-5">
+        <h1 className="text-display font-semibold tracking-tight">Invite a coach</h1>
+        <p className="text-muted-foreground mt-2 text-body leading-5">
           They&rsquo;ll set up their own profile during onboarding — you just get the invite to
           them.
         </p>
@@ -205,7 +205,7 @@ function InviteCoachPage() {
           onChange={setName}
           onBlur={() => undefined}
         />
-        <p className="text-muted-foreground mt-2 text-xs">
+        <p className="text-muted-foreground mt-2 text-caption">
           Only labels the invite in your list until they join.
         </p>
       </div>
@@ -219,7 +219,7 @@ function InviteCoachPage() {
         onChange={setLanguage}
       />
 
-      <h2 className="text-muted-foreground mt-8 text-xs font-semibold tracking-widest uppercase">
+      <h2 className="text-muted-foreground mt-8 text-caption font-semibold tracking-widest uppercase">
         Send the invite
       </h2>
       <Card className="divide-border mt-3 gap-0 divide-y overflow-hidden py-0">
@@ -261,12 +261,12 @@ function InviteCoachPage() {
       )}
 
       {pending ? (
-        <p className="text-muted-foreground mt-4 flex items-center gap-2 text-sm">
+        <p className="text-muted-foreground mt-4 flex items-center gap-2 text-body">
           <Spinner /> Preparing the invite…
         </p>
       ) : null}
 
-      <p className="text-muted-foreground mt-auto border-t pt-4 text-xs leading-5">
+      <p className="text-muted-foreground mt-auto border-t pt-4 text-caption leading-5">
         The link works once and expires in 7 days. You can resend it anytime.
       </p>
 
@@ -314,7 +314,7 @@ function InviteAction({
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="font-medium">{title}</ItemTitle>
-        <ItemDescription className="text-xs leading-4">{subtitle}</ItemDescription>
+        <ItemDescription className="text-caption leading-4">{subtitle}</ItemDescription>
       </ItemContent>
     </Item>
   )

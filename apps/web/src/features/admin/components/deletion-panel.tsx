@@ -43,10 +43,10 @@ export function WorkspaceDeletionPanel({
     <Section aria-labelledby="deletion-heading">
       <Card size="sm" className="border-destructive/40 bg-destructive/5 border shadow-none">
         <CardContent>
-          <h2 id="deletion-heading" className="text-base font-semibold">
+          <h2 id="deletion-heading" className="text-emphasis font-semibold">
             {headline.title}
           </h2>
-          <p className="text-muted-foreground mt-2 text-sm leading-5">{headline.description}</p>
+          <p className="text-muted-foreground mt-2 text-body leading-5">{headline.description}</p>
 
           <DeletionStageList stages={deletionStages(progress, advancing)} className="mt-5" />
 

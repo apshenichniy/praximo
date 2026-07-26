@@ -219,10 +219,12 @@ export function DayStrip({
                   : "border-border text-muted-foreground",
             )}
           >
-            <span className="text-xs font-semibold tracking-wide uppercase">
+            <span className="text-caption font-semibold tracking-wide uppercase">
               {weekdayFormat.format(day)}
             </span>
-            <span className="text-base font-semibold tabular-nums">{dayFormat.format(day)}</span>
+            <span className="text-emphasis font-semibold tabular-nums">
+              {dayFormat.format(day)}
+            </span>
             <span
               aria-hidden="true"
               className={cn(
@@ -240,7 +242,7 @@ export function DayStrip({
         className="border-border text-muted-foreground ease-out-strong flex w-16 flex-none flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-2 transition-[scale] duration-(--duration-press) active:scale-[0.97]"
       >
         <HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={2} />
-        <span className="text-xs font-semibold uppercase">{monthLabel}</span>
+        <span className="text-caption font-semibold uppercase">{monthLabel}</span>
       </button>
     </div>
   )

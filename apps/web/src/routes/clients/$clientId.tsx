@@ -151,7 +151,6 @@ function ClientRoute() {
           copy={copy}
           language={language}
           client={client}
-          onBack={() => router.history.back()}
           // Scheduling is a route of its own (#186), entered with the client
           // already answered. `from` is what sends the booked session back
           // here rather than to the sessions list.

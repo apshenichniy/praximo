@@ -91,10 +91,10 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
         />
       </ItemMedia>
       <ItemContent className="min-w-0 gap-0.5">
-        <ItemTitle className="block truncate text-[15px] font-semibold">
+        <ItemTitle className="block truncate text-body font-semibold">
           {displayName(coach.name)}
         </ItemTitle>
-        <ItemDescription className="flex min-w-0 items-center text-[13px] leading-[18px]">
+        <ItemDescription className="flex min-w-0 items-center text-footnote leading-[18px]">
           <span
             aria-hidden="true"
             className={cn("mr-[7px] size-1.5 shrink-0 rounded-full", dotClass[state.tone])}
@@ -112,7 +112,7 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
         // (#110). It is still the same link — the workspace screen owns the
         // pipeline, as it owns every other action on a coach — but the row says
         // what is waiting there rather than leaving it to a chevron.
-        <span className="border-destructive/40 text-destructive shrink-0 rounded-full border px-3 py-1 text-[13px] font-semibold">
+        <span className="border-destructive/40 text-destructive shrink-0 rounded-full border px-3 py-1 text-footnote font-semibold">
           Resume
         </span>
       ) : (
@@ -168,8 +168,8 @@ export function ViewerCoachCard({
           </span>
         </ItemMedia>
         <ItemContent className="min-w-0 gap-0.5">
-          <ItemTitle className="text-[15px] font-semibold">{action.title}</ItemTitle>
-          <ItemDescription className="text-[13px] leading-[18px]">
+          <ItemTitle className="text-body font-semibold">{action.title}</ItemTitle>
+          <ItemDescription className="text-footnote leading-[18px]">
             {action.subtitle}
           </ItemDescription>
         </ItemContent>

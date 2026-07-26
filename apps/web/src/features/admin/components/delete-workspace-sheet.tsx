@@ -129,7 +129,7 @@ function SheetHeader({
 }) {
   return (
     <DrawerHeader className="p-0 pt-2 text-left group-data-[swipe-axis=y]/drawer-popup:text-left">
-      <DrawerTitle className="text-lg font-semibold">{title}</DrawerTitle>
+      <DrawerTitle className="text-heading font-semibold">{title}</DrawerTitle>
       {description === undefined ? null : <DrawerDescription>{description}</DrawerDescription>}
     </DrawerHeader>
   )
@@ -149,7 +149,7 @@ function ConsequencesStep({
       <SheetHeader title={deletionTitle(workspace)} />
       <ul className="mt-4 flex flex-col gap-2.5">
         {deletionConsequences(workspace).map((consequence) => (
-          <li key={consequence} className="flex gap-2.5 text-sm leading-5">
+          <li key={consequence} className="flex gap-2.5 text-body leading-5">
             <span aria-hidden="true" className="text-destructive shrink-0">
               —
             </span>
@@ -161,7 +161,7 @@ function ConsequencesStep({
         <Button
           variant="secondary"
           size="lg"
-          className="h-13 w-full text-base font-semibold"
+          className="h-13 w-full text-emphasis font-semibold"
           onClick={onCancel}
         >
           Cancel
@@ -198,7 +198,7 @@ function ArmingStep({
         <Button
           size="lg"
           disabled={remaining > 0}
-          className="bg-destructive text-background hover:bg-destructive/90 h-13 w-full text-base font-semibold"
+          className="bg-destructive text-background hover:bg-destructive/90 h-13 w-full text-emphasis font-semibold"
           onClick={onConfirm}
         >
           {remaining > 0 ? `Yes, delete everything (${remaining})` : "Yes, delete everything"}
@@ -206,7 +206,7 @@ function ArmingStep({
         <Button
           variant="secondary"
           size="lg"
-          className="h-13 w-full text-base font-semibold"
+          className="h-13 w-full text-emphasis font-semibold"
           onClick={onKeep}
         >
           Keep workspace
@@ -301,7 +301,7 @@ function LightConfirm({
           variant="secondary"
           size="lg"
           disabled={advancing}
-          className="h-13 w-full text-base font-semibold"
+          className="h-13 w-full text-emphasis font-semibold"
           onClick={onCancel}
         >
           Cancel

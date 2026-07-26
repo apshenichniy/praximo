@@ -31,7 +31,7 @@ function Inline({ value }: { readonly value: LegalInline }) {
   // Left visible on purpose. These wait on the legal-entity decision, and a
   // silently blank contract clause is worse than one that says it is unfinished.
   return (
-    <mark className="bg-primary/15 text-primary rounded px-1 py-0.5 text-[13px] whitespace-nowrap">
+    <mark className="bg-primary/15 text-primary rounded px-1 py-0.5 text-footnote whitespace-nowrap">
       [{legalPlaceholders[value.placeholder]}]
     </mark>
   )
@@ -43,12 +43,12 @@ const inlines = (content: ReadonlyArray<LegalInline>): ReactNode =>
 function Block({ block }: { readonly block: LegalBlock }) {
   if (block.kind === "paragraph") {
     return (
-      <p className="text-muted-foreground mt-3 text-[15px] leading-6">{inlines(block.content)}</p>
+      <p className="text-muted-foreground mt-3 text-body leading-6">{inlines(block.content)}</p>
     )
   }
   if (block.kind === "list") {
     return (
-      <ul className="text-muted-foreground mt-3 list-disc space-y-2 pl-5 text-[15px] leading-6">
+      <ul className="text-muted-foreground mt-3 list-disc space-y-2 pl-5 text-body leading-6">
         {block.items.map((item, index) => (
           <li key={index}>{inlines(item)}</li>
         ))}
@@ -57,7 +57,7 @@ function Block({ block }: { readonly block: LegalBlock }) {
   }
   return (
     <div className="mt-4 overflow-x-auto">
-      <table className="w-full border-collapse text-left text-[13px]">
+      <table className="w-full border-collapse text-left text-footnote">
         <thead>
           <tr className="text-foreground">
             {block.head.map((cell) => (
@@ -98,14 +98,14 @@ export function LegalPage({
 }) {
   return (
     <main lang={locale} className="mx-auto w-full max-w-2xl px-5 pt-10 pb-16">
-      <h1 className="text-2xl font-semibold tracking-tight text-pretty">{document.title}</h1>
-      <p className="text-muted-foreground mt-2 font-mono text-xs">{version}</p>
+      <h1 className="text-title font-semibold tracking-tight text-pretty">{document.title}</h1>
+      <p className="text-muted-foreground mt-2 font-mono text-caption">{version}</p>
       {document.intro.map((block, index) => (
         <Block key={index} block={block} />
       ))}
       {document.sections.map((section) => (
         <section key={section.heading} className="mt-8">
-          <h2 className="text-base font-semibold tracking-tight">{section.heading}</h2>
+          <h2 className="text-emphasis font-semibold tracking-tight">{section.heading}</h2>
           {section.blocks.map((block, index) => (
             <Block key={index} block={block} />
           ))}

@@ -59,7 +59,7 @@ export function InviteEmailSheet({
     <Drawer open={open} showSwipeHandle onOpenChange={onOpenChange}>
       <DrawerContent className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <DrawerHeader className="p-0 pt-2 text-left group-data-[swipe-axis=y]/drawer-popup:text-left">
-          <DrawerTitle className="text-lg font-semibold">Send by email</DrawerTitle>
+          <DrawerTitle className="text-heading font-semibold">Send by email</DrawerTitle>
           <DrawerDescription>
             They&rsquo;ll get a link that opens the onboarding in Telegram.
           </DrawerDescription>

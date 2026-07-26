@@ -15,6 +15,35 @@
 }
 
 @theme {
+  /* Type scale (#186). Seven steps, named for the job rather than for a size,
+     and Tailwind's own scale is switched off so there is exactly one of them —
+     see docs/spec/mini-app.md §Typography.
+
+     The floor is 12px because the app had crowded eight sizes into the seven
+     pixels between 10 and 17, and the smallest of them was below the 11pt that
+     is Apple's own smallest style. Nunito Sans has neither the x-height nor the
+     optical sizing SF Pro brings to that kegel, so a native app's 11pt is not
+     our 11px; 12 is where this typeface starts being read rather than decoded.
+
+     Body is 15 rather than 14 for the same reason, and the line heights are
+     stated here so a screen does not have to remember them. */
+  --text-*: initial;
+
+  --text-caption: 0.75rem; /* 12px — labels, counts, state words */
+  --text-caption--line-height: 1rem;
+  --text-footnote: 0.8125rem; /* 13px — descriptions and leads */
+  --text-footnote--line-height: 1.125rem;
+  --text-body: 0.9375rem; /* 15px — running text, buttons, slots */
+  --text-body--line-height: 1.3125rem;
+  --text-emphasis: 1.0625rem; /* 17px — card titles, the line that matters */
+  --text-emphasis--line-height: 1.4375rem;
+  --text-heading: 1.25rem; /* 20px — dialog and section headings */
+  --text-heading--line-height: 1.625rem;
+  --text-title: 1.5rem; /* 24px — screen titles */
+  --text-title--line-height: 1.875rem;
+  --text-display: 1.875rem; /* 30px — the one number a screen is about */
+  --text-display--line-height: 2.125rem;
+
   /* Motion (#186). The built-in easings are too weak to read as deliberate:
      `ease-out` on a 200ms transition looks like nothing was eased at all. These
      are the two shapes the app needs — things arriving and leaving, and things

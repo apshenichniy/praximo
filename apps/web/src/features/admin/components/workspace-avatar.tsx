@@ -22,7 +22,7 @@ export function WorkspaceAvatar({
 }) {
   return (
     <Avatar className={cn("size-11", className)}>
-      <AvatarFallback className={cn("admin-avatar text-sm font-semibold", fallbackClassName)}>
+      <AvatarFallback className={cn("admin-avatar text-body font-semibold", fallbackClassName)}>
         {initials(name) || "?"}
       </AvatarFallback>
     </Avatar>

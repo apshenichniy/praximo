@@ -34,7 +34,7 @@ export function MainMiniAppScreen({
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
       <TelegramBackButton label={copy.common.back} />
 
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{copy.home.mainMiniAppTitle}</h1>
+      <h1 className="mt-2 text-title font-semibold tracking-tight">{copy.home.mainMiniAppTitle}</h1>
 
       {/*
         Four steps, because the row on Today promised four. A run-on sentence
@@ -44,24 +44,24 @@ export function MainMiniAppScreen({
       <ol className="mt-6 flex flex-col gap-3">
         {copy.home.mainMiniAppSteps.map((step, index) => (
           <li key={step} className="flex items-start gap-3">
-            <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums">
+            <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-caption font-semibold tabular-nums">
               {index + 1}
             </span>
-            <span className="text-[13px] leading-5">{step}</span>
+            <span className="text-footnote leading-5">{step}</span>
           </li>
         ))}
       </ol>
 
-      <p className="text-muted-foreground mt-6 text-sm leading-6">
+      <p className="text-muted-foreground mt-6 text-body leading-6">
         {copy.home.mainMiniAppLead}
         <span className="text-foreground">{copy.home.mainMiniAppOpen}</span>
         {copy.home.mainMiniAppTail}
       </p>
 
-      <p className="text-muted-foreground mt-8 px-1 text-xs font-semibold tracking-wide uppercase">
+      <p className="text-muted-foreground mt-8 px-1 text-caption font-semibold tracking-wide uppercase">
         {copy.home.mainMiniAppUrlLabel}
       </p>
-      <p className="border-border/60 bg-card text-foreground mt-2 overflow-x-auto rounded-xl border px-3 py-2 font-mono text-[12px] break-all">
+      <p className="border-border/60 bg-card text-foreground mt-2 overflow-x-auto rounded-xl border px-3 py-2 font-mono text-caption break-all">
         {mainMiniAppUrl}
       </p>
 

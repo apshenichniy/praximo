@@ -64,7 +64,7 @@ function AdminHome() {
       {onboarding.length === 0 ? null : (
         <Section className="mt-10" aria-labelledby="onboarding-heading">
           <SectionTitle id="onboarding-heading">Setting up</SectionTitle>
-          <p className="text-muted-foreground mt-2 px-1 text-sm">
+          <p className="text-muted-foreground mt-2 px-1 text-body">
             Invites and coaches who haven&rsquo;t finished onboarding.
           </p>
           <div className="mt-4">
