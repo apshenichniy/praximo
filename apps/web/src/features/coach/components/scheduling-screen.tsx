@@ -325,6 +325,29 @@ export function SchedulingScreen({
     () => new Intl.DateTimeFormat(localeTag(language), { month: "long" }),
     [language],
   )
+  /**
+   * The date where space is not ours to spend: the host's bottom button, whose
+   * width belongs to Telegram and which truncates without asking. «понедельник,
+   * 27 июля» plus a verb and a time overran it; «пн, 27 июл.» does not.
+   */
+  const shortDayFormat = useMemo(
+    () =>
+      new Intl.DateTimeFormat(localeTag(language), {
+        weekday: "short",
+        day: "numeric",
+        month: "short",
+      }),
+    [language],
+  )
+  /**
+   * The date beside the strip, which names the day *number* only: the weekday is
+   * already the top half of every box the coach is looking at, and repeating it
+   * in words squeezed the row against the «Month» control for nothing.
+   */
+  const dateFormat = useMemo(
+    () => new Intl.DateTimeFormat(localeTag(language), { day: "numeric", month: "long" }),
+    [language],
+  )
 
   const submit = useCallback(() => {
     if (startMinutes === undefined) return
@@ -357,7 +380,7 @@ export function SchedulingScreen({
   const label =
     startMinutes === undefined
       ? copy.pickTime
-      : `${copy.scheduleSubmit} · ${dayFormat.format(selectedDay)}, ${clock(startMinutes)}`
+      : `${copy.scheduleSubmit} · ${shortDayFormat.format(selectedDay)}, ${clock(startMinutes)}`
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-28">
@@ -431,8 +454,8 @@ export function SchedulingScreen({
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-semibold">
               {sameDay(selectedDay, today)
-                ? `${copy.today}, ${dayFormat.format(selectedDay)}`
-                : dayFormat.format(selectedDay)}
+                ? `${copy.today}, ${dateFormat.format(selectedDay)}`
+                : dateFormat.format(selectedDay)}
             </span>
             <Button size="sm" variant="outline" aria-expanded={monthOpen} onClick={toggleMonth}>
               {copy.monthLabel}
@@ -490,7 +513,9 @@ export function SchedulingScreen({
                   <Button size="sm" variant="outline" onClick={() => chooseMonthDay(today)}>
                     {copy.today}
                   </Button>
-                  <span className="text-muted-foreground text-xs">{dayFormat.format(today)}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {shortDayFormat.format(today)}
+                  </span>
                 </div>
               </div>
             </div>
