@@ -15,6 +15,7 @@ import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
 import { CoachClients } from "./coach-clients.ts"
 import { CoachSession } from "./coach-session.ts"
+import { CoachSessions } from "./coach-sessions.ts"
 import { CoachSurface } from "./coach-surface.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
@@ -96,6 +97,7 @@ const runtimeFromEnv = (env: Env) => {
     ViewerRole.layer,
     CoachSurface.layer.pipe(Layer.provide(CoachSession.layer)),
     CoachClients.layer.pipe(Layer.provide(CoachSession.layer)),
+    CoachSessions.layer.pipe(Layer.provide(CoachSession.layer)),
   ).pipe(Layer.provide(dependencies))
   return ManagedRuntime.make(
     Layer.provide(app, ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
@@ -259,6 +261,45 @@ export const resetCoachClientInvite = async (
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(CoachClients.Service, (service) => service.resetInvite(credential, clientId)),
+  )
+}
+
+export const resendCoachClientInvite = async (
+  credential: LaunchCredential,
+  clientId: string,
+): Promise<CoachClients.ResendOutcome> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.resendInvite(credential, clientId)),
+  )
+}
+
+/** The coach's day and their calendar (#61) — Today, the list, and one session. */
+export const loadCoachToday = async (
+  credential: LaunchCredential,
+): Promise<CoachSessions.TodayView> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachSessions.Service, (service) => service.today(credential)),
+  )
+}
+
+export const loadCoachUpcomingSessions = async (
+  credential: LaunchCredential,
+): Promise<CoachSessions.UpcomingSessions> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachSessions.Service, (service) => service.upcoming(credential)),
+  )
+}
+
+export const loadCoachSessionDetail = async (
+  credential: LaunchCredential,
+  sessionId: string,
+): Promise<CoachSessions.SessionDetail | undefined> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachSessions.Service, (service) => service.detail(credential, sessionId)),
   )
 }
 

@@ -12,11 +12,16 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as MainMiniAppRouteImport } from './routes/main-mini-app'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as ClientsIndexRouteImport } from './routes/clients/index'
 import { Route as ClientsClientIdRouteImport } from './routes/clients/$clientId'
 import { Route as ClientsNewRouteImport } from './routes/clients/new'
 import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as LegalTermsRouteImport } from './routes/legal/terms'
+import { Route as SessionsIndexRouteImport } from './routes/sessions/index'
+import { Route as SessionsSessionIdRouteImport } from './routes/sessions/$sessionId'
+import { Route as SessionsNewRouteImport } from './routes/sessions/new'
 import { Route as AdminWorkspacesWorkspaceIdRouteImport } from './routes/admin/workspaces/$workspaceId'
 import { Route as AdminWorkspacesNewRouteImport } from './routes/admin/workspaces/new'
 
@@ -35,10 +40,20 @@ const HealthRoute = HealthRouteImport.update({
   path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MainMiniAppRoute = MainMiniAppRouteImport.update({
+  id: '/main-mini-app',
+  path: '/main-mini-app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRouteRoute,
+} as any)
+const ClientsIndexRoute = ClientsIndexRouteImport.update({
+  id: '/clients/',
+  path: '/clients/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ClientsClientIdRoute = ClientsClientIdRouteImport.update({
   id: '/clients/$clientId',
@@ -60,6 +75,21 @@ const LegalTermsRoute = LegalTermsRouteImport.update({
   path: '/legal/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SessionsIndexRoute = SessionsIndexRouteImport.update({
+  id: '/sessions/',
+  path: '/sessions/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SessionsSessionIdRoute = SessionsSessionIdRouteImport.update({
+  id: '/sessions/$sessionId',
+  path: '/sessions/$sessionId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SessionsNewRoute = SessionsNewRouteImport.update({
+  id: '/sessions/new',
+  path: '/sessions/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminWorkspacesWorkspaceIdRoute =
   AdminWorkspacesWorkspaceIdRouteImport.update({
     id: '/workspaces/$workspaceId',
@@ -76,22 +106,32 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/health': typeof HealthRoute
+  '/main-mini-app': typeof MainMiniAppRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/new': typeof ClientsNewRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRoute
+  '/sessions/new': typeof SessionsNewRoute
   '/admin/': typeof AdminIndexRoute
+  '/clients/': typeof ClientsIndexRoute
+  '/sessions/': typeof SessionsIndexRoute
   '/admin/workspaces/$workspaceId': typeof AdminWorkspacesWorkspaceIdRoute
   '/admin/workspaces/new': typeof AdminWorkspacesNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
+  '/main-mini-app': typeof MainMiniAppRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/new': typeof ClientsNewRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRoute
+  '/sessions/new': typeof SessionsNewRoute
   '/admin': typeof AdminIndexRoute
+  '/clients': typeof ClientsIndexRoute
+  '/sessions': typeof SessionsIndexRoute
   '/admin/workspaces/$workspaceId': typeof AdminWorkspacesWorkspaceIdRoute
   '/admin/workspaces/new': typeof AdminWorkspacesNewRoute
 }
@@ -100,11 +140,16 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/health': typeof HealthRoute
+  '/main-mini-app': typeof MainMiniAppRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/new': typeof ClientsNewRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRoute
+  '/sessions/new': typeof SessionsNewRoute
   '/admin/': typeof AdminIndexRoute
+  '/clients/': typeof ClientsIndexRoute
+  '/sessions/': typeof SessionsIndexRoute
   '/admin/workspaces/$workspaceId': typeof AdminWorkspacesWorkspaceIdRoute
   '/admin/workspaces/new': typeof AdminWorkspacesNewRoute
 }
@@ -114,22 +159,32 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/health'
+    | '/main-mini-app'
     | '/clients/$clientId'
     | '/clients/new'
     | '/legal/privacy'
     | '/legal/terms'
+    | '/sessions/$sessionId'
+    | '/sessions/new'
     | '/admin/'
+    | '/clients/'
+    | '/sessions/'
     | '/admin/workspaces/$workspaceId'
     | '/admin/workspaces/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/health'
+    | '/main-mini-app'
     | '/clients/$clientId'
     | '/clients/new'
     | '/legal/privacy'
     | '/legal/terms'
+    | '/sessions/$sessionId'
+    | '/sessions/new'
     | '/admin'
+    | '/clients'
+    | '/sessions'
     | '/admin/workspaces/$workspaceId'
     | '/admin/workspaces/new'
   id:
@@ -137,11 +192,16 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/health'
+    | '/main-mini-app'
     | '/clients/$clientId'
     | '/clients/new'
     | '/legal/privacy'
     | '/legal/terms'
+    | '/sessions/$sessionId'
+    | '/sessions/new'
     | '/admin/'
+    | '/clients/'
+    | '/sessions/'
     | '/admin/workspaces/$workspaceId'
     | '/admin/workspaces/new'
   fileRoutesById: FileRoutesById
@@ -150,10 +210,15 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
   HealthRoute: typeof HealthRoute
+  MainMiniAppRoute: typeof MainMiniAppRoute
   ClientsClientIdRoute: typeof ClientsClientIdRoute
   ClientsNewRoute: typeof ClientsNewRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalTermsRoute: typeof LegalTermsRoute
+  SessionsSessionIdRoute: typeof SessionsSessionIdRoute
+  SessionsNewRoute: typeof SessionsNewRoute
+  ClientsIndexRoute: typeof ClientsIndexRoute
+  SessionsIndexRoute: typeof SessionsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -179,12 +244,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/main-mini-app': {
+      id: '/main-mini-app'
+      path: '/main-mini-app'
+      fullPath: '/main-mini-app'
+      preLoaderRoute: typeof MainMiniAppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/clients/': {
+      id: '/clients/'
+      path: '/clients'
+      fullPath: '/clients/'
+      preLoaderRoute: typeof ClientsIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/clients/$clientId': {
       id: '/clients/$clientId'
@@ -212,6 +291,27 @@ declare module '@tanstack/react-router' {
       path: '/legal/terms'
       fullPath: '/legal/terms'
       preLoaderRoute: typeof LegalTermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sessions/': {
+      id: '/sessions/'
+      path: '/sessions'
+      fullPath: '/sessions/'
+      preLoaderRoute: typeof SessionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sessions/$sessionId': {
+      id: '/sessions/$sessionId'
+      path: '/sessions/$sessionId'
+      fullPath: '/sessions/$sessionId'
+      preLoaderRoute: typeof SessionsSessionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sessions/new': {
+      id: '/sessions/new'
+      path: '/sessions/new'
+      fullPath: '/sessions/new'
+      preLoaderRoute: typeof SessionsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/workspaces/$workspaceId': {
@@ -251,10 +351,15 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRouteRoute: AdminRouteRouteWithChildren,
   HealthRoute: HealthRoute,
+  MainMiniAppRoute: MainMiniAppRoute,
   ClientsClientIdRoute: ClientsClientIdRoute,
   ClientsNewRoute: ClientsNewRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalTermsRoute: LegalTermsRoute,
+  SessionsSessionIdRoute: SessionsSessionIdRoute,
+  SessionsNewRoute: SessionsNewRoute,
+  ClientsIndexRoute: ClientsIndexRoute,
+  SessionsIndexRoute: SessionsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

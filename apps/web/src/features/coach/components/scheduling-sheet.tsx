@@ -76,6 +76,7 @@ export function SchedulingSheet({
   language,
   clientName,
   firstSession,
+  bookedDates,
   schedule,
   onDateChange,
   onSubmit,
@@ -89,6 +90,16 @@ export function SchedulingSheet({
   readonly clientName: string
   /** Pre-selects `intake`: a client's first session usually is one, but never must be. */
   readonly firstSession: boolean
+  /**
+   * `YYYY-MM-DD` for every day that already carries a session **with this
+   * client** — a dot on the month (#61).
+   *
+   * A coach booking a month ahead is placing a *rhythm* — every Monday, every
+   * second Thursday — and the dot is what makes that rhythm visible while it is
+   * being placed. It is also what stops the classic double booking of one
+   * Tuesday. Free from a read both entrances already make.
+   */
+  readonly bookedDates: ReadonlyArray<string>
   /** The day being looked at, loaded by the screen when the date changes. */
   readonly schedule: DayScheduleData | undefined
   /** The screen owns the fetch, so a new day has to travel back out. */
@@ -110,6 +121,7 @@ export function SchedulingSheet({
   const groupRefs = useRef(new Map<PartOfDay, HTMLDivElement>())
 
   const date = calendarDate(selectedDay)
+  const booked = useMemo(() => new Set(bookedDates), [bookedDates])
 
   /**
    * The default follows the kind — intake 30, regular 60 — and stops following
@@ -265,6 +277,14 @@ export function SchedulingSheet({
                   onSelect={chooseDay}
                   disabled={{ before: today }}
                   startMonth={today}
+                  // A day this client already has a session on, marked rather
+                  // than blocked: two sessions on one day is a legitimate thing
+                  // to book, and the dot is there so it is never an accident.
+                  modifiers={{ booked: (day) => booked.has(calendarDate(day)) }}
+                  modifiersClassNames={{
+                    booked:
+                      "after:bg-primary after:absolute after:bottom-1 after:left-1/2 after:size-1 after:-translate-x-1/2 after:rounded-full after:content-['']",
+                  }}
                   // Weekday and month names in the coach's language, like every
                   // other word on the screen — and the picker's own aria labels
                   // with them. A bare `{ code }` is not a locale and left all

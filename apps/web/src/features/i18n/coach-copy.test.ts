@@ -35,9 +35,39 @@ describe("coach copy", () => {
   it("carries no empty strings — the trilingual bot catalogue shipped unread once already", () => {
     for (const locale of locales) {
       for (const [path, value] of leaves(coachCatalog[locale])) {
-        expect(typeof value === "string" && value.trim().length > 0, `${locale}.${path}`).toBe(true)
+        // A **function** leaf is a legitimate shape here and always has been on
+        // the client side: it is how a count reaches the sentence it agrees
+        // with. `fillGaps` passes one through untouched — what it returns is
+        // beyond that walk's reach, which is what the plural test below covers.
+        const filled =
+          typeof value === "function" || (typeof value === "string" && value.trim().length > 0)
+        expect(filled, `${locale}.${path}`).toBe(true)
       }
     }
+  })
+
+  /**
+   * The first screen in the product that counts anything (#61), and the reason
+   * `plural()` exists: `en` distinguishes two forms and `uk` / `ru` three, and
+   * 21 goes back to the singular — which is exactly the mistake hand-written
+   * pluralisation makes.
+   */
+  it("pluralises today's session count in all three languages", () => {
+    expect(coachCatalog.en.today.sessionsToday(0)).toBe("No sessions today")
+    expect(coachCatalog.en.today.sessionsToday(1)).toBe("1 session today")
+    expect(coachCatalog.en.today.sessionsToday(2)).toBe("2 sessions today")
+
+    expect(coachCatalog.uk.today.sessionsToday(0)).toBe("Сьогодні сесій немає")
+    expect(coachCatalog.uk.today.sessionsToday(1)).toBe("Сьогодні 1 сесія")
+    expect(coachCatalog.uk.today.sessionsToday(2)).toBe("Сьогодні 2 сесії")
+    expect(coachCatalog.uk.today.sessionsToday(5)).toBe("Сьогодні 5 сесій")
+    expect(coachCatalog.uk.today.sessionsToday(21)).toBe("Сьогодні 21 сесія")
+
+    expect(coachCatalog.ru.today.sessionsToday(0)).toBe("Сегодня сессий нет")
+    expect(coachCatalog.ru.today.sessionsToday(1)).toBe("Сегодня 1 сессия")
+    expect(coachCatalog.ru.today.sessionsToday(3)).toBe("Сегодня 3 сессии")
+    expect(coachCatalog.ru.today.sessionsToday(11)).toBe("Сегодня 11 сессий")
+    expect(coachCatalog.ru.today.sessionsToday(21)).toBe("Сегодня 21 сессия")
   })
 
   it("is actually translated: no locale reuses the English sentence", () => {
@@ -49,6 +79,10 @@ describe("coach copy", () => {
       expect(coachCatalog[locale].home.relinkTitle).not.toBe(coachCatalog.en.home.relinkTitle)
       expect(coachCatalog[locale].clients.listTitle).not.toBe(coachCatalog.en.clients.listTitle)
       expect(coachCatalog[locale].clients.deleteBody).not.toBe(coachCatalog.en.clients.deleteBody)
+      expect(coachCatalog[locale].today.attentionTitle).not.toBe(
+        coachCatalog.en.today.attentionTitle,
+      )
+      expect(coachCatalog[locale].sessions.listTitle).not.toBe(coachCatalog.en.sessions.listTitle)
       for (const [index, point] of coachCatalog[locale].terms.points.entries()) {
         expect(point).not.toBe(coachCatalog.en.terms.points[index])
       }

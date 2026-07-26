@@ -18,6 +18,7 @@ import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
+import { localParts } from "@/lib/coach-calendar.ts"
 import { acceptOnce } from "@/routes/index.tsx"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
 import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
@@ -165,7 +166,7 @@ function ClientRoute() {
         const result = await deleteClient({ data: { clientId: client.id } })
         if (result.ok && result.deleted) {
           await router.invalidate()
-          await navigate({ to: "/" })
+          await navigate({ to: "/clients" })
           return
         }
         setError(copy.common.failed)
@@ -231,7 +232,7 @@ function ClientRoute() {
           copy={copy}
           language={language}
           client={client}
-          onBack={() => void navigate({ to: "/" })}
+          onBack={() => router.history.back()}
           onSchedule={() => {
             setError(undefined)
             setDate(calendarDate(new Date()))
@@ -250,6 +251,9 @@ function ClientRoute() {
           language={language}
           clientName={client.name}
           firstSession={client.sessions.length === 0}
+          bookedDates={client.sessions.map(
+            (session) => localParts(new Date(session.scheduledAt), client.timezone).date,
+          )}
           schedule={day}
           onDateChange={setDate}
           onSubmit={schedule}

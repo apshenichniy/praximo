@@ -9,6 +9,7 @@ import {
   loadCoachDaySchedule,
   prepareCoachInviteCard,
   removeCoachClient,
+  resendCoachClientInvite,
   resetCoachClientInvite,
   saveCoachTimezone,
   scheduleCoachSession,
@@ -184,6 +185,30 @@ export const resetInvite = createServerFn({ method: "POST" })
     if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
     try {
       return { ok: true, client: await resetCoachClientInvite(context.credential, data.clientId) }
+    } catch (error) {
+      return { ok: false, error: transportError(error) }
+    }
+  })
+
+export type ResendInviteResult =
+  | { readonly ok: true; readonly outcome: CoachClients.ResendOutcome }
+  | { readonly ok: false; readonly error: CoachClientsTransportError }
+
+/**
+ * Recovery behind the resend action (#61): the invitation to send again, minted
+ * fresh only when the one on file has lapsed.
+ *
+ * A `POST` like every other client operation and authenticated the same way —
+ * whether a fresh link is needed is decided server-side from the invitation's
+ * own state, never from what the screen believed when it drew the button.
+ */
+export const resendInvite = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator(clientIdOf)
+  .handler(async ({ context, data }): Promise<ResendInviteResult> => {
+    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
+    try {
+      return { ok: true, outcome: await resendCoachClientInvite(context.credential, data.clientId) }
     } catch (error) {
       return { ok: false, error: transportError(error) }
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { instantOf, localParts } from "./coach-clients.ts"
+import { instantOf, localParts } from "@/lib/coach-calendar.ts"
 
 /**
  * The two conversions every scheduled session passes through, and the one place

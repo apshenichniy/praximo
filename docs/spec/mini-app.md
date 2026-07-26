@@ -58,24 +58,26 @@ acceptance itself is refused until it lands. Authentication mechanics are in
 [client-onboarding-auth.md](client-onboarding-auth.md) §Coach authentication and
 [ADR 0006](../adr/0006-coach-authentication-in-mvp.md).
 
-Until the Today dashboard ships, acceptance lands on the **client list**
-([#56](https://github.com/apshenichniy/praximo/issues/56)) — deliberately not the manager
-Mini App's onboarding companion, which lives under a different credential and answers a
-different question. That home is, top to bottom: the re-link banner while the coach's bot is
-down, the clients with «New client» as the list's own first row, and the optional @BotFather
-hint last, under no heading of its own. The host's bottom button stays **empty** there: §Home
-screen below has already promised it to «New session», and teaching a coach a control only to
-move it is worse than not teaching it.
+Acceptance lands on **Today** ([#61](https://github.com/apshenichniy/praximo/issues/61)) —
+deliberately not the manager Mini App's onboarding companion, which lives under a different
+credential and answers a different question. Between #56 and #61 that landing was the client
+list, which Today displaces; the list now has a route of its own at `/clients`.
 
 ## Navigation model
 
 Hub-and-spoke, no tab bar. One home dashboard; every other screen is a
 drill-in with a back affordance. Screen inventory:
 
-- **Home ("Today")** — the dashboard, described below.
-- **Sessions list** — upcoming + past, flat, grouped by day.
-- **Session detail** — client, time, lifecycle actions, artifact list.
-- **Clients list** — all clients with invite status.
+- **Home ("Today")** — the dashboard, described below. Route `/`.
+- **Sessions list** — upcoming + past, flat, grouped by day. Route `/sessions`. Grouping
+  shipped with the list ([#61](https://github.com/apshenichniy/praximo/issues/61)) rather than
+  after it: three to five sessions a day appear in the first week, and adding grouping to a
+  flat list afterwards means rewriting it. **Past is not there yet** — no session can be
+  `completed` before #42, so #62 brings history with the rest of the session screen.
+- **Session detail** — client, time, lifecycle actions, artifact list. Route
+  `/sessions/$sessionId`. #61 ships it as a deliberate **stub** — the facts and no actions — so
+  the list rows and Today's cards lead somewhere complete-looking; #62 is the named creditor.
+- **Clients list** — all clients with invite status. Route `/clients`.
 - **Client detail** — profile (channel, language, consent), invite banner,
   session history.
 - **Artifact reader** — full-screen render of one artifact version.
@@ -88,20 +90,56 @@ drill-in with a back affordance. Screen inventory:
 
 ## Home screen, top to bottom
 
-1. **Greeting** with today's session count.
-2. **Next-session hero card**: client, kind, time, countdown; a "Brief ready —
-   read before the session" chip when the Brief is `ready` (opens the reader),
-   or a "Brief is being prepared" note while `generating`; the join button when
-   the join window is open (T−15m per
-   [web-room-sessions.md](web-room-sessions.md)), otherwise a "Session
-   details" link.
-3. **Needs attention**: artifact generation failures and pending invites, each
-   row deep-linking to the relevant session or client. Empty section is hidden.
-4. **Fresh artifacts feed**: latest post-session artifacts (Debrief / Mentor
-   Review), newest first, each opening the reader.
-5. **Bottom actions**: primary full-width **New session**; below it two
-   secondary buttons — **All sessions** and **Clients**. Creation is the
-   dominant affordance; navigation is secondary.
+Amended by [#61](https://github.com/apshenichniy/praximo/issues/61), which built it. Two
+changes, both the owner's call over the shape sketched here:
+
+- **A set of cards for the day, not a hero plus a folded-away line.** A set of cards is what a
+  person expects from a day and reads without instruction; «and 3 more» on a four-row
+  dashboard is economy for its own sake. A solo coach rarely has more than five sessions in a
+  day, so all of them are shown, unclipped.
+- **Needs attention carries invitations only, and only the urgent ones** — expiring within two
+  days, or already lapsed. *Every* pending invitation would make this the biggest section on a
+  fresh practice and a duplicate of the clients list wearing the word «attention»: a coach who
+  has just invited five people would be looking at a list of problems.
+
+Ordered by how often each thing is needed:
+
+1. **Re-link banner** while the coach's bot is down
+   ([#55](https://github.com/apshenichniy/praximo/issues/55)) — first, destructive-toned,
+   never dismissible.
+2. **Greeting**: the coach's name and one factual line — «Two sessions today» / «No sessions
+   today». No time-of-day greeting, and no greeting *word*: it would want the vocative in
+   Ukrainian and no column holds a declined form. The zero is spoken, because silence about it
+   reads as a screen that failed to load.
+3. **Today's sessions as cards**, grouped by time, each one tapping through to the session
+   screen. A session whose client never accepted carries the state word, its consequence —
+   «Invitation not accepted — N cannot get a link yet» — and the action that fixes it, in
+   amber. Red belongs to the bot being down.
+4. **Needs attention**, as amended above. Hidden when empty.
+5. **Bottom navigation**: two quiet buttons — **All sessions** and **Clients**. They are
+   navigation, not action.
+6. **Main Mini App hint**, last: one row reading as its payoff — «Add an Open button to your
+   chat list · Optional · 4 steps in @BotFather» — opening a screen that carries the steps, the
+   per-bot address and **Hide**. Today itself carries no dismiss control: a row a coach can put
+   away from the dashboard is a row they put away without reading, and `has_main_web_app`
+   already dismisses it for everybody who did the steps.
+
+The host's bottom button is **New session** — on an empty practice it reads **New client**
+instead, because New session there opens a client picker with nothing in it.
+
+**On an empty practice Today shows a three-step checklist** instead of three ways of looking
+at nothing: *Your bot is live* (already ticked — the coach finished it a minute ago, and a
+checklist that opens at zero reads as work waiting rather than work done), *Add your first
+client*, *Schedule the intake*. It disappears entirely once a client exists rather than
+becoming a list of ticks.
+
+Three of the blocks this section originally listed are **absent rather than present-and-empty**
+until the tickets that fill them ship: the fresh-artifacts feed and artifact generation
+failures ([#44](https://github.com/apshenichniy/praximo/issues/44)), and the join button
+([#42](https://github.com/apshenichniy/praximo/issues/42)). A section that exists and is always
+empty promises something the coach then hunts for; a greyed-out Join is a promise we cannot
+keep for two more tickets. When they ship, they take their places above: the feed after needs
+attention, the join button on the session card whose window is open.
 
 ## Artifacts relative to bot messages
 

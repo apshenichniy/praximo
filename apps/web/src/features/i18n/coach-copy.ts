@@ -4,6 +4,8 @@ import { clients, type ClientsCopy } from "@/features/i18n/coach-copy/clients.ts
 import { common, type CommonCopy } from "@/features/i18n/coach-copy/common.ts"
 import { entry, type EntryCopy } from "@/features/i18n/coach-copy/entry.ts"
 import { home, type HomeCopy } from "@/features/i18n/coach-copy/home.ts"
+import { sessions, type SessionsCopy } from "@/features/i18n/coach-copy/sessions.ts"
+import { today, type TodayCopy } from "@/features/i18n/coach-copy/today.ts"
 import {
   language,
   type LanguageCopy,
@@ -40,7 +42,9 @@ export interface CoachCopy {
   readonly language: LanguageCopy
   readonly terms: TermsCopy
   readonly home: HomeCopy
+  readonly today: TodayCopy
   readonly clients: ClientsCopy
+  readonly sessions: SessionsCopy
 }
 
 export { languageNames, MissingTranslation }
@@ -54,7 +58,9 @@ const compose = (locale: CoachLanguage): CoachCopy => ({
   language: language[locale],
   terms: terms[locale],
   home: home[locale],
+  today: today[locale],
   clients: clients[locale],
+  sessions: sessions[locale],
 })
 
 /**

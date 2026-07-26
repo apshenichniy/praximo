@@ -152,27 +152,45 @@ export function ClientScreen({
             )}
           </p>
 
-          <div className="mt-4">
-            <InviteLinkPanel
-              link={client.invite.url}
-              ariaLabel={copy.clients.linkLabel}
-              controller={copyLink}
-            />
-          </div>
+          {/*
+            An expired invitation offers **one** control, and it is recovery
+            (#61): the link on file opens nothing, so showing it beside «Send a
+            card» would be a dead end wearing the shape of an action. #56 named
+            this case and left it unbuilt — the sentence above told the coach to
+            issue a fresh link and nothing here did it.
 
-          <div className="mt-4 flex flex-col gap-2">
-            <Button className="w-full" onClick={onShare} disabled={pending}>
-              {copy.clients.sendCard}
+            Amber rather than the danger zone's red: there is nothing live left
+            to destroy, and Reset's framing would be a lie about what this does.
+          */}
+          {client.state === "expired" ? (
+            <Button className="mt-4 w-full" onClick={onResetInvite} disabled={pending}>
+              {copy.clients.reissueAction}
             </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => void copyMessage.copy()}
-              disabled={pending}
-            >
-              {copyMessage.copied ? copy.clients.copied : copy.clients.copyInvite}
-            </Button>
-          </div>
+          ) : (
+            <>
+              <div className="mt-4">
+                <InviteLinkPanel
+                  link={client.invite.url}
+                  ariaLabel={copy.clients.linkLabel}
+                  controller={copyLink}
+                />
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2">
+                <Button className="w-full" onClick={onShare} disabled={pending}>
+                  {copy.clients.sendCard}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => void copyMessage.copy()}
+                  disabled={pending}
+                >
+                  {copyMessage.copied ? copy.clients.copied : copy.clients.copyInvite}
+                </Button>
+              </div>
+            </>
+          )}
         </Section>
       )}
 
@@ -261,7 +279,13 @@ export function ClientScreen({
       </Section>
 
       <DangerZone title={copy.clients.dangerTitle}>
-        {client.state === "accepted" ? null : (
+        {/*
+          Reset is destructive because it kills a link the client is still
+          holding — so it is offered only while there *is* one. Once the
+          invitation has lapsed the same write is recovery, and it lives on the
+          card above under its own name (#61).
+        */}
+        {client.state !== "invited" ? null : (
           <DangerCard
             title={copy.clients.resetTitle}
             description={copy.clients.resetBody}

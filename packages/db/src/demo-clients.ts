@@ -162,6 +162,16 @@ export const demoClients: ReadonlyArray<DemoClient> = [
     },
     sessions: [
       {
+        // Today, and undeliverable: this is the card #61 spends its amber on —
+        // the state word plus its consequence plus the action that fixes it. It
+        // has to be on *today's* calendar or the dashboard never shows it.
+        id: "demo_session_sofia_today",
+        startsInMinutes: 3 * Hour,
+        durationMinutes: 60,
+        kind: "regular",
+        state: "scheduled",
+      },
+      {
         id: "demo_session_sofia_first",
         startsInMinutes: 4 * Day + 2 * Hour,
         durationMinutes: 90,

@@ -21,7 +21,6 @@ export interface ClientsCopy {
   readonly invitedPrefix: string
   readonly expiresPrefix: string
   readonly acceptedPrefix: string
-  readonly hideHint: string
 
   readonly newTitle: string
   readonly nameLabel: string
@@ -49,6 +48,12 @@ export interface ClientsCopy {
   readonly copied: string
   readonly linkLabel: string
   readonly reissueLead: string
+  /**
+   * Recovery, not reset (#61). It sits on the invitation card itself once the
+   * link is dead, in the ordinary tone — there is nothing live left to destroy,
+   * so the danger zone's framing would be a lie about what the tap does.
+   */
+  readonly reissueAction: string
 
   readonly sessionsTitle: string
   readonly scheduleAction: string
@@ -114,7 +119,6 @@ const en: ClientsCopy = {
   invitedPrefix: "invited ",
   expiresPrefix: "expires ",
   acceptedPrefix: "joined ",
-  hideHint: "Hide this",
 
   newTitle: "New client",
   nameLabel: "Name",
@@ -133,6 +137,7 @@ const en: ClientsCopy = {
   copied: "Copied",
   linkLabel: "Invitation link",
   reissueLead: "This link is no longer valid. Issue a fresh one to invite them again.",
+  reissueAction: "Issue a fresh link",
 
   sessionsTitle: "Sessions",
   scheduleAction: "Schedule a session",
@@ -198,7 +203,6 @@ const uk: ClientsCopy = {
   invitedPrefix: "запрошено ",
   expiresPrefix: "діє до ",
   acceptedPrefix: "приєднався ",
-  hideHint: "Сховати",
 
   newTitle: "Новий клієнт",
   nameLabel: "Ім'я",
@@ -218,6 +222,7 @@ const uk: ClientsCopy = {
   copied: "Скопійовано",
   linkLabel: "Посилання-запрошення",
   reissueLead: "Це посилання більше не діє. Випустіть нове, щоб запросити ще раз.",
+  reissueAction: "Випустити нове посилання",
 
   sessionsTitle: "Сесії",
   scheduleAction: "Запланувати сесію",
@@ -283,7 +288,6 @@ const ru: ClientsCopy = {
   invitedPrefix: "приглашён ",
   expiresPrefix: "действует до ",
   acceptedPrefix: "присоединился ",
-  hideHint: "Скрыть",
 
   newTitle: "Новый клиент",
   nameLabel: "Имя",
@@ -303,6 +307,7 @@ const ru: ClientsCopy = {
   copied: "Скопировано",
   linkLabel: "Ссылка-приглашение",
   reissueLead: "Эта ссылка больше не действует. Выпустите новую, чтобы пригласить ещё раз.",
+  reissueAction: "Выпустить новую ссылку",
 
   sessionsTitle: "Сессии",
   scheduleAction: "Запланировать сессию",
