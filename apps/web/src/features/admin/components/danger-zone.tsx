@@ -1,42 +1,16 @@
-import type { ReactNode } from "react"
-
 import { Button } from "@/components/ui/button.tsx"
-import { Card, CardContent } from "@/components/ui/card.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
 import type { DeletionHeadline } from "@/features/admin/workspace-deletion.ts"
+import { DangerCard } from "@/features/mini-app/components/danger-zone.tsx"
 
-/** The one place on the details screen where an action cannot be taken back. */
-export function DangerZone({ children }: { readonly children: ReactNode }) {
-  return (
-    <Section aria-labelledby="danger-zone-heading">
-      <SectionTitle id="danger-zone-heading" className="text-destructive">
-        Danger zone
-      </SectionTitle>
-      <div className="mt-4 flex flex-col gap-4">{children}</div>
-    </Section>
-  )
-}
-
-function DangerCard({
-  title,
-  description,
-  action,
-}: {
-  readonly title: string
-  readonly description: ReactNode
-  readonly action: ReactNode
-}) {
-  return (
-    <Card size="sm" className="border-destructive/40 bg-destructive/5 border shadow-none">
-      <CardContent>
-        <p className="text-base font-semibold">{title}</p>
-        <p className="text-muted-foreground mt-2 text-sm leading-5">{description}</p>
-        {action}
-      </CardContent>
-    </Card>
-  )
-}
+/**
+ * The admin surface's two irreversible actions.
+ *
+ * `DangerZone` and `DangerCard` themselves are Mini App primitives (#167) — the
+ * section and the card are layout, and the coach surface is about to grow a
+ * danger zone of its own. What stays here is the pair of cards that carry admin
+ * copy and admin types.
+ */
 
 /**
  * Reset in one confirmed gesture (#107): the old code is cancelled and a fresh

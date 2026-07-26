@@ -1,5 +1,12 @@
-// Admin copy is English-only (admin-surface.md), so formatters are pinned to
-// English locales instead of following the device locale.
+import { formatters } from "@praximo/i18n"
+
+import type { TimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
+
+// Admin copy is English-only (admin-surface.md), so this surface pins the shared
+// locale formatters to English instead of following the device or the member.
+// The formatters themselves became a parameter of the language in #167 — what
+// stays here is the choice of language, and the English words around them.
+const english = formatters("en")
 
 export const initials = (name: string): string =>
   name
@@ -9,48 +16,29 @@ export const initials = (name: string): string =>
     .map((part) => part[0]?.toUpperCase())
     .join("")
 
-const absoluteFormat = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-})
-
 export const formatTimestamp = (value: string | undefined, empty: string): string =>
-  value === undefined ? empty : absoluteFormat.format(new Date(value))
-
-const dateFormat = new Intl.DateTimeFormat("en-GB", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-})
+  value === undefined ? empty : english.timestamp(value)
 
 /** The day alone, for a value whose time of day carries no meaning. */
 export const formatDate = (value: string | undefined, empty: string): string =>
-  value === undefined ? empty : dateFormat.format(new Date(value))
+  value === undefined ? empty : english.date(value)
 
-const relativeFormat = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
+/**
+ * "2 days ago" — falls back to "just now" under a minute.
+ *
+ * The shared formatter declines to answer below a minute rather than inventing a
+ * word for it: "just now" is copy, and this surface's copy is English.
+ */
+export const formatRelativeTime = (value: string): string => english.relative(value) ?? "just now"
 
-const relativeSteps: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
-  ["year", 365 * 24 * 60 * 60],
-  ["month", 30 * 24 * 60 * 60],
-  ["week", 7 * 24 * 60 * 60],
-  ["day", 24 * 60 * 60],
-  ["hour", 60 * 60],
-  ["minute", 60],
-]
-
-/** "2 days ago" — falls back to "just now" under a minute. */
-export const formatRelativeTime = (value: string): string => {
-  const seconds = (Date.now() - new Date(value).getTime()) / 1000
-  for (const [unit, size] of relativeSteps) {
-    if (Math.abs(seconds) >= size) {
-      return relativeFormat.format(Math.round(-seconds / size), unit)
-    }
-  }
-  return "just now"
+/**
+ * What `TimestampValue` writes on an admin screen. One value, provided once at
+ * the top of the details route, rather than a prop threaded through seven call
+ * sites.
+ */
+export const adminTimestampFormat: TimestampFormat = {
+  relative: formatRelativeTime,
+  absolute: (value) => formatTimestamp(value, ""),
 }
 
 const MinuteMs = 60 * 1_000
@@ -62,6 +50,10 @@ const DayMs = 24 * HourMs
  * more than a day remains, hours below that, and a plain "expires today" in the
  * last hour, where a minute count would read as false precision. Only ever
  * shown for a `pending` invite: an accepted claim has no expiry (#112).
+ *
+ * English sentences rather than formatting, so this stays admin's own and does
+ * not move to `@praximo/i18n` (#167). The coach surface's countdown is its own
+ * copy, in the coach's language.
  */
 export const formatExpiresIn = (value: string): string => {
   const remaining = new Date(value).getTime() - Date.now()

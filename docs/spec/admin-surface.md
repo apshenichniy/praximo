@@ -180,6 +180,16 @@ workspaces. **Demo bot tokens are always absent** — a fixture may carry
 `connected`, because the list has to show active coaches, but none of them can
 reach Telegram. Every fixture is removable through the admin UI.
 
+### `bun db:demo` — clients and sessions for the coach surface
+
+A **second command, not a flag on `db:reset`** ([#167](https://github.com/apshenichniy/praximo/issues/167)). It seeds clients, client invitations and sessions into a workspace that already exists, and touches neither the schema, the workspace, nor its bot connection. Two reasons it stays separate: `db:reset` drops and recreates the `public` schema, taking the coach's bot with it — so every UI iteration would end in re-provisioning a bot through @BotFather — and if demo clients were seeded by a reset, the state "a brand-new coach with an empty practice", the first screen a real human sees, would stop being reachable.
+
+The target is the single `connected` workspace; with more than one it refuses and lists them, and `--bot <username|id>` chooses. `--clear` removes only what the command wrote, identified by a `demo_` id prefix — cheap, needs no schema change, and cannot mistake a real client for a seeded one. A re-run clears first, so timestamps refresh rather than collide.
+
+The fixture set is the state matrix the coach surface is built to render, and **none of these states can be produced by hand**: "invitation expires in two days" would take a six-day wait, "expired" eight, "session in 40 minutes" would take sitting at the screen at the right moment. It carries a client with a session ~40 minutes out; one with three sessions across three different days; a pending invitation two days from expiry; an expired invitation; a client with a pending invitation *and* a scheduled session; and an accepted client with nothing scheduled. Names inside the fixtures are human and span Latin and Cyrillic — half the decisions about truncation and line wrapping are only visible on real names in three alphabets.
+
+For the Mini App this is enough on its own: a launch is verified against the bot id and the Ed25519 signature ([ADR 0006](../adr/0006-coach-authentication-in-mvp.md)) and the bot token plays no part. A live bot is needed only for the acceptance conversation.
+
 ## Explicitly out of MVP
 
 - **Block/unblock as a suspend-without-delete state** and any richer stop-working semantics — post-MVP.

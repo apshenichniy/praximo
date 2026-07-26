@@ -1,0 +1,27 @@
+/**
+ * The i18n **mechanism**, shared by every Worker that speaks to a human.
+ *
+ * Catalogues stay where they are consumed — the coach Mini App's words in
+ * `apps/web`, the coach-facing bot's in `apps/bot` — because a catalogue is
+ * owned by the surface that says it. What is shared is everything around them:
+ * how a gap is filled, how a count agrees with its noun, how a moment is written
+ * in a given language, and how a text is versioned from its own content.
+ *
+ * There is deliberately **no i18n library** underneath. Extracting strings into
+ * `.po` / `.json` is what i18next and Lingui are for, and there is nobody to
+ * extract them for: the strings are written by the owner and by agents, in this
+ * repository. What the mechanism has instead is what a library cannot give
+ * without codegen — a typed catalogue interface, so a key missing from one
+ * locale fails the build.
+ */
+export { contentDigest } from "./digest.ts"
+export {
+  type CatalogueConfig,
+  fillGaps,
+  type FillGapsOptions,
+  makeCatalogue,
+  MissingTranslation,
+} from "./gaps.ts"
+export { formatters, type LocaleFormatters } from "./formatting.ts"
+export { localeTag } from "./locale-tag.ts"
+export { plural, type PluralForms } from "./plural.ts"

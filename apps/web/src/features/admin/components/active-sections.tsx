@@ -3,8 +3,8 @@ import {
   DetailRow,
   PlaceholderValue,
   TimestampValue,
-} from "@/features/admin/components/detail-card.tsx"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
+} from "@/features/mini-app/components/detail-card.tsx"
+import { Section, SectionTitle } from "@/features/mini-app/components/section.tsx"
 import { StatusBadge } from "@/features/admin/components/status-badge.tsx"
 import { languageLabel } from "@/features/admin/formatting.ts"
 import type { WorkspaceDetail } from "@/features/admin/workspace-detail.ts"

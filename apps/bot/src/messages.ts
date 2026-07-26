@@ -1,4 +1,5 @@
 import { type CoachLanguage, DefaultCoachLanguage, narrowCoachLanguage } from "@praximo/domain"
+import { makeCatalogue } from "@praximo/i18n"
 
 /**
  * Every coach-facing line the manager bot and a not-yet-installed coach bot can
@@ -306,11 +307,33 @@ const ru: Copy = {
   promptReconnected: (username) => `✅ <b>@${username}</b> снова подключён и работает.`,
 }
 
-const catalog: Record<CoachLanguage, Copy> = { en, uk, ru }
+/** Exported for the test that resolves every locale strictly — see below. */
+export const botCatalog: Record<CoachLanguage, Copy> = { en, uk, ru }
 
 export const DefaultLanguage: CoachLanguage = DefaultCoachLanguage
 
-export const messages = (language: CoachLanguage = DefaultLanguage): Copy => catalog[language]
+export const CatalogueFile = "apps/bot/src/messages.ts"
+
+/**
+ * The catalogue, gap-filled against English through the shared mechanism
+ * (#167). Until now this Worker indexed the record directly, so a field somebody
+ * blanked while editing reached a coach as an empty message — the half of #130
+ * the Mini App got and the bot did not.
+ *
+ * **Not strict**, deliberately. A Worker has no development build to fail in, and
+ * `import.meta.env.DEV` does not survive a wrangler bundle at all. The strict
+ * half runs in `messages.test.ts`, which resolves all three locales with gaps
+ * fatal — so a blank cannot be committed, and a blank that somehow ships still
+ * renders English rather than nothing.
+ */
+const resolve = makeCatalogue<Copy>({
+  reference: DefaultLanguage,
+  byLocale: botCatalog,
+  strict: false,
+  where: CatalogueFile,
+})
+
+export const messages = (language: CoachLanguage = DefaultLanguage): Copy => resolve(language)
 
 /**
  * The sender's Telegram client language, narrowed to what the product speaks.

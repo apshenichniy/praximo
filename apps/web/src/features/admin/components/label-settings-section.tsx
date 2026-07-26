@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button.tsx"
 import { Card, CardContent } from "@/components/ui/card.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
-import { Section, SectionTitle } from "@/features/admin/components/section.tsx"
-import { notifyHaptic } from "@/features/admin/haptics.ts"
+import { Section, SectionTitle } from "@/features/mini-app/components/section.tsx"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { requiredName } from "@/features/admin/validation.ts"
 import {
   adminWorkspaceDetailQuery,

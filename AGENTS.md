@@ -6,7 +6,7 @@ Agents write all documents, commit titles, and commit messages in English by def
 
 ## Workspace layout
 
-bun workspaces + Turborepo. Three deployable Workers in `apps/` (`web`, `bot`, `pipeline`), seven private `@praximo/*` packages in `packages/`. [ADR 0002](docs/adr/0002-monorepo-layout-and-module-boundaries.md) is the source of truth for the layout and the module boundaries.
+bun workspaces + Turborepo. Three deployable Workers in `apps/` (`web`, `bot`, `pipeline`), eight private `@praximo/*` packages in `packages/`. [ADR 0002](docs/adr/0002-monorepo-layout-and-module-boundaries.md) is the source of truth for the layout and the module boundaries.
 
 Commands: `bun run check` (typecheck every workspace, then lint), `bun run test`, `bun run build` (bundles each Worker for workerd via `wrangler --dry-run`), `bun run format`, `bun run deploy` (deploys the personal stage; `--dry-run` to rehearse it, and `prod` needs `--confirm-prod`).
 
@@ -17,7 +17,7 @@ Conventions worth knowing before writing code here:
 - **Service modules follow the module-namespace style**: file-local `Interface` / `Service` / `layer`, errors next to the owning service, operations wrapped in `Effect.fn`, and `export * as Name from "./file.ts"` at the bottom. `packages/telegram/src/bot-registry.ts` is the reference implementation. Plain domain data (`packages/domain`) uses ordinary named exports.
 - **The `effect` skill's names win** where a doc paraphrases it loosely — the skill is maintained by an Effect maintainer and tracks the library. Test layers are `testLayer`, not `layerTest`.
 - **Placeholder layers fail loudly.** Every adapter in the skeleton is unwired and returns a typed error rather than pretending to work; they use `Layer.sync` because they acquire nothing yet.
-- **The `@praximo/db` suites need a real Postgres.** Locally they skip (loudly) without `DATABASE_URL` — `bun run db:reset` provisions the dev Neon branch. CI creates a schema-only branch per run and *fails* when the URL is missing, so a skipped database suite can never read as a passing one (#136).
+- **The `@praximo/db` suites need a real Postgres.** Locally they skip (loudly) without `DATABASE_URL` — `bun run db:reset` provisions the dev Neon branch. `bun run db:demo` is the other half: it seeds clients and sessions into an existing connected workspace without touching the schema or the bot, so a UI iteration never costs a bot re-provisioning (`--clear` removes exactly what it wrote; `--bot <username|id>` picks the workspace). CI creates a schema-only branch per run and *fails* when the URL is missing, so a skipped database suite can never read as a passing one (#136).
 - **Toolchain pins live in the root `catalog`.** `effect` and `@effect/vitest` track the same beta and move together.
 - **This repository owns LiveKit maintenance.** `deploy/livekit/README.md` is the canonical rebuild, upgrade, rollback, rotation, and diagnostics runbook. The local root `.env.livekit` is the mode-`0600`, gitignored five-key recovery source; never print or commit its values. Run `bun run livekit:check` before maintenance and `bun run livekit:status` for read-only live verification.
 

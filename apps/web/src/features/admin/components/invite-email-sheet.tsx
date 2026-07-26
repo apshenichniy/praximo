@@ -9,7 +9,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer.tsx"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
-import { notifyHaptic } from "@/features/admin/haptics.ts"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { inviteEmail } from "@/features/admin/validation.ts"
 
 /** RFC 5321's ceiling for a whole address — a stop, not a budget, so no counter. */

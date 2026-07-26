@@ -7,7 +7,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group.tsx"
-import type { CopyLinkController } from "@/features/admin/hooks/use-copy-link.ts"
+import type { CopyLinkController } from "@/features/mini-app/hooks/use-copy-link.ts"
 
 /**
  * Read-only onboarding-link field with an inline copy button. The input also

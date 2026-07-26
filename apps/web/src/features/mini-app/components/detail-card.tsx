@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
 import { Card } from "@/components/ui/card.tsx"
-import { formatRelativeTime, formatTimestamp } from "@/features/admin/formatting.ts"
+import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
 import { cn } from "@/lib/utils.ts"
 
 /**
@@ -42,6 +42,9 @@ export function DetailRow({
 /**
  * A moment, read twice: the relative time answers "is this recent?" at a glance
  * and the absolute date underneath answers "when exactly?" without a tap.
+ *
+ * The words come from the surface, through {@link useTimestampFormat} — this is
+ * the two-line layout and nothing else.
  */
 export function TimestampValue({
   value,
@@ -50,13 +53,12 @@ export function TimestampValue({
   readonly value: string | undefined
   readonly empty: string
 }) {
+  const format = useTimestampFormat()
   if (value === undefined) return <span className="text-muted-foreground font-normal">{empty}</span>
   return (
     <span className="flex flex-col items-end">
-      <span>{formatRelativeTime(value)}</span>
-      <span className="text-muted-foreground text-xs font-normal">
-        {formatTimestamp(value, "")}
-      </span>
+      <span>{format.relative(value)}</span>
+      <span className="text-muted-foreground text-xs font-normal">{format.absolute(value)}</span>
     </span>
   )
 }

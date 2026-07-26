@@ -4,18 +4,14 @@ import type { ReactNode } from "react"
 import { useRef, useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
-import { ConfirmDialog } from "@/features/admin/components/confirm-dialog.tsx"
+import { ConfirmDialog } from "@/features/mini-app/components/confirm-dialog.tsx"
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
 import {
   AboutSection,
   CoachStatusSection,
   PracticeSection,
 } from "@/features/admin/components/active-sections.tsx"
-import {
-  DangerZone,
-  DeleteWorkspaceCard,
-  ResetInviteCard,
-} from "@/features/admin/components/danger-zone.tsx"
+import { DeleteWorkspaceCard, ResetInviteCard } from "@/features/admin/components/danger-zone.tsx"
 import { DeleteWorkspaceSheet } from "@/features/admin/components/delete-workspace-sheet.tsx"
 import { WorkspaceDeletionPanel } from "@/features/admin/components/deletion-panel.tsx"
 import { InviteSection } from "@/features/admin/components/invite-section.tsx"
@@ -23,7 +19,10 @@ import { LabelSettingsSection } from "@/features/admin/components/label-settings
 import { OnboardingStepsSection } from "@/features/admin/components/onboarding-steps.tsx"
 import { WorkspaceDetailHeader } from "@/features/admin/components/workspace-detail-header.tsx"
 import { WorkspaceDetailSkeleton } from "@/features/admin/components/workspace-detail-skeleton.tsx"
-import { notifyHaptic } from "@/features/admin/haptics.ts"
+import { adminTimestampFormat } from "@/features/admin/formatting.ts"
+import { DangerZone } from "@/features/mini-app/components/danger-zone.tsx"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
+import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
 import { useWorkspaceDeletion } from "@/features/admin/hooks/use-workspace-deletion.ts"
 import {
@@ -85,35 +84,40 @@ function WorkspaceDetailsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-5 pt-6 pb-16">
-      <TelegramBackButton />
-      <WorkspaceDetailHeader
-        workspace={workspace}
-        onOpenBot={(link) => void openTelegramLink(link)}
-      />
-      {progress === undefined ? null : (
-        <WorkspaceDeletionPanel
+    // Every moment on this screen is written in English (admin-surface.md).
+    // Stated once here rather than at each of the seven `TimestampValue` call
+    // sites; the coach surface states its own, in `member.language` (#167).
+    <TimestampFormatProvider value={adminTimestampFormat}>
+      <main className="mx-auto w-full max-w-2xl px-5 pt-6 pb-16">
+        <TelegramBackButton />
+        <WorkspaceDetailHeader
+          workspace={workspace}
+          onOpenBot={(link) => void openTelegramLink(link)}
+        />
+        {progress === undefined ? null : (
+          <WorkspaceDeletionPanel
+            progress={progress}
+            advancing={deletion.advancing}
+            error={deletion.error}
+            onResume={deletion.start}
+          />
+        )}
+        {progress !== undefined ? null : detailVariant(workspace) === "active" ? (
+          <ActiveWorkspace workspace={workspace} onDelete={() => setDeleteOpen(true)} />
+        ) : (
+          <OnboardingWorkspace workspace={workspace} onDelete={() => setDeleteOpen(true)} />
+        )}
+        <DeleteWorkspaceSheet
+          workspace={workspace}
+          open={deleteOpen}
           progress={progress}
           advancing={deletion.advancing}
           error={deletion.error}
-          onResume={deletion.start}
+          onOpenChange={setDeleteOpen}
+          onConfirm={deletion.start}
         />
-      )}
-      {progress !== undefined ? null : detailVariant(workspace) === "active" ? (
-        <ActiveWorkspace workspace={workspace} onDelete={() => setDeleteOpen(true)} />
-      ) : (
-        <OnboardingWorkspace workspace={workspace} onDelete={() => setDeleteOpen(true)} />
-      )}
-      <DeleteWorkspaceSheet
-        workspace={workspace}
-        open={deleteOpen}
-        progress={progress}
-        advancing={deletion.advancing}
-        error={deletion.error}
-        onOpenChange={setDeleteOpen}
-        onConfirm={deletion.start}
-      />
-    </main>
+      </main>
+    </TimestampFormatProvider>
   )
 }
 
@@ -267,7 +271,7 @@ function WorkspaceDangerZone({
   readonly children?: ReactNode
 }) {
   return (
-    <DangerZone>
+    <DangerZone title="Danger zone">
       {children}
       <DeleteWorkspaceCard copy={deletionCardCopy(workspace)} onOpen={onDelete} />
     </DangerZone>

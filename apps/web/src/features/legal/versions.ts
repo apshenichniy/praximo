@@ -1,4 +1,5 @@
 import { CoachLanguages } from "@praximo/domain"
+import { contentDigest } from "@praximo/i18n"
 import {
   coachTermsFor,
   type LegalDocument,
@@ -16,19 +17,6 @@ const LegalLocales: ReadonlyArray<LegalLocale> = CoachLanguages
  * `member.terms_version` can date it without a lookup.
  */
 export const LEGAL_EFFECTIVE_DATE = "2026-08-01"
-
-/**
- * FNV-1a over the document's own content. Not a security primitive — its whole
- * job is that two different texts cannot share a version.
- */
-const digest = (value: string): string => {
-  let hash = 0x811c9dc5
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 0x01000193) >>> 0
-  }
-  return hash.toString(16).padStart(8, "0").slice(1)
-}
 
 /**
  * A version derived from the text it names, rendered `2026-08-01+a1b2c3d`.
@@ -56,7 +44,7 @@ const digest = (value: string): string => {
  * across the change is told to reload, which is exactly what it should be told.
  */
 const versionOf = (documents: ReadonlyArray<LegalDocument>): string =>
-  `${LEGAL_EFFECTIVE_DATE}+${digest(JSON.stringify(documents))}`
+  `${LEGAL_EFFECTIVE_DATE}+${contentDigest(JSON.stringify(documents))}`
 
 const inEveryLanguage = (of: (locale: LegalLocale) => LegalDocument) =>
   LegalLocales.map((locale) => of(locale))
