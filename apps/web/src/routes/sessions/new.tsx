@@ -1,4 +1,5 @@
 import { WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useRef, useState } from "react"
 
@@ -6,10 +7,14 @@ import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import { ClientPickerScreen } from "@/features/coach/components/client-picker-screen.tsx"
+import {
+  daySchedule,
+  dayScheduleKeys,
+  UnknownDaySchedule,
+} from "@/features/coach/day-schedule-queries.ts"
 import { bookedDates } from "@/features/coach/session-days.ts"
 import {
   calendarDate,
-  type DayScheduleData,
   type SchedulingDraft,
   SchedulingScreen,
 } from "@/features/coach/components/scheduling-screen.tsx"
@@ -20,14 +25,10 @@ import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
+import { nextDate, previousDate } from "@/lib/coach-calendar.ts"
 import { acceptOnce } from "@/routes/index.tsx"
 import type { CoachClients } from "@/server/coach-clients.ts"
-import {
-  getClient,
-  getDaySchedule,
-  listClients,
-  scheduleSession,
-} from "@/server/coach-clients.functions.ts"
+import { getClient, listClients, scheduleSession } from "@/server/coach-clients.functions.ts"
 import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
@@ -64,11 +65,11 @@ function NewSessionRoute() {
   const { client: clientId, from } = Route.useSearch()
   const navigate = useNavigate()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [chosen, setChosen] = useState<CoachClients.ClientDetail>()
   const [unreadable, setUnreadable] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
-  const [day, setDay] = useState<DayScheduleData>()
   const [date, setDate] = useState(() => calendarDate(new Date()))
   const inFlight = useRef(false)
 
@@ -106,26 +107,32 @@ function NewSessionRoute() {
   }, [clientId])
 
   /**
-   * The day the screen is looking at, loaded whenever it changes. The grid is
-   * drawn from the coach's own bookings, so it cannot be computed in the browser
-   * alone — and the screen must never offer a slot the server refuses.
+   * The day the screen is looking at. The grid is drawn from the coach's own
+   * bookings, so it cannot be computed in the browser alone — and the screen
+   * must never offer a slot the server refuses.
+   *
+   * Cached per date, so comparing two days costs one read each rather than one
+   * per glance. A day that will not load reads as an empty one, which is what
+   * the screen did before the cache — but only after the retries, so a blink of
+   * network trouble no longer looks like a full day.
+   */
+  const dayQuery = useQuery({ ...daySchedule(date), enabled: chosen !== undefined })
+  const day = dayQuery.data ?? (dayQuery.isError ? UnknownDaySchedule : undefined)
+
+  /**
+   * The days on either side, fetched quietly once this one has landed. A coach
+   * moving along the strip almost always goes next door, and by the time they
+   * do the answer is already in hand.
    */
   useEffect(() => {
-    if (chosen === undefined) return
-    let cancelled = false
-    setDay(undefined)
-    void getDaySchedule({ data: { date } })
-      .then((result) => {
-        if (cancelled) return
-        setDay(result.ok ? result.day : { busy: [], timezone: "UTC" })
-      })
-      .catch(() => {
-        if (!cancelled) setDay({ busy: [], timezone: "UTC" })
-      })
-    return () => {
-      cancelled = true
+    if (chosen === undefined || day === undefined) return
+    const today = calendarDate(new Date())
+    for (const neighbour of [previousDate(date), nextDate(date)]) {
+      // Never yesterday: the past cannot be booked, so it would be a read of a
+      // day the calendar will not even offer.
+      if (neighbour >= today) void queryClient.prefetchQuery(daySchedule(neighbour))
     }
-  }, [chosen, date])
+  }, [chosen, date, day, queryClient])
 
   const pick = useCallback(
     (picked: string) => {
@@ -151,6 +158,10 @@ function NewSessionRoute() {
             },
           })
           if (result.ok && result.outcome.scheduled) {
+            // Every cached day, not just this one: a booking is exactly the
+            // event that makes a remembered free slot a lie, and the next screen
+            // to ask for a day must ask the server.
+            await queryClient.invalidateQueries({ queryKey: dayScheduleKeys.all })
             // The list is the proof: a toast cannot be checked afterwards, and
             // the session the coach just booked is the first thing on it. A
             // booking that began on a client goes back to that client instead —

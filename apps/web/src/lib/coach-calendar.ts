@@ -47,9 +47,14 @@ export const localParts = (
  * label the day *after* tomorrow «Tomorrow». Calendar days have no such problem:
  * the 25th is followed by the 26th in every zone there is.
  */
-export const nextDate = (date: string): string => {
+export const nextDate = (date: string): string => shiftDate(date, 1)
+
+/** The calendar day before this one, on the same terms as `nextDate`. */
+export const previousDate = (date: string): string => shiftDate(date, -1)
+
+const shiftDate = (date: string, days: number): string => {
   const at = new Date(`${date}T00:00:00Z`)
   if (Number.isNaN(at.getTime())) return date
-  at.setUTCDate(at.getUTCDate() + 1)
+  at.setUTCDate(at.getUTCDate() + days)
   return at.toISOString().slice(0, 10)
 }

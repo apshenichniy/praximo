@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { localParts, nextDate } from "@/lib/coach-calendar.ts"
+import { localParts, nextDate, previousDate } from "@/lib/coach-calendar.ts"
 
 /**
  * The half of the coach's calendar the browser reads. Effect-free by
@@ -52,5 +52,19 @@ describe("nextDate", () => {
 
   it("hands back what it was given rather than inventing a date", () => {
     expect(nextDate("not-a-date")).toBe("not-a-date")
+  })
+})
+
+/** The other direction, used to pre-read the day before the one on screen. */
+describe("previousDate", () => {
+  it("names the calendar day before this one", () => {
+    expect(previousDate("2026-07-28")).toBe("2026-07-27")
+    expect(previousDate("2026-08-01")).toBe("2026-07-31")
+    expect(previousDate("2027-01-01")).toBe("2026-12-31")
+    expect(previousDate("2028-03-01")).toBe("2028-02-29")
+  })
+
+  it("hands back what it was given rather than inventing a date", () => {
+    expect(previousDate("not-a-date")).toBe("not-a-date")
   })
 })
