@@ -1,3 +1,17 @@
+/**
+ * What Telegram is asked to deliver to the manager bot.
+ *
+ * An omitted type is not merely unhandled — it never arrives. `callback_query`
+ * had to be added the moment the creation prompt grew a button that answers
+ * rather than navigates (#164): without it the coach taps "I already have a
+ * bot", Telegram shows its loading state, and nothing ever comes back.
+ *
+ * Applied by `setWebhook`, so a change here needs
+ * `bun run manager-bot:set-webhook` against each stage. A deploy alone does not
+ * move it.
+ */
+const AllowedUpdates = ["message", "callback_query", "managed_bot"] as const
+
 export interface ManagerWebhookConfig {
   readonly token: string
   readonly secret: string
@@ -26,7 +40,7 @@ export const configureManagerWebhook = async (
       body: JSON.stringify({
         url: endpoint,
         secret_token: config.secret,
-        allowed_updates: ["message", "managed_bot"],
+        allowed_updates: AllowedUpdates,
       }),
     },
   )
