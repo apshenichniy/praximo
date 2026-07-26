@@ -32,10 +32,13 @@ function Calendar({
       )}
       captionLayout={captionLayout}
       locale={locale}
-      formatters={{
-        formatMonthDropdown: (date) => date.toLocaleString(locale?.code, { month: "short" }),
-        ...formatters,
-      }}
+      // Whatever the caller passes, and nothing of our own. The vendored
+      // component shipped a `formatMonthDropdown` that reached for
+      // `locale?.code` and `toLocaleString` — a second formatter, on a second
+      // mechanism, disagreeing with the locale for every other name on the
+      // calendar. That is the shape of the bug this file is being edited to
+      // close, so it goes rather than gets a third opinion.
+      {...(formatters === undefined ? {} : { formatters })}
       classNames={{
         root: cn("w-fit", defaultClassNames.root),
         months: cn("relative flex flex-col gap-4 md:flex-row", defaultClassNames.months),
