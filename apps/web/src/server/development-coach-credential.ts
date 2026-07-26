@@ -14,13 +14,38 @@ import { createServerFn } from "@tanstack/react-start"
  */
 type Key = Awaited<ReturnType<typeof crypto.subtle.importKey>>
 
-let pending: Promise<{ readonly privateKey: Key; readonly publicKey: Key }> | undefined
+type KeyPair = { readonly privateKey: Key; readonly publicKey: Key }
 
-const keyPair = () =>
-  (pending ??= crypto.subtle.generateKey("Ed25519", true, ["sign", "verify"]) as Promise<{
-    readonly privateKey: Key
-    readonly publicKey: Key
-  }>)
+/**
+ * The pair is cached on `globalThis`, not in a module-level `let`.
+ *
+ * "Once per dev server process" is the property this whole file rests on: the
+ * *signer* and the *trust anchor* have to be halves of one pair. A module-level
+ * cache does not give that. TanStack Start extracts server functions into a
+ * module of their own — `development-coach-credential.ts?tss-serverfn-split` —
+ * so this file is instantiated twice in one Vite dev process: once for the
+ * handler below, and once for `runtime.server.ts`'s `await import` of
+ * `developmentCoachPublicKey`. Two instances, two `generateKey` calls, two
+ * pairs — and every launch verified against the wrong half of the wrong one,
+ * which surfaces as an unexplained `unauthenticated` on every coach screen while
+ * the manager side (HMAC over a token, no generated key) keeps working.
+ *
+ * A process-wide slot is immune to that by construction. It stays a development
+ * concern: `import.meta.env.DEV` folds the handler below out of the production
+ * build, and the runtime only reaches for this key when it has already decided
+ * it is running locally.
+ */
+const KeyPairSlot = Symbol.for("praximo.development.coachKeyPair")
+
+type KeyPairHost = { [KeyPairSlot]?: Promise<KeyPair> }
+
+const keyPair = (): Promise<KeyPair> => {
+  const host = globalThis as unknown as KeyPairHost
+  return (host[KeyPairSlot] ??= crypto.subtle.generateKey("Ed25519", true, [
+    "sign",
+    "verify",
+  ]) as Promise<KeyPair>)
+}
 
 /**
  * The public half, for the runtime to anchor `CoachInitData` on in development.
