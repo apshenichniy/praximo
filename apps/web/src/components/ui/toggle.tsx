@@ -1,6 +1,7 @@
 import { Toggle as TogglePrimitive } from "@base-ui/react/toggle"
 import { cva, type VariantProps } from "class-variance-authority"
 
+import { selectionHaptic } from "@/features/mini-app/haptics.ts"
 import { cn } from "@/lib/utils.ts"
 
 const toggleVariants = cva(
@@ -29,12 +30,20 @@ function Toggle({
   className,
   variant = "default",
   size = "default",
+  onPressedChange,
   ...props
 }: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
   return (
     <TogglePrimitive
       data-slot="toggle"
       className={cn(toggleVariants({ variant, size, className }))}
+      // The tick for one value in a set replacing another (§Motion), here rather
+      // than in each chip row: pressing *into* a state is a selection, and
+      // pressing out of one is the same event seen from the other side.
+      onPressedChange={(pressed, eventDetails) => {
+        selectionHaptic()
+        onPressedChange?.(pressed, eventDetails)
+      }}
       {...props}
     />
   )

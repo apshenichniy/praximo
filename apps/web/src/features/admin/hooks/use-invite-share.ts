@@ -34,6 +34,14 @@ export interface InviteShareController {
   readonly sharingInviteId: string | undefined
 }
 
+/**
+ * haptics: reported by the caller.
+ *
+ * The outcome travels out as a value — «sent», «dismissed», «failed» — because
+ * only the screen knows what each means to the admin looking at it, and a
+ * dismissed picker is deliberately silent. The tick belongs beside that reading,
+ * not here.
+ */
 export const useInviteShare = (): InviteShareController => {
   const prepareMutation = useMutation(prepareCoachInviteShareMutation())
   const recordMutation = useMutation(recordCoachInviteShareMutation())

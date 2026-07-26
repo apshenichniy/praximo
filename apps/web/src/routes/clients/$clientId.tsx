@@ -12,6 +12,7 @@ import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { acceptOnce } from "@/routes/index.tsx"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
 import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
@@ -64,11 +65,14 @@ function ClientRoute() {
       try {
         const result = await resetInvite({ data: { clientId: client.id } })
         if (result.ok) {
+          notifyHaptic("success")
           await router.invalidate()
           return
         }
+        notifyHaptic("error")
         setError(copy.common.failed)
       } catch {
+        notifyHaptic("error")
         setError(copy.common.failed)
       } finally {
         setPending(false)
@@ -84,12 +88,15 @@ function ClientRoute() {
       try {
         const result = await deleteClient({ data: { clientId: client.id } })
         if (result.ok && result.deleted) {
+          notifyHaptic("success")
           await router.invalidate()
           await navigate({ to: "/clients" })
           return
         }
+        notifyHaptic("error")
         setError(copy.common.failed)
       } catch {
+        notifyHaptic("error")
         setError(copy.common.failed)
       } finally {
         setPending(false)
@@ -123,10 +130,18 @@ function ClientRoute() {
       message: invite.message,
     })
       .then(async (outcome) => {
-        if (outcome === "gone") await router.invalidate()
-        else if (outcome === "failed") setError(copy.common.failed)
+        if (outcome === "gone") {
+          notifyHaptic("warning")
+          await router.invalidate()
+        } else if (outcome === "failed") {
+          notifyHaptic("error")
+          setError(copy.common.failed)
+        }
       })
-      .catch(() => setError(copy.common.failed))
+      .catch(() => {
+        notifyHaptic("error")
+        setError(copy.common.failed)
+      })
   }, [client, copy, router])
 
   if (client === undefined) {

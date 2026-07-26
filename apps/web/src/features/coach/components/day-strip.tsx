@@ -5,6 +5,7 @@ import { localeTag } from "@praximo/i18n"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 
 import { sameDay } from "@/features/coach/day-strip.ts"
+import { selectionHaptic } from "@/features/mini-app/haptics.ts"
 import { prefersReducedMotion } from "@/lib/motion.ts"
 import { cn } from "@/lib/utils.ts"
 
@@ -208,7 +209,10 @@ export function DayStrip({
             data-strip-day
             type="button"
             aria-pressed={chosen}
-            onClick={() => onPick(day)}
+            onClick={() => {
+              if (!chosen) selectionHaptic()
+              onPick(day)
+            }}
             className={cn(
               "flex w-14 flex-none flex-col items-center gap-0.5 rounded-2xl border py-2",
               "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press) active:scale-[0.97]",

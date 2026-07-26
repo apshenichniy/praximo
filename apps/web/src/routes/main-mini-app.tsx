@@ -11,6 +11,7 @@ import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { mainMiniAppUrlFor } from "@/routes/index.tsx"
+import { impactHaptic } from "@/features/mini-app/haptics.ts"
 import { hideMainMiniAppHint } from "@/server/coach-clients.functions.ts"
 import { loadCoachEntry } from "@/server/coach.functions.ts"
 
@@ -43,6 +44,9 @@ function MainMiniAppRoute() {
   const copy = coachCopy(language)
 
   const hide = useCallback(() => {
+    // A control that dismisses something rather than an outcome to report: the
+    // hint going away is the whole confirmation, so this is punctuation (§Motion).
+    impactHaptic()
     void hideMainMiniAppHint()
       .then(() => router.invalidate())
       .catch(() => undefined)

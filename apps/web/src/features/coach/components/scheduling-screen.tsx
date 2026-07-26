@@ -196,7 +196,6 @@ export function SchedulingScreen({
   const chooseDay = useCallback(
     (day: Date | undefined) => {
       if (day === undefined) return
-      if (!sameDay(day, selectedDay)) selectionHaptic()
       setSelectedDay(day)
       setStartMinutes(undefined)
       onDateChange(calendarDate(day))
@@ -213,6 +212,9 @@ export function SchedulingScreen({
   const chooseMonthDay = useCallback(
     (day: Date | undefined) => {
       if (day === undefined) return
+      // The strip ticks for its own days; a day taken from the month is this
+      // one's to report.
+      if (!sameDay(day, selectedDay)) selectionHaptic()
       chooseDay(day)
       // Only a day the strip does not already carry re-anchors it. Trimming the
       // window on a day it *does* carry — «Today» on a strip scrolled weeks out —
@@ -224,7 +226,7 @@ export function SchedulingScreen({
       setMonthOpen(false)
       scrollAfterMonth.current = true
     },
-    [chooseDay, days],
+    [chooseDay, days, selectedDay],
   )
 
   /** The window the strip shows, announced so it can be read in one request. */

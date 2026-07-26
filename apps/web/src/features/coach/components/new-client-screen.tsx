@@ -2,6 +2,7 @@ import { type CoachLanguage, CoachLanguages, ClientNameMaxLength } from "@praxim
 import { useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
+import { selectionHaptic } from "@/features/mini-app/haptics.ts"
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { Input } from "@/components/ui/input.tsx"
@@ -71,7 +72,10 @@ export function NewClientScreen({
               key={option}
               type="button"
               aria-pressed={inviteLanguage === option}
-              onClick={() => setInviteLanguage(option)}
+              onClick={() => {
+                if (inviteLanguage !== option) selectionHaptic()
+                setInviteLanguage(option)
+              }}
               className={cn(
                 "flex-1 rounded-full border py-2 text-body font-semibold transition-colors",
                 inviteLanguage === option
