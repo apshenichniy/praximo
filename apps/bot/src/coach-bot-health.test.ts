@@ -174,10 +174,20 @@ const provisioningStub = (
     }),
   )
 
+interface TelegramCall {
+  readonly method: string
+  readonly token: string
+  /** The request payload, for the calls whose shape is the thing under test. */
+  readonly payload: Record<string, unknown>
+}
+
 interface TelegramStub {
   readonly fetch: typeof globalThis.fetch
-  readonly calls: Array<{ readonly method: string; readonly token: string }>
+  readonly calls: Array<TelegramCall>
 }
+
+/** Telegram's own window on a prepared inline message, as the stub mints it. */
+const PREPARED_CARD_EXPIRY_SECONDS = Math.floor(Date.parse("2026-07-26T12:30:00.000Z") / 1_000)
 
 /**
  * Telegram, keyed on the credential the call carries. That is the whole point of
@@ -189,12 +199,15 @@ const telegramStub = (
     readonly management?: "fresh" | "deleted" | "unmanaged" | "outage" | "manager-token"
   } = {},
 ): TelegramStub => {
-  const calls: Array<{ readonly method: string; readonly token: string }> = []
-  const fetch: typeof globalThis.fetch = async (input) => {
+  const calls: Array<TelegramCall> = []
+  const fetch: typeof globalThis.fetch = async (input, init) => {
     const path = new URL(input.toString()).pathname.split("/")
     const method = path.at(-1) ?? ""
     const token = decodeURIComponent(path.at(-2)?.replace(/^bot/, "") ?? "")
-    calls.push({ method, token })
+    const body = init?.body
+    const payload: Record<string, unknown> =
+      typeof body === "string" ? (JSON.parse(body) as Record<string, unknown>) : {}
+    calls.push({ method, token, payload })
 
     if (method === "getManagedBotToken") {
       switch (options.management ?? "fresh") {
@@ -227,6 +240,12 @@ const telegramStub = (
         { ok: false, error_code: 401, description: "Unauthorized" },
         { status: 401 },
       )
+    }
+    if (method === "savePreparedInlineMessage") {
+      return Response.json({
+        ok: true,
+        result: { id: "prepared-card-1", expiration_date: PREPARED_CARD_EXPIRY_SECONDS },
+      })
     }
     if (method === "getMe") {
       return Response.json({
@@ -452,8 +471,13 @@ describe("the origin a repaired webhook is re-armed at", () => {
  * the channel matters, so a send that meets a 401 repairs and tries again.
  */
 describe("sending through a workspace's own bot", () => {
-  const send = (health: HealthStub, telegram: TelegramStub, rotated: Array<RotateRecord> = []) =>
-    Effect.flatMap(BotRegistry.Service, (registry) => registry.send(workspaceId, "hello")).pipe(
+  const throughRegistry = <A, E>(
+    health: HealthStub,
+    telegram: TelegramStub,
+    rotated: Array<RotateRecord>,
+    body: Effect.Effect<A, E, BotRegistry.Service>,
+  ) =>
+    body.pipe(
       Effect.provide(
         BotRegistryLive.layerWithFetch(env, telegram.fetch).pipe(
           Layer.provide(
@@ -469,6 +493,14 @@ describe("sending through a workspace's own bot", () => {
           ),
         ),
       ),
+    )
+
+  const send = (health: HealthStub, telegram: TelegramStub, rotated: Array<RotateRecord> = []) =>
+    throughRegistry(
+      health,
+      telegram,
+      rotated,
+      Effect.flatMap(BotRegistry.Service, (registry) => registry.send(workspaceId, "hello")),
     )
 
   it.effect("repairs a refused credential inline and lands the message on the retry", () =>
@@ -497,6 +529,82 @@ describe("sending through a workspace's own bot", () => {
         reason: "bot needs re-link",
       })
       // And the same flip the sweep would have taken, from the same seam.
+      expect(health.flipped).toEqual([workspaceId])
+    }),
+  )
+
+  /**
+   * The invitation card (#179), which shares every one of those properties
+   * because it shares the seam: one credential, one repair, one retry. What is
+   * its own is the shape Telegram is asked for — a `url` button, because inline
+   * messages do not allow `web_app` ones, and a window read off the answer.
+   */
+  const card: BotRegistry.InviteCard = {
+    title: "Anna",
+    text: "Anna opens your bot in Telegram and accepts there.",
+    buttonText: "Open the invitation",
+    buttonUrl: `https://t.me/${BOT_USERNAME}?start=inv_ABCDEFGH2345`,
+  }
+
+  const prepare = (health: HealthStub, telegram: TelegramStub, rotated: Array<RotateRecord> = []) =>
+    throughRegistry(
+      health,
+      telegram,
+      rotated,
+      Effect.flatMap(BotRegistry.Service, (registry) => registry.prepareCard(workspaceId, card)),
+    )
+
+  it.effect("asks the coach's own bot for a card the coach can send to one person", () =>
+    Effect.gen(function* () {
+      const health = healthStub([target({ encryptedToken: "sealed:fine" })])
+      const telegram = telegramStub()
+
+      const prepared = yield* prepare(health, telegram)
+
+      const call = telegram.calls.find((entry) => entry.method === "savePreparedInlineMessage")
+      // The coach is both the user the card is bound to and the one who sends
+      // it, so a private chat with one client is the whole of its reach.
+      expect(call?.payload.user_id).toBe(Number(coach))
+      expect(call?.payload.allow_user_chats).toBe(true)
+      const result = call?.payload.result as {
+        readonly reply_markup: { readonly inline_keyboard: ReadonlyArray<ReadonlyArray<unknown>> }
+      }
+      // A `url` deep link into this same bot. `web_app` buttons are not allowed
+      // in an inline message, so there is nothing to fall back to here.
+      expect(result.reply_markup.inline_keyboard[0]?.[0]).toEqual({
+        text: card.buttonText,
+        url: card.buttonUrl,
+      })
+      // Telegram's own window, read rather than assumed.
+      expect(prepared.expiresAt.toISOString()).toBe("2026-07-26T12:30:00.000Z")
+      expect(prepared.id).toBe("prepared-card-1")
+    }),
+  )
+
+  it.effect("repairs a refused credential inline and mints the card on the retry", () =>
+    Effect.gen(function* () {
+      const health = healthStub([target()])
+      const telegram = telegramStub()
+
+      const prepared = yield* prepare(health, telegram)
+
+      const mints = telegram.calls.filter((entry) => entry.method === "savePreparedInlineMessage")
+      expect(mints.map((entry) => entry.token)).toEqual([STALE_TOKEN, FRESH_TOKEN])
+      expect(prepared.id).toBe("prepared-card-1")
+      expect(health.flipped).toEqual([])
+    }),
+  )
+
+  it.effect("fails the share once the bot turns out to be unrepairable", () =>
+    Effect.gen(function* () {
+      const health = healthStub([target()])
+
+      const failure = yield* Effect.flip(prepare(health, telegramStub({ management: "deleted" })))
+
+      expect(failure).toMatchObject({
+        _tag: "BotRegistry.PrepareFailed",
+        reason: "bot needs re-link",
+      })
       expect(health.flipped).toEqual([workspaceId])
     }),
   )

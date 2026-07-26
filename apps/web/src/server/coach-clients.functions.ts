@@ -7,6 +7,7 @@ import {
   loadCoachClientDetail,
   loadCoachClients,
   loadCoachDaySchedule,
+  prepareCoachInviteCard,
   removeCoachClient,
   resetCoachClientInvite,
   saveCoachTimezone,
@@ -20,13 +21,15 @@ import {
  */
 export type CoachClientsTransportError = "unauthenticated" | "server"
 
+/**
+ * Which typed failure crossed the runtime boundary. The tag is all that
+ * survives `runPromise`, so this is the one thing every handler below asks.
+ */
+const isTagged = (error: unknown, tag: string): boolean =>
+  typeof error === "object" && error !== null && "_tag" in error && error._tag === tag
+
 const transportError = (error: unknown): CoachClientsTransportError =>
-  typeof error === "object" &&
-  error !== null &&
-  "_tag" in error &&
-  error._tag === "CoachSession.Unauthenticated"
-    ? "unauthenticated"
-    : "server"
+  isTagged(error, "CoachSession.Unauthenticated") ? "unauthenticated" : "server"
 
 export type CoachClientsResult =
   | { readonly ok: true; readonly home: CoachClients.CoachClientsHome }
@@ -103,14 +106,7 @@ export const createClient = createServerFn({ method: "POST" })
       const created = await createCoachClient(context.credential, data)
       return { ok: true, clientId: created.clientId }
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "CoachClients.InvalidClient"
-      ) {
-        return { ok: false, error: "invalid" }
-      }
+      if (isTagged(error, "CoachClients.InvalidClient")) return { ok: false, error: "invalid" }
       return { ok: false, error: transportError(error) }
     }
   })
@@ -189,6 +185,37 @@ export const resetInvite = createServerFn({ method: "POST" })
     try {
       return { ok: true, client: await resetCoachClientInvite(context.credential, data.clientId) }
     } catch (error) {
+      return { ok: false, error: transportError(error) }
+    }
+  })
+
+export type PrepareInviteCardResult =
+  | { readonly ok: true; readonly card: CoachClients.PreparedInviteCard }
+  /**
+   * `gone` is the invitation that is no longer shareable — deleted, accepted, or
+   * reissued out from under the screen. `failed` is the coach's own bot refusing
+   * to author the card, which the same tap can retry.
+   */
+  | { readonly ok: false; readonly error: CoachClientsTransportError | "gone" | "failed" }
+
+/**
+ * The card, minted on the coach's tap (#179).
+ *
+ * A `POST` like every other client operation, and authenticated the same way:
+ * the invitation is resolved server-side from the coach's own workspace, so the
+ * only thing the browser gets to name is which client it is looking at.
+ */
+export const prepareInviteCard = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator(clientIdOf)
+  .handler(async ({ context, data }): Promise<PrepareInviteCardResult> => {
+    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
+    try {
+      const card = await prepareCoachInviteCard(context.credential, data.clientId)
+      return card === undefined ? { ok: false, error: "gone" } : { ok: true, card }
+    } catch (error) {
+      if (isTagged(error, "CoachClients.CardPreparationFailed"))
+        return { ok: false, error: "failed" }
       return { ok: false, error: transportError(error) }
     }
   })

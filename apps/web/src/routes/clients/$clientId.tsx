@@ -177,14 +177,37 @@ function ClientRoute() {
     })
   }, [client, copy, navigate, router])
 
+  /**
+   * The card is minted on this tap and shared through Telegram's own picker
+   * (#179).
+   *
+   * Deliberately *not* one of the screen's `pending` operations, unlike every
+   * other action here. This promise settles when Telegram's own callback fires,
+   * which is a host we do not control: holding the busy flag across it would let
+   * one silent client leave Schedule, Reissue and Delete disabled until the coach
+   * relaunched. The picker is modal over the app anyway, so there is nothing the
+   * busy state would have been protecting.
+   *
+   * A dismissed picker is silent: the invitation is untouched, and telling a
+   * coach who just changed their mind that "nothing was sent" reads as a failure
+   * they have to do something about. An invitation that turned out to be gone
+   * re-reads the screen, which is what shows them why.
+   */
   const share = useCallback(() => {
-    if (client?.invite === undefined) return
+    const invite = client?.invite
+    if (client === undefined || invite === undefined) return
+    setError(undefined)
     void shareClientInvite({
-      link: client.invite.url,
-      name: client.name,
-      lead: copy.clients.invitationLeadTail,
+      clientId: client.id,
+      link: invite.url,
+      message: invite.message,
     })
-  }, [client, copy])
+      .then(async (outcome) => {
+        if (outcome === "gone") await router.invalidate()
+        else if (outcome === "failed") setError(copy.common.failed)
+      })
+      .catch(() => setError(copy.common.failed))
+  }, [client, copy, router])
 
   if (client === undefined) {
     return (

@@ -1,9 +1,10 @@
 import { WorkerEntrypoint } from "cloudflare:workers"
 import { TelegramId, WorkspaceId } from "@praximo/domain"
-import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
+import { BotRegistry, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import {
   type Env,
   handleCoachBotReleaseRpc,
+  handleCoachInviteCardRpc,
   handleManagerInlineInviteRpc,
   handleManagerTextRpc,
   handleRequest,
@@ -18,7 +19,7 @@ import {
  */
 export default class BotWorker
   extends WorkerEntrypoint<Env>
-  implements ManagerBotSender.RpcClient, CoachBotRelease.RpcClient
+  implements ManagerBotSender.RpcClient, CoachBotRelease.RpcClient, BotRegistry.RpcClient
 {
   override fetch(request: Request): Promise<Response> {
     return handleRequest(request, this.env)
@@ -41,5 +42,17 @@ export default class BotWorker
 
   releaseCoachBot(workspaceId: WorkspaceId): Promise<CoachBotRelease.Result> {
     return handleCoachBotReleaseRpc(this.env, workspaceId)
+  }
+
+  /**
+   * The one method the coach Mini App's share needs (#179): the card has to be
+   * authored by the workspace's *own* bot, whose credential never leaves this
+   * Worker.
+   */
+  prepareCoachInviteCard(
+    workspace: WorkspaceId,
+    card: BotRegistry.InviteCard,
+  ): Promise<BotRegistry.PrepareCardRpcResult> {
+    return handleCoachInviteCardRpc(this.env, workspace, card)
   }
 }

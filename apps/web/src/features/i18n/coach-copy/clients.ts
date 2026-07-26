@@ -35,7 +35,14 @@ export interface ClientsCopy {
   readonly nameRequired: string
 
   readonly invitationEyebrow: string
-  /** name · " opens your bot in Telegram and accepts there. The link works for 7 days." */
+  /**
+   * name · " opens your bot in Telegram and accepts there. The link works for 7 days."
+   *
+   * The coach's own summary of what the invitation does, and **only** that
+   * (#181). What the client actually receives lives in the client catalogue in
+   * `@praximo/i18n`, is written to them rather than about them, and is rendered
+   * in the language the coach chose for that client.
+   */
   readonly invitationLeadTail: string
   readonly sendCard: string
   readonly copyInvite: string

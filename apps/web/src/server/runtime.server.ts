@@ -10,7 +10,7 @@ import {
   WorkspaceRepo,
 } from "@praximo/db"
 import type { WorkspaceRunCancellationRpcClient } from "@praximo/domain"
-import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
+import { BotRegistry, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
 import { CoachClients } from "./coach-clients.ts"
@@ -20,6 +20,16 @@ import type { LaunchCredential } from "./launch-credential.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
 import { ViewerRole } from "./viewer-role.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
+
+/**
+ * Everything this Worker asks of the bot Worker across the one binding they
+ * share: manager-bot delivery, coach-bot release, and — since #179 — a card
+ * authored by a coach's own bot. Named once, because a binding that grows a
+ * capability must grow it in exactly one place.
+ */
+type BotWorkerBinding = ManagerBotSender.RpcClient &
+  CoachBotRelease.RpcClient &
+  BotRegistry.RpcClient
 
 interface Env {
   readonly DATABASE_URL: string
@@ -33,7 +43,7 @@ interface Env {
    * populates it folds out of a production build.
    */
   readonly COACH_DEV_PUBLIC_KEY?: string
-  readonly MANAGER_BOT?: ManagerBotSender.RpcClient & CoachBotRelease.RpcClient
+  readonly MANAGER_BOT?: BotWorkerBinding
   readonly PIPELINE?: WorkspaceRunCancellationRpcClient
 }
 
@@ -55,6 +65,11 @@ const runtimeFromEnv = (env: Env) => {
     env.MANAGER_BOT === undefined
       ? CoachBotRelease.layer
       : CoachBotRelease.rpcLayer(env.MANAGER_BOT)
+  // The coach's own bot, reached the only way it can be: its credential never
+  // leaves the bot Worker, so authoring a card is a call across the binding
+  // rather than a second decryption over here (#179).
+  const coachBots =
+    env.MANAGER_BOT === undefined ? BotRegistry.layer : BotRegistry.rpcLayer(env.MANAGER_BOT)
   const runCancellation =
     env.PIPELINE === undefined
       ? WorkspaceRunCancellation.layer
@@ -72,6 +87,7 @@ const runtimeFromEnv = (env: Env) => {
     CoachOnboardingToken.layer,
     sender,
     coachBotRelease,
+    coachBots,
     runCancellation,
     repositories,
   )
@@ -126,10 +142,7 @@ const resolveEnv = async (): Promise<Env> => {
     TELEGRAM_ENV: requireString(workerEnv.TELEGRAM_ENV, "TELEGRAM_ENV"),
     ...(workerEnv.MANAGER_BOT === undefined
       ? {}
-      : {
-          MANAGER_BOT: workerEnv.MANAGER_BOT as ManagerBotSender.RpcClient &
-            CoachBotRelease.RpcClient,
-        }),
+      : { MANAGER_BOT: workerEnv.MANAGER_BOT as BotWorkerBinding }),
     ...(workerEnv.PIPELINE === undefined
       ? {}
       : { PIPELINE: workerEnv.PIPELINE as WorkspaceRunCancellationRpcClient }),
@@ -246,6 +259,18 @@ export const resetCoachClientInvite = async (
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(CoachClients.Service, (service) => service.resetInvite(credential, clientId)),
+  )
+}
+
+export const prepareCoachInviteCard = async (
+  credential: LaunchCredential,
+  clientId: string,
+): Promise<CoachClients.PreparedInviteCard | undefined> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) =>
+      service.prepareInviteCard(credential, clientId),
+    ),
   )
 }
 

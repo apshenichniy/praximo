@@ -680,6 +680,35 @@ export const prepareManagerInlineInvite = Effect.fn("BotWorker.prepareManagerInl
   },
 )
 
+/**
+ * The coach's own bot authors the invitation card (#179).
+ *
+ * The whole operation is the registry's — resolve, decrypt, mint, repair a
+ * refused credential and retry — so this is only the boundary: a failure becomes
+ * a tagged answer rather than an exception a service binding would flatten into
+ * "the Worker threw".
+ */
+export const prepareCoachInviteCard = Effect.fn("BotWorker.prepareCoachInviteCard")(function* (
+  workspace: WorkspaceId,
+  card: BotRegistry.InviteCard,
+) {
+  const registry = yield* BotRegistry.Service
+  return yield* registry.prepareCard(workspace, card).pipe(
+    Effect.match({
+      onFailure: (failure) =>
+        BotRegistry.PrepareCardRpcResult.cases.Failed.make({
+          workspace: failure.workspace,
+          reason: failure.reason,
+        }),
+      onSuccess: (prepared) =>
+        BotRegistry.PrepareCardRpcResult.cases.Prepared.make({
+          id: prepared.id,
+          expiresAtMillis: prepared.expiresAt.getTime(),
+        }),
+    }),
+  )
+})
+
 export const releaseCoachBot = Effect.fn("BotWorker.releaseCoachBot")(function* (
   workspaceId: WorkspaceId,
 ) {
@@ -742,3 +771,10 @@ export const handleCoachBotReleaseRpc = (
   env: Env,
   workspaceId: WorkspaceId,
 ): Promise<CoachBotRelease.Result> => getRuntime(env).runPromise(releaseCoachBot(workspaceId))
+
+export const handleCoachInviteCardRpc = (
+  env: Env,
+  workspace: WorkspaceId,
+  card: BotRegistry.InviteCard,
+): Promise<BotRegistry.PrepareCardRpcResult> =>
+  getRuntime(env).runPromise(prepareCoachInviteCard(workspace, card))
