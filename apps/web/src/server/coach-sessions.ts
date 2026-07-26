@@ -2,8 +2,8 @@ import { ClientRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
 import { inviteNeedsAttention, readMemberSettings } from "@praximo/domain"
 import { Clock, Context, Effect, Layer } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS } from "./coach-session.ts"
-import { instantOf, localParts, MinutesInDay } from "@/lib/coach-calendar.ts"
-import { zoneOf } from "./coach-zone.ts"
+import { localParts } from "@/lib/coach-calendar.ts"
+import { instantOf, MinutesInDay, zoneOf } from "./coach-day.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
 /**
@@ -72,8 +72,15 @@ export interface UpcomingSessions {
   readonly timezone: string
 }
 
+/**
+ * One session's facts, and nothing about its lifecycle.
+ *
+ * `state` is deliberately **not** carried across this boundary. The stub screen
+ * has no way to say "cancelled" that is not a lifecycle claim, and no session
+ * can reach a terminal state before #42 writes one — so shipping the column now
+ * would be a field with no reader. #62 adds it with the screen that acts on it.
+ */
 export interface SessionDetail extends SessionSummary {
-  readonly state: string
   readonly timezone: string
 }
 
@@ -120,6 +127,40 @@ const summarise = (row: SessionRepo.ScheduledSessionRow): SessionSummary => ({
   kind: row.kind,
   clientAccepted: row.clientAccepted,
 })
+
+/**
+ * What needs attention, out of the whole practice and the day already on screen.
+ *
+ * Two rules, and both are about what it leaves out. Only invitations that have
+ * lapsed or are inside their last two days — every pending one would make this
+ * the biggest section on a fresh practice, a duplicate of the clients list
+ * wearing the word «attention». And **nobody whose card is already on today's
+ * screen**: that card says it for today, the sessions list says it for the rest,
+ * and a third place would undo the point of the first rule (#61).
+ *
+ * Pure and exported, because it is the whole of the section's meaning and the
+ * layer around it is three repository reads.
+ */
+export const attentionFor = (
+  roster: ReadonlyArray<ClientRepo.ClientListRow>,
+  today: ReadonlyArray<SessionRepo.ScheduledSessionRow>,
+  now: Date,
+): ReadonlyArray<AttentionInvite> => {
+  const spokenFor = new Set(today.map((row) => row.clientId))
+  return orderAttention(
+    roster
+      .filter(
+        (row) =>
+          !spokenFor.has(row.id) && inviteNeedsAttention(row.state, row.inviteExpiresAt, now),
+      )
+      .map((row) => ({
+        clientId: row.id,
+        clientName: row.name,
+        expiresAt: iso(row.inviteExpiresAt),
+        expired: row.state === "expired",
+      })),
+  )
+}
 
 /**
  * The lapsed first, then whatever expires soonest.
@@ -186,16 +227,7 @@ export const layer = Layer.effect(
         coachName: workspace.name,
         timezone,
         sessions: day.map(summarise),
-        attention: orderAttention(
-          roster
-            .filter((row) => inviteNeedsAttention(row.state, row.inviteExpiresAt, now))
-            .map((row) => ({
-              clientId: row.id,
-              clientName: row.name,
-              expiresAt: iso(row.inviteExpiresAt),
-              expired: row.state === "expired",
-            })),
-        ),
+        attention: attentionFor(roster, day, now),
         emptyPractice: roster.length === 0,
         mainMiniAppHintVisible:
           settings.mainMiniAppHintDismissed !== true && !principal.hasMainMiniApp,
@@ -235,7 +267,6 @@ export const layer = Layer.effect(
       if (row === undefined) return undefined
       return {
         ...summarise(row),
-        state: row.state,
         timezone: zoneOf(principal),
       } satisfies SessionDetail
     })

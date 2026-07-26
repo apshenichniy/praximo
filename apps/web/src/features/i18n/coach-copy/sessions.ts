@@ -21,7 +21,6 @@ export interface SessionsCopy {
   readonly detailTitle: string
   readonly detailClient: string
   readonly detailKind: string
-  readonly detailLength: string
   readonly detailInvitation: string
   readonly detailUnaccepted: string
   readonly notFound: string
@@ -41,7 +40,6 @@ const en: SessionsCopy = {
   detailTitle: "Session",
   detailClient: "Client",
   detailKind: "Kind",
-  detailLength: "Length",
   detailInvitation: "Invitation",
   detailUnaccepted: "Not accepted yet",
   notFound: "This session is no longer here.",
@@ -61,7 +59,6 @@ const uk: SessionsCopy = {
   detailTitle: "Сесія",
   detailClient: "Клієнт",
   detailKind: "Тип",
-  detailLength: "Тривалість",
   detailInvitation: "Запрошення",
   detailUnaccepted: "Ще не прийнято",
   notFound: "Цієї сесії більше немає.",
@@ -81,7 +78,6 @@ const ru: SessionsCopy = {
   detailTitle: "Сессия",
   detailClient: "Клиент",
   detailKind: "Тип",
-  detailLength: "Длительность",
   detailInvitation: "Приглашение",
   detailUnaccepted: "Ещё не принято",
   notFound: "Этой сессии больше нет.",

@@ -1,11 +1,10 @@
-import { Calendar03Icon, FlagIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 import type { CoachLanguage } from "@praximo/domain"
 import { Link } from "@tanstack/react-router"
 import { useMemo } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { Card } from "@/components/ui/card.tsx"
+import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import { groupByDay, sessionClock } from "@/features/coach/session-days.ts"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { Section } from "@/features/mini-app/components/section.tsx"
@@ -79,19 +78,12 @@ export function SessionsScreen({
                         <span className="block truncate text-[15px] font-medium">
                           {session.clientName}
                         </span>
-                        <span className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-xs">
-                          <HugeiconsIcon
-                            icon={session.kind === "intake" ? FlagIcon : Calendar03Icon}
-                            size={14}
-                            strokeWidth={2}
-                          />
-                          {session.kind === "intake"
-                            ? copy.clients.kindIntake
-                            : copy.clients.kindRegular}
-                          {" · "}
-                          {session.durationMinutes}
-                          {copy.clients.durationSuffix}
-                        </span>
+                        <SessionKindLine
+                          copy={copy.clients}
+                          kind={session.kind}
+                          durationMinutes={session.durationMinutes}
+                          className="mt-0.5"
+                        />
                         {session.clientAccepted ? null : (
                           <span className="mt-1 block truncate text-xs text-amber-200/80">
                             {copy.sessions.rowUnaccepted}

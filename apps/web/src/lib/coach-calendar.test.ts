@@ -1,45 +1,11 @@
-import { describe, expect, it } from "@effect/vitest"
-import { instantOf, localParts } from "@/lib/coach-calendar.ts"
+import { describe, expect, it } from "vitest"
+import { localParts, nextDate } from "@/lib/coach-calendar.ts"
 
 /**
- * The two conversions every scheduled session passes through, and the one place
- * this slice can be silently wrong by exactly one offset.
- *
- * A coach picks a wall-clock minute in their own zone; the column stores an
- * instant. Get that wrong and nothing fails loudly — sessions are simply booked
- * hours from where they were placed, and the grid's busy intervals come back for
- * the wrong day.
+ * The half of the coach's calendar the browser reads. Effect-free by
+ * construction (ADR 0002 §Effect conventions), and wrong by exactly one day
+ * whenever it is wrong at all — which is why both halves are pinned here.
  */
-describe("instantOf", () => {
-  it("reads the minute as the coach's wall clock, not as UTC", () => {
-    // Kyiv is UTC+3 in July: 10:00 there is 07:00Z. `DateTime.toDate` would
-    // hand back 10:00Z — the reading rather than the instant.
-    expect(instantOf("2026-07-27", 10 * 60, "Europe/Kyiv")?.toISOString()).toBe(
-      "2026-07-27T07:00:00.000Z",
-    )
-  })
-
-  it("follows the zone across its own daylight-saving change", () => {
-    // Same wall clock, same zone, five months apart: UTC+2 in January.
-    expect(instantOf("2027-01-11", 10 * 60, "Europe/Kyiv")?.toISOString()).toBe(
-      "2027-01-11T08:00:00.000Z",
-    )
-  })
-
-  it("brackets the coach's own day, which is not the UTC one", () => {
-    expect(instantOf("2026-07-27", 0, "Europe/Kyiv")?.toISOString()).toBe(
-      "2026-07-26T21:00:00.000Z",
-    )
-    expect(instantOf("2026-07-27", 24 * 60, "Europe/Kyiv")?.toISOString()).toBe(
-      "2026-07-27T21:00:00.000Z",
-    )
-  })
-
-  it("refuses a date it cannot read rather than inventing one", () => {
-    expect(instantOf("not-a-date", 600, "Europe/Kyiv")).toBeUndefined()
-  })
-})
-
 describe("localParts", () => {
   it("reports the day and minute an instant falls on in the coach's zone", () => {
     expect(localParts(new Date("2026-07-27T07:00:00.000Z"), "Europe/Kyiv")).toEqual({
@@ -62,5 +28,29 @@ describe("localParts", () => {
       date: "2026-07-27",
       minutes: 0,
     })
+  })
+})
+
+describe("nextDate", () => {
+  it("names the calendar day after this one", () => {
+    expect(nextDate("2026-07-27")).toBe("2026-07-28")
+    expect(nextDate("2026-07-31")).toBe("2026-08-01")
+    expect(nextDate("2026-12-31")).toBe("2027-01-01")
+  })
+
+  /**
+   * The night the clocks change, the coach's day is 23 or 25 hours long. A
+   * «tomorrow» computed by adding 24 hours to an instant lands on the wrong
+   * date; a calendar day has no such problem — the 25th is followed by the 26th
+   * in every zone there is.
+   */
+  it("is unmoved by a day that is not 24 hours long", () => {
+    expect(nextDate("2026-10-25")).toBe("2026-10-26")
+    expect(nextDate("2027-02-28")).toBe("2027-03-01")
+    expect(nextDate("2028-02-28")).toBe("2028-02-29")
+  })
+
+  it("hands back what it was given rather than inventing a date", () => {
+    expect(nextDate("not-a-date")).toBe("not-a-date")
   })
 })

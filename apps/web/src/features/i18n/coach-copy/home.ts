@@ -16,6 +16,12 @@ export interface HomeCopy {
   readonly mainMiniAppRowMeta: string
 
   readonly mainMiniAppTitle: string
+  /**
+   * The four steps the row promises, as four steps. A run-on sentence naming
+   * them would meet the letter of «4 steps in @BotFather» and break its promise:
+   * this is a sequence a coach follows with a phone in one hand.
+   */
+  readonly mainMiniAppSteps: ReadonlyArray<string>
   readonly mainMiniAppLead: string
   /** Telegram's own button label, quoted inside the sentence. */
   readonly mainMiniAppOpen: string
@@ -35,8 +41,13 @@ const en: HomeCopy = {
   mainMiniAppRowMeta: "Optional · 4 steps in @BotFather",
 
   mainMiniAppTitle: "Optional: open from the chat list",
-  mainMiniAppLead:
-    "In @BotFather choose your bot → Bot Settings → Configure Mini App → Enable Mini App, and paste this exact address. Telegram then shows an ",
+  mainMiniAppSteps: [
+    "Open @BotFather and choose your bot.",
+    "Bot Settings.",
+    "Configure Mini App → Enable Mini App.",
+    "Paste the address below, exactly as it is.",
+  ],
+  mainMiniAppLead: "Telegram then shows an ",
   mainMiniAppOpen: "Open",
   mainMiniAppTail: " button next to your bot in the chat list.",
   mainMiniAppUrlLabel: "Your Mini App address",
@@ -53,8 +64,13 @@ const uk: HomeCopy = {
   mainMiniAppRowMeta: "Необов'язково · 4 кроки в @BotFather",
 
   mainMiniAppTitle: "Необов'язково: відкривати зі списку чатів",
-  mainMiniAppLead:
-    "У @BotFather оберіть свого бота → Bot Settings → Configure Mini App → Enable Mini App і вставте цю саму адресу. Тоді Telegram показуватиме кнопку ",
+  mainMiniAppSteps: [
+    "Відкрийте @BotFather і оберіть свого бота.",
+    "Bot Settings.",
+    "Configure Mini App → Enable Mini App.",
+    "Вставте адресу нижче, точно як вона є.",
+  ],
+  mainMiniAppLead: "Тоді Telegram показуватиме кнопку ",
   mainMiniAppOpen: "Відкрити",
   mainMiniAppTail: " біля вашого бота у списку чатів.",
   mainMiniAppUrlLabel: "Адреса вашого Mini App",
@@ -72,8 +88,13 @@ const ru: HomeCopy = {
   mainMiniAppRowMeta: "Необязательно · 4 шага в @BotFather",
 
   mainMiniAppTitle: "Необязательно: открывать из списка чатов",
-  mainMiniAppLead:
-    "В @BotFather выберите своего бота → Bot Settings → Configure Mini App → Enable Mini App и вставьте этот же адрес. Тогда Telegram будет показывать кнопку ",
+  mainMiniAppSteps: [
+    "Откройте @BotFather и выберите своего бота.",
+    "Bot Settings.",
+    "Configure Mini App → Enable Mini App.",
+    "Вставьте адрес ниже, ровно как он есть.",
+  ],
+  mainMiniAppLead: "Тогда Telegram будет показывать кнопку ",
   mainMiniAppOpen: "Открыть",
   mainMiniAppTail: " рядом с вашим ботом в списке чатов.",
   mainMiniAppUrlLabel: "Адрес вашего Mini App",

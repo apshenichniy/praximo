@@ -1,7 +1,7 @@
 import type { CoachLanguage } from "@praximo/domain"
 import { localeTag } from "@praximo/i18n"
 
-import { instantOf, localParts, MinutesInDay } from "@/lib/coach-calendar.ts"
+import { localParts, nextDate } from "@/lib/coach-calendar.ts"
 
 /**
  * How a list of sessions becomes a list of days (#61).
@@ -65,19 +65,6 @@ export const sessionClock = (language: CoachLanguage, timezone: string): Intl.Da
   })
 
 /**
- * Tomorrow, reached through midnight rather than by adding 24 hours.
- *
- * A day is not always 24 hours long where the coach lives, and on the two nights
- * a year it is not, "now plus a day" lands on the wrong date — which would put
- * tomorrow's sessions under a weekday heading while the day before them still
- * says «Tomorrow».
- */
-const nextDate = (date: string, timezone: string): string | undefined => {
-  const midnight = instantOf(date, MinutesInDay, timezone)
-  return midnight === undefined ? undefined : localParts(midnight, timezone).date
-}
-
-/**
  * Sessions, in the order they were given, gathered under the day each one falls
  * on where the coach is.
  *
@@ -90,7 +77,7 @@ export const groupByDay = <T extends { readonly scheduledAt: string }>(
   options: GroupOptions,
 ): ReadonlyArray<SessionDay<T>> => {
   const todayDate = localParts(options.now, options.timezone).date
-  const tomorrowDate = nextDate(todayDate, options.timezone)
+  const tomorrowDate = nextDate(todayDate)
   const format = headingFormat(options.language, options.timezone)
 
   const days: Array<{ date: string; heading: string; sessions: Array<T> }> = []
@@ -116,3 +103,17 @@ export const groupByDay = <T extends { readonly scheduledAt: string }>(
 
   return days
 }
+
+/**
+ * The days a client is already booked on, as the coach's own calendar reads them
+ * — the dots on the scheduling sheet's month (#61).
+ *
+ * Here rather than in either route because **both entrances draw the same
+ * month**: the client route holds these sessions already, and the picker path
+ * reads the same client before the sheet opens.
+ */
+export const bookedDates = (client: {
+  readonly timezone: string
+  readonly sessions: ReadonlyArray<{ readonly scheduledAt: string }>
+}): ReadonlyArray<string> =>
+  client.sessions.map((session) => localParts(new Date(session.scheduledAt), client.timezone).date)

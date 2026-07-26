@@ -1,3 +1,4 @@
+import { WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback } from "react"
 
@@ -5,6 +6,7 @@ import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import { MainMiniAppScreen } from "@/features/coach/components/main-mini-app-screen.tsx"
+import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
@@ -46,6 +48,23 @@ function MainMiniAppRoute() {
       .catch(() => undefined)
   }, [router])
 
+  // The whole screen is one address. Without a resolved coach there is no bot id
+  // to build it from, and printing `?b=` with nothing after it would hand out a
+  // confidently wrong address on the one screen whose entire job is that address.
+  if (!entry.ok || entry.entry.kind !== "home") {
+    return (
+      <MiniAppShell>
+        <TelegramFullscreen />
+        <EntryFrame
+          icon={WifiDisconnected01Icon}
+          tone="muted"
+          title={copy.entry.unavailableTitle}
+          body={copy.entry.unavailableBody}
+        />
+      </MiniAppShell>
+    )
+  }
+
   return (
     <MiniAppShell>
       <TelegramFullscreen />
@@ -53,7 +72,7 @@ function MainMiniAppRoute() {
         copy={copy}
         mainMiniAppUrl={mainMiniAppUrlFor(
           typeof window === "undefined" ? "" : window.location.href,
-          entry.ok && entry.entry.kind === "home" ? entry.entry.telegramBotId : "",
+          entry.entry.telegramBotId,
         )}
         onHide={hide}
       />

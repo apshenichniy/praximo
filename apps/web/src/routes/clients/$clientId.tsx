@@ -18,8 +18,8 @@ import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
-import { localParts } from "@/lib/coach-calendar.ts"
 import { acceptOnce } from "@/routes/index.tsx"
+import { bookedDates } from "@/features/coach/session-days.ts"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
 import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
 import {
@@ -251,9 +251,7 @@ function ClientRoute() {
           language={language}
           clientName={client.name}
           firstSession={client.sessions.length === 0}
-          bookedDates={client.sessions.map(
-            (session) => localParts(new Date(session.scheduledAt), client.timezone).date,
-          )}
+          bookedDates={bookedDates(client)}
           schedule={day}
           onDateChange={setDate}
           onSubmit={schedule}

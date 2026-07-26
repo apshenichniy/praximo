@@ -17,8 +17,8 @@ import { TodayScreen } from "@/features/coach/components/today-screen.tsx"
 import { coachCatalog, coachCopy } from "@/features/i18n/coach-copy.ts"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
-import { type CoachSessions, orderAttention } from "@/server/coach-sessions.ts"
-import { bookedDates } from "@/routes/sessions/new.tsx"
+import { attentionFor, type CoachSessions, orderAttention } from "@/server/coach-sessions.ts"
+import { bookedDates } from "@/features/coach/session-days.ts"
 
 /**
  * What each screen of #61 actually puts on the page, and — as much as the
@@ -48,6 +48,18 @@ const withFormat = (node: ReactNode, locale: "en" | "uk" | "ru" = "en") =>
   )
 
 const NOW = new Date("2026-07-27T09:00:00.000Z")
+
+/** A row of today's calendar, as the repository hands it over. */
+const booked = (clientId: string) => ({
+  id: `se_${clientId}`,
+  clientId,
+  clientName: clientId.toUpperCase(),
+  scheduledAt: new Date("2026-07-27T11:00:00.000Z"),
+  durationMinutes: 60,
+  kind: "regular",
+  state: "scheduled",
+  clientAccepted: false,
+})
 
 const session = (
   overrides: Partial<CoachSessions.SessionSummary> = {},
@@ -296,7 +308,7 @@ describe("Today", () => {
   })
 })
 
-describe("needs attention order", () => {
+describe("needs attention", () => {
   it("puts what has already lapsed first, then whatever goes next", () => {
     const ordered = orderAttention([
       { clientId: "a", clientName: "A", expiresAt: "2026-07-29T09:00:00.000Z", expired: false },
@@ -305,6 +317,45 @@ describe("needs attention order", () => {
     ])
 
     expect(ordered.map((item) => item.clientId)).toEqual(["b", "c", "a"])
+  })
+
+  const client = (
+    id: string,
+    state: "invited" | "expired" | "accepted",
+    expiresInDays: number,
+  ) => ({
+    id,
+    name: id.toUpperCase(),
+    state,
+    invitedAt: new Date("2026-07-20T09:00:00.000Z"),
+    inviteExpiresAt: new Date(NOW.getTime() + expiresInDays * 24 * 60 * 60 * 1000),
+  })
+
+  it("carries only the invitations inside their last two days, and the lapsed", () => {
+    const items = attentionFor(
+      [client("fresh", "invited", 6), client("soon", "invited", 1), client("gone", "expired", -2)],
+      [],
+      NOW,
+    )
+
+    expect(items.map((item) => item.clientId)).toEqual(["gone", "soon"])
+  })
+
+  /**
+   * The ticket's own rule: a session whose client never accepted already says so
+   * on its card, and «These sessions do not also appear in Needs attention» —
+   * otherwise limiting this section to urgent invitations buys nothing.
+   */
+  it("leaves out anybody whose card is already on today's screen", () => {
+    const roster = [client("soon", "invited", 1), client("other", "invited", 1)]
+
+    expect(attentionFor(roster, [booked("soon")], NOW).map((item) => item.clientId)).toEqual([
+      "other",
+    ])
+  })
+
+  it("never asks anything of a client who is already in", () => {
+    expect(attentionFor([client("done", "accepted", -9)], [], NOW)).toEqual([])
   })
 })
 
@@ -380,7 +431,7 @@ describe("session screen", () => {
       <SessionScreen
         copy={coachCopy("en")}
         language="en"
-        session={{ ...session(), state: "scheduled", timezone: "Europe/Kyiv" }}
+        session={{ ...session(), timezone: "Europe/Kyiv" }}
       />,
     )
 
@@ -401,7 +452,7 @@ describe("session screen", () => {
       <SessionScreen
         copy={coachCopy("en")}
         language="en"
-        session={{ ...session(), state: "scheduled", timezone: "Europe/Kyiv" }}
+        session={{ ...session(), timezone: "Europe/Kyiv" }}
       />,
     )
     expect(healthy).not.toContain(coachCatalog.en.sessions.detailInvitation)
@@ -410,12 +461,7 @@ describe("session screen", () => {
       <SessionScreen
         copy={coachCopy("en")}
         language="en"
-        session={{
-          ...session(),
-          clientAccepted: false,
-          state: "scheduled",
-          timezone: "Europe/Kyiv",
-        }}
+        session={{ ...session(), clientAccepted: false, timezone: "Europe/Kyiv" }}
       />,
     )
     expect(broken).toContain(coachCatalog.en.sessions.detailUnaccepted)
@@ -473,28 +519,13 @@ describe("the sheet's calendar dots", () => {
   it("marks the days this client already has a session on, in the coach's zone", () => {
     expect(
       bookedDates({
-        id: "cl_1",
-        name: "Maria K.",
-        state: "accepted",
-        createdAt: "2026-07-01T09:00:00.000Z",
+        timezone: "Europe/Kyiv",
         sessions: [
           // 23:30 in Kyiv on the 27th is already the 28th in UTC — the dot goes
           // on the day the coach is looking at.
-          {
-            id: "se_1",
-            scheduledAt: "2026-07-27T20:30:00.000Z",
-            durationMinutes: 60,
-            kind: "regular",
-          },
-          {
-            id: "se_2",
-            scheduledAt: "2026-08-03T08:00:00.000Z",
-            durationMinutes: 60,
-            kind: "regular",
-          },
+          { scheduledAt: "2026-07-27T20:30:00.000Z" },
+          { scheduledAt: "2026-08-03T08:00:00.000Z" },
         ],
-        canDelete: false,
-        timezone: "Europe/Kyiv",
       }),
     ).toEqual(["2026-07-27", "2026-08-03"])
   })

@@ -6,6 +6,7 @@ import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import { ClientPickerScreen } from "@/features/coach/components/client-picker-screen.tsx"
+import { bookedDates } from "@/features/coach/session-days.ts"
 import {
   calendarDate,
   type DayScheduleData,
@@ -27,7 +28,6 @@ import {
   scheduleSession,
 } from "@/server/coach-clients.functions.ts"
 import { loadCoachEntry } from "@/server/coach.functions.ts"
-import { localParts } from "@/lib/coach-calendar.ts"
 
 /**
  * New session, started from Today (#61).
@@ -204,14 +204,3 @@ function NewSessionRoute() {
     </MiniAppShell>
   )
 }
-
-/**
- * The days this client is already booked on, as the coach's own calendar reads
- * them — the dots on the sheet's month.
- *
- * Free from a read both entrances already make: a coach booking a month ahead is
- * placing a *rhythm*, and the dots are what makes that rhythm visible while it
- * is being placed.
- */
-export const bookedDates = (client: CoachClients.ClientDetail): ReadonlyArray<string> =>
-  client.sessions.map((session) => localParts(new Date(session.scheduledAt), client.timezone).date)

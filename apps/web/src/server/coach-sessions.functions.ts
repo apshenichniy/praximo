@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import type { CoachSessions } from "./coach-sessions.ts"
+import { type CoachTransportError, transportError } from "./coach-transport.ts"
 import { launchCredential } from "./launch-credential.ts"
 import {
   loadCoachSessionDetail,
@@ -7,20 +8,8 @@ import {
   loadCoachUpcomingSessions,
 } from "./runtime.server.ts"
 
-/**
- * Today, the sessions list and one session, as transport (#61).
- *
- * Same shape as the client screens' beside it: a tagged result rather than a
- * thrown error, and one undifferentiated `unauthenticated` so a refusal cannot
- * be used to tell an unknown bot from a stale credential.
- */
-export type CoachSessionsTransportError = "unauthenticated" | "server"
-
-const isTagged = (error: unknown, tag: string): boolean =>
-  typeof error === "object" && error !== null && "_tag" in error && error._tag === tag
-
-const transportError = (error: unknown): CoachSessionsTransportError =>
-  isTagged(error, "CoachSession.Unauthenticated") ? "unauthenticated" : "server"
+/** Today, the sessions list and one session, as transport (#61). */
+export type CoachSessionsTransportError = CoachTransportError
 
 export type TodayResult =
   | { readonly ok: true; readonly today: CoachSessions.TodayView }

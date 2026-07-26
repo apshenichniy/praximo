@@ -36,7 +36,23 @@ export function MainMiniAppScreen({
 
       <h1 className="mt-2 text-2xl font-semibold tracking-tight">{copy.home.mainMiniAppTitle}</h1>
 
-      <p className="text-muted-foreground mt-4 text-sm leading-6">
+      {/*
+        Four steps, because the row on Today promised four. A run-on sentence
+        naming them would meet the letter of that promise and break it: this is a
+        sequence a coach follows with @BotFather open in the other chat.
+      */}
+      <ol className="mt-6 flex flex-col gap-3">
+        {copy.home.mainMiniAppSteps.map((step, index) => (
+          <li key={step} className="flex items-start gap-3">
+            <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums">
+              {index + 1}
+            </span>
+            <span className="text-[13px] leading-5">{step}</span>
+          </li>
+        ))}
+      </ol>
+
+      <p className="text-muted-foreground mt-6 text-sm leading-6">
         {copy.home.mainMiniAppLead}
         <span className="text-foreground">{copy.home.mainMiniAppOpen}</span>
         {copy.home.mainMiniAppTail}

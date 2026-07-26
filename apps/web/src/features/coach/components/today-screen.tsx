@@ -1,10 +1,4 @@
-import {
-  Alert01Icon,
-  ArrowRight01Icon,
-  Calendar03Icon,
-  CheckmarkCircle02Icon,
-  FlagIcon,
-} from "@hugeicons/core-free-icons"
+import { Alert01Icon, ArrowRight01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { CoachLanguage } from "@praximo/domain"
 import { Link } from "@tanstack/react-router"
@@ -12,6 +6,7 @@ import { useMemo } from "react"
 
 import { Button, buttonVariants } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
+import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import { sessionClock } from "@/features/coach/session-days.ts"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { Section, SectionTitle } from "@/features/mini-app/components/section.tsx"
@@ -204,22 +199,12 @@ function SessionCard({
         <span className="text-xl font-semibold tabular-nums">{time}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] font-medium">{session.clientName}</span>
-          <span className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-xs">
-            {/*
-              Kind is a word with a glyph and no colour of its own: amber, rose
-              and emerald already mean invitation and session *state*, and a
-              second colour vocabulary makes both harder to read.
-            */}
-            <HugeiconsIcon
-              icon={session.kind === "intake" ? FlagIcon : Calendar03Icon}
-              size={14}
-              strokeWidth={2}
-            />
-            {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
-            {" · "}
-            {session.durationMinutes}
-            {copy.clients.durationSuffix}
-          </span>
+          <SessionKindLine
+            copy={copy.clients}
+            kind={session.kind}
+            durationMinutes={session.durationMinutes}
+            className="mt-0.5"
+          />
         </span>
       </Link>
 

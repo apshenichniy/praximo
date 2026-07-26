@@ -3,6 +3,7 @@ import { sessionMoment } from "@praximo/i18n"
 import { Link } from "@tanstack/react-router"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
+import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { DetailCard, DetailRow } from "@/features/mini-app/components/detail-card.tsx"
 import type { CoachSessions } from "@/server/coach-sessions.ts"
@@ -59,13 +60,12 @@ export function SessionScreen({
           </Link>
         </DetailRow>
         <DetailRow label={copy.sessions.detailKind}>
-          {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
-        </DetailRow>
-        <DetailRow label={copy.sessions.detailLength}>
-          <span className="tabular-nums">
-            {session.durationMinutes}
-            {copy.clients.durationSuffix}
-          </span>
+          <SessionKindLine
+            copy={copy.clients}
+            kind={session.kind}
+            durationMinutes={session.durationMinutes}
+            className="text-foreground justify-end text-sm"
+          />
         </DetailRow>
         {/*
           The invitation appears only when it is a problem. A healthy session

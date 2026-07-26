@@ -96,7 +96,7 @@ const uk: TodayCopy = {
   unacceptedLead: "Запрошення не прийнято — ",
   unacceptedTail: " поки не отримає посилання",
   resend: "Надіслати запрошення ще раз",
-  resendAccepted: "Клієнт вже прийняв запрошення.",
+  resendAccepted: "Запрошення вже прийнято.",
 
   checklistTitle: "Три кроки до першої сесії",
   checklistBot: "Ваш бот працює",
@@ -131,7 +131,7 @@ const ru: TodayCopy = {
   unacceptedLead: "Приглашение не принято — ",
   unacceptedTail: " пока не получит ссылку",
   resend: "Отправить приглашение ещё раз",
-  resendAccepted: "Клиент уже принял приглашение.",
+  resendAccepted: "Приглашение уже принято.",
 
   checklistTitle: "Три шага до первой сессии",
   checklistBot: "Ваш бот работает",

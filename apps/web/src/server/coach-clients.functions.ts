@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import type { CoachClients } from "./coach-clients.ts"
+import { type CoachTransportError, isTagged, transportError } from "./coach-transport.ts"
 import { launchCredential } from "./launch-credential.ts"
 import {
   createCoachClient,
@@ -16,21 +17,11 @@ import {
 } from "./runtime.server.ts"
 
 /**
- * The client screens' transport. Same shape as the entry's beside it: a tagged
- * result rather than a thrown error, and one undifferentiated `unauthenticated`
- * so a refusal cannot be used to tell an unknown bot from a stale credential.
+ * The client screens' transport: a tagged result rather than a thrown error, and
+ * one undifferentiated `unauthenticated` so a refusal cannot be used to tell an
+ * unknown bot from a stale credential. The mapping itself is shared (#61).
  */
-export type CoachClientsTransportError = "unauthenticated" | "server"
-
-/**
- * Which typed failure crossed the runtime boundary. The tag is all that
- * survives `runPromise`, so this is the one thing every handler below asks.
- */
-const isTagged = (error: unknown, tag: string): boolean =>
-  typeof error === "object" && error !== null && "_tag" in error && error._tag === tag
-
-const transportError = (error: unknown): CoachClientsTransportError =>
-  isTagged(error, "CoachSession.Unauthenticated") ? "unauthenticated" : "server"
+export type CoachClientsTransportError = CoachTransportError
 
 export type CoachClientsResult =
   | { readonly ok: true; readonly home: CoachClients.CoachClientsHome }

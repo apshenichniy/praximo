@@ -81,10 +81,16 @@ drill-in with a back affordance. Screen inventory:
 - **Client detail** — profile (channel, language, consent), invite banner,
   session history.
 - **Artifact reader** — full-screen render of one artifact version.
-- **New session** — client picker + date/time. Scheduling for a client the coach
-  is *already looking at* does not go through it: that is a sheet on the client
+- **New session** — client picker + date/time. Route `/sessions/new`. Scheduling for a client
+  the coach is *already looking at* does not go through it: that is a sheet on the client
   route ([#56](https://github.com/apshenichniy/praximo/issues/56)). This screen
-  arrives with Today, for the case where the client still has to be chosen.
+  arrives with Today, for the case where the client still has to be chosen. The sheet is the
+  same component from both entrances, so duration and kind cannot drift apart, and its month
+  dots the days that already carry a session with the client being scheduled.
+- **Main Mini App setup** — route `/main-mini-app`: the four @BotFather steps, this coach's own
+  Mini App address, and the **Hide** control for the hint row on Today
+  ([#61](https://github.com/apshenichniy/praximo/issues/61)). It exists because no Bot API can
+  set the chat-list button (ADR 0004 §Mini App entry points).
 - **Client route** — one client: header, invitation while unaccepted, upcoming
   sessions, profile, danger zone (#56). It arrives *before* the Today dashboard.
 
@@ -110,12 +116,16 @@ Ordered by how often each thing is needed:
 2. **Greeting**: the coach's name and one factual line — «Two sessions today» / «No sessions
    today». No time-of-day greeting, and no greeting *word*: it would want the vocative in
    Ukrainian and no column holds a declined form. The zero is spoken, because silence about it
-   reads as a screen that failed to load.
+   reads as a screen that failed to load — **except on an empty practice**, where the checklist
+   below is the whole screen and «No sessions today» would be the first of the three ways of
+   saying nothing that the checklist exists to replace.
 3. **Today's sessions as cards**, grouped by time, each one tapping through to the session
    screen. A session whose client never accepted carries the state word, its consequence —
    «Invitation not accepted — N cannot get a link yet» — and the action that fixes it, in
    amber. Red belongs to the bot being down.
-4. **Needs attention**, as amended above. Hidden when empty.
+4. **Needs attention**, as amended above. Hidden when empty, and it never repeats a client
+   whose card is already on the screen above: that card says it for today, the sessions list
+   says it for the rest, and a third place would undo the point of rule two.
 5. **Bottom navigation**: two quiet buttons — **All sessions** and **Clients**. They are
    navigation, not action.
 6. **Main Mini App hint**, last: one row reading as its payoff — «Add an Open button to your
