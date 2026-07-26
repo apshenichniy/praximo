@@ -1,5 +1,6 @@
 import { CoachOnboardingToken } from "@praximo/auth"
 import { MemberRepo } from "@praximo/db"
+import { CoachLanguage } from "@praximo/domain"
 import { Clock, Context, Effect, Layer, Schema } from "effect"
 import { TERMS_VERSION } from "@/features/legal/versions.ts"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
@@ -15,12 +16,22 @@ import type { LaunchCredential } from "./launch-credential.ts"
  * a URL of its own is a screen that can be bookmarked past.
  */
 export type CoachEntry =
-  | { readonly kind: "terms-required"; readonly termsVersion: string }
+  | {
+      readonly kind: "terms-required"
+      readonly termsVersion: string
+      /**
+       * What the coach is being spoken to in *right now* — seeded from their
+       * Telegram client when they claimed the invite (#130). Onboarding's first
+       * step shows it back to them and lets them disagree; every word of the
+       * screen, the terms included, renders in it.
+       */
+      readonly language: CoachLanguage
+    }
   | {
       readonly kind: "home"
       readonly botUsername: string
       readonly telegramBotId: string
-      readonly language: string
+      readonly language: CoachLanguage
       /**
        * Present exactly while the coach's own bot has stopped answering (#55).
        * Nothing about the workspace is blocked by it — the delivery channel is
@@ -45,6 +56,21 @@ export interface Interface {
     CoachEntry,
     CoachSession.Unauthenticated | CoachSession.LoadFailed | StaleTermsVersion
   >
+  /**
+   * The coach's own choice of the language Praximo speaks to them (#130) — the
+   * second and last writer of `member.language`.
+   *
+   * It is deliberately usable before *and* after acceptance. Before, it is
+   * onboarding's first step; after, it is what a settings screen would call, and
+   * nothing about accepting terms should have to be undone to change a language.
+   */
+  readonly chooseLanguage: (
+    credential: LaunchCredential,
+    language: unknown,
+  ) => Effect.Effect<
+    CoachEntry,
+    CoachSession.Unauthenticated | CoachSession.LoadFailed | UnsupportedLanguage
+  >
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/web/CoachSurface") {}
@@ -57,6 +83,16 @@ export class Service extends Context.Service<Service, Interface>()("@praximo/web
 export class StaleTermsVersion extends Schema.TaggedErrorClass<StaleTermsVersion>()(
   "CoachSurface.StaleTermsVersion",
   { current: Schema.String },
+) {}
+
+/**
+ * A language outside the three the product speaks. The Mini App offers exactly
+ * those three, so this is a broken client or a hand-made request — but the
+ * column is an enum and the refusal belongs here rather than at the database.
+ */
+export class UnsupportedLanguage extends Schema.TaggedErrorClass<UnsupportedLanguage>()(
+  "CoachSurface.UnsupportedLanguage",
+  {},
 ) {}
 
 export const layer = Layer.effect(
@@ -97,9 +133,42 @@ export const layer = Layer.effect(
         READ_WINDOW_MILLIS,
       )
       if (!CoachSession.isOnboarded(principal)) {
-        return { kind: "terms-required", termsVersion: TERMS_VERSION } satisfies CoachEntry
+        return {
+          kind: "terms-required",
+          termsVersion: TERMS_VERSION,
+          language: principal.language,
+        } satisfies CoachEntry
       }
       return yield* home(principal)
+    })
+
+    /**
+     * Write the coach's chosen language, then re-read the entry through the same
+     * gate that opened it.
+     *
+     * Re-reading rather than echoing the argument back is what makes the client
+     * simple: whichever step the coach is on, the screen renders whatever the
+     * database now says, and a write that did not take cannot look like one that
+     * did. The window is the write one — this is a state change, and it is made
+     * on the first screen of a fresh launch.
+     */
+    const chooseLanguage = Effect.fn("CoachSurface.chooseLanguage")(function* (
+      credential: LaunchCredential,
+      language: unknown,
+    ) {
+      const chosen = yield* Schema.decodeUnknownEffect(CoachLanguage)(language).pipe(
+        Effect.mapError(() => new UnsupportedLanguage()),
+      )
+      const principal = yield* session.authenticateForTermsAcceptance(
+        credential,
+        WRITE_WINDOW_MILLIS,
+      )
+      const now = yield* Clock.currentTimeMillis
+      yield* members
+        .setLanguage({ memberId: principal.memberId, language: chosen, now: new Date(now) })
+        .pipe(Effect.mapError(() => new CoachSession.LoadFailed({ operation: "setLanguage" })))
+
+      return yield* openApp(credential)
     })
 
     /**
@@ -133,7 +202,7 @@ export const layer = Layer.effect(
       return yield* home(onboarded)
     })
 
-    return Service.of({ openApp, acceptTerms })
+    return Service.of({ openApp, acceptTerms, chooseLanguage })
   }),
 )
 

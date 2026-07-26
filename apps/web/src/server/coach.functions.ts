@@ -1,7 +1,11 @@
 import { createServerFn } from "@tanstack/react-start"
 import type { CoachSurface } from "./coach-surface.ts"
 import { launchCredential } from "./launch-credential.ts"
-import { acceptCoachTerms as acceptCoachTermsRuntime, openCoachApp } from "./runtime.server.ts"
+import {
+  acceptCoachTerms as acceptCoachTermsRuntime,
+  chooseCoachLanguage as chooseCoachLanguageRuntime,
+  openCoachApp,
+} from "./runtime.server.ts"
 
 /**
  * Why the coach entry could not open. Like the manager entry beside it, and
@@ -70,6 +74,36 @@ export const acceptCoachTerms = createServerFn({ method: "POST" })
       ) {
         return { ok: false, error: "stale" }
       }
+      return { ok: false, error: transportError(error) }
+    }
+  })
+
+/**
+ * The coach's language, chosen on onboarding's first step (#130).
+ *
+ * It travels as a bare string and is validated against the domain schema on the
+ * server: the Mini App offers exactly three chips, so anything else is a broken
+ * client, and the column behind this is an enum that will not take it anyway.
+ */
+export const chooseCoachLanguage = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator((input: unknown): { readonly language: string } => ({
+    language:
+      typeof input === "object" &&
+      input !== null &&
+      "language" in input &&
+      typeof input.language === "string"
+        ? input.language
+        : "",
+  }))
+  .handler(async ({ context, data }): Promise<CoachEntryTransportResult> => {
+    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
+    try {
+      return {
+        ok: true,
+        entry: await chooseCoachLanguageRuntime(context.credential, data.language),
+      }
+    } catch (error) {
       return { ok: false, error: transportError(error) }
     }
   })

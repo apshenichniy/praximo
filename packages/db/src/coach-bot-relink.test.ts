@@ -45,7 +45,6 @@ describe.skipIf(skipWithoutDatabase)("coach bot re-link (dev Neon branch)", () =
       requestId: crypto.randomUUID(),
       requestFingerprint: fingerprint,
       name: "Relink Coaching",
-      coachLanguage: CoachLanguage.make("uk"),
       issuedByTelegramId,
       now: ISSUED_AT,
     })
@@ -55,7 +54,12 @@ describe.skipIf(skipWithoutDatabase)("coach bot re-link (dev Neon branch)", () =
         client.delete(schema.workspace).where(eq(schema.workspace.id, aggregate.workspace.id)),
       ).pipe(Effect.asVoid),
     )
-    const attempt = yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+    const attempt = yield* repo.prepare(
+      aggregate.invite.id,
+      coach,
+      CoachLanguage.make("uk"),
+      STARTED_AT,
+    )
     yield* repo.claim(coach, FIRST_BOT, "ada_first_bot", STARTED_AT)
     yield* repo.complete({
       provisioningId: attempt.id,

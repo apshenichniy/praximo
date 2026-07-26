@@ -54,6 +54,7 @@ const sessionLayer = (options: {
         options.bookkeepingFails === true ? failing() : Effect.void,
       ),
       acceptTerms: Effect.fn("MemberRepo.Test.acceptTerms")(() => Effect.die("unused")),
+      setLanguage: Effect.fn("MemberRepo.Test.setLanguage")(() => Effect.die("unused")),
     }),
   )
   return CoachSession.layer.pipe(

@@ -162,6 +162,17 @@ export const acceptCoachTerms = async (
   )
 }
 
+/** The coach's own choice of the language Praximo speaks to them (#130). */
+export const chooseCoachLanguage = async (
+  credential: LaunchCredential,
+  language: unknown,
+): Promise<CoachSurface.CoachEntry> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachSurface.Service, (service) => service.chooseLanguage(credential, language)),
+  )
+}
+
 export const listAdminWorkspaces = async (
   initData: string,
 ): Promise<AdminSurface.CoachListResult> => {

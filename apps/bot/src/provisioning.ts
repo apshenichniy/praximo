@@ -568,9 +568,18 @@ export const greetCoachOnBotReady = Effect.fn("BotWorker.greetCoachOnBotReady")(
   return true
 })
 
+/**
+ * `language` is the sender's own Telegram client language, narrowed. It is the
+ * first signal about the coach that comes from the coach themselves, and the
+ * claim writes it to `member.language` (#130) — so a coach whose Telegram is
+ * Ukrainian is spoken to in Ukrainian from the very next message, without a
+ * screen having asked anything. The Mini App's onboarding is where they get to
+ * disagree with it.
+ */
 export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(function* (
   parameter: string,
   telegramUserId: number,
+  language: CoachLanguage,
 ) {
   const tokens = yield* CoachOnboardingToken.Service
   const onboarding = yield* CoachOnboardingRepo.Service
@@ -582,6 +591,7 @@ export const prepareOnboarding = Effect.fn("BotWorker.prepareOnboarding")(functi
   return yield* repo.prepare(
     inviteId,
     TelegramId.make(String(telegramUserId)),
+    language,
     new Date(yield* Clock.currentTimeMillis),
   )
 })

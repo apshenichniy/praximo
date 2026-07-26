@@ -28,16 +28,33 @@ entry points) — the @BotFather steps live in the
 
 ## First login
 
-Before any screen below renders, the coach meets a **blocking terms-of-service acceptance**
-— a state of the entry, deliberately not a route of its own, so there is no URL to bookmark
-past it. It shows a short summary of what the coach is agreeing to and links the full terms
-and the privacy policy as in-app routes (an external link would eject them from the Mini App
-mid-acceptance); the single action is the host's own bottom button. There is no Decline
-control — closing the Mini App is the refusal.
+Before any screen below renders, the coach meets a **blocking two-step onboarding** — a
+state of the entry, deliberately not a route of its own, so there is no URL to bookmark past
+it. Stepping back between the two is the host's own back button, which on this screen would
+otherwise close the app.
+
+**Step 1 — language.** Praximo introduces itself and states, in the first person and in the
+language currently selected, what that selection means: *"I will write to you in **English** —
+here and in your bot."* Three chips sit under that sentence, each language named in its own
+tongue, pre-selected from what the invite claim seeded out of the coach's Telegram client
+([#130](https://github.com/apshenichniy/praximo/issues/130)). Tapping one re-renders the
+introduction in it — the sentence is the control's label, not a caption beside it, because
+this choice governs the **bot** as well as the app, and a switcher on a page of legal text
+reads as "translate this page". Continuing writes `member.language`, the one column every
+coach-facing surface reads. It is the only language control in MVP; a settings screen for
+changing it later is not part of it.
+
+**Step 2 — the terms**, in the language just settled. A short summary of what the coach is
+agreeing to, links to the full terms and the privacy policy as in-app routes (an external
+link would eject them from the Mini App mid-acceptance) carrying that language, and the
+host's own bottom button as the single action. There is no Decline control — closing the
+Mini App is the refusal.
 
 Acceptance records the fact and the text version on Member, and notifies the invite issuer
-that onboarding is complete. Every coach operation other than acceptance itself is refused
-until it lands. Authentication mechanics are in
+that onboarding is complete. The version identifies the *document*, not the rendering: the
+three languages are structurally identical translations of one text under one version, so
+changing language afterwards never asks for re-acceptance. Every coach operation other than
+acceptance itself is refused until it lands. Authentication mechanics are in
 [client-onboarding-auth.md](client-onboarding-auth.md) §Coach authentication and
 [ADR 0006](../adr/0006-coach-authentication-in-mvp.md).
 

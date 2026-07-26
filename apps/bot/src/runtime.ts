@@ -177,8 +177,11 @@ const makeManagerBot = (
       await getRuntime(env).runPromise(offerBotCreation(env, relink, "relink", telegramFetch))
       return
     }
+    // The claim seeds the coach's language from the sender's own Telegram
+    // client (#130), so the copy below — and every coach-facing message after
+    // it — is already in it.
     const result = await getRuntime(env).runPromise(
-      prepareOnboarding(parameter, ctx.from.id).pipe(Effect.result),
+      prepareOnboarding(parameter, ctx.from.id, language).pipe(Effect.result),
     )
     if (result._tag === "Failure") {
       const failure = result.failure as { readonly _tag?: string; readonly reason?: string }

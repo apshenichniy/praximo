@@ -3,6 +3,7 @@ import { DateTime, Effect, Schema } from "effect"
 import {
   CreateInviteDelivery,
   CreateWorkspaceInput,
+  narrowCoachLanguage,
   RenameWorkspaceInput,
 } from "./workspace-create.ts"
 
@@ -14,7 +15,6 @@ describe("CreateWorkspaceInput", () => {
       const input = yield* decode({
         requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
         name: "  Ada Coaching  ",
-        coachLanguage: "uk",
         description: "   ",
         shortDescription: "  Thoughtful coaching  ",
       })
@@ -22,13 +22,29 @@ describe("CreateWorkspaceInput", () => {
       expect(input).toEqual({
         requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
         name: "Ada Coaching",
-        coachLanguage: "uk",
         shortDescription: "Thoughtful coaching",
       })
     }),
   )
 
-  it.effect("accepts a bare request id: name and coach language are optional", () =>
+  // The admin does not choose the coach's language, and an old client that
+  // still sends one must not be able to set it by the back door (#130).
+  it.effect("drops a coach language the caller tries to supply", () =>
+    Effect.gen(function* () {
+      const input = yield* decode({
+        requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+        name: "Ada Coaching",
+        coachLanguage: "uk",
+      })
+
+      expect(input).toEqual({
+        requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
+        name: "Ada Coaching",
+      })
+    }),
+  )
+
+  it.effect("accepts a bare request id: the internal label is optional", () =>
     Effect.gen(function* () {
       const input = yield* decode({ requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f" })
       expect(input).toEqual({ requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f" })
@@ -49,18 +65,12 @@ describe("CreateWorkspaceInput", () => {
     }),
   )
 
-  it.effect("rejects unsupported languages and malformed request ids", () =>
+  it.effect("rejects malformed request ids", () =>
     Effect.gen(function* () {
       yield* Effect.flip(
         decode({
           requestId: "not-a-uuid",
           name: "Ada Coaching",
-        }),
-      )
-      yield* Effect.flip(
-        decode({
-          requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
-          coachLanguage: "es",
         }),
       )
     }),
@@ -71,13 +81,26 @@ describe("CreateWorkspaceInput", () => {
       const base = {
         requestId: "cb6bd559-6091-4d69-aeff-2af000354c7f",
         name: "Ada Coaching",
-        coachLanguage: "ru",
       }
 
       yield* Effect.flip(decode({ ...base, description: "a".repeat(513) }))
       yield* Effect.flip(decode({ ...base, shortDescription: "a".repeat(121) }))
     }),
   )
+})
+
+describe("narrowCoachLanguage", () => {
+  it("narrows a Telegram language_code to one of the three the product speaks", () => {
+    expect(narrowCoachLanguage("uk")).toBe("uk")
+    // Regional tags are what Telegram actually sends.
+    expect(narrowCoachLanguage("ru-RU")).toBe("ru")
+    expect(narrowCoachLanguage("UK-ua")).toBe("uk")
+    // Anything else is English rather than nothing: the bot and the Mini App
+    // both have to say *something* to a sender they cannot place.
+    expect(narrowCoachLanguage("de")).toBe("en")
+    expect(narrowCoachLanguage("")).toBe("en")
+    expect(narrowCoachLanguage(undefined)).toBe("en")
+  })
 })
 
 describe("CreateInviteDelivery", () => {

@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm"
 import { Effect, Layer, Result } from "effect"
 import { CoachBotProvisioningRepo } from "./coach-bot-provisioning-repo.ts"
 import { CoachOnboardingRepo } from "./coach-onboarding-repo.ts"
+import { MemberRepo } from "./member-repo.ts"
 import { Database } from "./client.ts"
 import * as schema from "./schema.ts"
 import { skipWithoutDatabase, testDatabaseUrl } from "./test-database.ts"
@@ -12,6 +13,11 @@ const requestId = () => crypto.randomUUID()
 const issuedByTelegramId = "100000001"
 const coach = TelegramId.make("800000101")
 const stranger = TelegramId.make("800000102")
+
+/** What the sender's Telegram client was set to when they tapped the link. */
+const EN = CoachLanguage.make("en")
+const UK = CoachLanguage.make("uk")
+const RU = CoachLanguage.make("ru")
 
 const ISSUED_AT = new Date("2026-07-23T18:00:00.000Z")
 const STARTED_AT = new Date("2026-07-23T19:00:00.000Z")
@@ -23,22 +29,17 @@ const STARTED_AT = new Date("2026-07-23T19:00:00.000Z")
  */
 describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon branch)", () => {
   const appLayer = Layer.provideMerge(
-    Layer.mergeAll(CoachBotProvisioningRepo.layer, CoachOnboardingRepo.layer),
+    Layer.mergeAll(CoachBotProvisioningRepo.layer, CoachOnboardingRepo.layer, MemberRepo.layer),
     Database.testLayer(testDatabaseUrl),
   )
 
-  const inviteFor = Effect.fnUntraced(function* (
-    fingerprint: string,
-    issuedAt: Date,
-    coachLanguage: CoachLanguage = CoachLanguage.make("en"),
-  ) {
+  const inviteFor = Effect.fnUntraced(function* (fingerprint: string, issuedAt: Date) {
     const onboarding = yield* CoachOnboardingRepo.Service
     const { client } = yield* Database.Service
     const created = yield* onboarding.createOrGet({
       requestId: requestId(),
       requestFingerprint: fingerprint,
       name: "Claim Coaching",
-      coachLanguage,
       issuedByTelegramId,
       now: issuedAt,
     })
@@ -58,7 +59,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const onboarding = yield* CoachOnboardingRepo.Service
       const aggregate = yield* inviteFor("first-start", ISSUED_AT)
 
-      const first = yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      const first = yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       expect(first.status).toBe("requested")
       expect(first.coachTelegramId).toBe(coach)
 
@@ -72,6 +73,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const resumed = yield* repo.prepare(
         aggregate.invite.id,
         coach,
+        EN,
         new Date("2026-07-25T09:00:00.000Z"),
       )
       expect(resumed.id).toBe(first.id)
@@ -82,13 +84,62 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 
+  /**
+   * The first of `member.language`'s two writers (#130). Creation leaves the
+   * owner on the column default, and the accepting `/start` is the first moment
+   * a signal from the coach themselves exists.
+   */
+  it.effect("seeds the owner's language from the claiming /start, once", () =>
+    Effect.gen(function* () {
+      const repo = yield* CoachBotProvisioningRepo.Service
+      const { client } = yield* Database.Service
+      const aggregate = yield* inviteFor("language-seed", ISSUED_AT)
+
+      const ownerLanguage = Effect.fnUntraced(function* () {
+        const rows = yield* Effect.promise(() =>
+          client
+            .select({ language: schema.member.language })
+            .from(schema.member)
+            .where(
+              and(
+                eq(schema.member.workspaceId, aggregate.workspace.id),
+                eq(schema.member.role, "owner"),
+              ),
+            )
+            .limit(1),
+        )
+        return rows[0]?.language
+      })
+
+      // Born on the default: the admin who created this workspace was never
+      // asked, and never should be.
+      expect(yield* ownerLanguage()).toBe("en")
+
+      yield* repo.prepare(aggregate.invite.id, coach, UK, STARTED_AT)
+      expect(yield* ownerLanguage()).toBe("uk")
+
+      // The coach then chose Russian for themselves in the Mini App…
+      const members = yield* MemberRepo.Service
+      yield* members.setLanguage({
+        memberId: `mem_${aggregate.workspace.id.replace("ws_", "")}`,
+        language: RU,
+        now: new Date("2026-07-25T08:00:00.000Z"),
+      })
+
+      // …and a later `/start` — a coach returning to the chat — must not walk
+      // back over it. The seed rides on the claim, which is already taken.
+      yield* repo.prepare(aggregate.invite.id, coach, UK, new Date("2026-07-25T09:00:00.000Z"))
+      expect(yield* ownerLanguage()).toBe("ru")
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
   it.effect("carries the live creation prompt across a repeated /start and into the claim", () =>
     Effect.gen(function* () {
       const repo = yield* CoachBotProvisioningRepo.Service
       const aggregate = yield* inviteFor("prompt-message", ISSUED_AT)
 
       // Nothing has been sent yet, so there is no prompt to disarm.
-      const first = yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      const first = yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       expect(first.promptMessageId).toBeUndefined()
 
       yield* repo.recordPrompt(first.id, 401, STARTED_AT)
@@ -98,6 +149,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const resumed = yield* repo.prepare(
         aggregate.invite.id,
         coach,
+        EN,
         new Date("2026-07-25T09:00:00.000Z"),
       )
       expect(resumed.id).toBe(first.id)
@@ -124,9 +176,9 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const onboarding = yield* CoachOnboardingRepo.Service
       const aggregate = yield* inviteFor("competing-start", ISSUED_AT)
 
-      yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       const refused = yield* Effect.flip(
-        repo.prepare(aggregate.invite.id, stranger, new Date("2026-07-23T19:05:00.000Z")),
+        repo.prepare(aggregate.invite.id, stranger, EN, new Date("2026-07-23T19:05:00.000Z")),
       )
       // `claimed` is the generic answer — the bot's copy for it says only that
       // the link has already been used (#112).
@@ -162,8 +214,8 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
 
       const attempts = yield* Effect.all(
         [
-          repo.prepare(aggregate.invite.id, coach, STARTED_AT).pipe(Effect.result),
-          repo.prepare(aggregate.invite.id, stranger, STARTED_AT).pipe(Effect.result),
+          repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT).pipe(Effect.result),
+          repo.prepare(aggregate.invite.id, stranger, EN, STARTED_AT).pipe(Effect.result),
         ],
         { concurrency: "unbounded" },
       )
@@ -183,7 +235,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const aggregate = yield* inviteFor("lapsed-start", ISSUED_AT)
 
       const refused = yield* Effect.flip(
-        repo.prepare(aggregate.invite.id, coach, new Date("2026-08-30T18:00:00.000Z")),
+        repo.prepare(aggregate.invite.id, coach, EN, new Date("2026-08-30T18:00:00.000Z")),
       )
       expect(refused).toMatchObject({
         _tag: "CoachBotProvisioningRepo.ProvisioningUnavailable",
@@ -210,9 +262,9 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
   it.effect("parks a pasted candidate on the coach's open attempt and reads it back", () =>
     Effect.gen(function* () {
       const repo = yield* CoachBotProvisioningRepo.Service
-      const aggregate = yield* inviteFor("paste-start", ISSUED_AT, CoachLanguage.make("uk"))
+      const aggregate = yield* inviteFor("paste-start", ISSUED_AT)
 
-      yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      yield* repo.prepare(aggregate.invite.id, coach, UK, STARTED_AT)
       const ingested = yield* repo.ingestCandidate({
         coachTelegramId: coach,
         ...candidate,
@@ -242,7 +294,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const repo = yield* CoachBotProvisioningRepo.Service
       const aggregate = yield* inviteFor("paste-again", ISSUED_AT)
 
-      yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       const first = yield* repo.ingestCandidate({
         coachTelegramId: coach,
         ...candidate,
@@ -272,8 +324,8 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const mine = yield* inviteFor("paste-mine", ISSUED_AT)
       const theirs = yield* inviteFor("paste-theirs", ISSUED_AT)
 
-      yield* repo.prepare(mine.invite.id, coach, STARTED_AT)
-      yield* repo.prepare(theirs.invite.id, stranger, STARTED_AT)
+      yield* repo.prepare(mine.invite.id, coach, EN, STARTED_AT)
+      yield* repo.prepare(theirs.invite.id, stranger, EN, STARTED_AT)
       yield* repo.ingestCandidate({
         coachTelegramId: coach,
         ...candidate,
@@ -304,7 +356,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const { client } = yield* Database.Service
       const aggregate = yield* inviteFor("paste-reset", ISSUED_AT)
 
-      yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       // An administrator resets the invitation while the coach still holds the
       // chat open (#112). The paste must say the link is dead, not that the
       // coach never opened one.
@@ -368,7 +420,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const repo = yield* CoachBotProvisioningRepo.Service
       const aggregate = yield* inviteFor("second-bot", ISSUED_AT)
 
-      const attempt = yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      const attempt = yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       yield* repo.claim(coach, "9100010", "ada_first_bot", STARTED_AT)
       const installed = yield* repo.complete({
         provisioningId: attempt.id,
@@ -422,7 +474,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       // Nothing claimed yet: the bot is not ours to be waiting on.
       expect(yield* repo.findInFlightManagedAttempt(botId)).toBeUndefined()
 
-      const prepared = yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      const prepared = yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       expect(yield* repo.findInFlightManagedAttempt(botId)).toBeUndefined()
 
       // Claimed and configuring: this bot is ours and unfinished, which is what a
@@ -454,7 +506,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const { client } = yield* Database.Service
       const aggregate = yield* inviteFor("claim-reset", ISSUED_AT)
 
-      yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       // An administrator resets the invitation between the `/start` and the tap.
       yield* Effect.promise(() =>
         client
@@ -486,7 +538,7 @@ describe.skipIf(skipWithoutDatabase)("CoachBotProvisioningRepo claim (dev Neon b
       const onboarding = yield* CoachOnboardingRepo.Service
       const aggregate = yield* inviteFor("paste-activation", ISSUED_AT)
 
-      yield* repo.prepare(aggregate.invite.id, coach, STARTED_AT)
+      yield* repo.prepare(aggregate.invite.id, coach, EN, STARTED_AT)
       yield* repo.ingestCandidate({
         coachTelegramId: coach,
         ...candidate,

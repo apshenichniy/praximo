@@ -678,7 +678,6 @@ export const layer = Layer.effect(
           JSON.stringify({
             requestId: input.requestId,
             name: input.name ?? null,
-            coachLanguage: input.coachLanguage ?? null,
             description: input.description ?? null,
             shortDescription: input.shortDescription ?? null,
             avatarDigest: null,
@@ -691,7 +690,6 @@ export const layer = Layer.effect(
           requestId: input.requestId,
           requestFingerprint: fingerprint,
           ...(input.name === undefined ? {} : { name: input.name }),
-          ...(input.coachLanguage === undefined ? {} : { coachLanguage: input.coachLanguage }),
           ...(input.description === undefined ? {} : { description: input.description }),
           ...(input.shortDescription === undefined
             ? {}

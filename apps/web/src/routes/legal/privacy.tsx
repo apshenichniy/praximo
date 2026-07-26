@@ -4,6 +4,8 @@ import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { privacyPolicyFor } from "@/features/legal/content.ts"
 import { LegalPage } from "@/features/legal/components/legal-page.tsx"
+import { coachCopy } from "@/features/i18n/coach-copy.ts"
+import { validateLegalSearch } from "@/features/legal/legal-search.ts"
 import { PRIVACY_VERSION } from "@/features/legal/versions.ts"
 
 /**
@@ -13,14 +15,16 @@ import { PRIVACY_VERSION } from "@/features/legal/versions.ts"
  */
 export const Route = createFileRoute("/legal/privacy")({
   ssr: false,
+  validateSearch: validateLegalSearch,
   component: PrivacyPage,
 })
 
 function PrivacyPage() {
+  const { lang } = Route.useSearch()
   return (
     <MiniAppShell>
-      <TelegramBackButton />
-      <LegalPage document={privacyPolicyFor("en")} version={PRIVACY_VERSION} locale="en" />
+      <TelegramBackButton label={coachCopy(lang).common.back} />
+      <LegalPage document={privacyPolicyFor(lang)} version={PRIVACY_VERSION} locale={lang} />
     </MiniAppShell>
   )
 }

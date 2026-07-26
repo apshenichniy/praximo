@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { CoachInitData, CoachOnboardingToken } from "@praximo/auth"
 import { MemberRepo } from "@praximo/db"
-import { WorkspaceId } from "@praximo/domain"
+import { type CoachLanguage, WorkspaceId } from "@praximo/domain"
 import { Effect, Layer } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { launchFor, TEST_PUBLIC_KEY } from "@/__tests__/coach-launch.ts"
@@ -33,6 +33,7 @@ const principal = (overrides: Partial<Principal> = {}): Principal => ({
 interface Recorded {
   readonly accepted: Array<{ readonly memberId: string; readonly version: string }>
   readonly logins: Array<number>
+  readonly languages: Array<CoachLanguage>
 }
 
 /**
@@ -45,7 +46,7 @@ const run = <A, E>(
   member: Principal | undefined,
   body: (recorded: Recorded) => Effect.Effect<A, E, CoachSurface.Service>,
 ) => {
-  const recorded: Recorded = { accepted: [], logins: [] }
+  const recorded: Recorded = { accepted: [], logins: [], languages: [] }
   let row = member
   const members = Layer.succeed(
     MemberRepo.Service,
@@ -68,6 +69,13 @@ const run = <A, E>(
           recorded.accepted.push({ memberId: input.memberId, version: input.version })
           row = { ...row, termsAcceptedAt: input.now, termsVersion: input.version }
           return { accepted: true }
+        }),
+      ),
+      setLanguage: Effect.fn("MemberRepo.Test.setLanguage")((input) =>
+        Effect.sync(() => {
+          if (row === undefined) return
+          recorded.languages.push(input.language)
+          row = { ...row, language: input.language }
         }),
       ),
     }),
@@ -134,6 +142,7 @@ describe("CoachSurface", () => {
         expect(yield* service.openApp(launch)).toEqual({
           kind: "terms-required",
           termsVersion: TERMS_VERSION,
+          language: "en",
         })
 
         expect(yield* service.acceptTerms(launch, TERMS_VERSION)).toMatchObject({
@@ -152,6 +161,74 @@ describe("CoachSurface", () => {
         // Every login is recorded from the credential's own auth_date, never a
         // server clock reading.
         expect(new Set(recorded.logins)).toEqual(new Set([AUTH_DATE]))
+      }),
+    ),
+  )
+
+  /**
+   * The second of `member.language`'s two writers (#130), through the surface
+   * the Mini App actually calls. What matters here is that the write lands
+   * *before* the entry is handed back: onboarding's next step renders the terms
+   * from `member.language`, and a screen that moved on ahead of the write would
+   * show a coach one language while the bot spoke another.
+   */
+  it.effect("writes the coach's chosen language and hands back the entry in it", () =>
+    run(principal({ language: "en" }), (recorded) =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachSurface.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        expect(yield* service.chooseLanguage(launch, "uk")).toEqual({
+          kind: "terms-required",
+          termsVersion: TERMS_VERSION,
+          language: "uk",
+        })
+        expect(recorded.languages).toEqual(["uk"])
+
+        // Changing it again is an ordinary write, not a special case: this is
+        // what a settings screen would call later.
+        expect(yield* service.chooseLanguage(launch, "ru")).toMatchObject({ language: "ru" })
+        expect(recorded.languages).toEqual(["uk", "ru"])
+      }),
+    ),
+  )
+
+  it.effect("refuses a language the product does not speak", () =>
+    run(principal(), (recorded) =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachSurface.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        for (const junk of ["es", "", "EN", 42, null]) {
+          expect(yield* Effect.flip(service.chooseLanguage(launch, junk))).toMatchObject({
+            _tag: "CoachSurface.UnsupportedLanguage",
+          })
+        }
+        expect(recorded.languages).toEqual([])
+      }),
+    ),
+  )
+
+  /**
+   * Acceptance records the version, and the language is not part of it: the
+   * three texts are one document under one version, so a coach who changes
+   * language afterwards is never asked to accept anything again (ADR 0006).
+   */
+  it.effect("does not re-open the terms when the language changes after acceptance", () =>
+    run(principal(), () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachSurface.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        yield* service.acceptTerms(launch, TERMS_VERSION)
+        expect(yield* service.chooseLanguage(launch, "ru")).toMatchObject({
+          kind: "home",
+          language: "ru",
+        })
+        expect(yield* service.openApp(launch)).toMatchObject({ kind: "home" })
       }),
     ),
   )

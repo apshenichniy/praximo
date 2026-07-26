@@ -136,9 +136,15 @@ export interface RotateInput {
 }
 
 export interface Interface {
+  /**
+   * `language` is the sender's own Telegram language, already narrowed to what
+   * the product speaks. It is written only when this call takes the claim — the
+   * first of `member.language`'s two writers (#130).
+   */
   readonly prepare: (
     inviteId: CoachOnboardingInviteId,
     coachTelegramId: TelegramId,
+    language: CoachLanguage,
     now: Date,
   ) => Effect.Effect<Provisioning, ProvisioningUnavailable | QueryFailed>
   readonly claim: (
@@ -459,6 +465,12 @@ export const layer = Layer.effect(
      * - `accepting` is the compare-and-set. Only an unexpired `pending` invite
      *   matches, so the first valid `/start` wins outright and every later one
      *   sees a row it cannot transition.
+     * - `seeding_language` is the first of `member.language`'s two writers
+     *   (#130). It hangs off `accepting`, so it fires exactly once — on the
+     *   `/start` that takes the claim — and carries the sender's own Telegram
+     *   language, narrowed by the caller. Every later `/start` finds the invite
+     *   already `accepted`, matches nothing here, and therefore cannot walk back
+     *   over a language the coach has since chosen for themselves.
      * - `claimant` adds the resume branch. A data-modifying CTE is invisible to
      *   the rest of the statement, so the second arm still reads the pre-update
      *   status: when the acceptance lands the arm is empty, and when this same
@@ -471,6 +483,7 @@ export const layer = Layer.effect(
     const prepare = Effect.fn("CoachBotProvisioningRepo.prepare")(function* (
       inviteId: CoachOnboardingInviteId,
       coachTelegramId: TelegramId,
+      language: CoachLanguage,
       now: Date,
     ) {
       const requestId = keyboardRequestId(inviteId, coachTelegramId)
@@ -488,6 +501,14 @@ export const layer = Layer.effect(
                 and "status" = 'pending'
                 and "expires_at" > ${now}
               returning "id", "workspace_id"
+            ),
+            seeding_language as (
+              update "member"
+              set "language" = ${language}::language, "updated_at" = ${now}
+              from accepting
+              where
+                "member"."workspace_id" = accepting."workspace_id"
+                and "member"."role" = 'owner'
             ),
             claimant as (
               select "id", "workspace_id" from accepting

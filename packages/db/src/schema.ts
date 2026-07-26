@@ -382,7 +382,12 @@ export const member = pgTable(
       .references(() => workspace.id, { onDelete: "cascade" }),
     // Open set: `owner` only in MVP.
     role: text("role").notNull().default("owner"),
-    language: languageEnum("language").notNull(),
+    // The coach's own language, and theirs alone (#130). The default is what a
+    // member is *born* with, not a choice anybody made: creation does not name
+    // this column, so the two statements that do — the invite claim seeding it
+    // from Telegram, and the coach choosing it during onboarding — are the
+    // whole story of how it ever changes.
+    language: languageEnum("language").notNull().default("en"),
     // Auth identity — the coach authenticates per launch through their own bot's
     // Mini App, with no server session (ADR 0006). This column is the natural
     // key that verification resolves to a member.

@@ -62,6 +62,12 @@ export interface AcceptTermsInput {
   readonly now: Date
 }
 
+export interface SetLanguageInput {
+  readonly memberId: string
+  readonly language: CoachLanguage
+  readonly now: Date
+}
+
 export interface Interface {
   readonly findCoachPrincipalByBot: (
     telegramBotId: string,
@@ -75,6 +81,13 @@ export interface Interface {
   readonly acceptTerms: (
     input: AcceptTermsInput,
   ) => Effect.Effect<{ readonly accepted: boolean }, QueryFailed>
+  /**
+   * The coach's own choice of the language Praximo speaks to them, and the
+   * second of this column's two writers (#130). Deliberately unconditional on
+   * `terms_accepted_at`: the choice is made *before* acceptance, and a coach who
+   * later gets a settings screen changes it through this same statement.
+   */
+  readonly setLanguage: (input: SetLanguageInput) => Effect.Effect<void, QueryFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/db/MemberRepo") {}
@@ -324,12 +337,28 @@ export const layer = Layer.effect(
       return { accepted: result.rows.length > 0 }
     })
 
+    /**
+     * The coach chose their language. Unlike the login bookkeeping above, this
+     * *is* a change to the member, so it moves `updated_at`.
+     */
+    const setLanguage = Effect.fn("MemberRepo.setLanguage")(function* (input: SetLanguageInput) {
+      yield* Effect.tryPromise({
+        try: () =>
+          client
+            .update(schema.member)
+            .set({ language: input.language, updatedAt: input.now })
+            .where(eq(schema.member.id, input.memberId)),
+        catch: (cause) => new QueryFailed({ operation: "member.setLanguage", cause }),
+      })
+    })
+
     return Service.of({
       findCoachPrincipalByBot,
       findCoachPrincipalByIdentity,
       touchLogin,
       touchActivity,
       acceptTerms,
+      setLanguage,
     })
   }),
 )

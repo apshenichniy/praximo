@@ -10,9 +10,9 @@ import {
 } from "@/features/legal/content.ts"
 
 /**
- * One renderer for both legal texts, in whatever locale it is handed. Only `en`
- * is authored today; the parameter exists so the i18n foundation ticket adds
- * translations rather than re-authoring shipped legal markup.
+ * One renderer for both legal texts, in whatever locale it is handed. All three
+ * are authored (#130), and the renderer never had to change for that — which is
+ * what the parameter was reserved for.
  *
  * Public: these routes take no credential. A coach reads them from inside the
  * terms screen, a client will read the policy from the consent page, and
@@ -90,7 +90,10 @@ export function LegalPage({
 }: {
   readonly document: LegalDocument
   readonly version: string
-  /** Reserved for the i18n foundation ticket; only `en` is authored (D4). */
+  /**
+   * The language this rendering is in — one of the three, all authored. It is
+   * also the `lang` attribute below, so a screen reader switches voice with it.
+   */
   readonly locale: LegalLocale
 }) {
   return (
