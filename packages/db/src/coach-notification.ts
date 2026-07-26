@@ -28,6 +28,13 @@ export const Kind = {
   NeedsRelink: "needs_relink",
   /** A re-linked workspace is back online. Admin only — the coach was there. */
   RelinkCompleted: "relink_completed",
+  /**
+   * A client accepted their invitation (#56). Coach-facing, once per client:
+   * acceptance is the one event in the whole onboarding that happens without
+   * the coach in the room, so it is the one they cannot infer from having done
+   * something themselves.
+   */
+  ClientAccepted: "client_accepted",
 } as const
 
 export type Kind = (typeof Kind)[keyof typeof Kind]
