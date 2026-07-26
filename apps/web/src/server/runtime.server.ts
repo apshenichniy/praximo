@@ -21,6 +21,16 @@ import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
 import { ViewerRole } from "./viewer-role.ts"
 import { WorkspaceRunCancellation } from "./workspace-run-cancellation.ts"
 
+/**
+ * Everything this Worker asks of the bot Worker across the one binding they
+ * share: manager-bot delivery, coach-bot release, and — since #179 — a card
+ * authored by a coach's own bot. Named once, because a binding that grows a
+ * capability must grow it in exactly one place.
+ */
+type BotWorkerBinding = ManagerBotSender.RpcClient &
+  CoachBotRelease.RpcClient &
+  BotRegistry.RpcClient
+
 interface Env {
   readonly DATABASE_URL: string
   readonly MANAGER_BOT_TOKEN: string
@@ -33,9 +43,7 @@ interface Env {
    * populates it folds out of a production build.
    */
   readonly COACH_DEV_PUBLIC_KEY?: string
-  readonly MANAGER_BOT?: ManagerBotSender.RpcClient &
-    CoachBotRelease.RpcClient &
-    BotRegistry.RpcClient
+  readonly MANAGER_BOT?: BotWorkerBinding
   readonly PIPELINE?: WorkspaceRunCancellationRpcClient
 }
 
@@ -134,11 +142,7 @@ const resolveEnv = async (): Promise<Env> => {
     TELEGRAM_ENV: requireString(workerEnv.TELEGRAM_ENV, "TELEGRAM_ENV"),
     ...(workerEnv.MANAGER_BOT === undefined
       ? {}
-      : {
-          MANAGER_BOT: workerEnv.MANAGER_BOT as ManagerBotSender.RpcClient &
-            CoachBotRelease.RpcClient &
-            BotRegistry.RpcClient,
-        }),
+      : { MANAGER_BOT: workerEnv.MANAGER_BOT as BotWorkerBinding }),
     ...(workerEnv.PIPELINE === undefined
       ? {}
       : { PIPELINE: workerEnv.PIPELINE as WorkspaceRunCancellationRpcClient }),

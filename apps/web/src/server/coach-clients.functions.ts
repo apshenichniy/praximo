@@ -21,13 +21,15 @@ import {
  */
 export type CoachClientsTransportError = "unauthenticated" | "server"
 
+/**
+ * Which typed failure crossed the runtime boundary. The tag is all that
+ * survives `runPromise`, so this is the one thing every handler below asks.
+ */
+const isTagged = (error: unknown, tag: string): boolean =>
+  typeof error === "object" && error !== null && "_tag" in error && error._tag === tag
+
 const transportError = (error: unknown): CoachClientsTransportError =>
-  typeof error === "object" &&
-  error !== null &&
-  "_tag" in error &&
-  error._tag === "CoachSession.Unauthenticated"
-    ? "unauthenticated"
-    : "server"
+  isTagged(error, "CoachSession.Unauthenticated") ? "unauthenticated" : "server"
 
 export type CoachClientsResult =
   | { readonly ok: true; readonly home: CoachClients.CoachClientsHome }
@@ -104,14 +106,7 @@ export const createClient = createServerFn({ method: "POST" })
       const created = await createCoachClient(context.credential, data)
       return { ok: true, clientId: created.clientId }
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "CoachClients.InvalidClient"
-      ) {
-        return { ok: false, error: "invalid" }
-      }
+      if (isTagged(error, "CoachClients.InvalidClient")) return { ok: false, error: "invalid" }
       return { ok: false, error: transportError(error) }
     }
   })
@@ -219,14 +214,7 @@ export const prepareInviteCard = createServerFn({ method: "POST" })
       const card = await prepareCoachInviteCard(context.credential, data.clientId)
       return card === undefined ? { ok: false, error: "gone" } : { ok: true, card }
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "CoachClients.CardPreparationFailed"
-      ) {
-        return { ok: false, error: "failed" }
-      }
+      if (isTagged(error, "CoachClients.CardPreparationFailed")) return { ok: false, error: "failed" }
       return { ok: false, error: transportError(error) }
     }
   })

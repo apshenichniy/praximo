@@ -181,35 +181,33 @@ function ClientRoute() {
    * The card is minted on this tap and shared through Telegram's own picker
    * (#179).
    *
-   * A dismissed picker is deliberately silent: the invitation is untouched, and
-   * telling a coach who just changed their mind that "nothing was sent" reads as
-   * a failure they have to do something about. An invitation that turned out to
-   * be gone re-reads the screen, which is what shows them why.
+   * Deliberately *not* one of the screen's `pending` operations, unlike every
+   * other action here. This promise settles when Telegram's own callback fires,
+   * which is a host we do not control: holding the busy flag across it would let
+   * one silent client leave Schedule, Reissue and Delete disabled until the coach
+   * relaunched. The picker is modal over the app anyway, so there is nothing the
+   * busy state would have been protecting.
+   *
+   * A dismissed picker is silent: the invitation is untouched, and telling a
+   * coach who just changed their mind that "nothing was sent" reads as a failure
+   * they have to do something about. An invitation that turned out to be gone
+   * re-reads the screen, which is what shows them why.
    */
   const share = useCallback(() => {
     const invite = client?.invite
     if (client === undefined || invite === undefined) return
-    acceptOnce(inFlight, async () => {
-      setPending(true)
-      setError(undefined)
-      try {
-        const outcome = await shareClientInvite({
-          clientId: client.id,
-          link: invite.url,
-          name: client.name,
-          lead: copy.clients.invitationLeadTail,
-        })
-        if (outcome === "gone") {
-          await router.invalidate()
-          return
-        }
-        if (outcome === "failed") setError(copy.common.failed)
-      } catch {
-        setError(copy.common.failed)
-      } finally {
-        setPending(false)
-      }
+    setError(undefined)
+    void shareClientInvite({
+      clientId: client.id,
+      link: invite.url,
+      name: client.name,
+      lead: copy.clients.invitationLeadTail,
     })
+      .then(async (outcome) => {
+        if (outcome === "gone") await router.invalidate()
+        else if (outcome === "failed") setError(copy.common.failed)
+      })
+      .catch(() => setError(copy.common.failed))
   }, [client, copy, router])
 
   if (client === undefined) {

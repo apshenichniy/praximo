@@ -46,6 +46,9 @@ type Attempt<A> =
   | { readonly _tag: "Refused" }
   | { readonly _tag: "Transient" }
 
+const Refused = { _tag: "Refused" } as const
+const Transient = { _tag: "Transient" } as const
+
 const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
   Layer.effect(
     BotRegistry.Service,
@@ -63,6 +66,10 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
        * One attempt through one credential. The category escapes; the cause
        * never does, because for a coach bot it carries the token in its request
        * URL (ADR 0004).
+       *
+       * Declared rather than wrapped in `Effect.fn`: the operations that call it
+       * carry the spans, and a generic here would only earn one back at the cost
+       * of casting every branch past `exactOptionalPropertyTypes`.
        */
       const attempt = <A>(
         target: CoachBotHealthRepo.HealthTarget,
@@ -71,18 +78,14 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
       ): Effect.Effect<Attempt<A>> =>
         Effect.gen(function* () {
           const token = yield* credentials.decrypt(target.encryptedToken).pipe(Effect.result)
-          if (Result.isFailure(token)) return { _tag: "Transient" } as const
+          if (Result.isFailure(token)) return Transient
           const api = apiFor(token.success, telegramFetch)
           const answered = yield* Effect.tryPromise({
             try: () => call(api, chatId),
             catch: classifyCoachBotFailure,
           }).pipe(Effect.result)
-          if (Result.isSuccess(answered)) {
-            return { _tag: "Answered", value: answered.success } as const
-          }
-          return answered.failure === "credential-rejected"
-            ? ({ _tag: "Refused" } as const)
-            : ({ _tag: "Transient" } as const)
+          if (Result.isSuccess(answered)) return { _tag: "Answered", value: answered.success }
+          return answered.failure === "credential-rejected" ? Refused : Transient
         })
 
       /**

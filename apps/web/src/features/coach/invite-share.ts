@@ -61,9 +61,9 @@ export const shareClientInvite = async (options: {
         // One re-mint and no more: a second card that comes back already stale
         // means the clocks disagree, and asking a third time would only spend
         // another round trip on the same answer.
-        const first = await mint(options.clientId)
-        if (fresh(first)) return first.preparedMessageId
-        return (await mint(options.clientId)).preparedMessageId
+        const first = await mintCard(options.clientId)
+        if (isStillShareable(first)) return first.preparedMessageId
+        return (await mintCard(options.clientId)).preparedMessageId
       },
       link: options.link,
       message,
@@ -76,7 +76,9 @@ export const shareClientInvite = async (options: {
 /** The invitation the screen is showing no longer exists, or is no longer open. */
 class CardUnavailable extends Error {}
 
-const mint = async (clientId: string): Promise<{
+const mintCard = async (
+  clientId: string,
+): Promise<{
   readonly preparedMessageId: string
   readonly expiresAt: string
 }> => {
@@ -86,5 +88,6 @@ const mint = async (clientId: string): Promise<{
   throw new Error(result.error)
 }
 
-const fresh = (card: { readonly expiresAt: string }): boolean =>
+/** An expiry we cannot read is treated as stale, and re-minted. */
+const isStillShareable = (card: { readonly expiresAt: string }): boolean =>
   Date.parse(card.expiresAt) - Date.now() > CARD_FRESHNESS_MARGIN_MILLIS

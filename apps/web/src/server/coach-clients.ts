@@ -577,6 +577,14 @@ export const layer = Layer.effect(
      * The message is the same sentence the screen shows and the copy button
      * copies, in the coach's own language, so the three forms of one invitation
      * cannot drift. The link is not repeated in the body: it is the button.
+     *
+     * **The coach's language and not `invite.language`**, deliberately. The
+     * invitation language is what the client is *meant* to be written in, and
+     * this sentence is #56's, which every other form of it already renders in
+     * the coach's own. Reading the other column here would make the card
+     * disagree with the copy button and with the sub-8.0 form beside it — one
+     * invitation saying two things is worse than one saying the wrong thing, and
+     * moving all three belongs to whoever owns that copy, not to this ticket.
      */
     const prepareInviteCard = Effect.fn("CoachClients.prepareInviteCard")(function* (
       credential: LaunchCredential,
