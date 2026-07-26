@@ -401,7 +401,7 @@ export function SchedulingScreen({
               aria-hidden="true"
               className={cn(
                 "bg-card absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg shadow-sm",
-                "ease-in-out-strong transition-transform duration-(--duration-move) motion-reduce:transition-none",
+                "ease-in-out-strong transition-[translate] duration-(--duration-move) motion-reduce:transition-none",
                 kind === "regular" ? "translate-x-full" : "translate-x-0",
               )}
             />
@@ -476,7 +476,7 @@ export function SchedulingScreen({
           <div
             style={{ height: monthOpen ? monthHeight : 0 }}
             onTransitionEnd={revealTime}
-            className="ease-out-strong overflow-hidden transition-[height] duration-250 motion-reduce:transition-none"
+            className="ease-out-strong overflow-hidden transition-[height] duration-(--duration-move) motion-reduce:transition-none"
             aria-hidden={!monthOpen}
             inert={!monthOpen}
           >
@@ -532,7 +532,7 @@ export function SchedulingScreen({
                 onClick={() => chooseDuration(minutes)}
                 className={cn(
                   "flex-1 rounded-full border py-2 text-sm font-semibold tabular-nums",
-                  "ease-out-strong transition-[color,background-color,border-color,transform] duration-(--duration-press) active:scale-[0.97]",
+                  "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press) active:scale-[0.97]",
                   durationMinutes === minutes
                     ? "bg-primary text-primary-foreground border-transparent"
                     : "border-border text-muted-foreground",
@@ -620,9 +620,17 @@ export function SchedulingScreen({
                             type="button"
                             disabled={!slot.available}
                             aria-pressed={startMinutes === slot.startMinutes}
-                            onClick={() => setStartMinutes(slot.startMinutes)}
+                            onClick={() => {
+                              // The slot is the choice this whole screen exists
+                              // to take, so it gets the same tick as every other
+                              // selection — and none for re-choosing the same one.
+                              if (slot.startMinutes !== startMinutes) selectionHaptic()
+                              setStartMinutes(slot.startMinutes)
+                            }}
                             className={cn(
-                              "rounded-xl border py-2 text-sm font-semibold tabular-nums transition-colors",
+                              "rounded-xl border py-2 text-sm font-semibold tabular-nums",
+                              "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press)",
+                              "enabled:active:scale-[0.97]",
                               startMinutes === slot.startMinutes
                                 ? "bg-primary text-primary-foreground border-transparent"
                                 : "border-border",

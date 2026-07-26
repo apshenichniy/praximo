@@ -221,12 +221,19 @@ By how often a coach sees it, not by how good it would look:
 | --- | --- |
 | Tens of times per booking — a slot, a day, a chip | press `scale(0.97)` and colour, `--duration-press`. No entrances, no travel |
 | Once or twice per booking — the day changed, the month opened | one movement, `--duration-swap`/`--duration-move` |
-| Once per entry — a screen, a list | `--duration-screen`, stagger allowed (30ms, first six items only) |
+| Once per entry — a screen, a list | `--duration-screen`; the screen transition is the entrance |
 | Rarely — booked, refused | say it with a haptic, not with a longer animation |
 
 **One action, one animation.** Tapping a day changes the strip *and* the slot
 grid; the grid animates and the strip stays put. Ignoring this is what produced
 #186's original defect — a single tap moving the layout three times.
+
+**No staggered lists.** Rows arriving one after another put a second animation on
+top of the screen transition that brought them, which is the same rule again — and
+on a phone it reads as a wave running down the list. It was tried on the client
+picker and removed: that screen is on the way to every booking, so its list is
+something a coach scans, not something introduced to them. A stagger would need a
+list seen once ever, and this app does not have one.
 
 Only `transform` and `opacity`, which skip layout and paint. `transition-all` is
 never written; properties are always named. The exception on the record is the

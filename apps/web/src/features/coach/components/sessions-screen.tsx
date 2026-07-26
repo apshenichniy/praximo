@@ -64,12 +64,8 @@ export function SessionsScreen({
             </h2>
             <Card className="mt-3 gap-0 overflow-hidden py-0">
               <ul className="divide-border divide-y">
-                {day.sessions.map((session, index) => (
-                  <li
-                    key={session.id}
-                    className="animate-in fade-in slide-in-from-bottom-1 duration-(--duration-screen)"
-                    style={index < 6 ? { animationDelay: `${index * 30}ms` } : undefined}
-                  >
+                {day.sessions.map((session) => (
+                  <li key={session.id}>
                     <Link
                       to="/sessions/$sessionId"
                       params={{ sessionId: session.id }}
