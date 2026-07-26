@@ -91,7 +91,7 @@ const uk: TodayCopy = {
 
   attentionTitle: "Потребує уваги",
   attentionExpired: "Запрошення прострочене",
-  attentionExpiringPrefix: "Запрошення діє ще ",
+  attentionExpiringPrefix: "Запрошення спливає ",
 
   unacceptedLead: "Запрошення не прийнято — ",
   unacceptedTail: " поки не отримає посилання",
@@ -126,7 +126,7 @@ const ru: TodayCopy = {
 
   attentionTitle: "Требует внимания",
   attentionExpired: "Приглашение истекло",
-  attentionExpiringPrefix: "Приглашение действует ещё ",
+  attentionExpiringPrefix: "Приглашение истекает ",
 
   unacceptedLead: "Приглашение не принято — ",
   unacceptedTail: " пока не получит ссылку",

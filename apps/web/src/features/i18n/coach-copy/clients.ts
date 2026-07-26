@@ -201,7 +201,7 @@ const uk: ClientsCopy = {
   stateExpired: "Посилання прострочене",
   stateAccepted: "Активний",
   invitedPrefix: "запрошено ",
-  expiresPrefix: "діє до ",
+  expiresPrefix: "спливає ",
   acceptedPrefix: "приєднався ",
 
   newTitle: "Новий клієнт",
@@ -286,7 +286,7 @@ const ru: ClientsCopy = {
   stateExpired: "Ссылка истекла",
   stateAccepted: "Активен",
   invitedPrefix: "приглашён ",
-  expiresPrefix: "действует до ",
+  expiresPrefix: "истекает ",
   acceptedPrefix: "присоединился ",
 
   newTitle: "Новый клиент",
