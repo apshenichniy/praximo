@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
-import { CoachBotProvisioningRepo } from "@praximo/db"
+import { ClientAcceptanceRepo, CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, TelegramId, WorkspaceId } from "@praximo/domain"
-import { ManagerBotSender } from "@praximo/telegram"
+import { BotRegistry, ManagerBotSender } from "@praximo/telegram"
 import { Effect, Layer, Ref } from "effect"
 import { deliverCoachNotifications } from "./provisioning.ts"
 
@@ -19,6 +19,7 @@ const notification = (
   kind,
   recipientRole: "admin",
   recipientTelegramId: issuer,
+  dedupeKey: `${kind}:ws_ada`,
   workspaceName: "Ada Coaching",
   botUsername: "ada_coach_bot",
   coachLanguage: CoachLanguage.make("en"),
@@ -30,6 +31,24 @@ interface Marks {
   readonly delivered: Ref.Ref<ReadonlyArray<string>>
   readonly deferred: Ref.Ref<ReadonlyArray<string>>
 }
+
+const env = { COACH_MINI_APP_URL: "https://stage.praximo.io/" }
+
+/** The client-accepted push reads one client; every other kind reads none. */
+const clientsLayer = Layer.succeed(
+  ClientAcceptanceRepo.Service,
+  ClientAcceptanceRepo.Service.of({
+    findByToken: unsupported,
+    findBotOwner: unsupported,
+    findAcceptedClient: (clientId) =>
+      Effect.succeed(
+        clientId === "cl_maria"
+          ? { id: clientId, name: "Maria K.", language: "ru" as const, telegramUsername: "maria" }
+          : undefined,
+      ),
+    accept: unsupported,
+  }),
+)
 
 const run = (queued: ReadonlyArray<CoachBotProvisioningRepo.PendingNotification>) =>
   Effect.gen(function* () {
@@ -60,13 +79,14 @@ const run = (queued: ReadonlyArray<CoachBotProvisioningRepo.PendingNotification>
       }),
     )
 
-    yield* deliverCoachNotifications().pipe(Effect.provide(repo))
+    yield* deliverCoachNotifications(env).pipe(Effect.provide(Layer.mergeAll(repo, clientsLayer)))
     return {
       sent: yield* (yield* ManagerBotSender.TestService).sent(),
+      throughCoachBot: yield* (yield* BotRegistry.TestService).sent(),
       delivered: yield* Ref.get(marks.delivered),
       deferred: yield* Ref.get(marks.deferred),
     }
-  }).pipe(Effect.provide(ManagerBotSender.testLayer))
+  }).pipe(Effect.provide(Layer.mergeAll(ManagerBotSender.testLayer, BotRegistry.testLayer)))
 
 describe("coach notification delivery", () => {
   it.effect("tells the invite issuer when a coach finishes onboarding", () =>
@@ -164,6 +184,43 @@ describe("coach notification delivery", () => {
 
       expect(result.sent[0]?.text).toContain("восстановлена автоматически")
       expect(result.sent[0]?.text).toContain("@BotFather")
+    }),
+  )
+
+  // The one event that happens without the coach in the room, and the only
+  // push that leaves through the coach's own bot: that is the chat the client
+  // just appeared in, and a `web_app` button only opens the app from there.
+  it.effect("tells the coach through their own bot when a client accepts", () =>
+    Effect.gen(function* () {
+      const result = yield* run([
+        notification("client_accepted", {
+          recipientRole: "coach",
+          recipientTelegramId: coach,
+          dedupeKey: "client_accepted:ws_ada:cl_maria",
+          coachLanguage: CoachLanguage.make("ru"),
+        }),
+      ])
+
+      expect(result.sent).toHaveLength(0)
+      expect(result.throughCoachBot[0]?.text).toContain("Maria K.")
+      expect(result.throughCoachBot[0]?.text).toContain("@maria")
+      expect(result.delivered).toEqual(["cbn_ada_client_accepted"])
+    }),
+  )
+
+  // A row whose client has since been deleted must not be delivered with a
+  // missing name, and must not be dropped either — it comes back next sweep.
+  it.effect("defers a client-accepted push it cannot describe yet", () =>
+    Effect.gen(function* () {
+      const result = yield* run([
+        notification("client_accepted", {
+          recipientRole: "coach",
+          dedupeKey: "client_accepted:ws_ada:cl_gone",
+        }),
+      ])
+
+      expect(result.throughCoachBot).toHaveLength(0)
+      expect(result.deferred).toEqual(["cbn_ada_client_accepted"])
     }),
   )
 

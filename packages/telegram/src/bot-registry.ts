@@ -9,8 +9,30 @@ import { Context, Effect, Layer, Ref, Schema } from "effect"
  * the owning service, operations wrapped in `Effect.fn`, and a canonical module
  * namespace self-exported at the bottom of the file.
  */
+/**
+ * What a message may carry besides its words.
+ *
+ * Deliberately narrow: an inline button and a parse mode, which is exactly what
+ * the client-accepted push needs (#56) — the coach is told a client is in, and
+ * the same message opens the Mini App on that client's route. Anything richer
+ * belongs to a sender that knows about chats and recipients, which this seam
+ * does not.
+ */
+export interface SendOptions {
+  readonly parseMode?: "HTML"
+  readonly button?: {
+    readonly text: string
+    /** Opens the Mini App — a `web_app` button, not a URL. */
+    readonly webAppUrl: string
+  }
+}
+
 export interface Interface {
-  readonly send: (workspace: WorkspaceId, text: string) => Effect.Effect<void, SendFailed>
+  readonly send: (
+    workspace: WorkspaceId,
+    text: string,
+    options?: SendOptions,
+  ) => Effect.Effect<void, SendFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()(
@@ -33,7 +55,11 @@ export class SendFailed extends Schema.TaggedErrorClass<SendFailed>()("BotRegist
  * that a message was delivered.
  */
 export const layer = Layer.sync(Service, () => {
-  const send = Effect.fn("BotRegistry.send")(function* (workspace: WorkspaceId, _text: string) {
+  const send = Effect.fn("BotRegistry.send")(function* (
+    workspace: WorkspaceId,
+    _text: string,
+    _options?: SendOptions,
+  ) {
     return yield* Effect.fail(
       new SendFailed({ workspace, reason: "no coach-bot transport in this runtime" }),
     )

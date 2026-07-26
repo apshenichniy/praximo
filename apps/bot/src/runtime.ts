@@ -1,13 +1,20 @@
 import { createHash } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
 import {
+  ClientAcceptanceRepo,
   CoachBotHealthRepo,
   CoachBotProvisioningRepo,
   CoachOnboardingRepo,
   Database,
   WorkspaceRepo,
 } from "@praximo/db"
-import { TelegramId, WorkspaceId } from "@praximo/domain"
+import {
+  narrowCoachLanguage,
+  parseClientInviteStartParameter,
+  TelegramId,
+  WorkspaceId,
+} from "@praximo/domain"
+import { clientCopy } from "@praximo/i18n"
 import {
   BotRegistry,
   CoachBotCredential,
@@ -17,6 +24,15 @@ import {
 import { Bot, InlineKeyboard } from "grammy"
 import type { Update, User, UserFromGetMe } from "grammy/types"
 import { ConfigProvider, Effect, Layer, ManagedRuntime, Result } from "effect"
+import {
+  acceptInvitation,
+  AcceptCallbackPrefix,
+  type BotMessage,
+  LanguageCallbackPrefix,
+  openInvitation,
+  parseCallback,
+  showConsent,
+} from "./client-acceptance.ts"
 import { clientLanguage, type Copy, messages } from "./messages.ts"
 import {
   coachMiniAppUrl,
@@ -64,6 +80,7 @@ const DbLive = Layer.mergeAll(
   CoachBotProvisioningRepo.layer,
   CoachBotHealthRepo.layer,
   CoachOnboardingRepo.layer,
+  ClientAcceptanceRepo.layer,
 ).pipe(Layer.provide(Database.layer))
 const CoachBotDataLive = Layer.mergeAll(DbLive, CoachBotCredential.layer)
 const appLive = (env: Env) =>
@@ -156,6 +173,54 @@ const Html = { parse_mode: "HTML" } as const
 
 /** `sendMessage`'s options bag, so `managedBotReply` can pass one through. */
 type SendOptions = NonNullable<Parameters<Bot["api"]["sendMessage"]>[2]>
+
+/**
+ * One button per row: the client's steps are a sequence, and a row of two would
+ * read as a choice between them (#164 — every action is a button, never a URL
+ * in the body).
+ */
+interface MessageOptions {
+  readonly parse_mode: "HTML"
+  readonly reply_markup?: InlineKeyboard
+}
+
+const replyOptions = (message: BotMessage): MessageOptions => {
+  if (message.buttons.length === 0) return Html
+  const keyboard = new InlineKeyboard()
+  for (const button of message.buttons) {
+    if (button.url !== undefined) keyboard.url(button.text, button.url).row()
+    else if (button.callbackData !== undefined)
+      keyboard.text(button.text, button.callbackData).row()
+  }
+  return { ...Html, reply_markup: keyboard }
+}
+
+/**
+ * The conversation is **one message, edited forward**: language, then consent,
+ * then the confirmation, each replacing the last in place. The chat keeps one
+ * artefact instead of five bubbles of a form, and no superseded button stays
+ * tappable.
+ *
+ * A failed edit falls back to a reply. Telegram refuses an edit whose content
+ * is unchanged and refuses one on a message too old to edit; in both cases the
+ * client still has to see where they are.
+ */
+const editForward = async (
+  ctx: {
+    readonly editMessageText: (text: string, other?: MessageOptions) => Promise<unknown>
+    readonly reply: (text: string, other?: MessageOptions) => Promise<unknown>
+  },
+  message: BotMessage,
+): Promise<void> => {
+  const options = replyOptions(message)
+  await ctx.editMessageText(message.text, options).catch(async () => {
+    await ctx.reply(message.text, options).catch(() => undefined)
+  })
+}
+
+/** Whose assistant this bot is — the `/start` doors' one lookup. */
+const coachOfBot = (botId: string) =>
+  Effect.flatMap(ClientAcceptanceRepo.Service, (repo) => repo.findBotOwner(botId))
 
 const makeManagerBot = (
   env: Env,
@@ -412,16 +477,96 @@ const coachBotFor = async (
     })
     // The bot instance outlives the update that built it, so the greeting reads
     // its language off whoever is actually typing rather than off construction.
-    bot.command("start", (ctx) => {
-      const copy = messages(clientLanguage(ctx.from?.language_code))
-      return ctx.reply(copy.botReady, {
-        ...Html,
-        reply_markup: new InlineKeyboard().webApp(
-          copy.openButton,
-          coachMiniAppUrl(env.COACH_MINI_APP_URL, botId),
-        ),
-      })
+    /**
+     * `/start` stops answering everybody the same way (#56). Three doors:
+     *
+     * - `/start inv_<token>` opens the acceptance conversation;
+     * - a bare `/start` from the coach keeps the menu it has always had;
+     * - a bare `/start` from anyone else is told whose assistant this is, and
+     *   nothing more. A token from another coach's workspace resolves to
+     *   nothing and lands here too, so neither answer discloses the other.
+     */
+    bot.command("start", async (ctx) => {
+      const parameter = typeof ctx.match === "string" ? ctx.match : ""
+      const sender = ctx.from
+      if (sender === undefined) return
+
+      const token = parseClientInviteStartParameter(parameter)
+      if (token !== undefined) {
+        const outcome = await getRuntime(env).runPromise(
+          openInvitation({
+            token,
+            telegramBotId: botId,
+            telegramUserId: String(sender.id),
+            clientLanguageCode: sender.language_code,
+          }).pipe(Effect.orElseSucceed(() => ({ _tag: "Unknown" }) as const)),
+        )
+        if (outcome._tag !== "Unknown") {
+          await ctx.reply(outcome.message.text, replyOptions(outcome.message))
+          return
+        }
+      }
+
+      const owner = await getRuntime(env).runPromise(
+        coachOfBot(botId).pipe(Effect.orElseSucceed(() => undefined)),
+      )
+      if (owner !== undefined && owner.coachTelegramId === String(sender.id)) {
+        const copy = messages(owner.coachLanguage)
+        await ctx.reply(copy.botReady, {
+          ...Html,
+          reply_markup: new InlineKeyboard().webApp(
+            copy.openButton,
+            coachMiniAppUrl(env.COACH_MINI_APP_URL, botId),
+          ),
+        })
+        return
+      }
+
+      // A stranger — including whoever presented a code this workspace does not
+      // own. No Mini App button: the app is the coach's, not theirs.
+      const clientCopyFor = clientCopy(narrowCoachLanguage(sender.language_code))
+      await ctx.reply(clientCopyFor.stranger(owner?.workspaceName ?? ""), Html)
     })
+
+    /** Language chosen: the same message becomes the consent text. */
+    bot.callbackQuery(new RegExp(`^${LanguageCallbackPrefix}`), async (ctx) => {
+      const choice = parseCallback(LanguageCallbackPrefix, ctx.callbackQuery.data)
+      const sender = ctx.from
+      await ctx.answerCallbackQuery()
+      if (choice === undefined) return
+      const outcome = await getRuntime(env).runPromise(
+        showConsent({
+          token: choice.token,
+          language: choice.language,
+          telegramBotId: botId,
+          telegramUserId: String(sender.id),
+          miniAppUrl: env.COACH_MINI_APP_URL,
+        }).pipe(Effect.orElseSucceed(() => ({ _tag: "Unknown" }) as const)),
+      )
+      if (outcome._tag === "Unknown") return
+      await editForward(ctx, outcome.message)
+    })
+
+    /** Consent given: the same message becomes the confirmation. */
+    bot.callbackQuery(new RegExp(`^${AcceptCallbackPrefix}`), async (ctx) => {
+      const choice = parseCallback(AcceptCallbackPrefix, ctx.callbackQuery.data)
+      const sender = ctx.from
+      await ctx.answerCallbackQuery()
+      if (choice === undefined) return
+      const outcome = await getRuntime(env).runPromise(
+        acceptInvitation({
+          token: choice.token,
+          language: choice.language,
+          telegramBotId: botId,
+          telegramUserId: String(sender.id),
+          telegramName: [sender.first_name, sender.last_name].filter(Boolean).join(" "),
+          telegramUsername: sender.username,
+        }).pipe(Effect.orElseSucceed(() => ({ _tag: "Unknown" }) as const)),
+      )
+      if (outcome._tag === "Unknown") return
+      await editForward(ctx, outcome.message)
+    })
+
     coachBots.set(botId, bot)
   }
   return { bot, webhookSecretHash: installation.success.installed.webhookSecretHash }
@@ -590,7 +735,7 @@ export const handleScheduled = async (env: Env): Promise<void> => {
       Effect.ignore,
     ),
   )
-  await tick.runPromise(deliverCoachNotifications())
+  await tick.runPromise(deliverCoachNotifications(env))
 }
 
 export const handleCoachBotReleaseRpc = (

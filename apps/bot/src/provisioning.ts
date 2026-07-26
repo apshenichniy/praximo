@@ -1,8 +1,14 @@
 import { timingSafeEqual } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
-import { CoachBotProvisioningRepo, CoachNotification, CoachOnboardingRepo } from "@praximo/db"
+import {
+  ClientAcceptanceRepo,
+  CoachBotProvisioningRepo,
+  CoachNotification,
+  CoachOnboardingRepo,
+} from "@praximo/db"
 import { type CoachLanguage, TelegramId, type WorkspaceId } from "@praximo/domain"
-import { CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
+import { ClientLanguageNames } from "@praximo/i18n"
+import { BotRegistry, CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Api, GrammyError, InlineKeyboard, InputFile } from "grammy"
 import type { User } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
@@ -1099,8 +1105,63 @@ export const coachNotificationText = (
  * Deliver the admin-facing coach notifications that are due. Claim, lease and
  * retry mechanics are the repository's; this only decides what each row says.
  */
+/**
+ * The client id a `client_accepted` row was deduplicated on.
+ *
+ * The key is composed as `client_accepted:<workspaceId>:<clientId>`, and the
+ * client id is the only part of that row which names the *subject* — the coach
+ * is being told about a person, not about their workspace.
+ */
+export const acceptedClientId = (dedupeKey: string): string | undefined => {
+  const parts = dedupeKey.split(":")
+  return parts.length === 3 && parts[0] === CoachNotification.Kind.ClientAccepted
+    ? parts[2]
+    : undefined
+}
+
+/**
+ * The client-accepted push, delivered through the coach's **own** bot (#56).
+ *
+ * Not the manager's, for two reasons: that is the chat the client just walked
+ * into, and a `web_app` button only opens the Mini App from the bot the app
+ * belongs to. The button carries the client's own route, because "who accepted"
+ * is a question best answered by the screen about them.
+ */
+const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(function* (
+  env: { readonly COACH_MINI_APP_URL: string },
+  notification: CoachBotProvisioningRepo.PendingNotification,
+) {
+  const clientId = acceptedClientId(notification.dedupeKey)
+  if (clientId === undefined) return false
+  const clients = yield* ClientAcceptanceRepo.Service
+  const client = yield* clients.findAcceptedClient(clientId).pipe(Effect.orElseSucceed(() => undefined))
+  if (client === undefined) return false
+
+  const registry = yield* BotRegistry.Service
+  const copy = messages(notification.coachLanguage)
+  const route = new URL(env.COACH_MINI_APP_URL)
+  route.hash = `#/clients/${clientId}`
+
+  const sent = yield* registry
+    .send(
+      notification.workspaceId,
+      copy.clientAccepted({
+        name: client.name,
+        ...(client.telegramName === undefined ? {} : { telegramName: client.telegramName }),
+        ...(client.telegramUsername === undefined ? {} : { username: client.telegramUsername }),
+        language: ClientLanguageNames[client.language ?? notification.coachLanguage],
+      }),
+      {
+        parseMode: "HTML",
+        button: { text: copy.openClientButton, webAppUrl: route.toString() },
+      },
+    )
+    .pipe(Effect.as(true), Effect.orElseSucceed(() => false))
+  return sent
+})
+
 export const deliverCoachNotifications = Effect.fn("BotWorker.deliverCoachNotifications")(
-  function* () {
+  function* (env: { readonly COACH_MINI_APP_URL: string }) {
     const repo = yield* CoachBotProvisioningRepo.Service
     const sender = yield* ManagerBotSender.Service
     const now = new Date(yield* Clock.currentTimeMillis)
@@ -1108,6 +1169,15 @@ export const deliverCoachNotifications = Effect.fn("BotWorker.deliverCoachNotifi
     yield* Effect.forEach(
       notifications,
       (notification) => {
+        if (notification.kind === CoachNotification.Kind.ClientAccepted) {
+          return deliverClientAccepted(env, notification).pipe(
+            Effect.flatMap((delivered) =>
+              delivered
+                ? repo.markNotificationDelivered(notification.id, now)
+                : repo.deferNotification(notification.id, now),
+            ),
+          )
+        }
         const text = coachNotificationText(notification)
         // Its lease has already been taken and its attempt counted, so an
         // unrecognised kind simply becomes available again on the next sweep.

@@ -43,12 +43,30 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
         target: CoachBotHealthRepo.HealthTarget,
         chatId: string,
         text: string,
+        options?: BotRegistry.SendOptions,
       ) {
         const token = yield* credentials.decrypt(target.encryptedToken).pipe(Effect.result)
         if (Result.isFailure(token)) return "transient" as const
         const api = apiFor(token.success, telegramFetch)
         const sent = yield* Effect.tryPromise({
-          try: () => api.sendMessage(chatId, text),
+          try: () =>
+            api.sendMessage(chatId, text, {
+              ...(options?.parseMode === undefined ? {} : { parse_mode: options.parseMode }),
+              ...(options?.button === undefined
+                ? {}
+                : {
+                    reply_markup: {
+                      inline_keyboard: [
+                        [
+                          {
+                            text: options.button.text,
+                            web_app: { url: options.button.webAppUrl },
+                          },
+                        ],
+                      ],
+                    },
+                  }),
+            }),
           catch: classifyCoachBotFailure,
         }).pipe(Effect.result)
         return Result.isSuccess(sent) ? ("sent" as const) : sent.failure
@@ -72,14 +90,18 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
           : target
       })
 
-      const send = Effect.fn("BotRegistry.send")(function* (workspace: WorkspaceId, text: string) {
+      const send = Effect.fn("BotRegistry.send")(function* (
+        workspace: WorkspaceId,
+        text: string,
+        options?: BotRegistry.SendOptions,
+      ) {
         const target = yield* resolve(workspace)
         const chatId = target.coachTelegramId
         if (chatId === undefined) {
           return yield* new BotRegistry.SendFailed({ workspace, reason: "no bound coach" })
         }
 
-        const first = yield* attempt(target, chatId, text)
+        const first = yield* attempt(target, chatId, text, options)
         if (first === "sent") return
         if (first === "transient") {
           return yield* new BotRegistry.SendFailed({ workspace, reason: "telegram unavailable" })
@@ -96,7 +118,7 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
             reason: repaired._tag === "Unchanged" ? "telegram unavailable" : "bot needs re-link",
           })
         }
-        const second = yield* attempt(yield* resolve(workspace), chatId, text)
+        const second = yield* attempt(yield* resolve(workspace), chatId, text, options)
         if (second === "sent") return
         return yield* new BotRegistry.SendFailed({
           workspace,

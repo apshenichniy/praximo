@@ -111,6 +111,23 @@ export interface Copy {
    */
   readonly botNeedsRelink: (username: string) => string
   /**
+   * A client accepted their invitation (#56). Coach-facing, and the one event in
+   * the whole onboarding that happens without the coach in the room — everything
+   * else they learn by having done it themselves.
+   *
+   * Sent through the coach's **own** bot rather than the manager's, because that
+   * is the chat the client just appeared in and the only one whose button can
+   * open the Mini App on their route.
+   */
+  readonly clientAccepted: (client: {
+    readonly name: string
+    readonly telegramName?: string
+    readonly username?: string
+    readonly language: string
+  }) => string
+  /** The push's one button: the client's own route in the Mini App. */
+  readonly openClientButton: string
+  /**
    * The recovery prompt: `invitationReserved`'s counterpart for a coach coming
    * back to reconnect. No workspace name — they know whose workspace it is, and
    * nothing is being reserved for them a second time.
@@ -188,6 +205,11 @@ const en: Copy = {
   relinkReserved:
     "🔄 <b>Let's get your bot back.</b>\n\nEverything in your workspace is exactly where you left it — clients, sessions, notes. Only the connection to Telegram needs rebuilding.\n\n👇 Tap <b>Create my bot</b> and Telegram will walk you through it. Already have a bot ready? The second button is for you.",
   promptReconnected: (username) => `✅ <b>@${username}</b> is reconnected and working again.`,
+  clientAccepted: (client) =>
+    `<b>${client.name} is in.</b>\n\nAccepted as ${
+      client.telegramName ?? client.name
+    }${client.username === undefined ? "" : ` (@${client.username})`}, writing in ${client.language}.`,
+  openClientButton: "Open their card",
 }
 
 const uk: Copy = {
@@ -247,6 +269,11 @@ const uk: Copy = {
   relinkReserved:
     "🔄 <b>Повернімо вашого бота.</b>\n\nУ вашому просторі все саме там, де ви лишили: клієнти, сесії, нотатки. Відновити треба лише зв'язок із Telegram.\n\n👇 Натисніть <b>Створити бота</b> — і Telegram усе підкаже. Уже маєте готового бота? Тоді вам до другої кнопки.",
   promptReconnected: (username) => `✅ <b>@${username}</b> знову підключено, і він працює.`,
+  clientAccepted: (client) =>
+    `<b>${client.name}: запрошення прийнято.</b>\n\nПрийнято як ${
+      client.telegramName ?? client.name
+    }${client.username === undefined ? "" : ` (@${client.username})`}, мова спілкування — ${client.language}.`,
+  openClientButton: "Відкрити картку",
 }
 
 const ru: Copy = {
@@ -305,6 +332,11 @@ const ru: Copy = {
   relinkReserved:
     "🔄 <b>Вернём вашего бота.</b>\n\nВ вашем пространстве всё ровно там, где вы оставили: клиенты, сессии, заметки. Восстановить нужно только связь с Telegram.\n\n👇 Нажмите <b>Создать бота</b> — и Telegram всё подскажет. Уже есть готовый бот? Тогда вам ко второй кнопке.",
   promptReconnected: (username) => `✅ <b>@${username}</b> снова подключён и работает.`,
+  clientAccepted: (client) =>
+    `<b>${client.name}: приглашение принято.</b>\n\nПринято как ${
+      client.telegramName ?? client.name
+    }${client.username === undefined ? "" : ` (@${client.username})`}, язык общения — ${client.language}.`,
+  openClientButton: "Открыть карточку",
 }
 
 /** Exported for the test that resolves every locale strictly — see below. */

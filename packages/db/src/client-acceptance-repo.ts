@@ -56,11 +56,35 @@ export interface AcceptInput {
   readonly now: Date
 }
 
+/** What the coach is told when somebody walks in without them in the room. */
+export interface AcceptedClient {
+  readonly id: string
+  readonly name: string
+  readonly language?: CoachLanguage
+  readonly telegramName?: string
+  readonly telegramUsername?: string
+  readonly nextSessionAt?: Date
+}
+
+/** Whose assistant a bot is — what the stranger door needs, and nothing more. */
+export interface BotOwner {
+  readonly workspaceId: string
+  readonly workspaceName: string
+  readonly coachTelegramId?: string
+  readonly coachLanguage: CoachLanguage
+}
+
 export interface Interface {
   readonly findByToken: (
     token: string,
     telegramBotId: string,
   ) => Effect.Effect<InviteLookup | undefined, QueryFailed>
+  readonly findBotOwner: (
+    telegramBotId: string,
+  ) => Effect.Effect<BotOwner | undefined, QueryFailed>
+  readonly findAcceptedClient: (
+    clientId: string,
+  ) => Effect.Effect<AcceptedClient | undefined, QueryFailed>
   readonly accept: (
     input: AcceptInput,
   ) => Effect.Effect<{ readonly accepted: boolean }, QueryFailed>
@@ -269,7 +293,97 @@ export const layer = Layer.effect(
       return { accepted: result.rows.length > 0 }
     })
 
-    return Service.of({ findByToken, accept })
+    /**
+     * The coach behind one bot. Read by `/start` before it decides which of its
+     * three answers this sender gets: the coach's own menu, or the sentence that
+     * names whose assistant they have just messaged.
+     */
+    const findBotOwner = Effect.fn("ClientAcceptanceRepo.findBotOwner")(function* (
+      telegramBotId: string,
+    ) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({
+              workspaceId: schema.workspace.id,
+              workspaceName: schema.workspace.name,
+              coachTelegramId: schema.member.telegramUserId,
+              coachLanguage: schema.member.language,
+            })
+            .from(schema.bot)
+            .innerJoin(schema.workspace, eq(schema.workspace.id, schema.bot.workspaceId))
+            .innerJoin(
+              schema.member,
+              sql`${schema.member.workspaceId} = ${schema.bot.workspaceId} and ${schema.member.role} = 'owner'`,
+            )
+            .where(eq(schema.bot.telegramBotId, telegramBotId))
+            .limit(1),
+        catch: (cause) => new QueryFailed({ operation: "clientAcceptance.findBotOwner", cause }),
+      })
+      const row = rows[0]
+      if (row === undefined) return undefined
+      return {
+        workspaceId: row.workspaceId,
+        workspaceName: row.workspaceName,
+        ...(row.coachTelegramId === null ? {} : { coachTelegramId: row.coachTelegramId }),
+        coachLanguage: row.coachLanguage,
+      } satisfies BotOwner
+    })
+
+    /**
+     * One accepted client, as the coach's own push describes them: the name they
+     * were created under, the Telegram account that accepted, the language they
+     * chose, and the session already on the books if there is one.
+     */
+    const findAcceptedClient = Effect.fn("ClientAcceptanceRepo.findAcceptedClient")(function* (
+      clientId: string,
+    ) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          client.execute(sql`
+            select
+              "c"."id" as "id",
+              "c"."name" as "name",
+              "c"."language" as "language",
+              "ch"."telegram_snapshot" as "snapshot",
+              ${iso('"s"."scheduled_at"')} as "session_at"
+            from "client" as "c"
+            left join "channel" as "ch"
+              on "ch"."client_id" = "c"."id" and "ch"."is_primary"
+            left join lateral (
+              select "scheduled_at"
+              from "session"
+              where "session"."client_id" = "c"."id" and "session"."state" = 'scheduled'
+              order by "session"."scheduled_at" asc
+              limit 1
+            ) as "s" on true
+            where "c"."id" = ${clientId}
+            limit 1
+          `),
+        catch: (cause) =>
+          new QueryFailed({ operation: "clientAcceptance.findAcceptedClient", cause }),
+      })
+
+      const record = rows.rows[0] as Record<string, unknown> | undefined
+      if (record === undefined) return undefined
+      const snapshot = record.snapshot as {
+        readonly name?: string
+        readonly username?: string
+      } | null
+      const chosen = language(record.language)
+      const sessionAt = readDate(record.session_at)
+
+      return {
+        id: String(record.id),
+        name: String(record.name),
+        ...(chosen === undefined ? {} : { language: chosen }),
+        ...(snapshot?.name === undefined ? {} : { telegramName: snapshot.name }),
+        ...(snapshot?.username === undefined ? {} : { telegramUsername: snapshot.username }),
+        ...(sessionAt === undefined ? {} : { nextSessionAt: sessionAt }),
+      } satisfies AcceptedClient
+    })
+
+    return Service.of({ findByToken, findBotOwner, findAcceptedClient, accept })
   }),
 )
 
