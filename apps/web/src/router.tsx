@@ -9,6 +9,10 @@ export function getRouter() {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // One screen replacing another, handled by the browser (§Motion). Where
+    // view transitions are unsupported the navigation is simply instant, which
+    // is what it was before.
+    defaultViewTransition: true,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
   })

@@ -9,6 +9,7 @@ import { NewClientScreen } from "@/features/coach/components/new-client-screen.t
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { acceptOnce } from "@/routes/index.tsx"
 import { createClient } from "@/server/coach-clients.functions.ts"
 import { loadCoachEntry } from "@/server/coach.functions.ts"
@@ -56,14 +57,17 @@ function NewClientRoute() {
         try {
           const result = await createClient({ data: input })
           if (result.ok) {
+            notifyHaptic("success")
             // Straight to the client's own route: there is no success screen,
             // and the screen they land on is the one they will come back to.
             await router.invalidate()
             await navigate({ to: "/clients/$clientId", params: { clientId: result.clientId } })
             return
           }
+          notifyHaptic("error")
           setError(result.error === "invalid" ? copy.clients.nameRequired : copy.common.failed)
         } catch {
+          notifyHaptic("error")
           setError(copy.common.failed)
         } finally {
           setPending(false)

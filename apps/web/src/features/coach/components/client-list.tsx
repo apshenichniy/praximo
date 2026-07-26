@@ -52,11 +52,14 @@ export function ClientList({
 }) {
   const newClient = (
     <li key="new-client">
-      <Link to="/clients/new" className="flex min-h-16 items-center gap-4 px-5 py-3 text-left">
+      <Link
+        to="/clients/new"
+        className="pressable-row flex min-h-16 items-center gap-4 px-5 py-3 text-left"
+      >
         <span className="bg-primary/15 text-primary flex size-10 shrink-0 items-center justify-center rounded-full">
           <HugeiconsIcon icon={UserAdd01Icon} size={18} strokeWidth={2} />
         </span>
-        <span className="text-primary text-[15px] font-semibold">{copy.newClient}</span>
+        <span className="text-primary text-body font-semibold">{copy.newClient}</span>
       </Link>
     </li>
   )
@@ -64,11 +67,15 @@ export function ClientList({
   const rows =
     clients.length === 0
       ? [
-          <li key="empty" className="text-muted-foreground px-5 py-5 text-sm leading-5">
+          <li key="empty" className="text-muted-foreground px-5 py-5 text-body leading-5">
             {copy.empty}
           </li>,
         ]
-      : clients.map((client) => (
+      : // No stagger, deliberately (§Motion). The list rides in on the screen
+        // transition that brought it, and a second animation on top of that one
+        // read as a wave running down the rows — noticeable in the picker, which
+        // a coach opens on the way to every booking rather than once.
+        clients.map((client) => (
           <li key={client.id}>
             <ClientRow copy={copy} client={client} onPick={onPick} />
           </li>
@@ -96,16 +103,16 @@ function ClientRow({
 }) {
   const body: ReactNode = (
     <>
-      <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+      <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-caption font-semibold">
         {initials(client.name)}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[15px] font-medium">{client.name}</span>
+        <span className="block truncate text-body font-medium">{client.name}</span>
         <ClientStateLine copy={copy} client={client} />
       </span>
     </>
   )
-  const className = "flex min-h-16 w-full items-center gap-4 px-5 py-3 text-left"
+  const className = "pressable-row flex min-h-16 w-full items-center gap-4 px-5 py-3 text-left"
 
   return onPick === undefined ? (
     <Link to="/clients/$clientId" params={{ clientId: client.id }} className={className}>
@@ -146,7 +153,7 @@ export function ClientStateLine({
         : `${copy.invitedPrefix}${format.relative(client.invitedAt)}`
 
   return (
-    <span className="mt-0.5 flex items-center gap-2 text-xs">
+    <span className="mt-0.5 flex items-center gap-2 text-caption">
       <span className={cn("flex items-center gap-1.5 font-medium", stateStyles[client.state])}>
         <span className="size-1.5 rounded-full bg-current" />
         {word}

@@ -52,14 +52,14 @@ export function SessionsScreen({
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
       <TelegramBackButton label={copy.common.back} />
 
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{copy.sessions.listTitle}</h1>
+      <h1 className="mt-2 text-title font-semibold tracking-tight">{copy.sessions.listTitle}</h1>
 
       {days.length === 0 ? (
-        <p className="text-muted-foreground mt-6 text-sm leading-5">{copy.sessions.empty}</p>
+        <p className="text-muted-foreground mt-6 text-body leading-5">{copy.sessions.empty}</p>
       ) : (
         days.map((day) => (
           <Section key={day.date} className="mt-8">
-            <h2 className="text-muted-foreground px-1 text-[10px] font-semibold tracking-widest uppercase">
+            <h2 className="text-muted-foreground px-1 text-caption font-semibold tracking-wide uppercase">
               {day.heading}
             </h2>
             <Card className="mt-3 gap-0 overflow-hidden py-0">
@@ -69,13 +69,13 @@ export function SessionsScreen({
                     <Link
                       to="/sessions/$sessionId"
                       params={{ sessionId: session.id }}
-                      className="flex min-h-16 items-center gap-4 px-5 py-3 text-left"
+                      className="pressable-row flex min-h-16 items-center gap-4 px-5 py-3 text-left"
                     >
-                      <span className="text-sm font-semibold tabular-nums">
+                      <span className="text-body font-semibold tabular-nums">
                         {clock.format(new Date(session.scheduledAt))}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-medium">
+                        <span className="block truncate text-body font-medium">
                           {session.clientName}
                         </span>
                         <SessionKindLine
@@ -85,7 +85,7 @@ export function SessionsScreen({
                           className="mt-0.5"
                         />
                         {session.clientAccepted ? null : (
-                          <span className="mt-1 block truncate text-xs text-amber-200/80">
+                          <span className="mt-1 block truncate text-caption text-amber-200/80">
                             {copy.sessions.rowUnaccepted}
                           </span>
                         )}

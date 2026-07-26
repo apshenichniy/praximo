@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
-import { attachMainButton, loadTelegramWebApp, readTelegramInitData } from "@/lib/telegram.ts"
+import {
+  attachMainButton,
+  loadTelegramWebApp,
+  readTelegramInitData,
+  type TelegramWebApp,
+} from "@/lib/telegram.ts"
 
 /**
  * A screen's primary action, handed to the host's own bottom button. It lives
@@ -23,6 +28,21 @@ export function TelegramMainButton({
   readonly fallback: React.ReactNode
 }) {
   const [usesNativeButton, setUsesNativeButton] = useState<boolean>()
+  const [host, setHost] = useState<TelegramWebApp>()
+  /**
+   * The current handler and label, read through refs.
+   *
+   * The button is attached **once**. Attaching per render would mean a `hide()`
+   * and a `show()` on every keystroke and every chip a screen offers — the host
+   * animates both, so the button blinked at the bottom of the scheduling screen
+   * each time the kind, the duration or the day changed, none of which the
+   * button is about. `onClick` is a fresh closure whenever the draft moves, so
+   * the host gets a stable wrapper and the closure is read at press time.
+   */
+  const handler = useRef(onClick)
+  handler.current = onClick
+  const label = useRef(text)
+  label.current = text
 
   useEffect(() => {
     let cancelled = false
@@ -33,7 +53,8 @@ export function TelegramMainButton({
       const isTelegramLaunch = Boolean(readTelegramInitData(webApp))
       setUsesNativeButton(isTelegramLaunch)
       if (webApp && isTelegramLaunch) {
-        detach = attachMainButton(webApp, text, onClick)
+        setHost(webApp)
+        detach = attachMainButton(webApp, label.current, () => handler.current())
       }
     })
 
@@ -41,7 +62,12 @@ export function TelegramMainButton({
       cancelled = true
       detach?.()
     }
-  }, [text, onClick])
+  }, [])
+
+  /** A new label is a `setText`, not a re-attach: the button stays on screen. */
+  useEffect(() => {
+    host?.MainButton.setText(text)
+  }, [host, text])
 
   // Undecided renders nothing: showing the fallback first and withdrawing it a
   // tick later would move every row under it just as the screen settles.

@@ -20,7 +20,7 @@ export function ClientsScreen({
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
       <TelegramBackButton label={copy.common.back} />
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight">{copy.clients.listTitle}</h1>
+      <h1 className="mt-2 text-title font-semibold tracking-tight">{copy.clients.listTitle}</h1>
       <ClientList copy={copy.clients} clients={clients} />
     </main>
   )

@@ -58,7 +58,7 @@ export function InviteSection({
 
       <Card size="sm" className="mt-4">
         <CardContent>
-          <p className="text-sm leading-5">{inviteExplanation(workspace)}</p>
+          <p className="text-body leading-5">{inviteExplanation(workspace)}</p>
 
           {invite?.link === undefined ? null : (
             <>
@@ -131,7 +131,7 @@ export function InviteSection({
             {invite.acceptedAt === undefined ? (
               <span className="flex flex-col items-end">
                 <span>{formatExpiresIn(invite.expiresAt)}</span>
-                <span className="text-muted-foreground text-xs font-normal">
+                <span className="text-muted-foreground text-caption font-normal">
                   {formatDate(invite.expiresAt, "")}
                 </span>
               </span>

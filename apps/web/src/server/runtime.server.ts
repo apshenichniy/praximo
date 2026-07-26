@@ -234,6 +234,19 @@ export const loadCoachDaySchedule = async (
   )
 }
 
+export const loadCoachRangeSchedule = async (
+  credential: LaunchCredential,
+  from: string,
+  days: number,
+): Promise<ReadonlyArray<CoachClients.DatedDaySchedule>> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) =>
+      service.rangeSchedule(credential, from, days),
+    ),
+  )
+}
+
 export const scheduleCoachSession = async (
   credential: LaunchCredential,
   input: CoachClients.ScheduleSessionInput,

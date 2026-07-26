@@ -29,7 +29,7 @@ export function InviteLanguageChips({
 }) {
   return (
     <div className={className}>
-      <p className="text-sm font-medium">Coach&rsquo;s language</p>
+      <p className="text-body font-medium">Coach&rsquo;s language</p>
       <ToggleGroup
         aria-label="Invite language"
         className="mt-2"
@@ -52,7 +52,7 @@ export function InviteLanguageChips({
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      <p className="text-muted-foreground mt-2 text-xs leading-4">
+      <p className="text-muted-foreground mt-2 text-caption leading-4">
         The invite and the whole bot setup are written in this language. Your coach can change it
         when they first sign in.
       </p>

@@ -37,7 +37,7 @@ export function InviteCoachLink() {
   return (
     <Link
       to="/admin/workspaces/new"
-      className="text-primary hover:bg-muted active:bg-accent/70 flex h-16 w-full items-center gap-3.5 px-4 text-left font-semibold transition-colors"
+      className="text-primary pressable-row hover:bg-muted flex h-16 w-full items-center gap-3.5 px-4 text-left font-semibold"
     >
       <span className="border-primary/50 flex size-[38px] items-center justify-center rounded-full border">
         <HugeiconsIcon icon={AddMaleIcon} size={22} strokeWidth={1.8} />
@@ -82,7 +82,7 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
   return (
     <Item
       render={<Link to="/admin/workspaces/$workspaceId" params={{ workspaceId: coach.id }} />}
-      className="active:bg-accent/70 h-16 gap-3.5 rounded-none border-0 px-4 py-0"
+      className="pressable-row h-16 gap-3.5 rounded-none border-0 px-4 py-0"
     >
       <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
         <WorkspaceAvatar
@@ -91,10 +91,10 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
         />
       </ItemMedia>
       <ItemContent className="min-w-0 gap-0.5">
-        <ItemTitle className="block truncate text-[15px] font-semibold">
+        <ItemTitle className="block truncate text-body font-semibold">
           {displayName(coach.name)}
         </ItemTitle>
-        <ItemDescription className="flex min-w-0 items-center text-[13px] leading-[18px]">
+        <ItemDescription className="flex min-w-0 items-center text-footnote leading-[18px]">
           <span
             aria-hidden="true"
             className={cn("mr-[7px] size-1.5 shrink-0 rounded-full", dotClass[state.tone])}
@@ -112,7 +112,7 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
         // (#110). It is still the same link — the workspace screen owns the
         // pipeline, as it owns every other action on a coach — but the row says
         // what is waiting there rather than leaving it to a chevron.
-        <span className="border-destructive/40 text-destructive shrink-0 rounded-full border px-3 py-1 text-[13px] font-semibold">
+        <span className="border-destructive/40 text-destructive shrink-0 rounded-full border px-3 py-1 text-footnote font-semibold">
           Resume
         </span>
       ) : (
@@ -160,7 +160,7 @@ export function ViewerCoachCard({
     <Card className="gap-0 overflow-hidden py-0">
       <Item
         render={<button type="button" onClick={() => onOpen(viewerCoach.link)} />}
-        className="hover:bg-muted active:bg-accent/70 w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
+        className="pressable-row hover:bg-muted w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
       >
         <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
           <span className="border-primary/50 text-primary flex size-[38px] items-center justify-center rounded-full border">
@@ -168,8 +168,8 @@ export function ViewerCoachCard({
           </span>
         </ItemMedia>
         <ItemContent className="min-w-0 gap-0.5">
-          <ItemTitle className="text-[15px] font-semibold">{action.title}</ItemTitle>
-          <ItemDescription className="text-[13px] leading-[18px]">
+          <ItemTitle className="text-body font-semibold">{action.title}</ItemTitle>
+          <ItemDescription className="text-footnote leading-[18px]">
             {action.subtitle}
           </ItemDescription>
         </ItemContent>

@@ -31,7 +31,7 @@ export function InviteLinkPanel({
         readOnly
         value={link}
         aria-label={ariaLabel}
-        className="truncate px-4 text-sm"
+        className="truncate px-4 text-body"
         onFocus={(event) => event.target.select()}
       />
       <InputGroupAddon align="inline-end">

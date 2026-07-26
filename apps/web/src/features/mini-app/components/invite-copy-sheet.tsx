@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/drawer.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { Textarea } from "@/components/ui/textarea.tsx"
+import { useOpenHaptic } from "@/features/mini-app/haptics.ts"
 
 /**
  * Bottom drawer for the Copy channel: copy the full forwardable message. When
@@ -36,6 +37,7 @@ export function InviteCopySheet({
   readonly onCopy: () => void
   readonly onCopyFallback: (message: string) => void
 }) {
+  useOpenHaptic(open)
   return (
     <Drawer
       open={open}
@@ -44,7 +46,7 @@ export function InviteCopySheet({
     >
       <DrawerContent className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <DrawerHeader className="p-0 pt-2 text-left group-data-[swipe-axis=y]/drawer-popup:text-left">
-          <DrawerTitle className="text-lg font-semibold">Copy invite</DrawerTitle>
+          <DrawerTitle className="text-heading font-semibold">Copy invite</DrawerTitle>
           <DrawerDescription>
             The full invite message is copied — paste it anywhere: WhatsApp, Slack, SMS.
           </DrawerDescription>
@@ -92,7 +94,7 @@ export function InviteCopySheet({
                 readOnly
                 value={fallbackMessage}
                 rows={6}
-                className="bg-muted rounded-2xl p-4 text-sm"
+                className="bg-muted rounded-2xl p-4 text-body"
                 onFocus={(event) => event.target.select()}
               />
               <Button

@@ -2,6 +2,7 @@ import { type CoachLanguage, CoachLanguages, ClientNameMaxLength } from "@praxim
 import { useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
+import { selectionHaptic } from "@/features/mini-app/haptics.ts"
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { Input } from "@/components/ui/input.tsx"
@@ -49,7 +50,7 @@ export function NewClientScreen({
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-28">
       <TelegramBackButton onBack={onBack} label={copy.common.back} />
-      <h1 className="text-2xl font-semibold tracking-tight">{copy.clients.newTitle}</h1>
+      <h1 className="text-title font-semibold tracking-tight">{copy.clients.newTitle}</h1>
 
       <div className="mt-8 flex flex-col gap-2">
         <Label htmlFor="client-name">{copy.clients.nameLabel}</Label>
@@ -71,9 +72,12 @@ export function NewClientScreen({
               key={option}
               type="button"
               aria-pressed={inviteLanguage === option}
-              onClick={() => setInviteLanguage(option)}
+              onClick={() => {
+                if (inviteLanguage !== option) selectionHaptic()
+                setInviteLanguage(option)
+              }}
               className={cn(
-                "flex-1 rounded-full border py-2 text-sm font-semibold transition-colors",
+                "flex-1 rounded-full border py-2 text-body font-semibold transition-colors",
                 inviteLanguage === option
                   ? "bg-primary text-primary-foreground border-transparent"
                   : "border-border text-muted-foreground",
@@ -88,7 +92,7 @@ export function NewClientScreen({
           reads as *that person's* language — the coach picks wrong and never
           finds out.
         */}
-        <p className="text-muted-foreground text-xs leading-5">
+        <p className="text-muted-foreground text-caption leading-5">
           {copy.clients.languageHintLead}
           {trimmed.length === 0 ? (
             copy.clients.languageHintFallback
@@ -102,7 +106,7 @@ export function NewClientScreen({
       </div>
 
       {error === undefined ? null : (
-        <p className="text-destructive mt-6 text-sm leading-5">{error}</p>
+        <p className="text-destructive mt-6 text-body leading-5">{error}</p>
       )}
 
       <TelegramMainButton

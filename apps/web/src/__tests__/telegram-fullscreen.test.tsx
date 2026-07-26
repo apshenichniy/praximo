@@ -51,6 +51,7 @@ const fakeMainButton = (): TelegramMainButton => {
 const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => ({
   initData: "signed-init-data",
   version: "8.0",
+  platform: "ios",
   isFullscreen: false,
   ready: vi.fn(),
   expand: vi.fn(),

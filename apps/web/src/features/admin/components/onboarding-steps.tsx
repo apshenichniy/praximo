@@ -22,7 +22,7 @@ function StepMarker({ state, index }: { readonly state: StepState; readonly inde
     <span
       aria-hidden="true"
       className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+        "flex size-7 shrink-0 items-center justify-center rounded-full border text-caption font-semibold",
         markerClass[state],
       )}
     >
@@ -79,14 +79,14 @@ export function OnboardingStepsSection({ workspace }: { readonly workspace: Work
                 <div className={cn("min-w-0 pb-5", index === steps.length - 1 && "pb-0")}>
                   <p
                     className={cn(
-                      "text-sm font-semibold",
+                      "text-body font-semibold",
                       step.state === "upcoming" && "text-muted-foreground",
                     )}
                   >
                     {step.title}
                     <span className="sr-only"> — {stateLabel[step.state]}</span>
                   </p>
-                  <p className="text-muted-foreground mt-1 text-[13px] leading-[18px]">
+                  <p className="text-muted-foreground mt-1 text-footnote leading-[18px]">
                     {step.description}
                   </p>
                 </div>

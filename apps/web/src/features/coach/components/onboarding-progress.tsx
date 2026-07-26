@@ -24,7 +24,7 @@ export function OnboardingProgress({
           }
         />
       </span>
-      <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+      <span className="text-muted-foreground text-caption font-medium tracking-wide uppercase">
         {label}
       </span>
     </div>

@@ -8,6 +8,7 @@ import {
   loadCoachClientDetail,
   loadCoachClients,
   loadCoachDaySchedule,
+  loadCoachRangeSchedule,
   prepareCoachInviteCard,
   removeCoachClient,
   resendCoachClientInvite,
@@ -122,6 +123,37 @@ export const getDaySchedule = createServerFn({ method: "POST" })
     if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
     try {
       return { ok: true, day: await loadCoachDaySchedule(context.credential, data.date) }
+    } catch (error) {
+      return { ok: false, error: transportError(error) }
+    }
+  })
+
+export type RangeScheduleResult =
+  | { readonly ok: true; readonly days: ReadonlyArray<CoachClients.DatedDaySchedule> }
+  | { readonly ok: false; readonly error: CoachClientsTransportError }
+
+/**
+ * A run of days in one read (#186). The strip asks for the fortnight it shows
+ * rather than for each day the thumb reaches, so walking it costs one round-trip
+ * instead of fourteen — and the days themselves are a handful of intervals, so
+ * the answer is smaller than the requests it replaces.
+ */
+export const getRangeSchedule = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator((input: unknown): { readonly from: string; readonly days: number } => {
+    const record = (input ?? {}) as Record<string, unknown>
+    return {
+      from: typeof record.from === "string" ? record.from : "",
+      days: typeof record.days === "number" && Number.isFinite(record.days) ? record.days : 1,
+    }
+  })
+  .handler(async ({ context, data }): Promise<RangeScheduleResult> => {
+    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
+    try {
+      return {
+        ok: true,
+        days: await loadCoachRangeSchedule(context.credential, data.from, data.days),
+      }
     } catch (error) {
       return { ok: false, error: transportError(error) }
     }

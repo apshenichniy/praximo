@@ -47,18 +47,18 @@ export function LanguageStep({
 
       <span
         aria-hidden="true"
-        className="admin-avatar shadow-primary/20 ring-primary/25 mt-9 flex size-14 items-center justify-center rounded-full text-2xl font-semibold shadow-2xl ring-1"
+        className="admin-avatar shadow-primary/20 ring-primary/25 mt-9 flex size-14 items-center justify-center rounded-full text-title font-semibold shadow-2xl ring-1"
       >
         P
       </span>
 
-      <h1 className="mt-6 text-2xl font-semibold tracking-tight text-pretty">
+      <h1 className="mt-6 text-title font-semibold tracking-tight text-pretty">
         {copy.language.greeting}
       </h1>
-      <p className="text-muted-foreground mt-3 text-[15px] leading-6 text-pretty">
+      <p className="text-muted-foreground mt-3 text-body leading-6 text-pretty">
         {copy.language.introduction}
       </p>
-      <p className="mt-5 text-[15px] leading-6 text-pretty">
+      <p className="mt-5 text-body leading-6 text-pretty">
         {copy.language.writesLead}
         <span className="font-semibold">{copy.language.writesEmphasis}</span>
         {copy.language.writesTail}
@@ -89,7 +89,7 @@ export function LanguageStep({
       </ToggleGroup>
 
       {error === undefined ? null : (
-        <p role="alert" className="text-destructive mt-6 text-sm">
+        <p role="alert" className="text-destructive mt-6 text-body">
           {error}
         </p>
       )}
@@ -101,7 +101,7 @@ export function LanguageStep({
           // Pushed to the bottom of the column, where the host's own button
           // sits inside Telegram. Only local browser development ever sees it.
           <div className="mt-auto pt-12">
-            <Button className="h-12 w-full text-[15px]" disabled={pending} onClick={onContinue}>
+            <Button className="h-12 w-full text-body" disabled={pending} onClick={onContinue}>
               {label}
             </Button>
           </div>

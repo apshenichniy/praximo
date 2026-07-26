@@ -17,7 +17,7 @@ import { TextField } from "@/features/admin/components/form-fields.tsx"
 import { InviteCopySheet } from "@/features/mini-app/components/invite-copy-sheet.tsx"
 import { InviteEmailSheet } from "@/features/admin/components/invite-email-sheet.tsx"
 import { InviteLanguageChips } from "@/features/admin/components/invite-language-chips.tsx"
-import { notifyHaptic } from "@/features/mini-app/haptics.ts"
+import { impactHaptic, notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
 import { sendCoachInviteEmail } from "@/features/admin/invite-email.ts"
 import { createCoachInviteMutation } from "@/features/admin/workspace-queries.ts"
@@ -102,6 +102,7 @@ function InviteCoachPage() {
     setCreated(true)
 
     const { inviteId, link, message } = response.value
+    impactHaptic()
     switch (await inviteShare.share({ inviteId, link, message, language })) {
       // A dismissed picker is not a failure: the invite stays pending, nothing
       // is recorded, and the manager can tap Share again. Leave the screen as is.
@@ -182,8 +183,8 @@ function InviteCoachPage() {
       <TelegramBackButton onBack={() => void navigate({ to: "/admin" })} />
 
       <header className="mt-7">
-        <h1 className="text-3xl font-semibold tracking-tight">Invite a coach</h1>
-        <p className="text-muted-foreground mt-2 text-sm leading-5">
+        <h1 className="text-display font-semibold tracking-tight">Invite a coach</h1>
+        <p className="text-muted-foreground mt-2 text-body leading-5">
           They&rsquo;ll set up their own profile during onboarding — you just get the invite to
           them.
         </p>
@@ -205,7 +206,7 @@ function InviteCoachPage() {
           onChange={setName}
           onBlur={() => undefined}
         />
-        <p className="text-muted-foreground mt-2 text-xs">
+        <p className="text-muted-foreground mt-2 text-caption">
           Only labels the invite in your list until they join.
         </p>
       </div>
@@ -219,7 +220,7 @@ function InviteCoachPage() {
         onChange={setLanguage}
       />
 
-      <h2 className="text-muted-foreground mt-8 text-xs font-semibold tracking-widest uppercase">
+      <h2 className="text-muted-foreground mt-8 text-caption font-semibold tracking-widest uppercase">
         Send the invite
       </h2>
       <Card className="divide-border mt-3 gap-0 divide-y overflow-hidden py-0">
@@ -261,12 +262,12 @@ function InviteCoachPage() {
       )}
 
       {pending ? (
-        <p className="text-muted-foreground mt-4 flex items-center gap-2 text-sm">
+        <p className="text-muted-foreground mt-4 flex items-center gap-2 text-body">
           <Spinner /> Preparing the invite…
         </p>
       ) : null}
 
-      <p className="text-muted-foreground mt-auto border-t pt-4 text-xs leading-5">
+      <p className="text-muted-foreground mt-auto border-t pt-4 text-caption leading-5">
         The link works once and expires in 7 days. You can resend it anytime.
       </p>
 
@@ -305,7 +306,7 @@ function InviteAction({
   return (
     <Item
       render={<button type="button" disabled={disabled} onClick={onClick} />}
-      className="hover:bg-muted active:bg-accent/70 min-h-[70px] w-full rounded-none border-0 text-left transition-colors disabled:opacity-60"
+      className="pressable-row hover:bg-muted min-h-[70px] w-full rounded-none border-0 text-left transition-colors disabled:opacity-60"
     >
       <ItemMedia>
         <span className="border-primary/50 text-primary flex size-11 items-center justify-center rounded-full border">
@@ -314,7 +315,7 @@ function InviteAction({
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="font-medium">{title}</ItemTitle>
-        <ItemDescription className="text-xs leading-4">{subtitle}</ItemDescription>
+        <ItemDescription className="text-caption leading-4">{subtitle}</ItemDescription>
       </ItemContent>
     </Item>
   )

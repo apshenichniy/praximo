@@ -79,7 +79,7 @@ export function PracticeSection() {
           <PlaceholderValue>Not tracked yet</PlaceholderValue>
         </DetailRow>
       </DetailCard>
-      <p className="text-muted-foreground mt-3 px-1 text-xs leading-5">
+      <p className="text-muted-foreground mt-3 px-1 text-caption leading-5">
         Client and session counts arrive with practice aggregates.
       </p>
     </Section>

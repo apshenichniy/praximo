@@ -10,6 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog.tsx"
 import { Button } from "@/components/ui/button.tsx"
+import { useOpenHaptic } from "@/features/mini-app/haptics.ts"
 
 /**
  * In-app replacement for `window.confirm`: Telegram webviews render native
@@ -33,6 +34,7 @@ export function ConfirmDialog({
   readonly confirmVariant?: "default" | "destructive"
   readonly onConfirm: () => void
 }) {
+  useOpenHaptic(open)
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent size="sm">

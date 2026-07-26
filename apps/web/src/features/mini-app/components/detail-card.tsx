@@ -33,8 +33,8 @@ export function DetailRow({
 }) {
   return (
     <div className="flex min-h-14 items-center justify-between gap-5 px-5 py-3">
-      <dt className="text-muted-foreground text-sm">{label}</dt>
-      <dd className="min-w-0 text-right text-sm font-medium">{children}</dd>
+      <dt className="text-muted-foreground text-body">{label}</dt>
+      <dd className="min-w-0 text-right text-body font-medium">{children}</dd>
     </div>
   )
 }
@@ -58,7 +58,9 @@ export function TimestampValue({
   return (
     <span className="flex flex-col items-end">
       <span>{format.relative(value)}</span>
-      <span className="text-muted-foreground text-xs font-normal">{format.absolute(value)}</span>
+      <span className="text-muted-foreground text-caption font-normal">
+        {format.absolute(value)}
+      </span>
     </span>
   )
 }

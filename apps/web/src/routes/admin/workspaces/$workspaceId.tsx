@@ -21,7 +21,7 @@ import { WorkspaceDetailHeader } from "@/features/admin/components/workspace-det
 import { WorkspaceDetailSkeleton } from "@/features/admin/components/workspace-detail-skeleton.tsx"
 import { adminTimestampFormat } from "@/features/admin/formatting.ts"
 import { DangerZone } from "@/features/mini-app/components/danger-zone.tsx"
-import { notifyHaptic } from "@/features/mini-app/haptics.ts"
+import { impactHaptic, notifyHaptic } from "@/features/mini-app/haptics.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
 import { useWorkspaceDeletion } from "@/features/admin/hooks/use-workspace-deletion.ts"
@@ -180,6 +180,7 @@ function OnboardingWorkspace({
     if (invite?.link === undefined || invite.message === undefined) return
     setShareError(undefined)
     setShareNotice(undefined)
+    impactHaptic()
     switch (
       await inviteShare.share({
         inviteId: invite.id,

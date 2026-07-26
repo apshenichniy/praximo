@@ -59,14 +59,14 @@ export function TodayScreen({
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-28">
       {relinkLink === undefined ? null : (
         <section className="border-destructive/40 bg-destructive/10 mb-8 rounded-2xl border p-5">
-          <h2 className="text-base font-semibold tracking-tight">{copy.home.relinkTitle}</h2>
-          <p className="text-muted-foreground mt-2 text-[13px] leading-5">
+          <h2 className="text-emphasis font-semibold tracking-tight">{copy.home.relinkTitle}</h2>
+          <p className="text-muted-foreground mt-2 text-footnote leading-5">
             {copy.home.relinkLead}
             <span className="text-foreground">@{botUsername}</span>
             {copy.home.relinkTail}
           </p>
           <a
-            className="bg-primary text-primary-foreground mt-4 inline-flex h-10 w-full items-center justify-center rounded-xl text-sm font-medium"
+            className="bg-primary text-primary-foreground mt-4 inline-flex h-10 w-full items-center justify-center rounded-xl text-body font-medium"
             href={relinkLink}
           >
             {copy.home.relinkAction}
@@ -75,7 +75,7 @@ export function TodayScreen({
       )}
 
       <header>
-        <h1 className="truncate text-2xl font-semibold tracking-tight">{today.coachName}</h1>
+        <h1 className="truncate text-title font-semibold tracking-tight">{today.coachName}</h1>
         {/*
           The count line is silent on an empty practice, and only there: with no
           clients at all the checklist below is the whole screen, and «No
@@ -84,14 +84,14 @@ export function TodayScreen({
           screen that failed to load.
         */}
         {today.emptyPractice ? null : (
-          <p className="text-muted-foreground mt-1 text-sm">
+          <p className="text-muted-foreground mt-1 text-body">
             {copy.today.sessionsToday(today.sessions.length)}
           </p>
         )}
       </header>
 
       {error === undefined ? null : (
-        <p className="text-destructive mt-6 text-sm leading-5">{error}</p>
+        <p className="text-destructive mt-6 text-body leading-5">{error}</p>
       )}
 
       {today.emptyPractice ? (
@@ -113,7 +113,7 @@ export function TodayScreen({
 
           {today.attention.length === 0 ? null : (
             <Section className="mt-10">
-              <SectionTitle className="text-base">{copy.today.attentionTitle}</SectionTitle>
+              <SectionTitle className="text-emphasis">{copy.today.attentionTitle}</SectionTitle>
               <Card className="mt-3 gap-0 overflow-hidden py-0">
                 <ul className="divide-border divide-y">
                   {today.attention.map((item) => (
@@ -148,10 +148,15 @@ export function TodayScreen({
       */}
       {!today.mainMiniAppHintVisible ? null : (
         <Card className="mt-8 gap-0 overflow-hidden py-0">
-          <Link to="/main-mini-app" className="flex items-center gap-4 px-5 py-4 text-left">
+          <Link
+            to="/main-mini-app"
+            className="pressable-row flex items-center gap-4 px-5 py-4 text-left"
+          >
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{copy.home.mainMiniAppRow}</span>
-              <span className="text-muted-foreground mt-0.5 block truncate text-xs">
+              <span className="block truncate text-body font-medium">
+                {copy.home.mainMiniAppRow}
+              </span>
+              <span className="text-muted-foreground mt-0.5 block truncate text-caption">
                 {copy.home.mainMiniAppRowMeta}
               </span>
             </span>
@@ -194,11 +199,11 @@ function SessionCard({
       <Link
         to="/sessions/$sessionId"
         params={{ sessionId: session.id }}
-        className="flex items-center gap-4 px-5 py-4 text-left"
+        className="pressable-row flex items-center gap-4 px-5 py-4 text-left"
       >
-        <span className="text-xl font-semibold tabular-nums">{time}</span>
+        <span className="text-heading font-semibold tabular-nums">{time}</span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-medium">{session.clientName}</span>
+          <span className="block truncate text-body font-medium">{session.clientName}</span>
           <SessionKindLine
             copy={copy.clients}
             kind={session.kind}
@@ -215,7 +220,7 @@ function SessionCard({
       */}
       {session.clientAccepted ? null : (
         <div className="border-border/60 border-t bg-amber-400/10 px-5 py-3">
-          <p className="text-[13px] leading-5 text-amber-200">
+          <p className="text-footnote leading-5 text-amber-200">
             {copy.today.unacceptedLead}
             <span className="font-semibold">{session.clientName}</span>
             {copy.today.unacceptedTail}
@@ -252,7 +257,7 @@ function AttentionRow({
     <Link
       to="/clients/$clientId"
       params={{ clientId: item.clientId }}
-      className="flex min-h-14 items-center gap-3 px-5 py-3 text-left"
+      className="pressable-row flex min-h-14 items-center gap-3 px-5 py-3 text-left"
     >
       <HugeiconsIcon
         icon={Alert01Icon}
@@ -261,8 +266,8 @@ function AttentionRow({
         className="shrink-0 text-amber-300"
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{item.clientName}</span>
-        <span className="mt-0.5 block truncate text-xs text-amber-200/80">
+        <span className="block truncate text-body font-medium">{item.clientName}</span>
+        <span className="mt-0.5 block truncate text-caption text-amber-200/80">
           {item.expired
             ? copy.today.attentionExpired
             : `${copy.today.attentionExpiringPrefix}${format.relative(item.expiresAt)}`}
@@ -295,7 +300,7 @@ function FirstSteps({ copy }: { readonly copy: CoachCopy }) {
 
   return (
     <Section className="mt-8">
-      <SectionTitle className="text-base">{copy.today.checklistTitle}</SectionTitle>
+      <SectionTitle className="text-emphasis">{copy.today.checklistTitle}</SectionTitle>
       <Card className="mt-3 gap-0 overflow-hidden py-0">
         <ol className="divide-border divide-y">
           {steps.map((step, index) => (
@@ -308,20 +313,20 @@ function FirstSteps({ copy }: { readonly copy: CoachCopy }) {
                   className="mt-0.5 shrink-0 text-emerald-300"
                 />
               ) : (
-                <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tabular-nums">
+                <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-caption font-semibold tabular-nums">
                   {index + 1}
                 </span>
               )}
               <span className="min-w-0 flex-1">
                 <span
                   className={cn(
-                    "block text-sm font-medium",
+                    "block text-body font-medium",
                     step.done && "text-muted-foreground line-through",
                   )}
                 >
                   {step.title}
                 </span>
-                <span className="text-muted-foreground mt-0.5 block text-xs leading-5">
+                <span className="text-muted-foreground mt-0.5 block text-caption leading-5">
                   {step.body}
                 </span>
               </span>

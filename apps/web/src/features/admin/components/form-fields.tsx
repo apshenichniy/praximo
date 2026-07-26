@@ -40,7 +40,7 @@ function FieldHeading({
     <div className="flex items-center justify-between">
       <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>
       {counter === undefined ? null : (
-        <span className="text-muted-foreground text-sm font-normal">
+        <span className="text-muted-foreground text-body font-normal">
           {value.length}/{counter}
         </span>
       )}
@@ -79,7 +79,7 @@ export function TextField({
         aria-describedby={error === undefined ? undefined : `${id}-error`}
         onBlur={onBlur}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 rounded-2xl px-4 text-base"
+        className="h-12 rounded-2xl px-4 text-emphasis"
       />
       {error === undefined ? null : <FieldError id={`${id}-error`}>{error}</FieldError>}
     </Field>
