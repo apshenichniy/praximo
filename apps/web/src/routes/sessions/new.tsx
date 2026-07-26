@@ -14,6 +14,7 @@ import {
   UnknownDaySchedule,
 } from "@/features/coach/day-schedule-queries.ts"
 import { bookedDates } from "@/features/coach/session-days.ts"
+import { notifyHaptic } from "@/features/mini-app/haptics.ts"
 import {
   calendarDate,
   type SchedulingDraft,
@@ -158,6 +159,7 @@ function NewSessionRoute() {
             },
           })
           if (result.ok && result.outcome.scheduled) {
+            notifyHaptic("success")
             // Every cached day, not just this one: a booking is exactly the
             // event that makes a remembered free slot a lie, and the next screen
             // to ask for a day must ask the server.
@@ -178,6 +180,7 @@ function NewSessionRoute() {
             return
           }
           const reason = result.ok && !result.outcome.scheduled ? result.outcome.reason : "failed"
+          notifyHaptic("error")
           setError(
             reason === "overlap"
               ? copy.clients.overlapError
@@ -188,6 +191,7 @@ function NewSessionRoute() {
                   : copy.common.failed,
           )
         } catch {
+          notifyHaptic("error")
           setError(copy.common.failed)
         } finally {
           setPending(false)

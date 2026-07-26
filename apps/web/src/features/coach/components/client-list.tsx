@@ -68,8 +68,15 @@ export function ClientList({
             {copy.empty}
           </li>,
         ]
-      : clients.map((client) => (
-          <li key={client.id}>
+      : clients.map((client, index) => (
+          // The list arrives in order rather than all at once — 30ms apart, and
+          // only for what is on screen when it opens (§Motion). Rows further
+          // down appear with the scroll, so a delay there would be a wait.
+          <li
+            key={client.id}
+            className="animate-in fade-in slide-in-from-bottom-1 duration-(--duration-screen)"
+            style={index < StaggeredRows ? { animationDelay: `${index * 30}ms` } : undefined}
+          >
             <ClientRow copy={copy} client={client} onPick={onPick} />
           </li>
         ))
@@ -82,6 +89,9 @@ export function ClientList({
     </Card>
   )
 }
+
+/** How many rows carry a stagger delay before it would read as a wait. */
+const StaggeredRows = 6
 
 /** The row itself, as a destination or as a choice — the same face either way. */
 function ClientRow({

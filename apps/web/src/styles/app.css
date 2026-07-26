@@ -111,6 +111,22 @@
   --sidebar-ring: oklch(0.56 0.021 213.5);
 }
 
+/* Screens replacing one another (§Motion). The browser's own crossfade, given
+   this app's duration and curve; a coach who has asked for less movement gets
+   the navigation without it. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--duration-screen);
+  animation-timing-function: var(--ease-out-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
 /* The day strip's edges (#186).
    A day fades as it reaches either end of the scroller, so the strip reads as
    something continuous the thumb is moving through rather than a row that stops.

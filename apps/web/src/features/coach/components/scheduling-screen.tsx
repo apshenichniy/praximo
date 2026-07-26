@@ -23,6 +23,7 @@ import { extendStrip, sameDay, StripDays, stripWindow } from "@/features/coach/d
 import { calendarLocale } from "@/features/i18n/calendar-locale.ts"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
+import { impactHaptic, selectionHaptic } from "@/features/mini-app/haptics.ts"
 import { cn } from "@/lib/utils.ts"
 
 /**
@@ -170,30 +171,37 @@ export function SchedulingScreen({
    */
   const chooseKind = useCallback(
     (next: SessionKind) => {
+      // A tap that chose what was already chosen is not a selection (§Motion).
+      if (next !== kind) selectionHaptic()
       setKind(next)
       if (!durationTouched) setDurationMinutes(defaultDurationForKind(next))
       setStartMinutes(undefined)
     },
-    [durationTouched],
+    [durationTouched, kind],
   )
 
-  const chooseDuration = useCallback((minutes: number) => {
-    setDurationTouched(true)
-    setDurationMinutes(minutes)
-    // A start that fitted at 30 minutes may not at 60. Rather than silently
-    // keeping an illegal choice, the time is asked again — which is the whole
-    // reason duration is asked first.
-    setStartMinutes(undefined)
-  }, [])
+  const chooseDuration = useCallback(
+    (minutes: number) => {
+      if (minutes !== durationMinutes) selectionHaptic()
+      setDurationTouched(true)
+      setDurationMinutes(minutes)
+      // A start that fitted at 30 minutes may not at 60. Rather than silently
+      // keeping an illegal choice, the time is asked again — which is the whole
+      // reason duration is asked first.
+      setStartMinutes(undefined)
+    },
+    [durationMinutes],
+  )
 
   const chooseDay = useCallback(
     (day: Date | undefined) => {
       if (day === undefined) return
+      if (!sameDay(day, selectedDay)) selectionHaptic()
       setSelectedDay(day)
       setStartMinutes(undefined)
       onDateChange(calendarDate(day))
     },
-    [onDateChange],
+    [onDateChange, selectedDay],
   )
 
   /**
@@ -227,6 +235,7 @@ export function SchedulingScreen({
 
   /** Opening the month shows the month of the day in hand, not the current one. */
   const toggleMonth = useCallback(() => {
+    impactHaptic()
     setMonthOpen((open) => {
       if (!open) setMonth(selectedDay)
       return !open
@@ -358,7 +367,21 @@ export function SchedulingScreen({
 
       <div className="mt-6">
         <Field label={copy.kindLabel}>
-          <div className="bg-muted flex gap-1 rounded-xl p-1">
+          <div className="bg-muted relative flex rounded-xl p-1">
+            {/*
+              The selected background travels rather than teleporting: two
+              choices side by side is the one place on this screen where a state
+              change has somewhere to move *to*, and a pill that slides says
+              which of the two was left behind.
+            */}
+            <span
+              aria-hidden="true"
+              className={cn(
+                "bg-card absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg shadow-sm",
+                "ease-in-out-strong transition-transform duration-(--duration-move) motion-reduce:transition-none",
+                kind === "regular" ? "translate-x-full" : "translate-x-0",
+              )}
+            />
             {(["intake", "regular"] as const).map((option) => (
               <button
                 key={option}
@@ -366,8 +389,9 @@ export function SchedulingScreen({
                 aria-pressed={kind === option}
                 onClick={() => chooseKind(option)}
                 className={cn(
-                  "flex-1 rounded-lg py-2 text-sm font-semibold transition-colors",
-                  kind === option ? "bg-card text-foreground shadow-sm" : "text-muted-foreground",
+                  "relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold",
+                  "transition-colors duration-(--duration-press)",
+                  kind === option ? "text-foreground" : "text-muted-foreground",
                 )}
               >
                 {option === "intake" ? copy.kindIntake : copy.kindRegular}
@@ -384,7 +408,7 @@ export function SchedulingScreen({
           trailing={
             <span
               key={monthFormat.format(visibleMonth)}
-              className="animate-in fade-in slide-in-from-bottom-1 text-muted-foreground text-[10px] font-semibold tracking-widest uppercase duration-200"
+              className="animate-in fade-in slide-in-from-bottom-1 text-muted-foreground text-[10px] font-semibold tracking-widest uppercase duration-(--duration-swap)"
             >
               {monthFormat.format(visibleMonth)}
             </span>
@@ -482,7 +506,8 @@ export function SchedulingScreen({
                 aria-pressed={durationMinutes === minutes}
                 onClick={() => chooseDuration(minutes)}
                 className={cn(
-                  "flex-1 rounded-full border py-2 text-sm font-semibold tabular-nums transition-colors",
+                  "flex-1 rounded-full border py-2 text-sm font-semibold tabular-nums",
+                  "ease-out-strong transition-[color,background-color,border-color,transform] duration-(--duration-press) active:scale-[0.97]",
                   durationMinutes === minutes
                     ? "bg-primary text-primary-foreground border-transparent"
                     : "border-border text-muted-foreground",
@@ -496,9 +521,14 @@ export function SchedulingScreen({
         </Field>
 
         <Field label={copy.timeLabel}>
+          {/*
+            Keyed on what the section holds, so the skeleton and the grid
+            crossfade rather than one replacing the other in a single frame.
+          */}
           <div
+            key={schedule === undefined ? "loading" : anyFree ? "grid" : "empty"}
             ref={timeRef}
-            className="flex scroll-mt-(--mini-app-safe-top,0px) flex-col gap-2"
+            className="animate-in fade-in flex scroll-mt-(--mini-app-safe-top,0px) flex-col gap-2 duration-(--duration-swap)"
             // Held at the height it had a moment ago while the next day loads.
             // Without it the section shrinks to a spinner and grows back, which
             // reads as the screen jumping under a thumb that only picked a day.
@@ -610,7 +640,9 @@ export function SchedulingScreen({
         </p>
 
         {error === undefined ? null : (
-          <p className="text-destructive mt-3 text-sm leading-5">{error}</p>
+          <p className="text-destructive animate-in fade-in slide-in-from-bottom-1 mt-3 text-sm leading-5 duration-(--duration-swap)">
+            {error}
+          </p>
         )}
       </div>
 
