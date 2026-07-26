@@ -10,7 +10,7 @@ import {
   WorkspaceRepo,
 } from "@praximo/db"
 import type { WorkspaceRunCancellationRpcClient } from "@praximo/domain"
-import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
+import { BotRegistry, CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
 import { CoachClients } from "./coach-clients.ts"
@@ -33,7 +33,9 @@ interface Env {
    * populates it folds out of a production build.
    */
   readonly COACH_DEV_PUBLIC_KEY?: string
-  readonly MANAGER_BOT?: ManagerBotSender.RpcClient & CoachBotRelease.RpcClient
+  readonly MANAGER_BOT?: ManagerBotSender.RpcClient &
+    CoachBotRelease.RpcClient &
+    BotRegistry.RpcClient
   readonly PIPELINE?: WorkspaceRunCancellationRpcClient
 }
 
@@ -55,6 +57,11 @@ const runtimeFromEnv = (env: Env) => {
     env.MANAGER_BOT === undefined
       ? CoachBotRelease.layer
       : CoachBotRelease.rpcLayer(env.MANAGER_BOT)
+  // The coach's own bot, reached the only way it can be: its credential never
+  // leaves the bot Worker, so authoring a card is a call across the binding
+  // rather than a second decryption over here (#179).
+  const coachBots =
+    env.MANAGER_BOT === undefined ? BotRegistry.layer : BotRegistry.rpcLayer(env.MANAGER_BOT)
   const runCancellation =
     env.PIPELINE === undefined
       ? WorkspaceRunCancellation.layer
@@ -72,6 +79,7 @@ const runtimeFromEnv = (env: Env) => {
     CoachOnboardingToken.layer,
     sender,
     coachBotRelease,
+    coachBots,
     runCancellation,
     repositories,
   )
@@ -128,7 +136,8 @@ const resolveEnv = async (): Promise<Env> => {
       ? {}
       : {
           MANAGER_BOT: workerEnv.MANAGER_BOT as ManagerBotSender.RpcClient &
-            CoachBotRelease.RpcClient,
+            CoachBotRelease.RpcClient &
+            BotRegistry.RpcClient,
         }),
     ...(workerEnv.PIPELINE === undefined
       ? {}
@@ -246,6 +255,18 @@ export const resetCoachClientInvite = async (
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(CoachClients.Service, (service) => service.resetInvite(credential, clientId)),
+  )
+}
+
+export const prepareCoachInviteCard = async (
+  credential: LaunchCredential,
+  clientId: string,
+): Promise<CoachClients.PreparedInviteCard | undefined> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) =>
+      service.prepareInviteCard(credential, clientId),
+    ),
   )
 }
 

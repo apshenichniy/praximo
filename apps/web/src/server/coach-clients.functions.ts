@@ -7,6 +7,7 @@ import {
   loadCoachClientDetail,
   loadCoachClients,
   loadCoachDaySchedule,
+  prepareCoachInviteCard,
   removeCoachClient,
   resetCoachClientInvite,
   saveCoachTimezone,
@@ -189,6 +190,43 @@ export const resetInvite = createServerFn({ method: "POST" })
     try {
       return { ok: true, client: await resetCoachClientInvite(context.credential, data.clientId) }
     } catch (error) {
+      return { ok: false, error: transportError(error) }
+    }
+  })
+
+export type PrepareInviteCardResult =
+  | { readonly ok: true; readonly card: CoachClients.PreparedInviteCard }
+  /**
+   * `gone` is the invitation that is no longer shareable — deleted, accepted, or
+   * reissued out from under the screen. `failed` is the coach's own bot refusing
+   * to author the card, which the same tap can retry.
+   */
+  | { readonly ok: false; readonly error: CoachClientsTransportError | "gone" | "failed" }
+
+/**
+ * The card, minted on the coach's tap (#179).
+ *
+ * A `POST` like every other client operation, and authenticated the same way:
+ * the invitation is resolved server-side from the coach's own workspace, so the
+ * only thing the browser gets to name is which client it is looking at.
+ */
+export const prepareInviteCard = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator(clientIdOf)
+  .handler(async ({ context, data }): Promise<PrepareInviteCardResult> => {
+    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
+    try {
+      const card = await prepareCoachInviteCard(context.credential, data.clientId)
+      return card === undefined ? { ok: false, error: "gone" } : { ok: true, card }
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "_tag" in error &&
+        error._tag === "CoachClients.CardPreparationFailed"
+      ) {
+        return { ok: false, error: "failed" }
+      }
       return { ok: false, error: transportError(error) }
     }
   })

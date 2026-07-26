@@ -15,7 +15,9 @@ import {
   SessionKind,
 } from "@praximo/domain"
 import { DefaultTimeZone } from "@praximo/i18n"
+import { BotRegistry } from "@praximo/telegram"
 import { Clock, Context, DateTime, Effect, Layer, Option, Schema } from "effect"
+import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
@@ -116,6 +118,20 @@ export type ScheduleOutcome =
       readonly reason: "overlap" | "past" | "invalid" | "unknown-client"
     }
 
+/**
+ * A prepared inline message, minted on the coach's tap and handed straight to
+ * Telegram's chat picker (#179).
+ *
+ * `expiresAt` is Telegram's own `expiration_date`, carried through rather than
+ * assumed: the browser decides from it whether the id is still worth sharing,
+ * and asks again if it is not.
+ */
+export interface PreparedInviteCard {
+  readonly preparedMessageId: string
+  /** ISO string, because this crosses a server-function boundary. */
+  readonly expiresAt: string
+}
+
 export interface Interface {
   readonly home: (
     credential: LaunchCredential,
@@ -156,6 +172,17 @@ export interface Interface {
     ClientDetail | undefined,
     CoachSession.Unauthenticated | CoachSession.LoadFailed
   >
+  /**
+   * `undefined` when there is no invitation left to share — the client was
+   * deleted, or accepted between the screen drawing and the tap.
+   */
+  readonly prepareInviteCard: (
+    credential: LaunchCredential,
+    clientId: string,
+  ) => Effect.Effect<
+    PreparedInviteCard | undefined,
+    CoachSession.Unauthenticated | CoachSession.LoadFailed | CardPreparationFailed
+  >
   /** Written silently on launch, with no UI and no answer worth waiting for. */
   readonly saveTimezone: (
     credential: LaunchCredential,
@@ -173,6 +200,31 @@ export class InvalidClient extends Schema.TaggedErrorClass<InvalidClient>()(
   "CoachClients.InvalidClient",
   {},
 ) {}
+
+/**
+ * The coach's bot could not author the card. Retryable by definition: the
+ * invitation is untouched, and everything that gets here — a Telegram hiccup, a
+ * credential mid-repair, a bot that needs re-linking — is answered by tapping
+ * again or by the sub-8.0 form beside it.
+ */
+export class CardPreparationFailed extends Schema.TaggedErrorClass<CardPreparationFailed>()(
+  "CoachClients.CardPreparationFailed",
+  {},
+) {}
+
+/**
+ * The card's one string of its own.
+ *
+ * Everything else it says is #56's invitation sentence, read from the same
+ * catalogue the screen reads — a card whose words were written twice is a card
+ * that drifts. A button label has nowhere else to come from: the screen has no
+ * button that says this, because until now there was no card.
+ */
+const openInvitationLabel: Record<CoachLanguage, string> = {
+  uk: "Відкрити запрошення",
+  ru: "Открыть приглашение",
+  en: "Open the invitation",
+}
 
 const MinutesInDay = 24 * 60
 
@@ -260,6 +312,7 @@ export const layer = Layer.effect(
     const clients = yield* ClientRepo.Service
     const sessions = yield* SessionRepo.Service
     const members = yield* MemberRepo.Service
+    const registry = yield* BotRegistry.Service
 
     const home = Effect.fn("CoachClients.home")(function* (credential: LaunchCredential) {
       const principal = yield* session.requireOnboardedCoach(credential, READ_WINDOW_MILLIS)
@@ -513,6 +566,52 @@ export const layer = Layer.effect(
       return yield* detailFor(principal, clientId)
     })
 
+    /**
+     * The share step (#179): ask the coach's own bot to author the invitation
+     * card, and hand its short-lived id back for `WebApp.shareMessage`.
+     *
+     * Minted on the tap and never ahead of it — prepared messages expire — which
+     * is why this is an operation of its own rather than another field on the
+     * detail the screen already loaded.
+     *
+     * The message is the same sentence the screen shows and the copy button
+     * copies, in the coach's own language, so the three forms of one invitation
+     * cannot drift. The link is not repeated in the body: it is the button.
+     */
+    const prepareInviteCard = Effect.fn("CoachClients.prepareInviteCard")(function* (
+      credential: LaunchCredential,
+      clientId: string,
+    ) {
+      const principal = yield* session.requireOnboardedCoach(credential, WRITE_WINDOW_MILLIS)
+      const now = new Date(yield* Clock.currentTimeMillis)
+      const row = yield* clients
+        .find(principal.workspaceId, clientId, now)
+        .pipe(Effect.mapError(failed("clients.find")))
+      // Nothing to share: no such client for this coach, or a token that no
+      // longer opens anything — accepted, or replaced by a reissue the screen
+      // has not caught up to. A window that has merely run out is *not* refused
+      // here: that token still reaches the bot, which answers it politely, and
+      // the form beside this one would share it either way.
+      if (row?.invite === undefined || row.invite.status !== "pending") return undefined
+
+      const copy = coachCopy(principal.language).clients
+      const prepared = yield* registry
+        .prepareCard(principal.workspaceId, {
+          title: row.name,
+          text: `${row.name}${copy.invitationLeadTail}`,
+          buttonText: openInvitationLabel[principal.language],
+          buttonUrl: `https://t.me/${principal.botUsername}?start=${clientInviteStartParameter(
+            row.invite.token,
+          )}`,
+        })
+        .pipe(Effect.mapError(() => new CardPreparationFailed()))
+
+      return {
+        preparedMessageId: prepared.id,
+        expiresAt: iso(prepared.expiresAt),
+      } satisfies PreparedInviteCard
+    })
+
     const saveTimezone = Effect.fn("CoachClients.saveTimezone")(function* (
       credential: LaunchCredential,
       timezone: string,
@@ -550,6 +649,7 @@ export const layer = Layer.effect(
       schedule,
       remove,
       resetInvite,
+      prepareInviteCard,
       saveTimezone,
       hideMainMiniAppHint,
     })

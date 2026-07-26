@@ -177,14 +177,40 @@ function ClientRoute() {
     })
   }, [client, copy, navigate, router])
 
+  /**
+   * The card is minted on this tap and shared through Telegram's own picker
+   * (#179).
+   *
+   * A dismissed picker is deliberately silent: the invitation is untouched, and
+   * telling a coach who just changed their mind that "nothing was sent" reads as
+   * a failure they have to do something about. An invitation that turned out to
+   * be gone re-reads the screen, which is what shows them why.
+   */
   const share = useCallback(() => {
-    if (client?.invite === undefined) return
-    void shareClientInvite({
-      link: client.invite.url,
-      name: client.name,
-      lead: copy.clients.invitationLeadTail,
+    const invite = client?.invite
+    if (client === undefined || invite === undefined) return
+    acceptOnce(inFlight, async () => {
+      setPending(true)
+      setError(undefined)
+      try {
+        const outcome = await shareClientInvite({
+          clientId: client.id,
+          link: invite.url,
+          name: client.name,
+          lead: copy.clients.invitationLeadTail,
+        })
+        if (outcome === "gone") {
+          await router.invalidate()
+          return
+        }
+        if (outcome === "failed") setError(copy.common.failed)
+      } catch {
+        setError(copy.common.failed)
+      } finally {
+        setPending(false)
+      }
     })
-  }, [client, copy])
+  }, [client, copy, router])
 
   if (client === undefined) {
     return (
