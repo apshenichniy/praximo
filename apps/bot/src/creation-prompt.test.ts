@@ -255,8 +255,14 @@ describe("offering bot creation", () => {
               url: "https://t.me/newbot/PraximoManagerBot/ada_coaching_3pue_bot?name=Ada%20Coaching",
             },
           ],
+          // The BotFather path, second row (#164). Its callback data carries the
+          // coach's language home, which is why the tap needs no lookup at all.
+          [{ text: messages("ru").haveBotButton, callback_data: "have-bot:ru" }],
         ],
       })
+      // Authored as HTML — the blockquote is what lets the message answer "why
+      // my own bot?" in full without costing everybody else four paragraphs.
+      expect(sent?.parse_mode).toBe("HTML")
       // The message id is the only handle on this prompt; without it there is
       // nothing to disarm later and nothing to confirm in place.
       expect(repo.recorded).toEqual([
@@ -278,9 +284,12 @@ describe("offering bot creation", () => {
       // invitation this attempt still rides on was spent months ago (#55).
       const sent = bodyOf(telegram, "sendMessage")
       expect(sent?.text).toBe(messages("ru").relinkReserved)
-      // The way in is unchanged: the same button, the same suggestions.
+      // The way in is unchanged: the same buttons, the same suggestions.
       expect(sent?.reply_markup).toMatchObject({
-        inline_keyboard: [[{ text: messages("ru").createBotButton }]],
+        inline_keyboard: [
+          [{ text: messages("ru").createBotButton }],
+          [{ text: messages("ru").haveBotButton }],
+        ],
       })
     }),
   )

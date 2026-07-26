@@ -192,6 +192,12 @@ export const coachOnboardingInvite = pgTable(
     // destination?, language }. Null until the first delivery action; feeds the
     // pending card ("Invited via …") and Resend's message language.
     delivery: jsonb("delivery"),
+    // The language this invitation was written in — the administrator's own
+    // statement about the coach they are inviting, and the seed the accepting
+    // `/start` prefers over the coach's device locale (#164). Set at creation
+    // and moved by a resend in a different language. Null on rows minted before
+    // that, which is precisely when the device locale is still the best guess.
+    language: languageEnum("language"),
     status: coachOnboardingInviteStatusEnum("status").notNull().default("pending"),
     issuedAt: timestamp("issued_at", { withTimezone: true, mode: "date" }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),

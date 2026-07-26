@@ -474,7 +474,7 @@ describe("BotFather token fallback", () => {
       const telegram = telegramStub()
 
       yield* proofOf(repo, telegram, proofUpdate(`/start ${PROOF}`, coach))
-      expect(telegram.messages[0]).toBe("Praximo готовий.")
+      expect(telegram.messages[0]).toBe(messagesFor("uk").botReady)
 
       const english = repoStub({ parked: candidate() })
       const englishTelegram = telegramStub()
@@ -484,7 +484,7 @@ describe("BotFather token fallback", () => {
         proofUpdate(`/start ${PROOF}`, coach),
         candidate({ coachLanguage: CoachLanguage.make("en") }),
       )
-      expect(englishTelegram.messages[0]).toBe("Praximo is ready.")
+      expect(englishTelegram.messages[0]).toBe(messagesFor("en").botReady)
     }),
   )
 

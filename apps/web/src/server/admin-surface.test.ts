@@ -673,13 +673,15 @@ describe("AdminSurface", () => {
           invite: {
             title: expect.any(String),
             text: expect.stringContaining("Ваш простір Praximo «Ada Coaching»"),
-            buttonText: "Почати налаштування",
+            buttonText: "🚀 Почати налаштування",
             buttonUrl: "https://t.me/PraximoMotherBot?start=ws_ADA23456",
           },
         },
       ])
-      // The prepared text carries the deep link so the button has a plain-text peer.
-      expect(prepared[0]?.invite.text).toContain("https://t.me/PraximoMotherBot?start=ws_ADA23456")
+      // The button is the only place the link appears (#164). Repeating it in the
+      // body only made the coach's first-ever message longer and more alarming —
+      // and this channel is Bot API 8.0 by construction, so the button is there.
+      expect(prepared[0]?.invite.text).not.toContain("https://")
       // Preparing does not record delivery: the picker can still be cancelled, so
       // the record waits for the client to confirm the share (recordInviteShare).
       expect(recorded).toEqual([])

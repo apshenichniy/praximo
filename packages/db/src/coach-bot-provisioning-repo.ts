@@ -467,10 +467,16 @@ export const layer = Layer.effect(
      *   sees a row it cannot transition.
      * - `seeding_language` is the first of `member.language`'s two writers
      *   (#130). It hangs off `accepting`, so it fires exactly once — on the
-     *   `/start` that takes the claim — and carries the sender's own Telegram
-     *   language, narrowed by the caller. Every later `/start` finds the invite
+     *   `/start` that takes the claim. Every later `/start` finds the invite
      *   already `accepted`, matches nothing here, and therefore cannot walk back
      *   over a language the coach has since chosen for themselves.
+     *
+     *   **What it seeds from is the invitation, and only then the device**
+     *   (#164). The administrator chose a language for a coach they know; the
+     *   `language_code` the caller narrows is a regional tag on that coach's
+     *   phone. Losing the first to the second is how an invitation written in
+     *   Russian opened a setup that spoke English. The `coalesce` also keeps
+     *   every invite minted before the column existed on the old behaviour.
      * - `claimant` adds the resume branch. A data-modifying CTE is invisible to
      *   the rest of the statement, so the second arm still reads the pre-update
      *   status: when the acceptance lands the arm is empty, and when this same
@@ -500,11 +506,13 @@ export const layer = Layer.effect(
                 "id" = ${inviteId}
                 and "status" = 'pending'
                 and "expires_at" > ${now}
-              returning "id", "workspace_id"
+              returning "id", "workspace_id", "language"
             ),
             seeding_language as (
               update "member"
-              set "language" = ${language}::language, "updated_at" = ${now}
+              set
+                "language" = coalesce(accepting."language", ${language}::language),
+                "updated_at" = ${now}
               from accepting
               where
                 "member"."workspace_id" = accepting."workspace_id"

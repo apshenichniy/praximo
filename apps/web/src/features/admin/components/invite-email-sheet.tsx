@@ -1,4 +1,3 @@
-import type { CoachLanguage } from "@praximo/domain"
 import { useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button.tsx"
@@ -10,7 +9,6 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer.tsx"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
-import { InviteLanguageChips } from "@/features/admin/components/invite-language-chips.tsx"
 import { notifyHaptic } from "@/features/admin/haptics.ts"
 import { inviteEmail } from "@/features/admin/validation.ts"
 
@@ -19,7 +17,8 @@ const EmailMaxLength = 254
 
 /**
  * Bottom drawer for the Email channel (#105): the one field this channel needs
- * that the other two don't, plus the same invite-language chips Copy has.
+ * that the other two don't. The language lives on the screen behind it (#164),
+ * where it is chosen once for the coach rather than once per channel.
  *
  * The address is checked here, on send, so a typo is caught while the sheet is
  * still open and the keyboard is still up. Once it has complained, it
@@ -33,10 +32,9 @@ export function InviteEmailSheet({
 }: {
   readonly open: boolean
   readonly onOpenChange: (open: boolean) => void
-  readonly onSend: (delivery: { readonly email: string; readonly language: CoachLanguage }) => void
+  readonly onSend: (delivery: { readonly email: string }) => void
 }) {
   const [email, setEmail] = useState("")
-  const [language, setLanguage] = useState<CoachLanguage>("en")
   const [error, setError] = useState<string>()
 
   // Reopening starts clean: a stale address from the previous coach is the one
@@ -44,7 +42,6 @@ export function InviteEmailSheet({
   useEffect(() => {
     if (!open) return
     setEmail("")
-    setLanguage("en")
     setError(undefined)
   }, [open])
 
@@ -55,7 +52,7 @@ export function InviteEmailSheet({
       notifyHaptic("error")
       return
     }
-    onSend({ email: email.trim(), language })
+    onSend({ email: email.trim() })
   }
 
   return (
@@ -84,12 +81,10 @@ export function InviteEmailSheet({
             }}
             onBlur={() => {
               // Silent on an untouched field: leaving a sheet's only input on
-              // the way to the language chips is not a mistake worth flagging.
+              // the way out is not a mistake worth flagging.
               if (email.trim().length > 0) setError(inviteEmail(email))
             }}
           />
-
-          <InviteLanguageChips value={language} onChange={setLanguage} />
 
           <Button size="lg" className="h-13 w-full font-semibold" onClick={send}>
             Send invite

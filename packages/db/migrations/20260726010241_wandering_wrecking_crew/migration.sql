@@ -1,0 +1,1 @@
+ALTER TABLE "coach_onboarding_invite" ADD COLUMN "language" "language";

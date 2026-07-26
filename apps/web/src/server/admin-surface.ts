@@ -298,37 +298,63 @@ const decodeInviteId = Schema.decodeUnknownEffect(
 )
 const decodeRequestId = Schema.decodeUnknownEffect(Schema.String.check(Schema.isUUID(4)))
 
-// The invite-first workspace may carry no label yet, so each language has a
-// named and an unnamed opening line.
+/**
+ * The coach's first contact with the product (#164). It used to be two lines
+ * and a naked URL; it now says what Praximo is, what the two minutes ahead
+ * consist of, and what the link's one-shot nature means — because the person
+ * reading it has, so far, been told nothing at all.
+ *
+ * Plain text on purpose. The copy channel lands this in WhatsApp, Slack or SMS,
+ * where markup is literal, and the Telegram channel wraps the same body in a
+ * bot-authored prepared message.
+ *
+ * The invite-first workspace may carry no label yet, so each language has a
+ * named and an unnamed opening line.
+ */
 const forwardableCopy = {
   uk: {
-    named: (name: string) => `Ваш простір Praximo «${name}» готовий.`,
-    unnamed: "Ваш простір Praximo готовий.",
-    tail: "Відкрийте це одноразове посилання протягом 7 днів, щоб підключити свого бота:",
+    named: (name: string) => `👋 Вітаємо! Ваш простір Praximo «${name}» готовий.`,
+    unnamed: "👋 Вітаємо! Ваш простір Praximo готовий.",
+    body: "Praximo збирає вашу практику в одному місці — клієнти, сесії, нотатки — і живе в Telegram, у боті, який належить тільки вам.\n\nНалаштування триває близько двох хвилин:\n1️⃣ відкрийте посилання\n2️⃣ створіть власного бота — Praximo підкаже кожен крок\n3️⃣ готово: саме цьому боту писатимуть ваші клієнти",
+    tail: "⏳ Посилання одноразове й діє 7 днів.",
   },
   ru: {
-    named: (name: string) => `Ваше пространство Praximo «${name}» готово.`,
-    unnamed: "Ваше пространство Praximo готово.",
-    tail: "Откройте эту одноразовую ссылку в течение 7 дней, чтобы подключить своего бота:",
+    named: (name: string) => `👋 Здравствуйте! Ваше пространство Praximo «${name}» готово.`,
+    unnamed: "👋 Здравствуйте! Ваше пространство Praximo готово.",
+    body: "Praximo собирает вашу практику в одном месте — клиенты, сессии, заметки — и живёт в Telegram, в боте, который принадлежит только вам.\n\nНастройка занимает около двух минут:\n1️⃣ откройте ссылку\n2️⃣ создайте своего бота — Praximo подскажет каждый шаг\n3️⃣ готово: именно этому боту будут писать ваши клиенты",
+    tail: "⏳ Ссылка одноразовая и действует 7 дней.",
   },
   en: {
-    named: (name: string) => `Your Praximo workspace “${name}” is ready.`,
-    unnamed: "Your Praximo workspace is ready.",
-    tail: "Open this one-time link within 7 days to connect your bot:",
+    named: (name: string) => `👋 Hi! Your Praximo workspace “${name}” is ready.`,
+    unnamed: "👋 Hi! Your Praximo workspace is ready.",
+    body: "Praximo keeps your practice in one place — clients, sessions, notes — and it lives in Telegram, in a bot that is yours alone.\n\nSetting it up takes about two minutes:\n1️⃣ open the link\n2️⃣ create your own bot — Praximo walks you through it\n3️⃣ done: that bot is what your clients will write to",
+    tail: "⏳ The link works once, and only for 7 days.",
   },
 } as const
 
-const forwardableMessage = (language: CoachLanguage, name: string, link: string): string => {
+/**
+ * The copy and email channels, where the link has to be *in* the message: there
+ * is no button in a WhatsApp paste.
+ */
+const forwardableMessage = (language: CoachLanguage, name: string, link: string): string =>
+  `${forwardableIntroduction(language, name)}\n\n${link}`
+
+/**
+ * The Telegram channel, where {@link startOnboardingLabel} carries the link on a
+ * button — so repeating it in the body would only make the message longer and
+ * scarier (#164).
+ */
+const forwardableIntroduction = (language: CoachLanguage, name: string): string => {
   const copy = forwardableCopy[language]
   const opening = name.length === 0 ? copy.unnamed : copy.named(name)
-  return `${opening}\n\n${copy.tail}\n${link}`
+  return `${opening}\n\n${copy.body}\n\n${copy.tail}`
 }
 
 // The inline "open the deep link" button on the bot-authored prepared message.
 const startOnboardingLabel: Record<CoachLanguage, string> = {
-  uk: "Почати налаштування",
-  ru: "Начать настройку",
-  en: "Start onboarding",
+  uk: "🚀 Почати налаштування",
+  ru: "🚀 Начать настройку",
+  en: "🚀 Start onboarding",
 }
 
 /**
@@ -695,6 +721,10 @@ export const layer = Layer.effect(
             ? {}
             : { shortDescription: input.shortDescription }),
           issuedByTelegramId: recipient,
+          // The language the administrator picked for this invitation, carried
+          // onto the row so the accepting `/start` can seed the coach from it
+          // rather than from their device (#164).
+          language: delivery.language,
           now,
         })
         .pipe(
@@ -749,7 +779,7 @@ export const layer = Layer.effect(
         const prepared = yield* sender
           .prepareInlineInvite(recipient, {
             title: aggregate.workspace.name.length === 0 ? "Praximo" : aggregate.workspace.name,
-            text: forwardableMessage(language, aggregate.workspace.name, link),
+            text: forwardableIntroduction(language, aggregate.workspace.name),
             buttonText: startOnboardingLabel[language],
             buttonUrl: link,
           })

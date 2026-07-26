@@ -22,6 +22,7 @@ import {
   coachMiniAppUrl,
   constantTimeEqual,
   deliverCoachNotifications,
+  HaveBotCallbackPrefix,
   type ManagedBotOutcome,
   offerBotCreation,
   prepareOnboarding,
@@ -146,6 +147,16 @@ const ingestionText = (copy: Copy, tag: string, reason?: string): string => {
 const withDeletionNotice = (text: string, deleted: boolean, copy: Copy): string =>
   deleted ? text : `${text}\n\n${copy.tokenNotDeleted}`
 
+/**
+ * Every coach-facing string in `messages.ts` is authored as HTML (#164), so
+ * every send that carries one says so. The two notification strings are the
+ * documented exception and never pass through here.
+ */
+const Html = { parse_mode: "HTML" } as const
+
+/** `sendMessage`'s options bag, so `managedBotReply` can pass one through. */
+type SendOptions = NonNullable<Parameters<Bot["api"]["sendMessage"]>[2]>
+
 const makeManagerBot = (
   env: Env,
   telegramFetch: typeof globalThis.fetch,
@@ -156,7 +167,7 @@ const makeManagerBot = (
   bot.command("start", async (ctx) => {
     const language = clientLanguage(ctx.from?.language_code)
     if (ctx.from === undefined) {
-      await ctx.reply(messages(language).openLinkFirst)
+      await ctx.reply(messages(language).openLinkFirst, Html)
       return
     }
     const parameter = typeof ctx.match === "string" ? ctx.match : ""
@@ -171,7 +182,7 @@ const makeManagerBot = (
         prepareRelink(ctx.from.id).pipe(Effect.orElseSucceed(() => undefined)),
       )
       if (relink === undefined) {
-        await ctx.reply(messages(language).openLinkFirst)
+        await ctx.reply(messages(language).openLinkFirst, Html)
         return
       }
       await getRuntime(env).runPromise(offerBotCreation(env, relink, "relink", telegramFetch))
@@ -185,13 +196,16 @@ const makeManagerBot = (
     )
     if (result._tag === "Failure") {
       const failure = result.failure as { readonly _tag?: string; readonly reason?: string }
-      await ctx.reply(errorText(messages(language), failure._tag ?? "unknown", failure.reason))
+      await ctx.reply(
+        errorText(messages(language), failure._tag ?? "unknown", failure.reason),
+        Html,
+      )
       return
     }
     const setup = result.success
     const copy = messages(setup.coachLanguage)
     if (setup.status !== "requested") {
-      await ctx.reply(setup.status === "completed" ? copy.linkUsed : copy.setupInProgress)
+      await ctx.reply(setup.status === "completed" ? copy.linkUsed : copy.setupInProgress, Html)
       return
     }
     // The prompt's whole lifecycle — disarm the previous button, send the new
@@ -226,12 +240,19 @@ const makeManagerBot = (
     )
     if (Result.isSuccess(outcome)) {
       const copy = messages(outcome.success.coachLanguage)
+      // The proof link is the button and nothing else (#164). In the body it was
+      // forty-eight characters of base64 wrapped across four lines of a phone —
+      // the single most alarming thing in the whole setup, at the exact moment
+      // the coach is being asked to trust us with a credential.
       await ctx.reply(
-        withDeletionNotice(
-          copy.proofPrompt(outcome.success.username, outcome.success.proofLink),
-          deleted,
-          copy,
-        ),
+        withDeletionNotice(copy.proofPrompt(outcome.success.username), deleted, copy),
+        {
+          ...Html,
+          reply_markup: new InlineKeyboard().url(
+            copy.proofButton(outcome.success.username),
+            outcome.success.proofLink,
+          ),
+        },
       )
       return
     }
@@ -243,7 +264,25 @@ const makeManagerBot = (
         deleted,
         copy,
       ),
+      Html,
     )
+  })
+
+  /**
+   * "I already have a bot" — the creation prompt's second button (#164).
+   *
+   * It answers and changes nothing, which is what lets it stay this simple: no
+   * claim to check, no state to fence, and a stale tap on a disarmed prompt
+   * costs the coach the same instructions it would have cost them live. The
+   * language comes back inside our own callback data, narrowed again here
+   * because a value that made a round trip is worth re-checking.
+   */
+  bot.callbackQuery(new RegExp(`^${HaveBotCallbackPrefix}`), async (ctx) => {
+    const copy = messages(
+      clientLanguage(ctx.callbackQuery.data.slice(HaveBotCallbackPrefix.length)),
+    )
+    await ctx.answerCallbackQuery()
+    await ctx.reply(copy.haveBotInstructions, Html)
   })
 
   return bot
@@ -282,18 +321,27 @@ const managerBotFor = (
 export const managedBotReply = async (
   outcome: ManagedBotOutcome,
   user: User,
-  send: (chatId: number, text: string) => Promise<unknown>,
+  send: (chatId: number, text: string, other?: SendOptions) => Promise<unknown>,
 ): Promise<Response> => {
   const copy = messages(clientLanguage(user.language_code))
   if (outcome._tag === "NoOpenAttempt") {
     // Best-effort: this update is already terminal, and a Telegram hiccup on a
     // courtesy message must not be the thing that reopens the retry loop.
-    await send(user.id, copy.extraBotNotConnected(outcome.botUsername)).catch(() => undefined)
+    await send(user.id, copy.extraBotNotConnected(outcome.botUsername), Html).catch(() => undefined)
     return new Response(null, { status: 200 })
   }
   // Not best-effort, deliberately: the coach has to learn their bot is live, and
   // a redelivery re-runs the (idempotent) rotation and tells them then.
-  await send(user.id, copy.botConnected(outcome.installation.username))
+  const username = outcome.installation.username
+  // "Open it to continue" left the coach to go and find the bot; the button is
+  // the continuing (#164).
+  await send(user.id, copy.botConnected(username), {
+    ...Html,
+    reply_markup: new InlineKeyboard().url(
+      copy.openBotButton(username),
+      `https://t.me/${username}`,
+    ),
+  })
   return new Response(null, { status: 200 })
 }
 
@@ -326,8 +374,8 @@ const handleManagerWebhook = async (
     )
     if (result._tag === "Failure") return new Response(null, { status: 500 })
     if (result.success._tag === "Connected") coachBots.delete(String(update.managed_bot.bot.id))
-    return managedBotReply(result.success, update.managed_bot.user, (chatId, text) =>
-      bot.api.sendMessage(chatId, text),
+    return managedBotReply(result.success, update.managed_bot.user, (chatId, text, other) =>
+      bot.api.sendMessage(chatId, text, other),
     )
   }
   await bot.handleUpdate(update)
@@ -367,6 +415,7 @@ const coachBotFor = async (
     bot.command("start", (ctx) => {
       const copy = messages(clientLanguage(ctx.from?.language_code))
       return ctx.reply(copy.botReady, {
+        ...Html,
         reply_markup: new InlineKeyboard().webApp(
           copy.openButton,
           coachMiniAppUrl(env.COACH_MINI_APP_URL, botId),

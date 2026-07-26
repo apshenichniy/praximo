@@ -1,6 +1,3 @@
-import type { CoachLanguage } from "@praximo/domain"
-import { useState } from "react"
-
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import {
@@ -12,13 +9,15 @@ import {
 } from "@/components/ui/drawer.tsx"
 import { Spinner } from "@/components/ui/spinner.tsx"
 import { Textarea } from "@/components/ui/textarea.tsx"
-import { InviteLanguageChips } from "@/features/admin/components/invite-language-chips.tsx"
 
 /**
- * Bottom drawer for the Copy channel: pick the invite-message language, then
- * copy the full forwardable message. When the webview denies programmatic
- * clipboard access after the async round-trip, the message itself appears with
- * a retry button — that press is a direct user gesture, which always works.
+ * Bottom drawer for the Copy channel: copy the full forwardable message. When
+ * the webview denies programmatic clipboard access after the async round-trip,
+ * the message itself appears with a retry button — that press is a direct user
+ * gesture, which always works.
+ *
+ * The language is the screen's, not this sheet's (#164): it now decides what
+ * the coach's setup speaks, so it cannot be a per-channel afterthought.
  */
 export function InviteCopySheet({
   open,
@@ -34,11 +33,9 @@ export function InviteCopySheet({
   readonly pending: boolean
   readonly error?: string | undefined
   readonly fallbackMessage?: string | undefined
-  readonly onCopy: (language: CoachLanguage) => void
+  readonly onCopy: () => void
   readonly onCopyFallback: (message: string) => void
 }) {
-  const [language, setLanguage] = useState<CoachLanguage>("en")
-
   return (
     <Drawer
       open={open}
@@ -56,8 +53,6 @@ export function InviteCopySheet({
         <div className="flex flex-col gap-5 pt-5">
           {fallbackMessage === undefined ? (
             <>
-              <InviteLanguageChips value={language} disabled={pending} onChange={setLanguage} />
-
               {error === undefined ? null : (
                 <Alert variant="destructive" className="bg-destructive/10 border-transparent">
                   <AlertDescription className="text-destructive">{error}</AlertDescription>
@@ -69,7 +64,7 @@ export function InviteCopySheet({
                 className="h-13 w-full font-semibold"
                 disabled={pending}
                 aria-busy={pending || undefined}
-                onClick={() => onCopy(language)}
+                onClick={() => onCopy()}
               >
                 {pending ? (
                   <>
