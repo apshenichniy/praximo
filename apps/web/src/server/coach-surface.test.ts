@@ -26,6 +26,8 @@ const principal = (overrides: Partial<Principal> = {}): Principal => ({
   botUsername: "ada_coach_bot",
   telegramBotId: BOT_ID,
   botConnectionStatus: "connected",
+  hasMainMiniApp: false,
+  settings: {},
   deletionPending: false,
   ...overrides,
 })
@@ -78,6 +80,8 @@ const run = <A, E>(
           row = { ...row, language: input.language }
         }),
       ),
+      setTimezone: Effect.fn("MemberRepo.Test.setTimezone")(() => Effect.die("unused")),
+      saveSettings: Effect.fn("MemberRepo.Test.saveSettings")(() => Effect.die("unused")),
     }),
   )
 

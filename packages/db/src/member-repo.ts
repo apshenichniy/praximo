@@ -29,6 +29,14 @@ export interface CoachPrincipalRow {
    * from a bot that can no longer say a word (#55).
    */
   readonly botConnectionStatus: BotConnectionStatus
+  /**
+   * Whether Telegram reports a Main Mini App on this bot — `getMe`'s
+   * `has_main_web_app`, refreshed by the daily health sweep (#55). It is what
+   * lets the coach's setup hint dismiss *itself* once the steps are done,
+   * instead of offering a button that can be tapped by somebody who never
+   * followed them (#56).
+   */
+  readonly hasMainMiniApp: boolean
   readonly termsAcceptedAt?: Date
   readonly termsVersion?: string
   readonly credentialsValidFrom?: Date
@@ -139,6 +147,7 @@ const principalProjection = {
   botUsername: schema.bot.username,
   telegramBotId: schema.bot.telegramBotId,
   botConnectionStatus: schema.bot.connectionStatus,
+  botInfo: schema.bot.botInfo,
   termsAcceptedAt: schema.member.termsAcceptedAt,
   termsVersion: schema.member.termsVersion,
   credentialsValidFrom: schema.member.credentialsValidFrom,
@@ -154,6 +163,7 @@ const toPrincipal = (row: {
   botUsername: string | null
   telegramBotId: string | null
   botConnectionStatus: string
+  botInfo: unknown
   termsAcceptedAt: Date | null
   termsVersion: string | null
   credentialsValidFrom: Date | null
@@ -169,6 +179,13 @@ const toPrincipal = (row: {
     botUsername: row.botUsername,
     telegramBotId: row.telegramBotId,
     botConnectionStatus: botConnectionStatus(row.botConnectionStatus),
+    // `botInfo` is whatever `getMe` last returned, stored whole. Read defensively:
+    // a bot provisioned before the field existed simply has not got one, and that
+    // reads as "the coach has not set the Main Mini App up" — which is true.
+    hasMainMiniApp:
+      typeof row.botInfo === "object" &&
+      row.botInfo !== null &&
+      (row.botInfo as { readonly has_main_web_app?: unknown }).has_main_web_app === true,
     ...(row.termsAcceptedAt === null ? {} : { termsAcceptedAt: row.termsAcceptedAt }),
     ...(row.termsVersion === null ? {} : { termsVersion: row.termsVersion }),
     ...(row.credentialsValidFrom === null

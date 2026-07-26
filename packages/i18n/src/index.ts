@@ -14,7 +14,19 @@
  * without codegen — a typed catalogue interface, so a key missing from one
  * locale fails the build.
  */
+export {
+  CLIENT_CONSENT_EFFECTIVE_DATE,
+  type ClientCopy,
+  ClientLanguageNames,
+  clientConsentText,
+  clientConsentVersion,
+  clientConsentVersions,
+  clientCopy,
+  type ConfirmationInput,
+  SuggestedLanguageMark,
+} from "./client-copy.ts"
 export { contentDigest } from "./digest.ts"
+export { DefaultTimeZone, type SessionMoment, sessionMoment } from "./session-time.ts"
 export {
   type CatalogueConfig,
   fillGaps,

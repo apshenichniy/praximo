@@ -1,7 +1,7 @@
 import { BotIcon, WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
 import type { CoachLanguage } from "@praximo/domain"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
@@ -13,6 +13,14 @@ import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
+import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
+import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
+import {
+  type CoachClientsResult,
+  hideMainMiniAppHint,
+  listClients,
+  saveTimezone,
+} from "@/server/coach-clients.functions.ts"
 import {
   acceptCoachTerms,
   chooseCoachLanguage,
@@ -34,6 +42,8 @@ import {
 export interface CoachEntryLoaderData {
   readonly entry: CoachEntryTransportResult
   readonly launchLanguage: CoachLanguage
+  /** Absent until a coach is past the terms — there is no practice to list yet. */
+  readonly clients: CoachClientsResult | undefined
 }
 
 export const Route = createFileRoute("/")({
@@ -48,7 +58,14 @@ export const Route = createFileRoute("/")({
       loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
       resolveLaunchCredential(),
     ])
-    return { entry, launchLanguage: launchLocale(credential.initData) }
+    // The list is only asked for once there is a home to put it on: a coach who
+    // has not accepted the terms has no clients, and asking anyway would spend a
+    // round trip on the one screen that must paint fastest.
+    const clients =
+      entry.ok && entry.entry.kind === "home"
+        ? await listClients().catch(() => ({ ok: false, error: "server" }) as const)
+        : undefined
+    return { entry, launchLanguage: launchLocale(credential.initData), clients }
   },
   component: CoachEntry,
 })
@@ -87,7 +104,7 @@ export const acceptOnce = (inFlight: { current: boolean }, run: () => Promise<vo
 }
 
 function CoachEntry() {
-  const { entry, launchLanguage } = Route.useLoaderData()
+  const { entry, launchLanguage, clients } = Route.useLoaderData()
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
@@ -98,6 +115,25 @@ function CoachEntry() {
   const copy = coachCopy(entry.ok ? entry.entry.language : launchLanguage)
 
   const retry = useCallback(() => void router.invalidate(), [router])
+
+  /**
+   * The coach's zone, written silently on every launch that finds it changed
+   * (#56 §`member.timezone`). No UI, no reply worth waiting for: this is the
+   * precondition for the *bot* being able to print "10:00 (UTC+3)" at all, and
+   * a launch that fails to write it simply tries again next time.
+   */
+  useEffect(() => {
+    if (!entry.ok || entry.entry.kind !== "home") return
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (typeof timezone !== "string" || timezone.length === 0) return
+    void saveTimezone({ data: { timezone } }).catch(() => undefined)
+  }, [entry])
+
+  const hideHint = useCallback(() => {
+    void hideMainMiniAppHint()
+      .then(() => router.invalidate())
+      .catch(() => undefined)
+  }, [router])
 
   const accept = useCallback(() => {
     if (entry.ok !== true || entry.entry.kind !== "terms-required") return
@@ -153,8 +189,10 @@ function CoachEntry() {
       <CoachScreen
         entry={entry}
         launchLanguage={launchLanguage}
+        clients={clients}
         onAccept={accept}
         onChooseLanguage={chooseLanguage}
+        onHideHint={hideHint}
         onRetry={retry}
         pending={pending}
         error={error}
@@ -166,16 +204,20 @@ function CoachEntry() {
 export function CoachScreen({
   entry,
   launchLanguage,
+  clients,
   onAccept,
   onChooseLanguage,
+  onHideHint,
   onRetry,
   pending,
   error,
 }: {
   readonly entry: CoachEntryTransportResult
   readonly launchLanguage: CoachLanguage
+  readonly clients: CoachClientsResult | undefined
   readonly onAccept: () => void
   readonly onChooseLanguage: (language: CoachLanguage) => Promise<boolean>
+  readonly onHideHint: () => void
   readonly onRetry: () => void
   readonly pending: boolean
   readonly error: string | undefined
@@ -223,14 +265,19 @@ export function CoachScreen({
   }
 
   return (
-    <CoachHome
-      copy={coachCopy(entry.entry.language)}
-      botUsername={entry.entry.botUsername}
-      mainMiniAppUrl={mainMiniAppUrlFor(
-        typeof window === "undefined" ? "" : window.location.href,
-        entry.entry.telegramBotId,
-      )}
-      {...(entry.entry.relink === undefined ? {} : { relinkLink: entry.entry.relink.link })}
-    />
+    <TimestampFormatProvider value={coachTimestampFormat(entry.entry.language)}>
+      <CoachHome
+        copy={coachCopy(entry.entry.language)}
+        botUsername={entry.entry.botUsername}
+        mainMiniAppUrl={mainMiniAppUrlFor(
+          typeof window === "undefined" ? "" : window.location.href,
+          entry.entry.telegramBotId,
+        )}
+        clients={clients?.ok === true ? clients.home.clients : []}
+        hintVisible={clients?.ok === true && clients.home.mainMiniAppHintVisible}
+        onHideHint={onHideHint}
+        {...(entry.entry.relink === undefined ? {} : { relinkLink: entry.entry.relink.link })}
+      />
+    </TimestampFormatProvider>
   )
 }

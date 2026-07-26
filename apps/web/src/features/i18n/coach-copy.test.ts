@@ -46,7 +46,9 @@ describe("coach copy", () => {
     for (const locale of ["uk", "ru"] as const) {
       expect(coachCatalog[locale].terms.title).not.toBe(coachCatalog.en.terms.title)
       expect(coachCatalog[locale].language.greeting).not.toBe(coachCatalog.en.language.greeting)
-      expect(coachCatalog[locale].home.title).not.toBe(coachCatalog.en.home.title)
+      expect(coachCatalog[locale].home.relinkTitle).not.toBe(coachCatalog.en.home.relinkTitle)
+      expect(coachCatalog[locale].clients.listTitle).not.toBe(coachCatalog.en.clients.listTitle)
+      expect(coachCatalog[locale].clients.deleteBody).not.toBe(coachCatalog.en.clients.deleteBody)
       for (const [index, point] of coachCatalog[locale].terms.points.entries()) {
         expect(point).not.toBe(coachCatalog.en.terms.points[index])
       }
