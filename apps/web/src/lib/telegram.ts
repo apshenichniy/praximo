@@ -10,6 +10,8 @@ export interface TelegramWebApp {
   readonly initData: string
   /** The Bot API version the host client implements, e.g. "8.0". */
   readonly version: string
+  /** `ios`, `android`, `tdesktop`, `macos`, `weba`… — what is running us. */
+  readonly platform: string
   /** Whether the Mini App is currently expanded to fullscreen (Bot API 8.0). */
   readonly isFullscreen: boolean
   /** Signals the host the Mini App is ready to be shown. */

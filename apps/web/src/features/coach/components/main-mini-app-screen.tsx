@@ -1,6 +1,7 @@
 import { useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
+import { HapticsProbe } from "@/features/mini-app/components/haptics-probe.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 
@@ -78,6 +79,9 @@ export function MainMiniAppScreen({
       >
         {copy.home.mainMiniAppHide}
       </Button>
+
+      {/* Temporary (#186) — remove once the phone has answered. */}
+      <HapticsProbe />
     </main>
   )
 }

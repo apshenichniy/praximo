@@ -1,4 +1,4 @@
-import { HAPTIC_MIN_VERSION, type TelegramWebApp } from "@/lib/telegram.ts"
+import type { TelegramWebApp } from "@/lib/telegram.ts"
 
 /**
  * The host's haptics, guarded (#186).
@@ -16,9 +16,25 @@ import { HAPTIC_MIN_VERSION, type TelegramWebApp } from "@/lib/telegram.ts"
  */
 const feedback = (): TelegramWebApp["HapticFeedback"] | undefined => {
   if (typeof window === "undefined") return undefined
-  const webApp = window.Telegram?.WebApp
-  if (webApp === undefined || !webApp.isVersionAtLeast(HAPTIC_MIN_VERSION)) return undefined
-  return webApp.HapticFeedback
+  // The object's own presence is the test, not the version it claims: a host
+  // that ships `HapticFeedback` can perform one, and a host that does not
+  // cannot, whatever `isVersionAtLeast` says about it.
+  return window.Telegram?.WebApp?.HapticFeedback
+}
+
+/**
+ * Never let a tick take a tap down with it. The bridge throws on some hosts for
+ * a method they do not implement, and a haptic is the least important thing
+ * happening in that handler.
+ */
+const fire = (perform: (feedback: NonNullable<TelegramWebApp["HapticFeedback"]>) => void): void => {
+  const bridge = feedback()
+  if (bridge === undefined) return
+  try {
+    perform(bridge)
+  } catch {
+    // A host that cannot buzz is not a failure anybody needs to hear about.
+  }
 }
 
 /**
@@ -29,7 +45,7 @@ const feedback = (): TelegramWebApp["HapticFeedback"] | undefined => {
  * was already chosen, because that is not a selection.
  */
 export const selectionHaptic = (): void => {
-  feedback()?.selectionChanged()
+  fire((bridge) => bridge.selectionChanged())
 }
 
 /**
@@ -39,10 +55,26 @@ export const selectionHaptic = (): void => {
 export const impactHaptic = (
   style: "light" | "medium" | "heavy" | "rigid" | "soft" = "light",
 ): void => {
-  feedback()?.impactOccurred(style)
+  fire((bridge) => bridge.impactOccurred(style))
 }
 
 /** An outcome — the session was booked, or the server refused it. */
 export const notifyHaptic = (type: "error" | "success" | "warning"): void => {
-  feedback()?.notificationOccurred(type)
+  fire((bridge) => bridge.notificationOccurred(type))
+}
+
+/** What the host says about itself, for the probe on the Main Mini App screen. */
+export const hapticSupport = (): {
+  readonly host: string
+  readonly version: string
+  readonly platform: string
+  readonly available: boolean
+} => {
+  const webApp = typeof window === "undefined" ? undefined : window.Telegram?.WebApp
+  return {
+    host: webApp === undefined ? "none" : "telegram",
+    version: webApp?.version ?? "—",
+    platform: webApp?.platform ?? "—",
+    available: webApp?.HapticFeedback !== undefined,
+  }
 }
