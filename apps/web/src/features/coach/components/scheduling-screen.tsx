@@ -123,6 +123,12 @@ export function SchedulingScreen({
   )
   const [selectedDay, setSelectedDay] = useState<Date>(today)
   const [stripLength, setStripLength] = useState(StripDays)
+  /**
+   * Bumped whenever the date comes from the month rather than from the strip.
+   * The strip's scroll position is its own — no state change accompanies
+   * «Today» pressed on the day that is already chosen — so the ask is explicit.
+   */
+  const [centreRequest, setCentreRequest] = useState(0)
   /** The month under the thumb, which is not always the chosen day's month. */
   const [visibleMonth, setVisibleMonth] = useState<Date>(today)
   const [monthOpen, setMonthOpen] = useState(false)
@@ -191,6 +197,7 @@ export function SchedulingScreen({
       // scrolling forward is not a fortnight *behind* where the strip now opens.
       setStripLength(StripDays)
       setVisibleMonth(day)
+      setCentreRequest((count) => count + 1)
       setMonthOpen(false)
       scrollAfterMonth.current = true
     },
@@ -349,6 +356,7 @@ export function SchedulingScreen({
             onExtend={() => setStripLength(extendStrip)}
             onOpenMonth={() => setMonthOpen(true)}
             onVisibleMonth={noteVisibleMonth}
+            centreRequest={centreRequest}
           />
 
           <div className="flex items-center justify-between gap-3">

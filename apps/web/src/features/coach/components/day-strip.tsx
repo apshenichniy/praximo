@@ -35,6 +35,7 @@ export function DayStrip({
   onExtend,
   onOpenMonth,
   onVisibleMonth,
+  centreRequest,
 }: {
   readonly days: ReadonlyArray<Date>
   readonly selected: Date
@@ -53,10 +54,16 @@ export function DayStrip({
    * there is room to say which month they belong to.
    */
   readonly onVisibleMonth: (day: Date) => void
+  /**
+   * Bumped by the screen when the strip must go to the chosen day whether or not
+   * that day changed — «Today» pressed on a strip already scrolled weeks out.
+   */
+  readonly centreRequest: number
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const selectedRef = useRef<HTMLButtonElement>(null)
   const frame = useRef<number>(undefined)
+  const glideFrame = useRef<number>(undefined)
 
   const weekdayFormat = useMemo(
     () => new Intl.DateTimeFormat(localeTag(language), { weekday: "short" }),
@@ -103,36 +110,88 @@ export function DayStrip({
   useEffect(
     () => () => {
       if (frame.current !== undefined) cancelAnimationFrame(frame.current)
+      if (glideFrame.current !== undefined) cancelAnimationFrame(glideFrame.current)
     },
     [],
   )
 
   /**
-   * A day chosen from the month can sit anywhere on the strip, so the strip
-   * brings it into view itself. Scrolled by hand rather than with
-   * `scrollIntoView`, which would also scroll the *page* to reach it — the one
-   * thing this field exists to stop doing.
+   * The chosen day, brought to the middle.
    *
-   * Only when the day is not already fully on screen: a tap should never make
-   * the row move under the thumb that just tapped it.
+   * Animated by hand rather than with `scrollTo({ behavior: "smooth" })`: the
+   * browser's own smooth scroll has a duration nobody can set, and across a
+   * fortnight it crawls. This is the `--ease-out-strong` shape — off fast,
+   * settling long — over a distance-aware duration, and it gives up the moment
+   * a thumb lands on the strip, because a finger always outranks an animation.
+   */
+  const glide = useCallback((left: number) => {
+    const container = scrollRef.current
+    if (container === null) return
+    if (glideFrame.current !== undefined) cancelAnimationFrame(glideFrame.current)
+
+    const from = container.scrollLeft
+    const distance = left - from
+    if (Math.abs(distance) < 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      container.scrollLeft = left
+      return
+    }
+
+    const duration = Math.min(520, Math.max(240, Math.abs(distance) * 0.5))
+    const started = performance.now()
+    const step = (now: number) => {
+      const elapsed = Math.min(1, (now - started) / duration)
+      const eased = 1 - (1 - elapsed) ** 3
+      container.scrollLeft = from + distance * eased
+      glideFrame.current = elapsed < 1 ? requestAnimationFrame(step) : undefined
+    }
+    glideFrame.current = requestAnimationFrame(step)
+  }, [])
+
+  const centre = useCallback(
+    (force: boolean) => {
+      const container = scrollRef.current
+      const chosen = selectedRef.current
+      if (container === null || chosen === null) return
+      const left = chosen.offsetLeft - container.scrollLeft
+      // A tap must never move the row under the thumb that made it — so an
+      // already-visible day is left where it is unless the screen insists.
+      if (!force && left >= 0 && left + chosen.clientWidth <= container.clientWidth) return
+      glide(chosen.offsetLeft - (container.clientWidth - chosen.clientWidth) / 2)
+    },
+    [glide],
+  )
+
+  /** A day chosen from the month can sit anywhere, so the strip goes to it. */
+  useEffect(() => {
+    centre(false)
+  }, [centre, selected])
+
+  /**
+   * What the strip cannot see from `selected` alone: «Today» pressed while today
+   * is already the chosen day changes no state at all, and the strip — scrolled
+   * three weeks out by hand — would keep showing August while the screen says
+   * the 26th of July. The screen asks, in so many words, to be taken there.
    */
   useEffect(() => {
-    const container = scrollRef.current
-    const chosen = selectedRef.current
-    if (container === null || chosen === null) return
-    const left = chosen.offsetLeft - container.scrollLeft
-    if (left >= 0 && left + chosen.clientWidth <= container.clientWidth) return
-    container.scrollTo({
-      left: chosen.offsetLeft - (container.clientWidth - chosen.clientWidth) / 2,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    })
-  }, [selected])
+    if (centreRequest === 0) return
+    centre(true)
+  }, [centre, centreRequest])
 
   return (
     <div
       ref={scrollRef}
       onScroll={onScroll}
-      className="-mx-5 flex snap-x snap-mandatory gap-2 overflow-x-auto px-5 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      // A thumb outranks the glide: landing on the strip stops it dead rather
+      // than fighting it for the scroll position.
+      onPointerDown={() => {
+        if (glideFrame.current !== undefined) cancelAnimationFrame(glideFrame.current)
+        glideFrame.current = undefined
+      }}
+      // No scroll snapping, deliberately. `mandatory` snapping puts the momentum
+      // of a flick against the snap and the snap wins: the strip crept forward a
+      // day or two per swipe and felt stuck. Free scrolling keeps the whole
+      // fortnight one flick away, and nothing here needs to land exactly.
+      className="-mx-5 flex gap-2 overflow-x-auto overscroll-x-contain px-5 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {days.map((day) => {
         const chosen = sameDay(day, selected)
@@ -145,7 +204,7 @@ export function DayStrip({
             aria-pressed={chosen}
             onClick={() => onPick(day)}
             className={cn(
-              "flex w-14 flex-none snap-start flex-col items-center gap-0.5 rounded-2xl border py-2",
+              "flex w-14 flex-noneflex-col items-center gap-0.5 rounded-2xl border py-2",
               "ease-out-strong transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97]",
               chosen
                 ? "bg-primary text-primary-foreground border-transparent"
@@ -172,7 +231,7 @@ export function DayStrip({
       <button
         type="button"
         onClick={onOpenMonth}
-        className="border-border text-muted-foreground ease-out-strong flex w-14 flex-none snap-start flex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-2 transition-transform duration-150 active:scale-[0.97]"
+        className="border-border text-muted-foreground ease-out-strong flex w-14 flex-noneflex-col items-center justify-center gap-1 rounded-2xl border border-dashed py-2 transition-transform duration-150 active:scale-[0.97]"
       >
         <HugeiconsIcon icon={Calendar03Icon} size={16} strokeWidth={2} />
         <span className="text-[10px] font-semibold tracking-wide uppercase">{monthLabel}</span>
