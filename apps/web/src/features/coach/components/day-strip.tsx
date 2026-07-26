@@ -5,6 +5,7 @@ import { localeTag } from "@praximo/i18n"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 
 import { sameDay } from "@/features/coach/day-strip.ts"
+import { prefersReducedMotion } from "@/lib/motion.ts"
 import { cn } from "@/lib/utils.ts"
 
 /** How close to the end a thumb has to get before the next fortnight arrives. */
@@ -136,7 +137,7 @@ export function DayStrip({
 
     const from = container.scrollLeft
     const distance = left - from
-    if (Math.abs(distance) < 2 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (Math.abs(distance) < 2 || prefersReducedMotion()) {
       container.scrollLeft = left
       return
     }

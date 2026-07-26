@@ -43,8 +43,16 @@ export interface TelegramWebApp {
   openTelegramLink: (url: string) => void
   readonly BackButton: TelegramBackButton
   readonly MainButton: TelegramMainButton
+  /**
+   * The host's own haptics (Bot API 6.1). Absent on Desktop and on clients that
+   * predate it, which is why every call goes through the guarded wrappers in
+   * `features/mini-app/haptics.ts`.
+   */
   readonly HapticFeedback?: {
+    readonly impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void
     readonly notificationOccurred: (type: "error" | "success" | "warning") => void
+    /** The tick a picker makes: one value in a set replacing another. */
+    readonly selectionChanged: () => void
   }
   onEvent: (eventType: string, handler: () => void) => void
   offEvent: (eventType: string, handler: () => void) => void
@@ -130,6 +138,9 @@ export const attachBackButton = (webApp: TelegramWebApp, onBack: () => void): ((
 
 /** `MainButton.setParams` is Bot API 6.1; the button itself predates it. */
 export const MAIN_BUTTON_PARAMS_MIN_VERSION = "6.1"
+
+/** `HapticFeedback` arrived in the same version as the button's parameters. */
+export const HAPTIC_MIN_VERSION = "6.1"
 
 /**
  * Hand a screen's primary action to the host's own bottom button. It sits

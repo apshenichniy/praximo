@@ -182,3 +182,96 @@ for a first session: "no history yet").
   obsolete: terminal states are written only by the reconciler
   ([ADR 0005](../adr/0005-session-reconciler-on-durable-objects.md)); the UI
   shows an automatic cancellation with its reason.
+
+## Motion
+
+Decided in #186, after walking the scheduling flow on a phone. The rules are
+here rather than in each component because motion is the one thing that reads as
+*one app* or as several: a new screen that invents its own timings is what makes
+a product feel assembled rather than made.
+
+### Tokens
+
+Four durations and three curves, in `apps/web/src/styles/app.css`. A number
+chosen at a call site is a number that drifts from the one beside it.
+
+| Token | Value | For |
+| --- | --- | --- |
+| `--duration-press` | 120ms | the answer to a press; the colour of the thing just chosen |
+| `--duration-swap` | 180ms | one state replacing another inside a section |
+| `--duration-move` | 250ms | something that travels or changes size on screen |
+| `--duration-screen` | 320ms | one screen replacing another |
+
+| Curve | Value | For |
+| --- | --- | --- |
+| `--ease-out-strong` | `cubic-bezier(0.23, 1, 0.32, 1)` | entering, leaving |
+| `--ease-in-out-strong` | `cubic-bezier(0.77, 0, 0.175, 1)` | moving while staying |
+| `--ease-drawer` | `cubic-bezier(0.32, 0.72, 0, 1)` | the host's own popup feel |
+
+`ease-in` is never used. It withholds movement exactly when the coach is looking
+hardest, which reads as the app being slow rather than as the animation being
+gentle. The built-in `ease-out` is too weak to read as deliberate at these
+durations — hence the strong variants.
+
+### What may animate
+
+By how often a coach sees it, not by how good it would look:
+
+| Frequency | Allowed |
+| --- | --- |
+| Tens of times per booking — a slot, a day, a chip | press `scale(0.97)` and colour, `--duration-press`. No entrances, no travel |
+| Once or twice per booking — the day changed, the month opened | one movement, `--duration-swap`/`--duration-move` |
+| Once per entry — a screen, a list | `--duration-screen`, stagger allowed (30ms, first six items only) |
+| Rarely — booked, refused | say it with a haptic, not with a longer animation |
+
+**One action, one animation.** Tapping a day changes the strip *and* the slot
+grid; the grid animates and the strip stays put. Ignoring this is what produced
+#186's original defect — a single tap moving the layout three times.
+
+Only `transform` and `opacity`, which skip layout and paint. `transition-all` is
+never written; properties are always named. The exception on the record is the
+month's fold, which animates `height` because `grid-template-rows` does not
+animate in the WebView Telegram runs on iOS — measured by a `ResizeObserver`, and
+documented at the call site.
+
+No springs and no bounce while there is no interruptible gesture in the app: a
+spring earns its keep when a finger can change its mind mid-flight, and pays for
+itself in nothing otherwise. No animated numbers or counters. No skeleton more
+elaborate than a pulse. At most two things moving in a frame.
+
+### Haptics
+
+The host's `HapticFeedback` (Bot API 6.1) through
+`features/mini-app/haptics.ts`, which is a no-op on Desktop and on older
+clients. On a phone this carries more than any curve, and it is the feedback
+that survives a coach turning animations off.
+
+| Event | Call |
+| --- | --- |
+| One value in a set replacing another: kind, duration, day, slot | `selectionHaptic()` |
+| A control that opens or closes something: «Month», «Today» | `impactHaptic("light")` |
+| The session was booked | `notifyHaptic("success")` |
+| The server refused it | `notifyHaptic("error")` |
+
+Fired on the press, not on the answer — the two exceptions are the outcomes,
+which *are* answers. One haptic per action, never for a system event (a fetch
+resolving, a prefetch arriving, the strip scrolling itself), and never for a tap
+that chose what was already chosen.
+
+### Reduced motion
+
+`prefers-reduced-motion` removes movement, not meaning: opacity and colour stay,
+`transform` and size changes go, and JavaScript paths ask
+`prefersReducedMotion()` from `lib/motion.ts` — the strip's scroll jumps instead
+of gliding. Haptics stay: for a coach who has turned animation off, the tick is
+what is left.
+
+### Libraries
+
+CSS first, because CSS animations run off the main thread and keep their frames
+while the app is fetching and rendering. `@starting-style` for entrances,
+`tw-animate-css` for fades and slides, View Transitions for routes, JavaScript
+only for scroll position and haptics. A motion library is worth its bundle when —
+and not before — the app grows a gesture that can be interrupted mid-flight
+(swipe-to-cancel on a session, drag-to-reschedule); the first candidate then is
+`motion/mini`, on the Web Animations API, not the full package.
