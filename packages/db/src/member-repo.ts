@@ -29,9 +29,25 @@ export interface CoachPrincipalRow {
    * from a bot that can no longer say a word (#55).
    */
   readonly botConnectionStatus: BotConnectionStatus
+  /**
+   * Whether Telegram reports a Main Mini App on this bot — `getMe`'s
+   * `has_main_web_app`, refreshed by the daily health sweep (#55). It is what
+   * lets the coach's setup hint dismiss *itself* once the steps are done,
+   * instead of offering a button that can be tapped by somebody who never
+   * followed them (#56).
+   */
+  readonly hasMainMiniApp: boolean
   readonly termsAcceptedAt?: Date
   readonly termsVersion?: string
   readonly credentialsValidFrom?: Date
+  /**
+   * The coach's stored zone, so a launch can tell whether the browser's own
+   * answer is news before it writes anything, and every coach-facing surface
+   * renders in it. Absent until the first launch after #56 shipped.
+   */
+  readonly timezone?: string
+  /** `member.settings`, raw. The domain reads it tolerantly; the row does not. */
+  readonly settings: unknown
   /**
    * A prepared, uncompleted workspace deletion. It travels with the principal
    * because the coach's rows outlive the farewell: `CoachBotRelease` only drops
@@ -68,6 +84,19 @@ export interface SetLanguageInput {
   readonly now: Date
 }
 
+export interface SetTimezoneInput {
+  readonly memberId: string
+  /** An IANA id the caller has already checked the runtime can resolve. */
+  readonly timezone: string
+  readonly now: Date
+}
+
+export interface SaveSettingsInput {
+  readonly memberId: string
+  readonly settings: Record<string, unknown>
+  readonly now: Date
+}
+
 export interface Interface {
   readonly findCoachPrincipalByBot: (
     telegramBotId: string,
@@ -88,6 +117,14 @@ export interface Interface {
    * later gets a settings screen changes it through this same statement.
    */
   readonly setLanguage: (input: SetLanguageInput) => Effect.Effect<void, QueryFailed>
+  /**
+   * The coach's zone, written silently on launch and only when it changed (#56).
+   * The comparison is in the statement rather than in the caller: every launch
+   * would otherwise be a read plus a write to discover that nothing moved.
+   */
+  readonly setTimezone: (input: SetTimezoneInput) => Effect.Effect<void, QueryFailed>
+  /** The whole `member.settings` blob, replaced. Callers merge before they call. */
+  readonly saveSettings: (input: SaveSettingsInput) => Effect.Effect<void, QueryFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/db/MemberRepo") {}
@@ -110,9 +147,12 @@ const principalProjection = {
   botUsername: schema.bot.username,
   telegramBotId: schema.bot.telegramBotId,
   botConnectionStatus: schema.bot.connectionStatus,
+  botInfo: schema.bot.botInfo,
   termsAcceptedAt: schema.member.termsAcceptedAt,
   termsVersion: schema.member.termsVersion,
   credentialsValidFrom: schema.member.credentialsValidFrom,
+  timezone: schema.member.timezone,
+  settings: schema.member.settings,
   deletionPending,
 }
 
@@ -123,9 +163,12 @@ const toPrincipal = (row: {
   botUsername: string | null
   telegramBotId: string | null
   botConnectionStatus: string
+  botInfo: unknown
   termsAcceptedAt: Date | null
   termsVersion: string | null
   credentialsValidFrom: Date | null
+  timezone: string | null
+  settings: unknown
   deletionPending: boolean
 }): CoachPrincipalRow | undefined => {
   if (row.botUsername === null || row.telegramBotId === null) return undefined
@@ -136,11 +179,20 @@ const toPrincipal = (row: {
     botUsername: row.botUsername,
     telegramBotId: row.telegramBotId,
     botConnectionStatus: botConnectionStatus(row.botConnectionStatus),
+    // `botInfo` is whatever `getMe` last returned, stored whole. Read defensively:
+    // a bot provisioned before the field existed simply has not got one, and that
+    // reads as "the coach has not set the Main Mini App up" — which is true.
+    hasMainMiniApp:
+      typeof row.botInfo === "object" &&
+      row.botInfo !== null &&
+      (row.botInfo as { readonly has_main_web_app?: unknown }).has_main_web_app === true,
     ...(row.termsAcceptedAt === null ? {} : { termsAcceptedAt: row.termsAcceptedAt }),
     ...(row.termsVersion === null ? {} : { termsVersion: row.termsVersion }),
     ...(row.credentialsValidFrom === null
       ? {}
       : { credentialsValidFrom: row.credentialsValidFrom }),
+    ...(row.timezone === null ? {} : { timezone: row.timezone }),
+    settings: row.settings,
     deletionPending: row.deletionPending,
   }
 }
@@ -352,6 +404,42 @@ export const layer = Layer.effect(
       })
     })
 
+    /**
+     * The zone the browser reported, stored only when it differs from what is
+     * already there.
+     *
+     * This is the precondition for the client's confirmation message: the bot
+     * prints it in a Worker with no browser, where `Intl…resolvedOptions()`
+     * knows nothing about the coach. `is distinct from` rather than `<>` so the
+     * first write — against a null column — is not swallowed.
+     */
+    const setTimezone = Effect.fn("MemberRepo.setTimezone")(function* (input: SetTimezoneInput) {
+      yield* Effect.tryPromise({
+        try: () =>
+          client
+            .update(schema.member)
+            .set({ timezone: input.timezone, updatedAt: input.now })
+            .where(
+              and(
+                eq(schema.member.id, input.memberId),
+                sql`${schema.member.timezone} is distinct from ${input.timezone}`,
+              ),
+            ),
+        catch: (cause) => new QueryFailed({ operation: "member.setTimezone", cause }),
+      })
+    })
+
+    const saveSettings = Effect.fn("MemberRepo.saveSettings")(function* (input: SaveSettingsInput) {
+      yield* Effect.tryPromise({
+        try: () =>
+          client
+            .update(schema.member)
+            .set({ settings: input.settings, updatedAt: input.now })
+            .where(eq(schema.member.id, input.memberId)),
+        catch: (cause) => new QueryFailed({ operation: "member.saveSettings", cause }),
+      })
+    })
+
     return Service.of({
       findCoachPrincipalByBot,
       findCoachPrincipalByIdentity,
@@ -359,6 +447,8 @@ export const layer = Layer.effect(
       touchActivity,
       acceptTerms,
       setLanguage,
+      setTimezone,
+      saveSettings,
     })
   }),
 )

@@ -123,6 +123,9 @@ describe.skipIf(skipWithoutDatabase)("MemberRepo (dev Neon branch)", () => {
           termsVersion: schema.member.termsVersion,
           lastLoginAt: schema.member.lastLoginAt,
           lastActivityAt: schema.member.lastActivityAt,
+          timezone: schema.member.timezone,
+          settings: schema.member.settings,
+          updatedAt: schema.member.updatedAt,
         })
         .from(schema.member)
         .where(eq(schema.member.id, memberId)),
@@ -258,6 +261,44 @@ describe.skipIf(skipWithoutDatabase)("MemberRepo (dev Neon branch)", () => {
       })
       expect(result.accepted).toBe(true)
       expect(yield* notificationsFor(fixture.workspaceId)).toHaveLength(1)
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  // Written on every launch that finds it changed, and on no other. The zone is
+  // what lets the *bot* print "10:00 (UTC+3)" from a Worker with no browser.
+  it.effect("stores the coach's zone the first time and leaves it alone after", () =>
+    Effect.gen(function* () {
+      const repo = yield* MemberRepo.Service
+      const fixture = yield* coachFixture()
+      const first = new Date("2026-07-24T12:00:00.000Z")
+
+      yield* repo.setTimezone({ memberId: fixture.memberId, timezone: "Europe/Kyiv", now: first })
+      const stored = yield* memberRow(fixture.memberId)
+      expect(stored?.timezone).toBe("Europe/Kyiv")
+
+      const later = new Date("2026-07-25T12:00:00.000Z")
+      yield* repo.setTimezone({ memberId: fixture.memberId, timezone: "Europe/Kyiv", now: later })
+      // Unchanged means untouched: `updated_at` did not move either.
+      expect((yield* memberRow(fixture.memberId))?.updatedAt).toEqual(stored?.updatedAt)
+
+      yield* repo.setTimezone({ memberId: fixture.memberId, timezone: "Europe/Lisbon", now: later })
+      expect((yield* memberRow(fixture.memberId))?.timezone).toBe("Europe/Lisbon")
+    }).pipe(Effect.scoped, Effect.provide(appLayer)),
+  )
+
+  it.effect("replaces the settings blob wholesale", () =>
+    Effect.gen(function* () {
+      const repo = yield* MemberRepo.Service
+      const fixture = yield* coachFixture()
+
+      yield* repo.saveSettings({
+        memberId: fixture.memberId,
+        settings: { mainMiniAppHintDismissed: true },
+        now: new Date("2026-07-24T12:00:00.000Z"),
+      })
+      expect((yield* memberRow(fixture.memberId))?.settings).toEqual({
+        mainMiniAppHintDismissed: true,
+      })
     }).pipe(Effect.scoped, Effect.provide(appLayer)),
   )
 

@@ -1,9 +1,11 @@
 import { CoachInitData, CoachOnboardingToken, ManagerInitData } from "@praximo/auth"
 import {
   AdminRepo,
+  ClientRepo,
   CoachOnboardingRepo,
   Database,
   MemberRepo,
+  SessionRepo,
   WorkspaceDeletionRepo,
   WorkspaceRepo,
 } from "@praximo/db"
@@ -11,6 +13,7 @@ import type { WorkspaceRunCancellationRpcClient } from "@praximo/domain"
 import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
+import { CoachClients } from "./coach-clients.ts"
 import { CoachSession } from "./coach-session.ts"
 import { CoachSurface } from "./coach-surface.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
@@ -41,6 +44,8 @@ const runtimeFromEnv = (env: Env) => {
     CoachOnboardingRepo.layer,
     WorkspaceDeletionRepo.layer,
     MemberRepo.layer,
+    ClientRepo.layer,
+    SessionRepo.layer,
   ).pipe(Layer.provide(Database.layer))
   const sender =
     env.MANAGER_BOT === undefined
@@ -74,6 +79,7 @@ const runtimeFromEnv = (env: Env) => {
     AdminSurface.layer,
     ViewerRole.layer,
     CoachSurface.layer.pipe(Layer.provide(CoachSession.layer)),
+    CoachClients.layer.pipe(Layer.provide(CoachSession.layer)),
   ).pipe(Layer.provide(dependencies))
   return ManagedRuntime.make(
     Layer.provide(app, ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
@@ -170,6 +176,93 @@ export const chooseCoachLanguage = async (
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(CoachSurface.Service, (service) => service.chooseLanguage(credential, language)),
+  )
+}
+
+/** The coach's own practice — the list, one client, and everything they do to it (#56). */
+export const loadCoachClients = async (
+  credential: LaunchCredential,
+): Promise<CoachClients.CoachClientsHome> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.home(credential)),
+  )
+}
+
+export const loadCoachClientDetail = async (
+  credential: LaunchCredential,
+  clientId: string,
+): Promise<CoachClients.ClientDetail | undefined> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.detail(credential, clientId)),
+  )
+}
+
+export const createCoachClient = async (
+  credential: LaunchCredential,
+  input: unknown,
+): Promise<{ readonly clientId: string }> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.create(credential, input)),
+  )
+}
+
+export const loadCoachDaySchedule = async (
+  credential: LaunchCredential,
+  date: string,
+): Promise<CoachClients.DaySchedule> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.daySchedule(credential, date)),
+  )
+}
+
+export const scheduleCoachSession = async (
+  credential: LaunchCredential,
+  input: CoachClients.ScheduleSessionInput,
+): Promise<CoachClients.ScheduleOutcome> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.schedule(credential, input)),
+  )
+}
+
+export const removeCoachClient = async (
+  credential: LaunchCredential,
+  clientId: string,
+): Promise<{ readonly deleted: boolean }> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.remove(credential, clientId)),
+  )
+}
+
+export const resetCoachClientInvite = async (
+  credential: LaunchCredential,
+  clientId: string,
+): Promise<CoachClients.ClientDetail | undefined> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.resetInvite(credential, clientId)),
+  )
+}
+
+export const saveCoachTimezone = async (
+  credential: LaunchCredential,
+  timezone: string,
+): Promise<void> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.saveTimezone(credential, timezone)),
+  )
+}
+
+export const hideCoachMainMiniAppHint = async (credential: LaunchCredential): Promise<void> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.hideMainMiniAppHint(credential)),
   )
 }
 

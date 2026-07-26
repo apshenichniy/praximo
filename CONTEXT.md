@@ -71,8 +71,8 @@ A scheduled 1:1 coaching conversation between the coach and one client. Has a ki
 _Avoid_: meeting, call, appointment
 
 **Intake**:
-The session kind for a client's first session — clarifying goals and the coaching contract; drives its own debrief prompt.
-_Avoid_: first session (as a term), discovery call
+The session kind for a client's first session — clarifying goals and the coaching contract; drives its own debrief prompt. Not the industry's *chemistry* / *discovery* session, which is the unpaid mutual-fit call before any engagement exists: in MVP that happens off-platform, and the client-facing word for an intake is «первая встреча», never «знакомство».
+_Avoid_: first session (as a term), discovery call, chemistry session
 
 **Web Room**:
 The browser page where the coach and client meet for a session's call.

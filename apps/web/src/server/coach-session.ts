@@ -43,6 +43,16 @@ export interface PreOnboardingPrincipal {
    */
   readonly botConnectionStatus: MemberRepo.CoachPrincipalRow["botConnectionStatus"]
   readonly language: CoachLanguage
+  /**
+   * Telegram's own answer to "has this coach finished the @BotFather steps",
+   * which is what lets the home screen's hint dismiss itself rather than offer
+   * a button somebody can tap without having done them (#56).
+   */
+  readonly hasMainMiniApp: boolean
+  /** The coach's stored zone, absent until their first launch after #56. */
+  readonly timezone?: string
+  /** `member.settings`, raw — read through the domain's tolerant reader. */
+  readonly settings: unknown
 }
 
 /**
@@ -196,6 +206,9 @@ export const layer = Layer.effect(
         botUsername: found.botUsername,
         telegramBotId: found.telegramBotId,
         botConnectionStatus: found.botConnectionStatus,
+        hasMainMiniApp: found.hasMainMiniApp,
+        ...(found.timezone === undefined ? {} : { timezone: found.timezone }),
+        settings: found.settings,
         termsAcceptedAt: found.termsAcceptedAt,
         termsVersion: found.termsVersion,
       } satisfies CoachPrincipal
@@ -211,6 +224,9 @@ export const layer = Layer.effect(
           botUsername: principal.botUsername,
           telegramBotId: principal.telegramBotId,
           botConnectionStatus: principal.botConnectionStatus,
+          hasMainMiniApp: principal.hasMainMiniApp,
+          ...(principal.timezone === undefined ? {} : { timezone: principal.timezone }),
+          settings: principal.settings,
           language: principal.language,
         } satisfies PreOnboardingPrincipal
       },

@@ -1,30 +1,46 @@
+import { useState } from "react"
+
+import { Button } from "@/components/ui/button.tsx"
+import { ClientList } from "@/features/coach/components/client-list.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
+import { Section, SectionTitle } from "@/features/mini-app/components/section.tsx"
+import type { CoachClients } from "@/server/coach-clients.ts"
 
 /**
- * The stub that stands where the Today dashboard will be (#40). It says the one
- * thing a coach needs on the day they finish onboarding — the workspace is live
- * — and carries exactly one operational element.
+ * The coach's home screen (#56 §Home), ordered by how often each thing is
+ * needed rather than by how it was built:
  *
- * That element is the per-bot Mini App URL. Telegram has no API for the
- * chat-list "Open" button, so enabling it is something the coach does in
- * @BotFather themselves, and the URL to paste is bot-specific: only the app
- * knows the number. Printing it here is the difference between a runbook step a
- * coach can follow and one they cannot.
+ * 1. the **relink banner** while the coach's bot is down (#55) — first,
+ *    destructive-toned, not dismissible: putting it away does not make clients
+ *    reachable;
+ * 2. **clients**, with New client as the list's own first row;
+ * 3. the **Main Mini App hint** last, with no section heading of its own,
+ *    because a heading would promote it to the rank of Clients.
  *
- * Every word arrives as `copy`, in `member.language` (#130). The @BotFather
- * menu path inside it deliberately stays English in all three: Telegram does not
- * translate those labels, so a coach following the steps is reading them off an
- * English screen whatever language they think in.
+ * The host's bottom button stays **empty here**. mini-app.md has already
+ * promised it to «New session» on Today (#61); taking it for «New client» now
+ * and moving it back later teaches a control and then withdraws it.
  */
 export function CoachHome({
   copy,
   botUsername,
   mainMiniAppUrl,
+  clients,
+  hintVisible,
+  onHideHint,
   relinkLink,
 }: {
   readonly copy: CoachCopy
   readonly botUsername: string
   readonly mainMiniAppUrl: string
+  readonly clients: ReadonlyArray<CoachClients.ClientSummary>
+  /**
+   * Whether the @BotFather hint still has a job. It disappears on its own once
+   * Telegram reports `has_main_web_app`, so the manual Hide below covers only
+   * the coach who decided not to bother.
+   */
+  readonly hintVisible: boolean
+  readonly onHideHint: () => void
   /**
    * Set only while the coach's own bot has stopped answering (#55). This app is
    * the one surface that survives that — the launch is signed by Telegram, not
@@ -32,6 +48,8 @@ export function CoachHome({
    */
   readonly relinkLink?: string
 }) {
+  const [hidden, setHidden] = useState(false)
+
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
       {relinkLink === undefined ? null : (
@@ -50,24 +68,36 @@ export function CoachHome({
           </a>
         </section>
       )}
-      <h1 className="text-2xl font-semibold tracking-tight text-pretty">{copy.home.title}</h1>
-      <p className="text-muted-foreground mt-3 text-[15px] leading-6 text-pretty">
-        {copy.home.bodyLead}
-        <span className="text-foreground">@{botUsername}</span>
-        {copy.home.bodyTail}
-      </p>
 
-      <section className="border-border bg-card mt-10 rounded-2xl border p-5">
-        <h2 className="text-base font-semibold tracking-tight">{copy.home.mainMiniAppTitle}</h2>
-        <p className="text-muted-foreground mt-2 text-[13px] leading-5">
-          {copy.home.mainMiniAppLead}
-          <span className="text-foreground">{copy.home.mainMiniAppOpen}</span>
-          {copy.home.mainMiniAppTail}
-        </p>
-        <p className="border-border/60 bg-background text-foreground mt-4 overflow-x-auto rounded-xl border px-3 py-2 font-mono text-[12px] break-all">
-          {mainMiniAppUrl}
-        </p>
-      </section>
+      <SectionTitle>{copy.clients.listTitle}</SectionTitle>
+      <ClientList copy={copy.clients} clients={clients} />
+
+      {!hintVisible || hidden ? null : (
+        <Section className="border-border bg-card mt-10 rounded-2xl border p-5">
+          <h2 className="text-base font-semibold tracking-tight">{copy.home.mainMiniAppTitle}</h2>
+          <p className="text-muted-foreground mt-2 text-[13px] leading-5">
+            {copy.home.mainMiniAppLead}
+            <span className="text-foreground">{copy.home.mainMiniAppOpen}</span>
+            {copy.home.mainMiniAppTail}
+          </p>
+          <p className="border-border/60 bg-background text-foreground mt-4 overflow-x-auto rounded-xl border px-3 py-2 font-mono text-[12px] break-all">
+            {mainMiniAppUrl}
+          </p>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground mt-3 -ml-2"
+            onClick={() => {
+              // Optimistic on purpose: this is a preference, and a coach who
+              // hid a row must not watch it sit there while a write lands.
+              setHidden(true)
+              onHideHint()
+            }}
+          >
+            {copy.clients.hideHint}
+          </Button>
+        </Section>
+      )}
     </main>
   )
 }

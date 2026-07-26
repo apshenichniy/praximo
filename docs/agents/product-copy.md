@@ -1,0 +1,35 @@
+# Product copy: who is speaking, and to whom
+
+Every user-facing string in this product is written by the owner or by an agent, in this repository. There is no translation vendor and no extraction step ([`packages/i18n`](../../packages/i18n/src/index.ts) explains why there is no i18n library either). What replaces a style guide living in somebody's head is this file.
+
+Three voices, one per reader. Getting the reader wrong is the single most expensive copy mistake here, because it is invisible: the sentence is grammatical, the screen renders, and the wrong person is being addressed.
+
+## The three voices
+
+**The coach, in the bot.** A partner's register, settled in [#164](https://github.com/apshenichniy/praximo/issues/164): tell them what happened, then what to do about it, and put the explanation where it costs nothing to skip. The catalogue is [`apps/bot/src/messages.ts`](../../apps/bot/src/messages.ts).
+
+**The coach, in the Mini App.** The same face without the chat's emoji density. A screen carries its own structure — headings, sections, a bottom button — so the copy does not have to signal any of it. The catalogue is [`apps/web/src/features/i18n/coach-copy/`](../../apps/web/src/features/i18n/coach-copy).
+
+**The client.** Addressed by **their coach's assistant**, never by a platform ([client-onboarding-auth.md](../spec/client-onboarding-auth.md) §Principles). The client did not choose Praximo, has no account with us, and is not our user in any sense they would recognise — they are their coach's client, and the bot they are talking to belongs to that coach. The catalogue is [`packages/i18n/src/client-copy.ts`](../../packages/i18n/src/client-copy.ts), in the package rather than in an app because two Workers render the same consent text.
+
+## Standing rules
+
+**No URLs in body text.** Every action is an inline button ([#164](https://github.com/apshenichniy/praximo/issues/164)). A `t.me/…?start=` payload wrapped across four lines of a phone reads like phishing, and it is worst in the one message that asks for a legal agreement.
+
+**No gender-agreeing verb forms** in UK/RU copy about a person whose gender the system does not know — which is every person in it ([#16](https://github.com/apshenichniy/praximo/issues/16), [privacy-copy.md](../spec/privacy-copy.md) §Conventions). Write `{coach} напише тут`, never `{coach} написала`. Future tense and impersonal constructions are gender-neutral in both languages and are usually the way out: `профиль создан`, not `создала профиль`.
+
+**Split a sentence that wraps a value, rather than templating it.** Word order differs between these three languages, and a placeholder in the middle of a string is a translation waiting to read backwards. A *count* is the exception: it is the same token everywhere, and splitting it from the noun it agrees with makes the plural form unreachable — `plural()` exists for exactly that.
+
+**Client-facing names for things are plain words, not the coach's terms.** The intake is «первая встреча» to a client and `Intake` to their coach. Deliberately **not** «знакомство»: that is what the industry calls the *chemistry* session, which this product does not run ([#1](https://github.com/apshenichniy/praximo/issues/1) §Out of scope), and spending the word on the intake would guarantee the confusion the distinction exists to prevent.
+
+**Versioned text is versioned by its content.** `contentDigest` over the text produces the version recorded against an acceptance, so an edit cannot ship as the same document somebody already agreed to. Whether that version is *one across all three languages* or *one per language* depends on who can change language afterwards: the coach can and is never re-asked, so their terms carry one version ([#130](https://github.com/apshenichniy/praximo/issues/130)); the client cannot, so their consent carries one per language ([#56](https://github.com/apshenichniy/praximo/issues/56)).
+
+**English is the reference.** Every other catalogue is filled out against it leaf by leaf, and a blank leaf throws in development and falls back in production — a coach reading one English sentence in a Ukrainian screen is a smaller failure than a coach reading `terms.points.3`.
+
+## What to check before adding a string
+
+1. Which of the three readers is this for? Write it in their catalogue, in their voice.
+2. Does it name an action? Then it is a button, not a link in prose.
+3. Does it say something about a person? Then it cannot agree with their gender.
+4. Does it wrap a value? Split it — unless the value is a count.
+5. Is it legally operative? Then it is versioned from its own content, and the version has to answer "which text did they agree to", not "which release was this".

@@ -24,6 +24,8 @@ const principal = (overrides: Partial<Principal> = {}): Principal => ({
   botUsername: "ada_coach_bot",
   telegramBotId: BOT_ID,
   botConnectionStatus: "connected",
+  hasMainMiniApp: false,
+  settings: {},
   termsAcceptedAt: new Date(AUTH_DATE - 86_400_000),
   deletionPending: false,
   ...overrides,
@@ -55,6 +57,8 @@ const sessionLayer = (options: {
       ),
       acceptTerms: Effect.fn("MemberRepo.Test.acceptTerms")(() => Effect.die("unused")),
       setLanguage: Effect.fn("MemberRepo.Test.setLanguage")(() => Effect.die("unused")),
+      setTimezone: Effect.fn("MemberRepo.Test.setTimezone")(() => Effect.die("unused")),
+      saveSettings: Effect.fn("MemberRepo.Test.saveSettings")(() => Effect.die("unused")),
     }),
   )
   return CoachSession.layer.pipe(

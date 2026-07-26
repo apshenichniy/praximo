@@ -35,6 +35,10 @@ Issues are tracked as GitHub issues in `apshenichniy/praximo`, via the `gh` CLI.
 
 Default canonical triage vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
 
+### Product copy
+
+Three voices — the coach in the bot, the coach in the Mini App, the client — and the standing rules for all of them. See `docs/agents/product-copy.md`.
+
 ### Domain docs
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

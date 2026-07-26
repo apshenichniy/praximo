@@ -17,10 +17,23 @@ import { botCatalog, CatalogueFile, type Copy, escapeHtml, messages } from "./me
 /** One argument covers every function in `Copy`: a name, or a bot username. */
 const SAMPLE = "praximo_test_bot"
 
+/** The one function whose argument is a record rather than a name. */
+const SAMPLE_CLIENT = {
+  name: "Maria K.",
+  telegramName: "Maria",
+  username: "maria",
+  language: "Русский",
+  nextSession: "03 Aug 2026, 10:00",
+}
+
 const render = (copy: Copy): ReadonlyArray<readonly [string, string]> =>
   Object.entries(copy).map(([key, value]) => [
     key,
-    typeof value === "function" ? (value as (argument: string) => string)(SAMPLE) : value,
+    typeof value !== "function"
+      ? value
+      : key === "clientAccepted"
+        ? (value as (client: typeof SAMPLE_CLIENT) => string)(SAMPLE_CLIENT)
+        : (value as (argument: string) => string)(SAMPLE),
   ])
 
 /** The pair that leaves through `ManagerBotSender.sendText`, which has no parse mode. */

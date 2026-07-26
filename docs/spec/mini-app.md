@@ -58,9 +58,14 @@ acceptance itself is refused until it lands. Authentication mechanics are in
 [client-onboarding-auth.md](client-onboarding-auth.md) §Coach authentication and
 [ADR 0006](../adr/0006-coach-authentication-in-mvp.md).
 
-Until the Today dashboard ships, acceptance lands on a minimal home that reports the
-workspace is active — deliberately not the manager Mini App's onboarding companion, which
-lives under a different credential and answers a different question.
+Until the Today dashboard ships, acceptance lands on the **client list**
+([#56](https://github.com/apshenichniy/praximo/issues/56)) — deliberately not the manager
+Mini App's onboarding companion, which lives under a different credential and answers a
+different question. That home is, top to bottom: the re-link banner while the coach's bot is
+down, the clients with «New client» as the list's own first row, and the optional @BotFather
+hint last, under no heading of its own. The host's bottom button stays **empty** there: §Home
+screen below has already promised it to «New session», and teaching a coach a control only to
+move it is worse than not teaching it.
 
 ## Navigation model
 
@@ -74,7 +79,12 @@ drill-in with a back affordance. Screen inventory:
 - **Client detail** — profile (channel, language, consent), invite banner,
   session history.
 - **Artifact reader** — full-screen render of one artifact version.
-- **New session** — client picker + date/time.
+- **New session** — client picker + date/time. Scheduling for a client the coach
+  is *already looking at* does not go through it: that is a sheet on the client
+  route ([#56](https://github.com/apshenichniy/praximo/issues/56)). This screen
+  arrives with Today, for the case where the client still has to be chosen.
+- **Client route** — one client: header, invitation while unaccepted, upcoming
+  sessions, profile, danger zone (#56). It arrives *before* the Today dashboard.
 
 ## Home screen, top to bottom
 

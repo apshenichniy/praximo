@@ -104,6 +104,12 @@ export interface PendingNotification {
    */
   readonly recipientRole: CoachNotification.Role
   readonly recipientTelegramId: TelegramId
+  /**
+   * What `on conflict` was inferred against, carried out because some kinds
+   * name a *subject* the row alone cannot: `client_accepted` is once per client,
+   * and the client's id is in here (#56).
+   */
+  readonly dedupeKey: string
   readonly workspaceName: string
   readonly botUsername: string
   /** The workspace owner's chosen language, whoever this row is addressed to. */
@@ -1267,6 +1273,7 @@ export const layer = Layer.effect(
               claimed."kind",
               claimed."recipient_role",
               claimed."recipient_telegram_id",
+              claimed."dedupe_key",
               claimed."attempt_count",
               "workspace"."name" as "workspace_name",
               "bot"."username" as "bot_username",
@@ -1293,6 +1300,7 @@ export const layer = Layer.effect(
             kind: string
             recipient_role: string
             recipient_telegram_id: string
+            dedupe_key: string
             workspace_name: string
             bot_username: string | null
             coach_language: CoachLanguage
@@ -1314,6 +1322,7 @@ export const layer = Layer.effect(
                       ? CoachNotification.Role.Coach
                       : CoachNotification.Role.Admin,
                   recipientTelegramId: TelegramId.make(row.recipient_telegram_id),
+                  dedupeKey: row.dedupe_key,
                   workspaceName: row.workspace_name,
                   botUsername: row.bot_username,
                   coachLanguage: row.coach_language,

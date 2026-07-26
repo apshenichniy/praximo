@@ -37,13 +37,21 @@ const render = async (node: ReactNode): Promise<string> => {
   return renderToStaticMarkup(<RouterProvider router={router as never} />)
 }
 
+/** An onboarded coach's home always has a list — an empty practice is still one. */
+const emptyPractice = {
+  ok: true,
+  home: { clients: [], mainMiniAppHintVisible: true },
+} as const
+
 const screen = (entry: CoachEntryTransportResult, launchLanguage: "en" | "uk" | "ru" = "en") =>
   render(
     <CoachScreen
       entry={entry}
       launchLanguage={launchLanguage}
+      clients={emptyPractice}
       onAccept={() => {}}
       onChooseLanguage={async () => true}
+      onHideHint={() => {}}
       onRetry={() => {}}
       pending={false}
       error={undefined}
@@ -131,17 +139,22 @@ describe("coach Mini App entry", () => {
     expect(html).toContain("/legal/privacy?lang=ru")
   })
 
-  it("shows an onboarded coach their bot", async () => {
+  // The home screen is the client list now (#56): «New client» is the list's own
+  // first row, and the setup hint sits last, under no heading of its own.
+  it("shows an onboarded coach their clients", async () => {
     const html = await screen(home())
-    expect(html).toContain("Your workspace is active")
-    expect(html).toContain("@ada_coach_bot")
+    expect(html).toContain(coachCatalog.en.clients.listTitle)
+    expect(html).toContain(coachCatalog.en.clients.newClient)
+    expect(html).toContain(coachCatalog.en.clients.empty)
+    expect(html.indexOf(coachCatalog.en.clients.listTitle)).toBeLessThan(
+      html.indexOf(coachCatalog.en.home.mainMiniAppTitle),
+    )
   })
 
   it("speaks the home screen in the coach's own language", async () => {
     const html = await screen(home("ru"))
-    expect(html).toContain(coachCatalog.ru.home.title)
+    expect(html).toContain(coachCatalog.ru.clients.listTitle)
     expect(html).toContain(coachCatalog.ru.home.mainMiniAppTitle)
-    expect(html).toContain("@ada_coach_bot")
   })
 
   it("prints the exact per-bot address @BotFather asks for", async () => {
@@ -158,6 +171,9 @@ describe("coach Mini App entry", () => {
         copy={coachCopy("en")}
         botUsername="ada_coach_bot"
         mainMiniAppUrl="https://stage.praximo.io/?b=9100777"
+        clients={[]}
+        hintVisible
+        onHideHint={() => {}}
       />,
     )
     expect(html).toContain("https://stage.praximo.io/?b=9100777")

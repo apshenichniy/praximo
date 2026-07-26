@@ -394,6 +394,19 @@ export const member = pgTable(
     // from Telegram, and the coach choosing it during onboarding — are the
     // whole story of how it ever changes.
     language: languageEnum("language").notNull().default("en"),
+    // The coach's IANA zone, written silently by the Mini App on every launch
+    // that finds it changed, with no UI at all (#56). Not a feature but the
+    // precondition for one: the client's confirmation message is printed by the
+    // *bot*, in a Worker with no browser, so `Intl…resolvedOptions().timeZone`
+    // is unavailable there and without this column it cannot render "10:00" at
+    // all. Null until the coach's first launch after this shipped; readers fall
+    // back to UTC rather than guessing.
+    timezone: text("timezone"),
+    // Per-coach choices not worth a column each — the manually hidden Main Mini
+    // App hint is the first and, in this slice, the only key. A column rather
+    // than Telegram's `CloudStorage` because it must survive a device change and
+    // is a fact about the coach, not about the client they launched from.
+    settings: jsonb("settings").notNull().default({}),
     // Auth identity — the coach authenticates per launch through their own bot's
     // Mini App, with no server session (ADR 0006). This column is the natural
     // key that verification resolves to a member.
