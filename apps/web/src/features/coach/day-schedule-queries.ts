@@ -74,29 +74,66 @@ const rangeSchedule = (from: string, days: number) =>
 /**
  * Read a window and file every day of it under its own key.
  *
- * Nothing happens when the window is already in hand and fresh: the strip
- * reports its window whenever it grows, and re-reading a fortnight because a
- * coach scrolled would undo the point of asking for it in one go.
+ * Asked for in fortnights rather than as one long range. The strip grows to a
+ * quarter and the server answers at most a month at a time (`MaxRangeDays`), so
+ * one request for the whole strip would come back short and leave the tail to be
+ * fetched a day at a time — silently, and forever, since the window would never
+ * look cached. In fortnights each growth spurt is one request for the part that
+ * is new, and the parts already in hand are skipped.
  */
 export const primeDayRange = async (
   client: QueryClient,
   from: string,
   days: number,
 ): Promise<void> => {
-  const cached = Array.from({ length: days }, (_, index) => index).every((index) => {
-    const state = client.getQueryState<DayScheduleData>(dayScheduleKeys.day(shiftDate(from, index)))
-    return state?.data !== undefined && Date.now() - state.dataUpdatedAt < DayScheduleStaleMs
-  })
-  if (cached) return
+  await Promise.all(
+    dayChunks(from, days)
+      .filter((chunk) => !chunkCached(client, chunk))
+      .map(async (chunk) => {
+        const window = await client.fetchQuery(rangeSchedule(chunk.from, chunk.days))
+        for (const day of window) {
+          client.setQueryData<DayScheduleData>(dayScheduleKeys.day(day.date), {
+            busy: day.busy,
+            ...(day.earliestStartMinutes === undefined
+              ? {}
+              : { earliestStartMinutes: day.earliestStartMinutes }),
+            timezone: day.timezone,
+          })
+        }
+      }),
+  )
+}
 
-  const window = await client.fetchQuery(rangeSchedule(from, days))
-  for (const day of window) {
-    client.setQueryData<DayScheduleData>(dayScheduleKeys.day(day.date), {
-      busy: day.busy,
-      ...(day.earliestStartMinutes === undefined
-        ? {}
-        : { earliestStartMinutes: day.earliestStartMinutes }),
-      timezone: day.timezone,
+export interface DayChunk {
+  readonly from: string
+  readonly days: number
+}
+
+/**
+ * A window, cut into requests the server will answer in full.
+ *
+ * `StripRequestDays` rather than `MaxRangeDays`: the chunks have to line up with
+ * how the strip grows, or a fortnight added to the end would land across two
+ * chunks and re-read a fortnight already in hand.
+ */
+export const StripRequestDays = 14
+
+export const dayChunks = (from: string, days: number): ReadonlyArray<DayChunk> => {
+  const chunks: Array<DayChunk> = []
+  for (let offset = 0; offset < days; offset += StripRequestDays) {
+    chunks.push({
+      from: shiftDate(from, offset),
+      days: Math.min(StripRequestDays, days - offset),
     })
   }
+  return chunks
 }
+
+/** Whether every day of a chunk is already in hand and still fresh. */
+const chunkCached = (client: QueryClient, chunk: DayChunk): boolean =>
+  Array.from({ length: chunk.days }, (_, index) => index).every((index) => {
+    const state = client.getQueryState<DayScheduleData>(
+      dayScheduleKeys.day(shiftDate(chunk.from, index)),
+    )
+    return state?.data !== undefined && Date.now() - state.dataUpdatedAt < DayScheduleStaleMs
+  })
