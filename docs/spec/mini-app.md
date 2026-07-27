@@ -218,6 +218,35 @@ on the dark ground, its 600s on the light one. A screen that said
 same shade is a tint rather than a word; `src/__tests__/global-theme.test.tsx`
 fails on one reappearing anywhere in `src`.
 
+### Surfaces
+
+**Three, not one** ([#195](https://github.com/apshenichniy/praximo/issues/195)).
+The page, the raised surface (card, popover, sheet) and the recessed fill are
+distinct grounds, and they have to be distinct in *both* schemes: elevation needs
+something to be elevated against. The light ground first shipped with all three
+at pure white, and a bottom sheet opened over a screen simply was not there — it
+read as the page growing some buttons.
+
+On light the page recedes and the raised surfaces keep the white, which is the
+direction light interfaces run in; on dark the page is the darkest and raised
+surfaces lift off it. The steps are the same size in both — page→card 1.14:1
+dark against 1.11:1 light, card→recessed 1.17:1 in both — so a screen designed in
+one scheme keeps its structure in the other.
+
+`src/__tests__/theme-contrast.test.ts` reads the two blocks out of `app.css` and
+asserts the steps, the hairline against both of its grounds, and the text
+parity. None of these are visible in a diff: the miss that prompted this was one
+token copied from the registry.
+
+A **backdrop is not a substitute for a surface.** The drawer has always had one —
+`modal` defaults to `true`, and it paints a scrim with a blur — and the sheet was
+still invisible, because the scrim separates the sheet from the *content* behind
+it, not from the ground it is drawn on. Two more things the sheet needs and now
+has: a border of `--border` rather than of its own fill, and its shadow cast
+**upward**. Every Tailwind `shadow-*` falls downward, which on a sheet pinned to
+the bottom of the screen puts the whole shadow off-screen and leaves the one edge
+anybody sees with nothing under it.
+
 The BotFather splash screen stays dark. It is configured outside this repository
 and Telegram takes one colour there, not a pair.
 

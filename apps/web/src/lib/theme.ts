@@ -29,10 +29,14 @@ export interface SchemeColor {
  * configured separately in BotFather — Telegram takes one color there, not a
  * pair, so the splash stays dark whatever the client is set to.
  */
-export const APP_SURFACE_COLOR: SchemeColor = { dark: "#191c1d", light: "#ffffff" }
+export const APP_SURFACE_COLOR: SchemeColor = { dark: "#191c1d", light: "#f2f4f4" }
 
-/** The page's own ground, in hex, for the pre-oklch fallback in critical CSS. */
-export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#090b0c", light: "#ffffff" }
+/**
+ * The page's own ground, in hex, for the pre-oklch fallback in critical CSS.
+ * The light one is not white: the page recedes so that cards and sheets have
+ * something to be raised against (#195) — `styles/app.css` §`:root`.
+ */
+export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#090b0c", light: "#f2f4f4" }
 
 /** Running text on that ground, for the same fallback. */
 export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#f9fbfb", light: "#090b0c" }

@@ -14,7 +14,7 @@ import appCss from "@/styles/app.css?url"
 
 const darkBackground = "oklch(0.148 0.004 228.8)"
 const darkForeground = "oklch(0.987 0.002 197.1)"
-const lightBackground = "oklch(1 0 0)"
+const lightBackground = "oklch(0.965 0.002 197.1)"
 const lightForeground = "oklch(0.148 0.004 228.8)"
 
 /**

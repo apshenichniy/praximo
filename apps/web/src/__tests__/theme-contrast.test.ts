@@ -50,14 +50,16 @@ const luminance = (colour: ReadonlyArray<number>) =>
   0.2126 * linear(colour[0]) + 0.7152 * linear(colour[1]) + 0.0722 * linear(colour[2])
 
 /** WCAG 2 relative luminance, then the ratio the guidelines are stated in. */
-const contrast = (scheme: "light" | "dark", name: string): number => {
-  const ink = luminance(toSrgb(token(scheme, name)))
-  const ground = luminance(toSrgb(token(scheme, "background")))
-  const brighter = Math.max(ink, ground)
-  const darker = Math.min(ink, ground)
+const ratio = (scheme: "light" | "dark", a: string, b: string): number => {
+  const one = luminance(toSrgb(token(scheme, a)))
+  const other = luminance(toSrgb(token(scheme, b)))
 
-  return (brighter + 0.05) / (darker + 0.05)
+  return (Math.max(one, other) + 0.05) / (Math.min(one, other) + 0.05)
 }
+
+/** The common case: something against the ground it is read on. */
+const contrast = (scheme: "light" | "dark", name: string): number =>
+  ratio(scheme, name, "background")
 
 describe("scheme contrast parity", () => {
   it("reads running text the same in either scheme", () => {
@@ -82,5 +84,32 @@ describe("scheme contrast parity", () => {
         contrast(scheme, "foreground") * 0.65,
       )
     }
+  })
+
+  /**
+   * Elevation needs something to be elevated against (#195). The light ground
+   * shipped with page, card and popover all `oklch(1 0 0)`, so a bottom sheet
+   * was white on white and a card existed only by its shadow — the same class of
+   * miss as the text one above, and equally invisible in a diff.
+   */
+  it("raises cards and sheets off the page in both schemes", () => {
+    for (const scheme of ["light", "dark"] as const) {
+      for (const raised of ["card", "popover"]) {
+        expect(ratio(scheme, raised, "background")).toBeGreaterThan(1.05)
+      }
+      // And a recessed fill sits off the surface it is cut into, not off the page.
+      expect(ratio(scheme, "muted", "card")).toBeGreaterThan(1.1)
+    }
+  })
+
+  /**
+   * Light only: the dark scheme authors `--border` as white at 10%, and this
+   * reader takes opaque oklch. Light is where the hairline has two grounds to
+   * hold on — a white card and a page that is no longer white — so it is the
+   * one that can go wrong quietly.
+   */
+  it("keeps a light hairline visible on both grounds it crosses", () => {
+    expect(ratio("light", "border", "card")).toBeGreaterThan(1.2)
+    expect(ratio("light", "border", "background")).toBeGreaterThan(1.15)
   })
 })

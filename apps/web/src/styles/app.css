@@ -130,7 +130,16 @@
 
 :root {
   color-scheme: light;
-  --background: oklch(1 0 0);
+  /* Three surfaces, not one (#195).
+     The preset's light ground made page, card and popover all `oklch(1 0 0)` —
+     one colour where the dark scheme has three steps — so nothing elevated had
+     anything to be elevated *against*: a bottom sheet was white on white, and a
+     card carried its whole existence on a shadow. Here the page recedes and the
+     raised surfaces keep the white, which is the direction light interfaces run
+     in (and what iOS does with grouped lists). The steps are sized to the dark
+     scheme's own: page→card 1.11 there against 1.14 here, card→muted 1.17 in
+     both. */
+  --background: oklch(0.965 0.002 197.1);
   --foreground: oklch(0.148 0.004 228.8);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.148 0.004 228.8);
@@ -138,23 +147,25 @@
   --popover-foreground: oklch(0.148 0.004 228.8);
   --primary: oklch(0.218 0.008 223.9);
   --primary-foreground: oklch(0.987 0.002 197.1);
-  --secondary: oklch(0.963 0.002 197.1);
+  --secondary: oklch(0.945 0.002 197.1);
   --secondary-foreground: oklch(0.218 0.008 223.9);
-  --muted: oklch(0.963 0.002 197.1);
+  --muted: oklch(0.945 0.002 197.1);
   /* Darker than the preset's own 0.56, which was the one token that did not
      survive the move to a light ground (#194). Secondary text is what this app
      is mostly made of — 111 `text-muted-foreground`s, and on the scheduling
      screen every section label, every unselected chip and every free slot is
      one — so its contrast is not a detail. The preset's value lands at 4.6:1 on
      white where the dark scheme's equivalent reads 8.1:1 on near-black, and the
-     screen went pale exactly in proportion. This is 7.4:1: the same standing
-     against its own ground, still clearly below `--foreground`'s 19.7. */
-  --muted-foreground: oklch(0.45 0.021 213.5);
-  --accent: oklch(0.963 0.002 197.1);
+     screen went pale exactly in proportion. This is 7.0:1 against the page: the
+     same standing as the dark one, still far below `--foreground`'s 17.8. */
+  --muted-foreground: oklch(0.44 0.021 213.5);
+  --accent: oklch(0.945 0.002 197.1);
   --accent-foreground: oklch(0.218 0.008 223.9);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.925 0.005 214.3);
-  --input: oklch(0.925 0.005 214.3);
+  /* A hairline has to hold on both grounds now — 1.35:1 on a white card and
+     1.22:1 on the page, against the dark scheme's 1.26:1. */
+  --border: oklch(0.9 0.005 214.3);
+  --input: oklch(0.9 0.005 214.3);
   --ring: oklch(0.723 0.014 214.4);
   --chart-1: oklch(0.872 0.007 219.6);
   --chart-2: oklch(0.56 0.021 213.5);
@@ -166,9 +177,9 @@
   --sidebar-foreground: oklch(0.148 0.004 228.8);
   --sidebar-primary: oklch(0.218 0.008 223.9);
   --sidebar-primary-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-accent: oklch(0.963 0.002 197.1);
+  --sidebar-accent: oklch(0.945 0.002 197.1);
   --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-  --sidebar-border: oklch(0.925 0.005 214.3);
+  --sidebar-border: oklch(0.9 0.005 214.3);
   --sidebar-ring: oklch(0.723 0.014 214.4);
 
   /* The 600s of Tailwind's own ramps: on white, a 300 is a tint, not a word. */
