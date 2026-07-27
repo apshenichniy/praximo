@@ -3,6 +3,7 @@ const requiredLocalBindings = [
   "MANAGER_BOT_TOKEN",
   "MANAGER_BOT_USERNAME",
   "TELEGRAM_ENV",
+  "CLIENT_APP_URL",
 ] as const
 
 export const canUseLocalProcessEnvironment = (

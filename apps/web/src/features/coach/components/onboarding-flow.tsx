@@ -25,6 +25,7 @@ export type OnboardingStep = "language" | "terms"
  */
 export function OnboardingFlow({
   language,
+  legalOrigin,
   onChooseLanguage,
   onAccept,
   pending,
@@ -32,6 +33,8 @@ export function OnboardingFlow({
 }: {
   /** The coach's language as the server currently has it. */
   readonly language: CoachLanguage
+  /** Where the full legal texts live — the client app's origin, from the entry. */
+  readonly legalOrigin: string
   readonly onChooseLanguage: (language: CoachLanguage) => Promise<boolean>
   readonly onAccept: () => void
   readonly pending: boolean
@@ -69,6 +72,7 @@ export function OnboardingFlow({
       <TermsScreen
         copy={copy}
         locale={language}
+        legalOrigin={legalOrigin}
         onAccept={onAccept}
         pending={pending}
         error={error}

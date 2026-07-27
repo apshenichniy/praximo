@@ -1,17 +1,23 @@
 import type { CoachLanguage } from "@praximo/domain"
-import { Link } from "@tanstack/react-router"
 
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { OnboardingProgress } from "@/features/coach/components/onboarding-progress.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
-import { LEGAL_PATHS } from "@praximo/i18n"
+import { legalUrl, type LegalDocumentName } from "@/lib/legal-url.ts"
+import { openExternalLink } from "@/lib/telegram.ts"
 
 /**
  * First login, step two: what every coach agrees to, in five lines they will
- * actually read, with the full texts one tap away on internal routes — a link
- * that ejected them into a browser mid-onboarding is one they may not come back
- * from.
+ * actually read, with the full texts one tap away.
+ *
+ * Those texts are on another host since #191 — `my.praximo.io`, the client app —
+ * so the two links are external where they used to be router links. The warning
+ * that used to sit here still stands and is now answered rather than avoided: a
+ * link that ejects a coach into the system browser mid-onboarding is one they
+ * may not come back from, so these open through `openLink`, in Telegram's own
+ * in-app browser, over a Mini App that is still running with a back arrow to it.
+ * Outside a Telegram launch the `href` does its ordinary job.
  *
  * There is no Decline: declining is closing the app, and a button that ends
  * onboarding with no way back is a trap, not a choice. There is no
@@ -20,23 +26,43 @@ import { LEGAL_PATHS } from "@praximo/i18n"
  *
  * Every word of it renders in the language settled one step earlier, and the
  * links carry that language so the full texts open in it too (#130) — including
- * for a coach who has not finished onboarding, since those routes are public and
+ * for a coach who has not finished onboarding, since those pages are public and
  * have no credential to read a member from.
  */
 export function TermsScreen({
   copy,
   locale,
+  legalOrigin,
   onAccept,
   pending,
   error,
 }: {
   readonly copy: CoachCopy
   readonly locale: CoachLanguage
+  /** The client app's origin, from the Worker's configuration — never a literal. */
+  readonly legalOrigin: string
   readonly onAccept: () => void
   readonly pending: boolean
   readonly error: string | undefined
 }) {
   const label = pending ? copy.common.working : copy.terms.accept
+
+  const legalLink = (document: LegalDocumentName, text: string) => (
+    <a
+      href={legalUrl(legalOrigin, document, locale)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary underline underline-offset-4"
+      onClick={(event) => {
+        // Inside Telegram the bridge opens it and the default navigation is
+        // exactly what must not happen — it would replace the Mini App. Outside,
+        // this reports that it did nothing and the anchor behaves like an anchor.
+        if (openExternalLink(event.currentTarget.href)) event.preventDefault()
+      }}
+    >
+      {text}
+    </a>
+  )
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-10 pb-24">
@@ -63,21 +89,9 @@ export function TermsScreen({
 
       <p className="text-muted-foreground mt-8 text-caption leading-5">
         {copy.terms.legalLead}
-        <Link
-          to={LEGAL_PATHS.terms}
-          search={{ lang: locale }}
-          className="text-primary underline underline-offset-4"
-        >
-          {copy.terms.legalTerms}
-        </Link>
+        {legalLink("terms", copy.terms.legalTerms)}
         {copy.terms.legalAnd}
-        <Link
-          to={LEGAL_PATHS.privacy}
-          search={{ lang: locale }}
-          className="text-primary underline underline-offset-4"
-        >
-          {copy.terms.legalPrivacy}
-        </Link>
+        {legalLink("privacy", copy.terms.legalPrivacy)}
         {copy.terms.legalTail}
       </p>
 

@@ -316,6 +316,7 @@ export function CoachScreen({
     return (
       <OnboardingFlow
         language={entry.entry.language}
+        legalOrigin={entry.entry.legalOrigin}
         onChooseLanguage={onChooseLanguage}
         onAccept={onAccept}
         pending={pending}

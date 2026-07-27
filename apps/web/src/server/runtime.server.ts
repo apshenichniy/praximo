@@ -39,6 +39,16 @@ interface Env {
   /** Selects Telegram's Ed25519 public key for the coach path (ADR 0006). */
   readonly TELEGRAM_ENV: string
   /**
+   * The client app's own origin — `my.praximo.io` in prod (#191). Bound from
+   * that Worker's `.url` in `alchemy.run.ts` rather than written into `.env`, so
+   * it cannot name a host the stack did not actually deploy.
+   *
+   * Required, not optional: the legal texts live there now, and a coach who
+   * cannot reach the terms cannot accept them. A stage missing it is
+   * misconfigured, and that is worth failing at boot over.
+   */
+  readonly CLIENT_APP_URL: string
+  /**
    * Local development only: the public half of the throwaway pair the dev
    * credential minter signs with. Absent everywhere else, and the branch that
    * populates it folds out of a production build.
@@ -121,6 +131,7 @@ const resolveEnv = async (): Promise<Env> => {
       MANAGER_BOT_TOKEN: requireString(process.env.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
       MANAGER_BOT_USERNAME: requireString(process.env.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
       TELEGRAM_ENV: requireString(process.env.TELEGRAM_ENV, "TELEGRAM_ENV"),
+      CLIENT_APP_URL: requireString(process.env.CLIENT_APP_URL, "CLIENT_APP_URL"),
       // The guard is a bare `import.meta.env.DEV`, not the binding-source check
       // above it: only a foldable constant lets Vite drop the dynamic import and
       // with it every line of the development credential minter. A call whose
@@ -142,6 +153,7 @@ const resolveEnv = async (): Promise<Env> => {
     MANAGER_BOT_TOKEN: requireString(workerEnv.MANAGER_BOT_TOKEN, "MANAGER_BOT_TOKEN"),
     MANAGER_BOT_USERNAME: requireString(workerEnv.MANAGER_BOT_USERNAME, "MANAGER_BOT_USERNAME"),
     TELEGRAM_ENV: requireString(workerEnv.TELEGRAM_ENV, "TELEGRAM_ENV"),
+    CLIENT_APP_URL: requireString(workerEnv.CLIENT_APP_URL, "CLIENT_APP_URL"),
     ...(workerEnv.MANAGER_BOT === undefined
       ? {}
       : { MANAGER_BOT: workerEnv.MANAGER_BOT as BotWorkerBinding }),
@@ -150,6 +162,14 @@ const resolveEnv = async (): Promise<Env> => {
       : { PIPELINE: workerEnv.PIPELINE as WorkspaceRunCancellationRpcClient }),
   }
 }
+
+/**
+ * The client app's origin, for the two callers that need it without needing the
+ * whole Effect runtime — the `/legal/*` redirects. Resolved through the same
+ * `resolveEnv` as everything else, so local development and a deployed Worker
+ * read it from the same place.
+ */
+export const clientAppUrl = async (): Promise<string> => (await resolveEnv()).CLIENT_APP_URL
 
 let runtimePromise: Promise<ReturnType<typeof runtimeFromEnv>> | undefined
 

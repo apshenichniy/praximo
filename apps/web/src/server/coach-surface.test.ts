@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { CoachInitData, CoachOnboardingToken } from "@praximo/auth"
 import { MemberRepo } from "@praximo/db"
 import { type CoachLanguage, WorkspaceId } from "@praximo/domain"
-import { Effect, Layer } from "effect"
+import { ConfigProvider, Effect, Layer } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { launchFor, TEST_PUBLIC_KEY } from "@/__tests__/coach-launch.ts"
 import { TERMS_VERSION } from "@praximo/i18n"
@@ -14,6 +14,7 @@ const BOT_ID = "9100777"
 const OTHER_BOT_ID = "9100778"
 const MEMBER_ID = "mem_ada"
 const MANAGER_BOT_USERNAME = "PraximoMotherDevBot"
+const CLIENT_APP_URL = "https://my.praximo.io"
 const AUTH_DATE = Date.parse("2026-07-23T12:00:00.000Z")
 const NOW = AUTH_DATE + 60_000
 
@@ -95,6 +96,10 @@ const run = <A, E>(
             CoachSession.layer.pipe(
               Layer.provide(Layer.mergeAll(CoachInitData.testLayer(TEST_PUBLIC_KEY), members)),
             ),
+            // The surface reads the client app's origin from configuration, the
+            // way the deployed Worker does — the legal texts are on another host
+            // and the terms screen has to be able to say where.
+            ConfigProvider.layer(ConfigProvider.fromUnknown({ CLIENT_APP_URL })),
           ),
         ),
       ),
@@ -146,6 +151,9 @@ describe("CoachSurface", () => {
         expect(yield* service.openApp(launch)).toEqual({
           kind: "terms-required",
           termsVersion: TERMS_VERSION,
+          // Where the full texts are. They left this app in #191, so the screen
+          // cannot link to them without being told the host.
+          legalOrigin: CLIENT_APP_URL,
           language: "en",
         })
 
@@ -186,6 +194,7 @@ describe("CoachSurface", () => {
         expect(yield* service.chooseLanguage(launch, "uk")).toEqual({
           kind: "terms-required",
           termsVersion: TERMS_VERSION,
+          legalOrigin: CLIENT_APP_URL,
           language: "uk",
         })
         expect(recorded.languages).toEqual(["uk"])

@@ -144,6 +144,6 @@ describe("the screens that carried the placeholder letter", () => {
     // every coach's workspace is Praximo's (#173).
     expect(html).toContain("AS")
     expect(html).not.toContain("<svg")
-    expect(src("styles/app.css")).toContain("@utility admin-avatar")
+    expect(src("styles/app.css")).toContain("@utility brand-disc")
   })
 })

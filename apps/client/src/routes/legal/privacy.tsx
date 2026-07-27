@@ -1,19 +1,22 @@
+import { PRIVACY_VERSION, privacyPolicyFor } from "@praximo/i18n"
 import { createFileRoute } from "@tanstack/react-router"
 
-import { MiniAppShell } from "@/components/mini-app-shell.tsx"
-import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
-import { PRIVACY_VERSION, privacyPolicyFor } from "@praximo/i18n"
+import { ClientShell } from "@/components/client-shell.tsx"
 import { LegalPage } from "@/features/legal/components/legal-page.tsx"
-import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { validateLegalSearch } from "@/features/legal/legal-search.ts"
 
 /**
  * The privacy policy. Public and credential-free — the client who reads it from
  * the consent page has no account by design, and the coach who reaches it from
  * the terms screen has not accepted anything yet.
+ *
+ * Server-rendered, unlike the copy this replaced in `apps/web` (#191). That one
+ * was `ssr: false` because it lived in an app whose every route waits for a
+ * Telegram credential that arrives after load. Nothing here waits for anything:
+ * the text is a constant and the language is in the URL, so the reader should be
+ * handed the finished document rather than a blank page and a bundle.
  */
 export const Route = createFileRoute("/legal/privacy")({
-  ssr: false,
   validateSearch: validateLegalSearch,
   component: PrivacyPage,
 })
@@ -21,9 +24,8 @@ export const Route = createFileRoute("/legal/privacy")({
 function PrivacyPage() {
   const { lang } = Route.useSearch()
   return (
-    <MiniAppShell>
-      <TelegramBackButton label={coachCopy(lang).common.back} />
+    <ClientShell locale={lang}>
       <LegalPage document={privacyPolicyFor(lang)} version={PRIVACY_VERSION} locale={lang} />
-    </MiniAppShell>
+    </ClientShell>
   )
 }

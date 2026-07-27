@@ -8,11 +8,23 @@
    costs ~35 KB more across the two subsets we serve, once, cached. */
 @import "@fontsource-variable/inter/opsz.css";
 
-/* Global shadcn preset b7ClRmv9U: base-luma / mist / Inter / Hugeicons.
-   Both of the preset's grounds are here, the way shadcn ships them: light on
-   `:root`, dark as a class override. Which one is on is not this file's
-   decision — the Telegram client's scheme is, and `lib/theme.ts` puts the class
-   on <html> before the first paint (#190). */
+/* One design system, two apps (#198, #191).
+   base-luma / mist / Inter / Hugeicons, in the Iris set.
+
+   This file is the **same** system `apps/web` carries, not a fresh preset: the
+   token blocks below are written into both apps by
+   `docs/spec/design-system/apply.py`, and `__tests__/design-system-parity.test.ts`
+   holds them identical. Edit them there, never here.
+
+   What differs from the Mini App's copy is only what belongs to a phone webview
+   the coach lives in: the day strip's scroll-driven edges are not here, because
+   there is no day strip. Everything a stranger's browser needs — both grounds,
+   the type scale, the motion tokens, the control treatment — is shared.
+
+   Which ground is on is not this file's decision. In the Mini App the Telegram
+   client decides; here the reader does, through a preference in `localStorage`
+   falling back to `prefers-color-scheme`, applied by `lib/theme.ts` before the
+   first paint. */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -302,35 +314,6 @@
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation: none;
-  }
-}
-
-/* The day strip's edges (#186).
-   A day fades as it reaches either end of the scroller, so the strip reads as
-   something continuous the thumb is moving through rather than a row that stops.
-   Driven by the scroll itself, not by a timer, which is why it survives a flick
-   being interrupted mid-way. Opacity only: the buttons keep `transform` for
-   their press feedback, and an animation would otherwise win over it. Purely a
-   progressive enhancement — without scroll timelines the strip is simply flat. */
-@keyframes strip-edge {
-  0% {
-    opacity: 0.3;
-  }
-  14%,
-  86% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.3;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  @supports (animation-timeline: view(inline)) {
-    [data-strip-day] {
-      animation: strip-edge linear both;
-      animation-timeline: view(inline);
-    }
   }
 }
 

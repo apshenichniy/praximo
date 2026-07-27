@@ -53,6 +53,14 @@ export interface TelegramWebApp {
   shareMessage: (preparedMessageId: string, callback?: (sent: boolean) => void) => void
   /** Opens a `t.me` link inside Telegram without closing the Mini App. */
   openTelegramLink: (url: string) => void
+  /**
+   * Opens an external `https` link in Telegram's own in-app browser, which keeps
+   * a back arrow to the Mini App (Bot API 6.1 for the options argument; the bare
+   * call is older). `try_instant_view` is deliberately not passed — a legal text
+   * read through a reader view is not the document we are asking somebody to
+   * agree to.
+   */
+  openLink: (url: string, options?: { readonly try_instant_view?: boolean }) => void
   readonly BackButton: TelegramBackButton
   readonly MainButton: TelegramMainButton
   /**
@@ -138,6 +146,44 @@ export const openTelegramLink = async (link: string): Promise<void> => {
     return
   }
   webApp.openTelegramLink(link)
+}
+
+/**
+ * Open an external page without stranding the coach outside the app (#191).
+ *
+ * The legal texts moved to `my.praximo.io`, and a link out of a Mini App is the
+ * thing `terms-screen.tsx` has always warned about: a coach ejected into the
+ * system browser mid-onboarding is a coach who may not come back. `openLink`
+ * answers exactly that — Telegram's own in-app browser opens over the Mini App,
+ * with a back arrow that returns to it, and the app is still running underneath.
+ *
+ * Outside a Telegram host (a browser, local development) there is no bridge and
+ * no problem to solve: the caller's own `href` handles it, which is why this
+ * reports whether it took the link rather than opening a window itself. A page
+ * that is already a page does not need to be re-opened.
+ */
+export const openExternalLink = (link: string): boolean => {
+  if (typeof window === "undefined") return false
+  // Read from the global synchronously rather than through
+  // `loadTelegramWebApp`, for the reason `features/mini-app/haptics.ts` gives:
+  // this is called from a click handler, and a decision that arrives a promise
+  // later has already lost the event it was deciding about. By the time anything
+  // on a screen can be tapped, the host script in `<head>` has long since run.
+  const webApp = window.Telegram?.WebApp
+  // Its presence is not enough — the SDK script is on every page. A signed
+  // `initData` is what separates a real launch from a plain visit, the same test
+  // `TelegramTheme` and `TelegramMainButton` make.
+  if (webApp === undefined || !readTelegramInitData(webApp)) return false
+
+  try {
+    webApp.openLink(link)
+    return true
+  } catch {
+    // A host too old for `openLink` throws. Reporting the failure lets the
+    // anchor navigate, which is worse than an in-app browser and much better
+    // than a link that does nothing.
+    return false
+  }
 }
 
 export const attachBackButton = (webApp: TelegramWebApp, onBack: () => void): (() => void) => {

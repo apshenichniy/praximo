@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils.ts"
  * Size is set by the caller via className (`size-11` in list rows, `size-24`
  * in page headers).
  *
- * The ink is stated here even though `admin-avatar` already carries it. That
+ * The ink is stated here even though `brand-disc` already carries it. That
  * utility hides `text-white` behind `@apply`, so tailwind-merge cannot see a
  * colour in it and leaves the fallback's own `text-muted-foreground` standing —
  * which then wins in the cascade and prints the initials grey on the violet
@@ -29,7 +29,7 @@ export function WorkspaceAvatar({
   return (
     <Avatar className={cn("size-11", className)}>
       <AvatarFallback
-        className={cn("admin-avatar text-body font-semibold text-white", fallbackClassName)}
+        className={cn("brand-disc text-body font-semibold text-white", fallbackClassName)}
       >
         {initials(name) || "?"}
       </AvatarFallback>

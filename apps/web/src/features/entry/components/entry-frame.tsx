@@ -21,7 +21,7 @@ export const entryMarkClass = (tone: "brand" | "muted"): string =>
   cn(
     "flex size-20 items-center justify-center rounded-full ring-1",
     tone === "brand"
-      ? "admin-avatar shadow-primary/20 ring-primary/25 shadow-2xl"
+      ? "brand-disc shadow-primary/20 ring-primary/25 shadow-2xl"
       : "bg-card ring-border text-muted-foreground",
   )
 
