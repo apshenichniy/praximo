@@ -3,10 +3,13 @@ import { Link } from "@tanstack/react-router"
 import { useMemo } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
+import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
+import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
 import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import { groupByDay, sessionClock } from "@/features/coach/session-days.ts"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
+import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
 import { Section } from "@/features/mini-app/components/section.tsx"
 import type { CoachSessions } from "@/server/coach-sessions.ts"
 
@@ -26,12 +29,15 @@ export function SessionsScreen({
   language,
   upcoming,
   now,
+  onCreate,
 }: {
   readonly copy: CoachCopy
   readonly language: CoachLanguage
   readonly upcoming: CoachSessions.UpcomingSessions
   /** Passed in rather than read here, so the grouping is testable at an instant. */
   readonly now: Date
+  /** Opens the client picker — a session is always somebody's. */
+  readonly onCreate: () => void
 }) {
   const clock = useMemo(
     () => sessionClock(language, upcoming.timezone),
@@ -49,7 +55,7 @@ export function SessionsScreen({
   )
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
+    <main className="mx-auto w-full max-w-md px-5 pt-14 pb-28">
       <TelegramBackButton label={copy.common.back} />
 
       <h1 className="mt-2 text-title font-semibold tracking-tight">{copy.sessions.listTitle}</h1>
@@ -98,6 +104,31 @@ export function SessionsScreen({
           </Section>
         ))
       )}
+
+      {/*
+        The screen's own action, in the host's fixed place (#198). Today already
+        offers it, but a coach who has drilled into the full list is exactly the
+        one about to add to it, and until now this screen was the only read-only
+        one in the flow.
+
+        It opens the picker rather than the scheduling screen, because a session
+        is always somebody's. Today swaps this label to `New client` on an empty
+        practice, to avoid a picker with nothing in it; here the picker is the
+        one that knows — with no clients it says so and offers to create one, so
+        the button leads somewhere either way rather than needing a second read
+        of the roster on this route.
+      */}
+      <TelegramMainButton
+        text={copy.today.newSession}
+        onClick={onCreate}
+        fallback={
+          <ActionBar>
+            <Button className="w-full" onClick={onCreate}>
+              {copy.today.newSession}
+            </Button>
+          </ActionBar>
+        }
+      />
     </main>
   )
 }

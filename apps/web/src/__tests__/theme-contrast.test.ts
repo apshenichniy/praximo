@@ -119,6 +119,32 @@ describe("scheme contrast parity", () => {
   })
 
   /**
+   * A control has to look like a control (#198).
+   *
+   * This is the assertion that was missing, and its absence is how the whole
+   * issue happened: the file already checked running text, secondary text, the
+   * surface steps, the hairline and the press, and nothing at all about the
+   * resting state of something a thumb chooses. So the scheduling screen's
+   * slots, chips and days ended up drawn with no fill and a `--border` hairline
+   * at 1.22:1 against the page, and every number this file did check was green.
+   *
+   * Two mechanisms, because a variant may lean on either: a control can sit off
+   * the page by its fill or be outlined by its edge. Both floors are low — the
+   * point is that neither is *absent*, which is the state that shipped.
+   */
+  it("keeps a control legible as a control, at rest", () => {
+    for (const scheme of ["light", "dark"] as const) {
+      // Some fill step off the page, however slight.
+      expect(ratio(scheme, "secondary", "background")).toBeGreaterThan(1.08)
+      // An edge that reads against the page…
+      expect(ratio(scheme, "control-border", "background")).toBeGreaterThan(1.4)
+      // …and against the control's own fill, which is the harder of the two once
+      // the fill is raised towards the card.
+      expect(ratio(scheme, "control-border", "secondary")).toBeGreaterThan(1.25)
+    }
+  })
+
+  /**
    * Light only: the dark scheme authors `--border` as white at 10%, and this
    * reader takes opaque oklch. Light is where the hairline has two grounds to
    * hold on — a white card and a page that is no longer white — so it is the
@@ -145,7 +171,15 @@ describe("scheme contrast parity", () => {
       // Visible against the surface it is pressed on…
       expect(contrastOf(pressedOnCard, card)).toBeGreaterThan(1.15)
       // …and not mistakable for the ground the card sits on.
-      expect(contrastOf(pressedOnCard, page)).toBeGreaterThan(1.1)
+      //
+      // Relaxed from 1.1 in #198. The defect this guards was a pressed row
+      // landing on the page's *own* colour — 1.01:1, a hole cut through the
+      // card — and anything past about 1.04 is already not that. The higher
+      // floor had a cost: with the page lightened it forced the wash to 11%
+      // black, and a full-width row at that weight reads as a second surface
+      // rather than as the moment somebody's thumb is down. The card is where
+      // the press has to be legible, and that is the assertion above.
+      expect(contrastOf(pressedOnCard, page)).toBeGreaterThan(1.04)
     }
   })
 })

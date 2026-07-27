@@ -22,3 +22,7 @@ deploy/livekit/runtime/
 .wrangler/
 .alchemy/
 *.tsbuildinfo
+
+# Python bytecode from the design-token generator
+__pycache__/
+*.pyc

@@ -20,7 +20,10 @@ const sourceDir = fileURLToPath(new URL("..", import.meta.url))
  * this is what makes that arrive as a red test rather than as a paragraph that
  * looks a little off.
  */
-const scale = ["caption", "footnote", "body", "emphasis", "heading", "title", "display"] as const
+const scale = ["caption", "body", "emphasis", "heading", "title", "display"] as const
+
+/** Retired in #198, when `caption` moved to 13 and swallowed it. */
+const merged = /\btext-footnote\b/g
 
 /** Tailwind's own font-size utilities, which no longer exist here. */
 const retired = /\btext-(xs|sm|base|lg|xl|[2-9]xl)\b/g
@@ -48,7 +51,11 @@ describe("type scale", () => {
     const sources = await Promise.all(files.map((file) => readFile(file, "utf8")))
     const found = files.flatMap((file, index) => {
       const source = sources[index] ?? ""
-      const classes = [...offences(source, retired), ...offences(source, arbitrary)]
+      const classes = [
+        ...offences(source, retired),
+        ...offences(source, arbitrary),
+        ...offences(source, merged),
+      ]
       return classes.length === 0 ? [] : [[path.relative(sourceDir, file), classes] as const]
     })
 

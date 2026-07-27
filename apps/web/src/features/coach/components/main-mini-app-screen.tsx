@@ -44,10 +44,13 @@ export function MainMiniAppScreen({
       <ol className="mt-6 flex flex-col gap-3">
         {copy.home.mainMiniAppSteps.map((step, index) => (
           <li key={step} className="flex items-start gap-3">
-            <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-caption font-semibold tabular-nums">
+            <span className="border-border text-muted-foreground mt-px flex size-6 shrink-0 items-center justify-center rounded-full border text-caption font-semibold tabular-nums">
               {index + 1}
             </span>
-            <span className="text-footnote leading-5">{step}</span>
+            {/* The steps are what this screen is; the paragraph under them only
+                explains what following them gets you. They were the smaller of
+                the two, which is the hierarchy upside down (#198). */}
+            <span className="text-body">{step}</span>
           </li>
         ))}
       </ol>
@@ -61,13 +64,27 @@ export function MainMiniAppScreen({
       <p className="text-muted-foreground mt-8 px-1 text-caption font-semibold tracking-wide uppercase">
         {copy.home.mainMiniAppUrlLabel}
       </p>
-      <p className="border-border/60 bg-card text-foreground mt-2 overflow-x-auto rounded-xl border px-3 py-2 font-mono text-caption break-all">
+      {/* A value the reader has to transcribe is never a caption (#198). This is
+          the one thing on the screen that gets read character by character and
+          pasted into another app, and a wrong character produces a Mini App that
+          opens nothing. Monospace also reads smaller than proportional type at
+          the same nominal size, so 13px here was two steps down, not one. */}
+      <p className="border-border bg-card text-foreground mt-2 overflow-x-auto rounded-xl border px-3.5 py-2.5 font-mono text-body break-all">
         {mainMiniAppUrl}
       </p>
 
+      {/* Outline, not ghost (#198). A ghost button has no fill and no edge, and
+          its only resting mark is a `hover:` that does not exist on a phone — so
+          this read as a grey paragraph that happened to respond to a tap. The
+          same defect as the slots, in a variant rather than at a call site.
+
+          Ghost is still right where something else already marks the control: an
+          icon button inside a field, a day inside the calendar's grid, or the
+          quiet destructive action under a big Cancel, which #197 made quiet on
+          purpose. Standing alone on a page it marks nothing. */}
       <Button
-        variant="ghost"
-        className="text-muted-foreground mt-8 -ml-2"
+        variant="outline"
+        className="text-muted-foreground mt-8"
         disabled={hidden}
         onClick={() => {
           // Optimistic on purpose: this is a preference, and a coach who put a

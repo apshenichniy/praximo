@@ -48,7 +48,12 @@ export function ClientList({
    * Absent on the clients list, where it opens the client's own route.
    */
   readonly onPick?: (clientId: string) => void
-  readonly newClientPosition?: "first" | "last"
+  /**
+   * `"none"` on the clients route, where creating is the host's bottom button
+   * rather than a row that scrolls away (#198). The picker keeps `"last"`: there
+   * the action is choosing somebody, and creating is the escape hatch.
+   */
+  readonly newClientPosition?: "first" | "last" | "none"
 }) {
   const newClient = (
     <li key="new-client">
@@ -56,7 +61,7 @@ export function ClientList({
         to="/clients/new"
         className="pressable-row flex min-h-16 items-center gap-4 px-5 py-3 text-left"
       >
-        <span className="bg-primary/15 text-primary flex size-10 shrink-0 items-center justify-center rounded-full">
+        <span className="bg-brand-surface text-brand flex size-10 shrink-0 items-center justify-center rounded-full">
           <HugeiconsIcon icon={UserAdd01Icon} size={18} strokeWidth={2} />
         </span>
         <span className="text-primary text-body font-semibold">{copy.newClient}</span>
@@ -84,7 +89,11 @@ export function ClientList({
   return (
     <Card className="mt-4 gap-0 overflow-hidden py-0">
       <ul className="divide-border divide-y">
-        {newClientPosition === "first" ? [newClient, ...rows] : [...rows, newClient]}
+        {newClientPosition === "none"
+          ? rows
+          : newClientPosition === "first"
+            ? [newClient, ...rows]
+            : [...rows, newClient]}
       </ul>
     </Card>
   )

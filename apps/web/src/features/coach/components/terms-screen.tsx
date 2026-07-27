@@ -61,7 +61,7 @@ export function TermsScreen({
         ))}
       </ul>
 
-      <p className="text-muted-foreground mt-8 text-footnote leading-5">
+      <p className="text-muted-foreground mt-8 text-caption leading-5">
         {copy.terms.legalLead}
         <Link
           to={LEGAL_PATHS.terms}

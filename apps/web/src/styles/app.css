@@ -37,25 +37,28 @@
 }
 
 @theme {
-  /* Type scale (#186). Seven steps, named for the job rather than for a size,
-     and Tailwind's own scale is switched off so there is exactly one of them —
-     see docs/spec/mini-app.md §Typography.
+  /* Type scale (#186, narrowed in #198). Six steps, named for the job rather
+     than for a size, and Tailwind's own scale is switched off so there is
+     exactly one of them — see docs/spec/mini-app.md §Typography.
 
-     The floor is 12px because the app had crowded eight sizes into the seven
-     pixels between 10 and 17, and the smallest of them was below the 11pt that
-     is Apple's own smallest style. The sizes were then set against Nunito Sans,
-     which had neither the x-height nor the optical sizing SF Pro brings to that
-     kegel; Inter has both (#194), so the floor now has headroom it did not have
-     — retuning the steps down is a separate decision, not a side effect.
+     Seven until #198, where the bottom two turned out to be one: `caption` at 12
+     and `footnote` at 13 are not a step anybody can see, but they were a decision
+     every call site had to take. That is the same disease #186 diagnosed — eight
+     sizes crowded into the seven pixels between 10 and 17 — left half-treated.
+     So the floor is now 13 and `footnote` is gone; the bottom of the scale reads
+     13 → 15 → 17, in real 2px steps.
 
-     Body is 15 rather than 14 for the same reason, and the line heights are
-     stated here so a screen does not have to remember them. */
+     Raising the floor rather than scaling everything: 15 is still the body, and
+     moving it is #186's widest-reach decision, taken on its own or not at all.
+     Worth knowing while reading this: the whole scale sits one step below the
+     platform's (iOS Body is 17, Footnote 13), which is the conversation to have
+     if 13 still reads small on a phone.
+
+     The line heights are stated here so a screen does not have to remember them. */
   --text-*: initial;
 
-  --text-caption: 0.75rem; /* 12px — labels, counts, state words */
-  --text-caption--line-height: 1rem;
-  --text-footnote: 0.8125rem; /* 13px — descriptions and leads */
-  --text-footnote--line-height: 1.125rem;
+  --text-caption: 0.8125rem; /* 13px — labels, counts, state words, descriptions */
+  --text-caption--line-height: 1.125rem;
   --text-body: 0.9375rem; /* 15px — running text, buttons, slots */
   --text-body--line-height: 1.3125rem;
   --text-emphasis: 1.0625rem; /* 17px — card titles, the line that matters */
@@ -112,6 +115,28 @@
   --color-warning: var(--warning);
   --color-info: var(--info);
   --color-pressed: var(--pressed);
+  /* A tinted surface per status, so a state that needs a ground has a token
+     instead of an alpha guessed at the call site — the app had accumulated
+     twenty-two of those, six of them for this one job (#198). */
+  --color-success-surface: var(--success-surface);
+  --color-warning-surface: var(--warning-surface);
+  --color-info-surface: var(--info-surface);
+  --color-destructive-surface: var(--destructive-surface);
+  /* The edge that makes a control read as a control (#198). Separate from
+     `--border`, which is a divider between things rather than the outline of
+     one, and stronger: the hairline that was carrying every slot, chip and day
+     on its own sat at 1.22:1 against the page, and this sits at 1.56:1. It
+     applies even when the control has a fill — a control whose fill matches the
+     surface under it is exactly the failure this issue started from. */
+  --color-control-border: var(--control-border);
+  /* The mark's violet. `--primary` carries the same value while the brand is in
+     the primary role, but the two are separate tokens because the roles are: one
+     is "the main action", the other is "this product". A set that moves the
+     brand to a tint moves this and leaves `--primary` as ink. */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-border: var(--brand-border);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -137,113 +162,127 @@
 
 :root {
   color-scheme: light;
-  /* Three surfaces, not one (#195).
-     The preset's light ground made page, card and popover all `oklch(1 0 0)` —
-     one colour where the dark scheme has three steps — so nothing elevated had
-     anything to be elevated *against*: a bottom sheet was white on white, and a
-     card carried its whole existence on a shadow. Here the page recedes and the
-     raised surfaces keep the white, which is the direction light interfaces run
-     in (and what iOS does with grouped lists). The steps are sized to the dark
-     scheme's own: page→card 1.11 there against 1.14 here, card→muted 1.17 in
-     both. */
-  --background: oklch(0.965 0.002 197.1);
-  --foreground: oklch(0.148 0.004 228.8);
+
+  /* Surfaces — the grounds content sits on. Never the fill of a control. */
+  --background: oklch(0.964 0.005 285);
+  --foreground: oklch(0.1785 0.0168 285);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.148 0.004 228.8);
+  --card-foreground: oklch(0.1785 0.0168 285);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.148 0.004 228.8);
-  --primary: oklch(0.218 0.008 223.9);
-  --primary-foreground: oklch(0.987 0.002 197.1);
-  --secondary: oklch(0.945 0.002 197.1);
-  --secondary-foreground: oklch(0.218 0.008 223.9);
-  --muted: oklch(0.945 0.002 197.1);
-  /* Darker than the preset's own 0.56, which was the one token that did not
-     survive the move to a light ground (#194). Secondary text is what this app
-     is mostly made of — 111 `text-muted-foreground`s, and on the scheduling
-     screen every section label, every unselected chip and every free slot is
-     one — so its contrast is not a detail. The preset's value lands at 4.6:1 on
-     white where the dark scheme's equivalent reads 8.1:1 on near-black, and the
-     screen went pale exactly in proportion. This is 7.0:1 against the page: the
-     same standing as the dark one, still far below `--foreground`'s 17.8. */
-  --muted-foreground: oklch(0.44 0.021 213.5);
-  --accent: oklch(0.945 0.002 197.1);
-  --accent-foreground: oklch(0.218 0.008 223.9);
-  --destructive: oklch(0.577 0.245 27.325);
-  /* A hairline has to hold on both grounds now — 1.35:1 on a white card and
-     1.22:1 on the page, against the dark scheme's 1.26:1. */
-  --border: oklch(0.9 0.005 214.3);
-  --input: oklch(0.9 0.005 214.3);
-  --ring: oklch(0.723 0.014 214.4);
-  --chart-1: oklch(0.872 0.007 219.6);
-  --chart-2: oklch(0.56 0.021 213.5);
-  --chart-3: oklch(0.45 0.017 213.2);
-  --chart-4: oklch(0.378 0.015 216);
-  --chart-5: oklch(0.275 0.011 216.9);
+  --popover-foreground: oklch(0.1785 0.0168 285);
+  --muted: oklch(0.936 0.011 285);
+  --muted-foreground: oklch(0.441 0.024 285);
+
+  /* Controls — the things a thumb chooses. `--control-border` is what makes a
+     control read as one, and it applies even when the control has a fill. */
+  --primary: oklch(0.565 0.2828 299);
+  --primary-foreground: oklch(0.992 0.003 285);
+  --secondary: oklch(1 0.0007 285);
+  --secondary-foreground: oklch(0.1785 0.0168 285);
+  --control-border: oklch(0.8199 0.0144 285);
+  --accent: oklch(0.9616 0.012 285);
+  --accent-foreground: oklch(0.1785 0.0168 285);
+  --border: oklch(0.8987 0.0096 285);
+  --input: oklch(0.8987 0.0096 285);
+  --ring: oklch(0.565 0.2828 299);
+
+  /* Brand — the mark's violet. `--primary` carries it in this set, so the two
+     are the same value; they are still separate tokens because the role is. */
+  --brand: oklch(0.565 0.2828 299);
+  --brand-foreground: oklch(0.992 0.003 285);
+  --brand-surface: oklch(0.952 0.0273 299);
+  --brand-border: oklch(0.8397 0.0935 299);
+
+  /* Status — meaning, never hue. Each carries a surface so a tinted state has
+     a token instead of an improvised alpha. */
+  --destructive: oklch(0.5644 0.22 27);
+  --destructive-surface: oklch(0.967 0.017 27);
+  --success: oklch(0.523 0.127 156);
+  --success-surface: oklch(0.964 0.02032 156);
+  --warning: oklch(0.5464 0.1259 62);
+  --warning-surface: oklch(0.967 0.02014 62);
+  --info: oklch(0.5379 0.15 250);
+  --info-surface: oklch(0.964 0.0185 250);
+
+  /* State — a press is ink, so it darkens whatever surface it lands on. */
+  --pressed: oklch(0 0 0 / 8%);
+
+  --chart-1: oklch(0.872 0.01 285);
+  --chart-2: oklch(0.56 0.03 285);
+  --chart-3: oklch(0.45 0.024 285);
+  --chart-4: oklch(0.378 0.02 285);
+  --chart-5: oklch(0.275 0.016 285);
   --radius: 0.625rem;
-  --sidebar: oklch(0.987 0.002 197.1);
-  --sidebar-foreground: oklch(0.148 0.004 228.8);
-  --sidebar-primary: oklch(0.218 0.008 223.9);
-  --sidebar-primary-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-accent: oklch(0.945 0.002 197.1);
-  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-  --sidebar-border: oklch(0.9 0.005 214.3);
-  --sidebar-ring: oklch(0.723 0.014 214.4);
-
-  /* The 600s of Tailwind's own ramps: on white, a 300 is a tint, not a word. */
-  --success: oklch(0.596 0.145 163.225);
-  --warning: oklch(0.666 0.179 58.318);
-  --info: oklch(0.588 0.158 241.966);
-
-  /* A press is a state, not a surface (#196), so it is ink rather than a
-     colour: it darkens whatever it is pressed on and therefore reads the same
-     on a white card, on the page, and inside a sheet. An opaque token cannot —
-     `bg-accent/70` was tuned against a white page and came to rest on the
-     page's own colour the moment the page receded. Both schemes land at
-     1.25:1 against the surface under them. */
-  --pressed: oklch(0 0 0 / 10%);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #101018;
+  --sidebar-primary: #9324ff;
+  --sidebar-primary-foreground: #fcfcfe;
+  --sidebar-accent: #f1f1fa;
+  --sidebar-accent-foreground: #101018;
+  --sidebar-border: #dddde4;
+  --sidebar-ring: #9324ff;
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.148 0.004 228.8);
-  --foreground: oklch(0.987 0.002 197.1);
-  --card: oklch(0.218 0.008 223.9);
-  --card-foreground: oklch(0.987 0.002 197.1);
-  --popover: oklch(0.218 0.008 223.9);
-  --popover-foreground: oklch(0.987 0.002 197.1);
-  --primary: oklch(0.925 0.005 214.3);
-  --primary-foreground: oklch(0.218 0.008 223.9);
-  --secondary: oklch(0.275 0.011 216.9);
-  --secondary-foreground: oklch(0.987 0.002 197.1);
-  --muted: oklch(0.275 0.011 216.9);
-  --muted-foreground: oklch(0.723 0.014 214.4);
-  --accent: oklch(0.275 0.011 216.9);
-  --accent-foreground: oklch(0.987 0.002 197.1);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.56 0.021 213.5);
-  --chart-1: oklch(0.872 0.007 219.6);
-  --chart-2: oklch(0.56 0.021 213.5);
-  --chart-3: oklch(0.45 0.017 213.2);
-  --chart-4: oklch(0.378 0.015 216);
-  --chart-5: oklch(0.275 0.011 216.9);
-  --sidebar: oklch(0.218 0.008 223.9);
-  --sidebar-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-accent: oklch(0.275 0.011 216.9);
-  --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.56 0.021 213.5);
 
-  /* The 300s: on this ground a 600 is a smudge. */
-  --success: oklch(0.845 0.143 164.978);
-  --warning: oklch(0.879 0.169 91.605);
-  --info: oklch(0.828 0.111 230.318);
+  /* Surfaces — the grounds content sits on. Never the fill of a control. */
+  --background: oklch(0.148 0.0132 285);
+  --foreground: oklch(0.9608 0.005 285);
+  --card: oklch(0.214 0.018 285);
+  --card-foreground: oklch(0.9608 0.005 285);
+  --popover: oklch(0.214 0.018 285);
+  --popover-foreground: oklch(0.9608 0.005 285);
+  --muted: oklch(0.276 0.024 285);
+  --muted-foreground: oklch(0.7192 0.024 285);
 
-  /* The same press, in the only ink a dark ground takes. */
-  --pressed: oklch(1 0 0 / 8%);
+  /* Controls — the things a thumb chooses. `--control-border` is what makes a
+     control read as one, and it applies even when the control has a fill. */
+  --primary: oklch(0.7175 0.1728 299);
+  --primary-foreground: oklch(0.178 0.024 285);
+  --secondary: oklch(0.266 0.0204 285);
+  --secondary-foreground: oklch(0.9608 0.005 285);
+  --control-border: oklch(0.414 0.0336 285);
+  --accent: oklch(0.314 0.0288 285);
+  --accent-foreground: oklch(0.9608 0.005 285);
+  --border: oklch(0.2944 0.024 285);
+  --input: oklch(0.2944 0.024 285);
+  --ring: oklch(0.7175 0.1728 299);
+
+  /* Brand — the mark's violet. `--primary` carries it in this set, so the two
+     are the same value; they are still separate tokens because the role is. */
+  --brand: oklch(0.7175 0.1728 299);
+  --brand-foreground: oklch(0.178 0.024 285);
+  --brand-surface: oklch(0.283 0.05184 299);
+  --brand-border: oklch(0.3897 0.1176 299);
+
+  /* Status — meaning, never hue. Each carries a surface so a tinted state has
+     a token instead of an improvised alpha. */
+  --destructive: oklch(0.741 0.1587 22);
+  --destructive-surface: oklch(0.283 0.04761 22);
+  --success: oklch(0.7035 0.15 160);
+  --success-surface: oklch(0.283 0.045 160);
+  --warning: oklch(0.7255 0.1496 82);
+  --warning-surface: oklch(0.283 0.04488 82);
+  --info: oklch(0.7185 0.15 245);
+  --info-surface: oklch(0.283 0.045 245);
+
+  /* State — a press is ink, so it darkens whatever surface it lands on. */
+  --pressed: oklch(1 0 0 / 7%);
+
+  --chart-1: oklch(0.872 0.01 285);
+  --chart-2: oklch(0.56 0.03 285);
+  --chart-3: oklch(0.45 0.024 285);
+  --chart-4: oklch(0.378 0.02 285);
+  --chart-5: oklch(0.275 0.016 285);
+  --sidebar: #181821;
+  --sidebar-foreground: #f1f2f5;
+  --sidebar-primary: #b488ff;
+  --sidebar-primary-foreground: #10101b;
+  --sidebar-accent: #302f40;
+  --sidebar-accent-foreground: #f1f2f5;
+  --sidebar-border: #2b2b38;
+  --sidebar-ring: #b488ff;
 }
 
 /* Screens replacing one another (§Motion). The browser's own crossfade, given
@@ -297,6 +336,20 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* The registry's own iOS advice, which this app never had (#198): a backdrop
+       needs `body` to be a containing block so it covers the visual viewport
+       after the page has been scrolled.
+
+       The drawer's backdrop is `fixed` here, so this changes nothing today. It is
+       stated because the component shipped with a supports-variant keyed on the
+       iOS-only touch-callout property that made the backdrop absolute, and that
+       assumed this rule — without it, `inset-0` resolved against the initial
+       containing block, and
+       the scrim landed on the top of the *document*: on a scrolled page it dimmed
+       a band across the upper screen and left the rest bright under an open
+       sheet. A CLI re-pull would bring that branch back, and this is what makes
+       it harmless when it does. */
+    position: relative;
   }
   html {
     @apply font-sans;

@@ -12,10 +12,10 @@ import {
 } from "@/lib/theme.ts"
 import appCss from "@/styles/app.css?url"
 
-const darkBackground = "oklch(0.148 0.004 228.8)"
-const darkForeground = "oklch(0.987 0.002 197.1)"
-const lightBackground = "oklch(0.965 0.002 197.1)"
-const lightForeground = "oklch(0.148 0.004 228.8)"
+const darkBackground = "oklch(0.148 0.0132 285)"
+const darkForeground = "oklch(0.9608 0.005 285)"
+const lightBackground = "oklch(0.964 0.005 285)"
+const lightForeground = "oklch(0.1785 0.0168 285)"
 
 /**
  * The first paint, before the stylesheet arrives — both schemes, because which

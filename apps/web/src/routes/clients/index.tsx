@@ -1,5 +1,5 @@
 import { WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
@@ -36,6 +36,7 @@ export const Route = createFileRoute("/clients/")({
 })
 
 function ClientsRoute() {
+  const navigate = useNavigate()
   const { entry, clients, launchLanguage } = Route.useLoaderData()
   const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
@@ -45,7 +46,11 @@ function ClientsRoute() {
       <TelegramFullscreen />
       {clients.ok ? (
         <TimestampFormatProvider value={coachTimestampFormat(language)}>
-          <ClientsScreen copy={copy} clients={clients.home.clients} />
+          <ClientsScreen
+            copy={copy}
+            clients={clients.home.clients}
+            onCreate={() => void navigate({ to: "/clients/new" })}
+          />
         </TimestampFormatProvider>
       ) : (
         <EntryFrame

@@ -1,5 +1,5 @@
 import { WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useMemo } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
@@ -35,6 +35,7 @@ export const Route = createFileRoute("/sessions/")({
 })
 
 function SessionsRoute() {
+  const navigate = useNavigate()
   const { entry, upcoming, launchLanguage } = Route.useLoaderData()
   const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
@@ -46,7 +47,13 @@ function SessionsRoute() {
     <MiniAppShell>
       <TelegramFullscreen />
       {upcoming.ok ? (
-        <SessionsScreen copy={copy} language={language} upcoming={upcoming.upcoming} now={now} />
+        <SessionsScreen
+          copy={copy}
+          language={language}
+          upcoming={upcoming.upcoming}
+          now={now}
+          onCreate={() => void navigate({ to: "/sessions/new" })}
+        />
       ) : (
         <EntryFrame
           icon={WifiDisconnected01Icon}

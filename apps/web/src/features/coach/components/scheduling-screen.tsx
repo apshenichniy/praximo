@@ -481,7 +481,11 @@ export function SchedulingScreen({
             inert={!monthOpen}
           >
             <div ref={monthRef}>
-              <div className="border-border overflow-hidden rounded-2xl border">
+              {/* A raised surface, not a hole: the month had a border and no fill,
+                  which read as a card only while the page happened to be white.
+                  Once the page receded (#195) it was the page showing through a
+                  rounded outline (#198). */}
+              <div className="border-border bg-card overflow-hidden rounded-2xl border">
                 <Calendar
                   mode="single"
                   required={false}
@@ -548,7 +552,7 @@ export function SchedulingScreen({
               either way: it describes the client, not the answer.
             */}
             {firstSession ? (
-              <span className="text-muted-foreground mt-0.5 text-footnote">
+              <span className="text-muted-foreground mt-0.5 text-caption">
                 {copy.firstSessionHint}
               </span>
             ) : null}
@@ -573,7 +577,10 @@ export function SchedulingScreen({
                   "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press) active:scale-[0.97]",
                   durationMinutes === minutes
                     ? "bg-primary text-primary-foreground border-transparent"
-                    : "border-border text-muted-foreground",
+                    : // A control at rest is a fill *and* an edge (#198). This used
+                      // to be `border-border` on nothing, which put the whole
+                      // affordance on a hairline 1.22:1 from the page.
+                      "bg-secondary border-control-border text-foreground",
                 )}
               >
                 {minutes}
@@ -671,11 +678,18 @@ export function SchedulingScreen({
                               "enabled:active:scale-[0.97]",
                               startMinutes === slot.startMinutes
                                 ? "bg-primary text-primary-foreground border-transparent"
-                                : "border-border",
+                                : "bg-secondary border-control-border",
                               // Taken, not gone: hiding it would reflow a
                               // three-column grid between days and cost the
                               // positional memory the layout trades on.
-                              slot.available ? undefined : "text-muted-foreground/40 border-dashed",
+                              //
+                              // Faded, not dashed (#198). A dashed edge reads as
+                              // a different *kind* of thing — which is why the
+                              // strip's month tail keeps one — and unavailable
+                              // is not a different kind of slot, it is the same
+                              // slot in a state. A state is said by weakening
+                              // the control, not by redrawing its outline.
+                              slot.available ? undefined : "opacity-45",
                             )}
                           >
                             {clock(slot.startMinutes)}
@@ -694,7 +708,7 @@ export function SchedulingScreen({
           one running sentence on the screen, set smaller than the labels above
           it. 13px is the step the scale keeps for exactly this (§Typography).
         */}
-        <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-footnote leading-5">
+        <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-caption leading-5">
           {startMinutes === undefined ? (
             <>
               {clientName}

@@ -39,7 +39,7 @@ export function InviteCoachLink() {
       to="/admin/workspaces/new"
       className="text-primary pressable-row hover:bg-muted flex h-16 w-full items-center gap-3.5 px-4 text-left font-semibold"
     >
-      <span className="border-primary/50 flex size-[38px] items-center justify-center rounded-full border">
+      <span className="border-brand-border text-brand flex size-[38px] items-center justify-center rounded-full border">
         <HugeiconsIcon icon={AddMaleIcon} size={22} strokeWidth={1.8} />
       </span>
       Invite a coach
@@ -67,12 +67,18 @@ const dotClass = {
  * One row shape for every coach, onboarding or active, at one fixed height — a
  * scanning surface reads faster when nothing about a row's size means anything.
  *
- * The state is a coloured word rather than a badge: a badge would be the only
- * element on this screen carrying its own border and fill, and the word already
- * says the whole state, so the tone is there to speed up finding it, not to
- * carry it. Weight does the work the badge used to: the name leads on size, the
- * state word is the only semibold thing in the meta line, and the timestamp
- * sits behind it at normal weight.
+ * The state is a coloured word rather than a badge — **in a row**. Narrowed in
+ * #198, which put a badge in the two heroes: the original rule said a badge
+ * would be the only element carrying its own fill, and that was already untrue
+ * on this screen, where `StatusBadge` ships in the sections below. What survives
+ * is the part about scanning. A list is read by running an eye down it, and a
+ * fill and a radius in every row is a shape to parse in every row; a hero has
+ * one subject and one state and nothing competing, so there the word read as a
+ * third paragraph instead of as the coach's standing.
+ *
+ * So: **badge in a hero, word in a row.** Weight does the rest here — the name
+ * leads on size, the state word is the only semibold thing in the meta line, and
+ * the timestamp sits behind it at normal weight.
  */
 export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
   const state = coachRowState(coach)
@@ -94,7 +100,7 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
         <ItemTitle className="block truncate text-body font-semibold">
           {displayName(coach.name)}
         </ItemTitle>
-        <ItemDescription className="flex min-w-0 items-center text-footnote leading-[18px]">
+        <ItemDescription className="flex min-w-0 items-center text-caption leading-[18px]">
           <span
             aria-hidden="true"
             className={cn("mr-[7px] size-1.5 shrink-0 rounded-full", dotClass[state.tone])}
@@ -112,7 +118,7 @@ export function CoachRow({ coach }: { readonly coach: CoachEntry }) {
         // (#110). It is still the same link — the workspace screen owns the
         // pipeline, as it owns every other action on a coach — but the row says
         // what is waiting there rather than leaving it to a chevron.
-        <span className="border-destructive/40 text-destructive shrink-0 rounded-full border px-3 py-1 text-footnote font-semibold">
+        <span className="border-destructive/40 text-destructive shrink-0 rounded-full border px-3 py-1 text-caption font-semibold">
           Resume
         </span>
       ) : (
@@ -163,13 +169,13 @@ export function ViewerCoachCard({
         className="pressable-row hover:bg-muted w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
       >
         <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
-          <span className="border-primary/50 text-primary flex size-[38px] items-center justify-center rounded-full border">
+          <span className="border-brand-border text-brand flex size-[38px] items-center justify-center rounded-full border">
             <HugeiconsIcon icon={UserSharingIcon} size={20} strokeWidth={1.8} />
           </span>
         </ItemMedia>
         <ItemContent className="min-w-0 gap-0.5">
           <ItemTitle className="text-body font-semibold">{action.title}</ItemTitle>
-          <ItemDescription className="text-footnote leading-[18px]">
+          <ItemDescription className="text-caption leading-[18px]">
             {action.subtitle}
           </ItemDescription>
         </ItemContent>

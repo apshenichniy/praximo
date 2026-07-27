@@ -2,19 +2,10 @@ import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { Button } from "@/components/ui/button.tsx"
-import type { CoachStateTone } from "@/features/admin/coach-progress.ts"
 import { WorkspaceAvatar } from "@/features/admin/components/workspace-avatar.tsx"
 import { displayName } from "@/features/admin/formatting.ts"
+import { StatusBadge } from "@/features/mini-app/components/status-badge.tsx"
 import { detailStatus, type WorkspaceDetail } from "@/features/admin/workspace-detail.ts"
-import { cn } from "@/lib/utils.ts"
-
-const toneClass = {
-  warning: "text-warning",
-  info: "text-info",
-  success: "text-success",
-  destructive: "text-destructive",
-  muted: "text-muted-foreground",
-} as const satisfies Record<CoachStateTone, string>
 
 /**
  * One header for both variants. The avatar is the branded initials mark rather
@@ -53,15 +44,14 @@ export function WorkspaceDetailHeader({
       {botUsername === undefined ? null : (
         <p className="text-muted-foreground mt-1.5 text-body">@{botUsername}</p>
       )}
-      <p
-        className={cn(
-          "mt-3 flex items-center gap-2 text-emphasis font-bold tracking-tight",
-          toneClass[status.tone],
-        )}
-      >
-        <HugeiconsIcon icon={status.icon} size={20} strokeWidth={2.2} />
+      {/* The hero says the state as a badge; the rows of the list say it as a
+          coloured word (#198). The icon stays — it is the same second channel
+          the badge's dot is elsewhere, and here there is room for the better
+          one. */}
+      <StatusBadge tone={status.tone} dot={false} className="mt-3 gap-2 px-3 py-1.5 text-body">
+        <HugeiconsIcon icon={status.icon} size={18} strokeWidth={2.2} />
         {status.label}
-      </p>
+      </StatusBadge>
       {botUsername === undefined ? null : (
         <Button
           variant="outline"

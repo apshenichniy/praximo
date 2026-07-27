@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils.ts"
 
 const markerClass = {
   done: "border-success/30 bg-success/12 text-success",
-  current: "border-primary/50 bg-primary/10 text-primary",
+  current: "border-brand-border bg-brand-surface text-brand",
   upcoming: "border-border text-muted-foreground/70",
   blocked: "border-warning/30 bg-warning/12 text-warning",
 } as const satisfies Record<StepState, string>
@@ -86,7 +86,7 @@ export function OnboardingStepsSection({ workspace }: { readonly workspace: Work
                     {step.title}
                     <span className="sr-only"> — {stateLabel[step.state]}</span>
                   </p>
-                  <p className="text-muted-foreground mt-1 text-footnote leading-[18px]">
+                  <p className="text-muted-foreground mt-1 text-caption leading-[18px]">
                     {step.description}
                   </p>
                 </div>

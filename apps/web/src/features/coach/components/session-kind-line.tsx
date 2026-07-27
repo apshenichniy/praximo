@@ -26,9 +26,7 @@ export function SessionKindLine({
   readonly className?: string
 }) {
   return (
-    <span
-      className={cn("text-muted-foreground flex items-center gap-1.5 text-footnote", className)}
-    >
+    <span className={cn("text-muted-foreground flex items-center gap-1.5 text-caption", className)}>
       <HugeiconsIcon
         icon={kind === "intake" ? FlagIcon : Calendar03Icon}
         size={14}
