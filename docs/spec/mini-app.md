@@ -218,6 +218,26 @@ on the dark ground, its 600s on the light one. A screen that said
 same shade is a tint rather than a word; `src/__tests__/global-theme.test.tsx`
 fails on one reappearing anywhere in `src`.
 
+### Where a dangerous question is asked
+
+**From the bottom of the screen, always**
+([#197](https://github.com/apshenichniy/praximo/issues/197)). Deleting a
+workspace asked from a sheet and deleting a client asked from a centred dialog,
+so the decision moved around the screen depending on which decision it was and
+the coach learned the shape of neither. A phone's thumb rests at the bottom; a
+centred dialog puts a destructive choice under the hand rather than in it.
+
+Every confirmation goes through `ConfirmSheet`. A **destructive** one spends its
+buttons the way the deletion sheet does — Cancel as the big comfortable target,
+the destructive action as quiet text under it, so the easy press is the safe one.
+A merely **lossy** one, which can be done again, keeps its own action on top.
+
+The arming step is *not* shared. Three seconds of countdown belongs to deleting a
+workspace ([admin-surface.md](admin-surface.md) §Deletion), where a bot is
+released and a practice erased; charging the same toll for re-issuing an invite
+would teach the coach to sit through it. `feedback-invariants.test.ts` holds the
+shape: nothing outside `components/ui` imports `alert-dialog.tsx`.
+
 ### Surfaces
 
 **Three, not one** ([#195](https://github.com/apshenichniy/praximo/issues/195)).

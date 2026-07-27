@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button.tsx"
 import { Card } from "@/components/ui/card.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"
-import { ConfirmDialog } from "@/features/mini-app/components/confirm-dialog.tsx"
+import { ConfirmSheet } from "@/features/mini-app/components/confirm-sheet.tsx"
 import { DangerCard, DangerZone } from "@/features/mini-app/components/danger-zone.tsx"
 import {
   DetailCard,
@@ -329,7 +329,7 @@ export function ClientScreen({
         )}
       </DangerZone>
 
-      <ConfirmDialog
+      <ConfirmSheet
         open={confirmReset}
         onOpenChange={setConfirmReset}
         title={copy.clients.resetTitle}
@@ -341,7 +341,7 @@ export function ClientScreen({
           onResetInvite()
         }}
       />
-      <ConfirmDialog
+      <ConfirmSheet
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
         title={copy.clients.deleteTitle}

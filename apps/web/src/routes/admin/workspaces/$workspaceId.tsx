@@ -4,7 +4,7 @@ import type { ReactNode } from "react"
 import { useRef, useState } from "react"
 
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
-import { ConfirmDialog } from "@/features/mini-app/components/confirm-dialog.tsx"
+import { ConfirmSheet } from "@/features/mini-app/components/confirm-sheet.tsx"
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx"
 import {
   AboutSection,
@@ -246,7 +246,7 @@ function OnboardingWorkspace({
           />
         ) : null}
       </WorkspaceDangerZone>
-      <ConfirmDialog
+      <ConfirmSheet
         open={resetOpen}
         onOpenChange={setResetOpen}
         title={reset.title}
