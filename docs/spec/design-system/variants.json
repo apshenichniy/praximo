@@ -31,13 +31,13 @@
       "brand-border": "#bdbffb",
       "pressed": "rgb(0 0 0 / 13%)",
       "success": "#007b47",
-      "success-surface": "#e0eee5",
+      "success-surface": "#e4f2e9",
       "warning": "#9f5a00",
-      "warning-surface": "#f4e8dd",
+      "warning-surface": "#f9ede2",
       "info": "#006dbd",
-      "info-surface": "#dfecfa",
+      "info-surface": "#e3f0fe",
       "destructive": "#d5101c",
-      "destructive-surface": "#ffe3df"
+      "destructive-surface": "#ffe9e6"
     },
     "dark": {
       "background": "#0a0a0f",
@@ -97,13 +97,13 @@
       "brand-border": "oklch(0.8233 0.084 283)",
       "pressed": "oklch(0 0 0 / 13%)",
       "success": "oklch(0.5128 0.1245 156)",
-      "success-surface": "oklch(0.937 0.01992 156)",
+      "success-surface": "oklch(0.949 0.01992 156)",
       "warning": "oklch(0.5357 0.1235 62)",
-      "warning-surface": "oklch(0.937 0.01976 62)",
+      "warning-surface": "oklch(0.952 0.01976 62)",
       "info": "oklch(0.5275 0.1495 250)",
-      "info-surface": "oklch(0.937 0.02392 250)",
+      "info-surface": "oklch(0.949 0.02392 250)",
       "destructive": "oklch(0.554 0.22 27)",
-      "destructive-surface": "oklch(0.937 0.0325 27)"
+      "destructive-surface": "oklch(0.952 0.0246 27)"
     },
     "dark_oklch": {
       "background": "oklch(0.148 0.011 285)",
@@ -219,13 +219,13 @@
       "brand-border": "#bfc1fe",
       "pressed": "rgb(0 0 0 / 12%)",
       "success": "#007d48",
-      "success-surface": "#e2f1e7",
+      "success-surface": "#e6f5eb",
       "warning": "#a15b00",
-      "warning-surface": "#f7eadf",
+      "warning-surface": "#fcefe4",
       "info": "#026fbf",
-      "info-surface": "#e1eefc",
+      "info-surface": "#e6f2ff",
       "destructive": "#d7141e",
-      "destructive-surface": "#ffe6e2"
+      "destructive-surface": "#ffedea"
     },
     "dark": {
       "background": "#0a0a11",
@@ -285,13 +285,13 @@
       "brand-border": "oklch(0.8299 0.0861 283)",
       "pressed": "oklch(0 0 0 / 12%)",
       "success": "oklch(0.5175 0.1257 156)",
-      "success-surface": "oklch(0.944 0.02011 156)",
+      "success-surface": "oklch(0.956 0.02011 156)",
       "warning": "oklch(0.5407 0.1246 62)",
-      "warning-surface": "oklch(0.944 0.01994 62)",
+      "warning-surface": "oklch(0.959 0.01994 62)",
       "info": "oklch(0.5324 0.15 250)",
-      "info-surface": "oklch(0.944 0.024 250)",
+      "info-surface": "oklch(0.956 0.0225 250)",
       "destructive": "oklch(0.5588 0.22 27)",
-      "destructive-surface": "oklch(0.944 0.0288 27)"
+      "destructive-surface": "oklch(0.959 0.021 27)"
     },
     "dark_oklch": {
       "background": "oklch(0.15 0.0154 285)",
@@ -407,13 +407,13 @@
       "brand-border": "#c6c7ef",
       "pressed": "rgb(0 0 0 / 10%)",
       "success": "#00804a",
-      "success-surface": "#e7f6eb",
+      "success-surface": "#eaf9ee",
       "warning": "#a55d00",
-      "warning-surface": "#fceee4",
+      "warning-surface": "#fff4ea",
       "info": "#0972c2",
-      "info-surface": "#e7f3ff",
+      "info-surface": "#eef6ff",
       "destructive": "#db1b21",
-      "destructive-surface": "#ffece9"
+      "destructive-surface": "#fff3f1"
     },
     "dark": {
       "background": "#0b0b18",
@@ -473,13 +473,13 @@
       "brand-border": "oklch(0.841 0.05544 284)",
       "pressed": "oklch(0 0 0 / 10%)",
       "success": "oklch(0.5268 0.1279 156)",
-      "success-surface": "oklch(0.958 0.02046 156)",
+      "success-surface": "oklch(0.967 0.02046 156)",
       "warning": "oklch(0.5504 0.1268 62)",
-      "warning-surface": "oklch(0.958 0.02029 62)",
+      "warning-surface": "oklch(0.973 0.018 62)",
       "info": "oklch(0.5418 0.15 250)",
-      "info-surface": "oklch(0.958 0.0215 250)",
+      "info-surface": "oklch(0.97 0.0155 250)",
       "destructive": "oklch(0.5683 0.22 27)",
-      "destructive-surface": "oklch(0.958 0.0215 27)"
+      "destructive-surface": "oklch(0.973 0.0139 27)"
     },
     "dark_oklch": {
       "background": "oklch(0.158 0.0264 284)",
@@ -595,15 +595,15 @@
       "brand-border": "#c0baff",
       "pressed": "rgb(0 0 0 / 14%)",
       "success": "#007946",
-      "success-surface": "#deece2",
+      "success-surface": "#e2f0e6",
       "warning": "#9d5900",
-      "warning-surface": "#f2e5db",
+      "warning-surface": "#f7eae0",
       "info": "#006cba",
-      "info-surface": "#dce9f7",
+      "info-surface": "#e0edfb",
       "destructive": "#d30a19",
-      "destructive-surface": "#fedfdb",
+      "destructive-surface": "#ffe7e4",
       "warm": "#a15600",
-      "warm-surface": "#f3e5db"
+      "warm-surface": "#f8eadf"
     },
     "dark": {
       "background": "#08080e",
@@ -665,15 +665,15 @@
       "brand-border": "oklch(0.8173 0.0966 288)",
       "pressed": "oklch(0 0 0 / 14%)",
       "success": "oklch(0.5073 0.1232 156)",
-      "success-surface": "oklch(0.929 0.01971 156)",
+      "success-surface": "oklch(0.941 0.01971 156)",
       "warning": "oklch(0.53 0.1222 62)",
-      "warning-surface": "oklch(0.929 0.01955 62)",
+      "warning-surface": "oklch(0.944 0.01955 62)",
       "info": "oklch(0.5219 0.1479 250)",
-      "info-surface": "oklch(0.929 0.02366 250)",
+      "info-surface": "oklch(0.941 0.02366 250)",
       "destructive": "oklch(0.5484 0.22 27)",
-      "destructive-surface": "oklch(0.929 0.0352 27)",
+      "destructive-surface": "oklch(0.947 0.0272 27)",
       "warm": "oklch(0.5313 0.1274 58)",
-      "warm-surface": "oklch(0.929 0.02038 58)"
+      "warm-surface": "oklch(0.944 0.02038 58)"
     },
     "dark_oklch": {
       "background": "oklch(0.138 0.0121 285)",

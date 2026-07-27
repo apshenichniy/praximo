@@ -69,15 +69,27 @@ STATUS_HUES = {"success": 156, "warning": 62, "info": 250, "destructive": 27}
 STATUS_HUES_DARK = {"success": 160, "warning": 82, "info": 245, "destructive": 22}
 
 
-def tint(base, page_l, hue, chroma_share=0.16, lift=0.012):
+def tint(base, page_l, hue, chroma_share=0.16, lift=0.012, floor=4.6):
     """A pale wash of a colour, sitting just off the page rather than mid-way to it.
 
-    Solved the other way round from the ink it carries: the surface is fixed pale
-    and the *ratio* is then asserted, because a tint that satisfies 4.5:1 by
-    getting darker stops being a tint.
+    Starts as pale as the lift allows and steps down only as far as the ink it has
+    to carry demands — so the surface is the palest one that still holds its own
+    text. A brighter brand needs a deeper tint under it, and that falls out here
+    rather than having to be noticed.
     """
-    L = min(0.985, page_l - lift)
-    return (L, clamp_chroma(L, base[1] * chroma_share, hue), hue)
+    ink = oklch_to_srgb(*base[:3])
+    start = min(0.985, page_l - lift)
+    # The wash is lighter than the ink on it, so more contrast means paler, not
+    # darker. Start at the intended lift and walk toward white only as far as the
+    # ink demands; a brighter brand simply ends up on a paler surface.
+    for step in range(0, 90):
+        L = min(0.995, start + step * 0.003)
+        C = clamp_chroma(L, base[1] * chroma_share, hue)
+        if contrast(ink, oklch_to_srgb(L, C, hue)) >= floor:
+            return (round(L, 4), C, hue)
+        if L >= 0.995:
+            break
+    return (0.995, clamp_chroma(0.995, base[1] * chroma_share, hue), hue)
 
 
 def tint_dark(base, page_l, hue, chroma_share=0.30, drop=0.135, floor=4.6):

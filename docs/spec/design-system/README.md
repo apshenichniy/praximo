@@ -100,6 +100,30 @@ common chromatic pixel in the light master.
 Worth noting: the hardcoded `admin-avatar` gradient uses `violet-700 →
 indigo-950`, about 10° more violet than the mark actually is.
 
+### How far toward fuchsia
+
+`brands.py` holds the recommended base fixed and moves only the hue, so the four
+columns differ in exactly one thing. Each is the most saturated value sRGB has at
+its hue that clears **both** jobs the token holds on the light ground:
+
+| | H | light | on white | on page | dark |
+| --- | --- | --- | --- | --- | --- |
+| Знак | 283° | `#6a46ff` | 5.21 | 4.62 | `#9692ff` |
+| Iris | 299° | `#9324ff` | 5.21 | 4.62 | `#b488ff` |
+| Orchid | 311° | `#ab00ed` | 5.20 | 4.61 | `#cd7bff` |
+| Fuchsia | 322° | `#b800d0` | 5.19 | 4.60 | `#eb66ff` |
+
+The two jobs pull against each other. Solving only for white-on-brand gives a
+step brighter — `#6d4eff` at H 283 — which then fails as a link at **4.35:1**
+against the page. That is how one brand token quietly becomes two. Solving for
+the page instead costs almost nothing visually (L 0.555 against 0.567) and keeps
+it single.
+
+Iris at 299° is the interesting middle: it is still literally in the artwork —
+the bright tip of the arc measures 299° in the light master — while reading
+distinctly more magenta than the mark's body. Orchid and Fuchsia leave the mark
+behind and would make the logo the odd one out until #145's artwork is redone.
+
 ## The four variants
 
 Each varies four independent axes, so they can be mixed rather than chosen whole.
