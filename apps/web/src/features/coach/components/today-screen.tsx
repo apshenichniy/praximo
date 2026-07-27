@@ -219,8 +219,8 @@ function SessionCard({
         who has simply not tapped a link yet teaches them to discount it.
       */}
       {session.clientAccepted ? null : (
-        <div className="border-border/60 border-t bg-amber-400/10 px-5 py-3">
-          <p className="text-footnote leading-5 text-amber-200">
+        <div className="border-border/60 border-t bg-warning/10 px-5 py-3">
+          <p className="text-footnote leading-5 text-warning">
             {copy.today.unacceptedLead}
             <span className="font-semibold">{session.clientName}</span>
             {copy.today.unacceptedTail}
@@ -263,11 +263,11 @@ function AttentionRow({
         icon={Alert01Icon}
         size={18}
         strokeWidth={2}
-        className="shrink-0 text-amber-300"
+        className="shrink-0 text-warning"
       />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-body font-medium">{item.clientName}</span>
-        <span className="mt-0.5 block truncate text-caption text-amber-200/80">
+        <span className="mt-0.5 block truncate text-caption text-warning/80">
           {item.expired
             ? copy.today.attentionExpired
             : `${copy.today.attentionExpiringPrefix}${format.relative(item.expiresAt)}`}
@@ -310,7 +310,7 @@ function FirstSteps({ copy }: { readonly copy: CoachCopy }) {
                   icon={CheckmarkCircle02Icon}
                   size={20}
                   strokeWidth={2}
-                  className="mt-0.5 shrink-0 text-emerald-300"
+                  className="mt-0.5 shrink-0 text-success"
                 />
               ) : (
                 <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-caption font-semibold tabular-nums">

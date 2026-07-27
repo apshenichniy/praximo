@@ -74,7 +74,7 @@ export function SessionScreen({
         */}
         {session.clientAccepted ? null : (
           <DetailRow label={copy.sessions.detailInvitation}>
-            <span className="text-amber-200">{copy.sessions.detailUnaccepted}</span>
+            <span className="text-warning">{copy.sessions.detailUnaccepted}</span>
           </DetailRow>
         )}
       </DetailCard>

@@ -3,12 +3,15 @@ import type { AdminSurface } from "@/server/admin-surface.ts"
 import type { ViewerRole } from "@/server/viewer-role.ts"
 
 /**
- * How urgently a row wants attention. Amber is something the admin can still
- * push forward, sky is progress that is now the coach's move, emerald is
- * healthy, rose is broken, muted is terminal history. `expired` is amber rather
- * than rose — a lapsed invite is routine and fixed by reissuing.
+ * How urgently a row wants attention. Warning is something the admin can still
+ * push forward, info is progress that is now the coach's move, success is
+ * healthy, destructive is broken, muted is terminal history. `expired` is a
+ * warning rather than destructive — a lapsed invite is routine and fixed by
+ * reissuing. Named for the meaning rather than for a hue, because the hue is the
+ * theme's to choose: each of these resolves to a different shade in light and in
+ * dark (#190).
  */
-export type CoachStateTone = "amber" | "sky" | "emerald" | "rose" | "muted"
+export type CoachStateTone = "warning" | "info" | "success" | "destructive" | "muted"
 
 export interface CoachRowState {
   readonly label: string
@@ -16,20 +19,20 @@ export interface CoachRowState {
 }
 
 const onboardingStates = {
-  invited: { label: "Invited", tone: "amber" },
-  accepted: { label: "Accepted", tone: "sky" },
-  stalled: { label: "Setup stalled", tone: "amber" },
-  "bot-connected": { label: "Awaiting activation", tone: "sky" },
-  expired: { label: "Invite expired", tone: "amber" },
+  invited: { label: "Invited", tone: "warning" },
+  accepted: { label: "Accepted", tone: "info" },
+  stalled: { label: "Setup stalled", tone: "warning" },
+  "bot-connected": { label: "Awaiting activation", tone: "info" },
+  expired: { label: "Invite expired", tone: "warning" },
   declined: { label: "Declined", tone: "muted" },
   reset: { label: "Reset", tone: "muted" },
   "not-invited": { label: "No invite", tone: "muted" },
 } as const satisfies Record<AdminSurface.CoachOnboardingStage, CoachRowState>
 
 const botTones = {
-  "awaiting-setup": "amber",
-  connected: "emerald",
-  "needs-relink": "rose",
+  "awaiting-setup": "warning",
+  connected: "success",
+  "needs-relink": "destructive",
 } as const satisfies Record<AdminSurface.CoachListEntry["botStatus"], CoachStateTone>
 
 /**
@@ -58,7 +61,7 @@ export const stageState = (
  */
 export const coachRowState = (coach: AdminSurface.CoachListEntry): CoachRowState =>
   coach.deleting === true
-    ? { label: "Deleting…", tone: "rose" }
+    ? { label: "Deleting…", tone: "destructive" }
     : stageState(coach.onboarding?.stage, coach.botStatus)
 
 const relative = (value: string | undefined): string | undefined =>

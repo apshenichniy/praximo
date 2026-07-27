@@ -3,7 +3,12 @@
 // purpose — every method here is exercised by the fullscreen flow below; widen
 // it only when a screen needs more.
 
-import { APP_DARK_COLOR, APP_ON_PRIMARY_COLOR, APP_PRIMARY_COLOR } from "@/lib/theme.ts"
+import {
+  APP_ON_PRIMARY_COLOR,
+  APP_PRIMARY_COLOR,
+  APP_SURFACE_COLOR,
+  type ColorScheme,
+} from "@/lib/theme.ts"
 
 export interface TelegramWebApp {
   /** Signed launch credential sent to the server for validation. */
@@ -12,6 +17,11 @@ export interface TelegramWebApp {
   readonly version: string
   /** `ios`, `android`, `tdesktop`, `macos`, `weba`… — what is running us. */
   readonly platform: string
+  /**
+   * The client's own color scheme, derived by the host from its theme. The app
+   * follows it rather than imposing one; `themeChanged` is how it moves.
+   */
+  readonly colorScheme: ColorScheme
   /** Whether the Mini App is currently expanded to fullscreen (Bot API 8.0). */
   readonly isFullscreen: boolean
   /** Signals the host the Mini App is ready to be shown. */
@@ -145,25 +155,33 @@ export const MAIN_BUTTON_PARAMS_MIN_VERSION = "6.1"
 export const HAPTIC_MIN_VERSION = "6.1"
 
 /**
+ * Paint the host's bottom button in the app's own palette for the scheme the
+ * client is in. Inheriting the client's blue accent would make the one button
+ * Telegram draws for us the only foreign thing on the screen; pre-6.1 hosts keep
+ * their theme colors rather than being left with a button we styled halfway.
+ * Called again whenever the scheme moves — the button outlives the change.
+ */
+export const applyMainButtonColors = (webApp: TelegramWebApp, scheme: ColorScheme): void => {
+  if (!webApp.isVersionAtLeast(MAIN_BUTTON_PARAMS_MIN_VERSION)) return
+
+  webApp.MainButton.setParams({
+    color: APP_PRIMARY_COLOR[scheme],
+    text_color: APP_ON_PRIMARY_COLOR[scheme],
+  })
+}
+
+/**
  * Hand a screen's primary action to the host's own bottom button. It sits
  * outside the scroll area, so the action keeps one fixed place no matter how
  * much the list above it grows — which is the whole reason to prefer it to a
  * row inside the list.
- *
- * The app's own palette is applied where the host allows it: this is a dark app
- * whose primary is a near-white surface, and inheriting the client's blue accent
- * would make the one button Telegram draws for us the only foreign thing on the
- * screen. Pre-6.1 hosts keep their theme colors rather than being left with a
- * button we styled halfway.
  */
 export const attachMainButton = (
   webApp: TelegramWebApp,
   text: string,
   onClick: () => void,
 ): (() => void) => {
-  if (webApp.isVersionAtLeast(MAIN_BUTTON_PARAMS_MIN_VERSION)) {
-    webApp.MainButton.setParams({ color: APP_PRIMARY_COLOR, text_color: APP_ON_PRIMARY_COLOR })
-  }
+  applyMainButtonColors(webApp, webApp.colorScheme)
   webApp.MainButton.setText(text).onClick(onClick).show()
 
   return () => {
@@ -183,21 +201,50 @@ export const BOTTOM_BAR_COLOR_MIN_VERSION = "7.10"
 export const VERTICAL_SWIPES_MIN_VERSION = "7.7"
 
 /**
- * Paint Telegram-owned surfaces and pin the swipe behavior before hiding the
- * native loading placeholder. The page stylesheet cannot reach the host header
- * or its overscroll regions, and CSS cannot reach the host swipe container
- * either, so these bridge calls must precede `ready()`. Pre-7.7 clients keep
- * the default swipe-to-minimize behavior — the method is never called there.
+ * Paint the Telegram-owned surfaces — header, webview background, bottom bar —
+ * in the app's surface color for a scheme. The page stylesheet reaches none of
+ * them, which is why they are bridge calls; each is gated on the version that
+ * introduced it, so an older client keeps its own chrome rather than a half-
+ * painted one. Called on launch and again on every `themeChanged`.
  */
-export const revealTelegramWebApp = (webApp: TelegramWebApp): void => {
-  webApp.setBackgroundColor(APP_DARK_COLOR)
+export const applyTelegramSurfaceColors = (webApp: TelegramWebApp, scheme: ColorScheme): void => {
+  const surface = APP_SURFACE_COLOR[scheme]
+  webApp.setBackgroundColor(surface)
 
   if (webApp.isVersionAtLeast(CUSTOM_HEADER_COLOR_MIN_VERSION)) {
-    webApp.setHeaderColor(APP_DARK_COLOR)
+    webApp.setHeaderColor(surface)
   }
   if (webApp.isVersionAtLeast(BOTTOM_BAR_COLOR_MIN_VERSION)) {
-    webApp.setBottomBarColor(APP_DARK_COLOR)
+    webApp.setBottomBarColor(surface)
   }
+}
+
+/**
+ * Follow the client's scheme for as long as the app is open: `themeChanged`
+ * fires when the coach flips the setting — or when their phone crosses into
+ * night — while the Mini App is still on screen. Returns an unsubscribe. The
+ * event predates every version gate here, so there is nothing to gate it on.
+ */
+export const watchTelegramColorScheme = (
+  webApp: TelegramWebApp,
+  onScheme: (scheme: ColorScheme) => void,
+): (() => void) => {
+  const handler = () => onScheme(webApp.colorScheme)
+
+  webApp.onEvent("themeChanged", handler)
+  return () => webApp.offEvent("themeChanged", handler)
+}
+
+/**
+ * Paint Telegram-owned surfaces and pin the swipe behavior before hiding the
+ * native loading placeholder. CSS cannot reach the host swipe container any more
+ * than it can reach the header, so these bridge calls must precede `ready()`.
+ * Pre-7.7 clients keep the default swipe-to-minimize behavior — the method is
+ * never called there.
+ */
+export const revealTelegramWebApp = (webApp: TelegramWebApp): void => {
+  applyTelegramSurfaceColors(webApp, webApp.colorScheme)
+
   if (webApp.isVersionAtLeast(VERTICAL_SWIPES_MIN_VERSION)) {
     webApp.disableVerticalSwipes()
   }

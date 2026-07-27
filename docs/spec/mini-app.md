@@ -183,6 +183,44 @@ for a first session: "no history yet").
   ([ADR 0005](../adr/0005-session-reconciler-on-durable-objects.md)); the UI
   shows an automatic cancellation with its reason.
 
+## Theme
+
+The app is in whatever scheme its host is in. Decided in
+[#190](https://github.com/apshenichniy/praximo/issues/190), which replaced a
+dark-only app: a coach who reads their phone in light mode used to meet one black
+rectangle inside a white client, and the Mini App was the only surface on their
+phone ignoring a setting they had made.
+
+`Telegram.WebApp.colorScheme` is the answer while the app runs, and the
+`themeChanged` event is how it moves — a coach can flip the setting, or their
+phone can cross into night, with the app still on screen. Outside a Telegram
+launch (a client's browser on the acceptance page, local development) the
+browser's own `prefers-color-scheme` stands in for both.
+
+**The first paint is settled before it happens.** The scheme is not knowable on
+the server — Telegram publishes it as `tgWebAppThemeParams` in the URL *hash*,
+which no request carries — so the document is rendered scheme-less and a blocking
+script in `<head>` (`COLOR_SCHEME_BOOTSTRAP` in `apps/web/src/lib/theme.ts`) puts
+the class on ahead of the body. Reading the launch's `bg_color` luminance is the
+same derivation Telegram's own SDK makes; the critical stylesheet carries both
+grounds, because which one it will be is unknown a few bytes earlier.
+
+**Three surfaces answer to a change, and only one is CSS.** The `dark` class on
+`<html>` carries the palette. The Telegram chrome — header, webview background,
+bottom bar — and the host's own bottom button are painted through bridge calls,
+because a page stylesheet does not reach them. `TelegramTheme`, mounted once in
+the root shell, keeps all three in step.
+
+**Status is named by meaning, never by hue.** `--success`, `--warning`, `--info`
+and the preset's own `--destructive` carry one value per scheme — Tailwind's 300s
+on the dark ground, its 600s on the light one. A screen that said
+`text-emerald-300` was stating a shade chosen for near-black, and on white the
+same shade is a tint rather than a word; `src/__tests__/global-theme.test.tsx`
+fails on one reappearing anywhere in `src`.
+
+The BotFather splash screen stays dark. It is configured outside this repository
+and Telegram takes one colour there, not a pair.
+
 ## Motion
 
 Decided in #186, after walking the scheduling flow on a phone. The rules are

@@ -44,7 +44,7 @@ export function InviteLinkPanel({
             icon={controller.copied ? Tick02Icon : Copy01Icon}
             size={16}
             strokeWidth={2}
-            className={controller.copied ? "text-emerald-300" : undefined}
+            className={controller.copied ? "text-success" : undefined}
           />
         </InputGroupButton>
       </InputGroupAddon>

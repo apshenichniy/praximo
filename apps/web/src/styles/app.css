@@ -4,9 +4,10 @@
 @import "@fontsource-variable/nunito-sans";
 
 /* Global shadcn preset b7ClRmv9U: base-luma / mist / Nunito Sans / Hugeicons.
-   Praximo is intentionally dark-only, so the preset's dark values are the root
-   values rather than a deferred class override. The `dark` class still lives on
-   <html> so shadcn's dark-mode utility variants remain active. */
+   Both of the preset's grounds are here, the way shadcn ships them: light on
+   `:root`, dark as a class override. Which one is on is not this file's
+   decision — the Telegram client's scheme is, and `lib/theme.ts` puts the class
+   on <html> before the first paint (#190). */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -91,6 +92,13 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  /* Status, named for the meaning rather than for the hue (#190). A screen that
+     said `text-emerald-300` was stating a shade picked for a dark ground, and on
+     white it is barely there; these carry one value per scheme, and `destructive`
+     — already in the preset — is the fourth of them. */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -115,6 +123,47 @@
 }
 
 :root {
+  color-scheme: light;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.148 0.004 228.8);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.148 0.004 228.8);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.148 0.004 228.8);
+  --primary: oklch(0.218 0.008 223.9);
+  --primary-foreground: oklch(0.987 0.002 197.1);
+  --secondary: oklch(0.963 0.002 197.1);
+  --secondary-foreground: oklch(0.218 0.008 223.9);
+  --muted: oklch(0.963 0.002 197.1);
+  --muted-foreground: oklch(0.56 0.021 213.5);
+  --accent: oklch(0.963 0.002 197.1);
+  --accent-foreground: oklch(0.218 0.008 223.9);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.925 0.005 214.3);
+  --input: oklch(0.925 0.005 214.3);
+  --ring: oklch(0.723 0.014 214.4);
+  --chart-1: oklch(0.872 0.007 219.6);
+  --chart-2: oklch(0.56 0.021 213.5);
+  --chart-3: oklch(0.45 0.017 213.2);
+  --chart-4: oklch(0.378 0.015 216);
+  --chart-5: oklch(0.275 0.011 216.9);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.987 0.002 197.1);
+  --sidebar-foreground: oklch(0.148 0.004 228.8);
+  --sidebar-primary: oklch(0.218 0.008 223.9);
+  --sidebar-primary-foreground: oklch(0.987 0.002 197.1);
+  --sidebar-accent: oklch(0.963 0.002 197.1);
+  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
+  --sidebar-border: oklch(0.925 0.005 214.3);
+  --sidebar-ring: oklch(0.723 0.014 214.4);
+
+  /* The 600s of Tailwind's own ramps: on white, a 300 is a tint, not a word. */
+  --success: oklch(0.596 0.145 163.225);
+  --warning: oklch(0.666 0.179 58.318);
+  --info: oklch(0.588 0.158 241.966);
+}
+
+.dark {
   color-scheme: dark;
   --background: oklch(0.148 0.004 228.8);
   --foreground: oklch(0.987 0.002 197.1);
@@ -139,7 +188,6 @@
   --chart-3: oklch(0.45 0.017 213.2);
   --chart-4: oklch(0.378 0.015 216);
   --chart-5: oklch(0.275 0.011 216.9);
-  --radius: 0.625rem;
   --sidebar: oklch(0.218 0.008 223.9);
   --sidebar-foreground: oklch(0.987 0.002 197.1);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -148,6 +196,11 @@
   --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.56 0.021 213.5);
+
+  /* The 300s: on this ground a 600 is a smudge. */
+  --success: oklch(0.845 0.143 164.978);
+  --warning: oklch(0.879 0.169 91.605);
+  --info: oklch(0.828 0.111 230.318);
 }
 
 /* Screens replacing one another (§Motion). The browser's own crossfade, given
