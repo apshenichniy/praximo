@@ -91,6 +91,15 @@ per-variant flourish.
 A control's fill says how far it sits from the page. Its edge says it is a
 control. The fill can legitimately go to zero — the edge cannot.
 
+The same rule retires the bare `ghost` button. Ghost has neither fill nor edge,
+and its only resting mark is a `hover:` state that does not exist on a phone, so
+standing alone on a page it renders as a paragraph that happens to answer a tap —
+the slots' defect again, this time living in a variant rather than at a call
+site. It stays right where something *else* marks the control: an icon button
+inside a field, a day inside the calendar's grid, or the quiet destructive action
+under a big Cancel that [#197](https://github.com/apshenichniy/praximo/issues/197)
+made quiet deliberately.
+
 ## The three missing invariants
 
 `theme-contrast.test.ts` asserts running text, secondary text, the surface

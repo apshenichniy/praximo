@@ -73,9 +73,18 @@ export function MainMiniAppScreen({
         {mainMiniAppUrl}
       </p>
 
+      {/* Outline, not ghost (#198). A ghost button has no fill and no edge, and
+          its only resting mark is a `hover:` that does not exist on a phone — so
+          this read as a grey paragraph that happened to respond to a tap. The
+          same defect as the slots, in a variant rather than at a call site.
+
+          Ghost is still right where something else already marks the control: an
+          icon button inside a field, a day inside the calendar's grid, or the
+          quiet destructive action under a big Cancel, which #197 made quiet on
+          purpose. Standing alone on a page it marks nothing. */}
       <Button
-        variant="ghost"
-        className="text-muted-foreground mt-8 -ml-2"
+        variant="outline"
+        className="text-muted-foreground mt-8"
         disabled={hidden}
         onClick={() => {
           // Optimistic on purpose: this is a preference, and a coach who put a
