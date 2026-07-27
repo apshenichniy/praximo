@@ -3,6 +3,7 @@ import { Toggle as TogglePrimitive } from "@base-ui/react/toggle"
 import { ToggleGroup as ToggleGroupPrimitive } from "@base-ui/react/toggle-group"
 import { type VariantProps } from "class-variance-authority"
 
+import { selectionHaptic } from "@/features/mini-app/haptics.ts"
 import { cn } from "@/lib/utils.ts"
 import { toggleVariants } from "@/components/ui/toggle.tsx"
 
@@ -10,12 +11,14 @@ const ToggleGroupContext = React.createContext<
   VariantProps<typeof toggleVariants> & {
     spacing?: number
     orientation?: "horizontal" | "vertical"
+    multiple?: boolean
   }
 >({
   size: "default",
   variant: "default",
   spacing: 2,
   orientation: "horizontal",
+  multiple: false,
 })
 
 function ToggleGroup({
@@ -24,6 +27,7 @@ function ToggleGroup({
   size,
   spacing = 2,
   orientation = "horizontal",
+  multiple = false,
   children,
   ...props
 }: ToggleGroupPrimitive.Props &
@@ -38,6 +42,7 @@ function ToggleGroup({
       data-size={size}
       data-spacing={spacing}
       data-orientation={orientation}
+      multiple={multiple}
       style={{ "--gap": spacing } as React.CSSProperties}
       className={cn(
         "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] data-[spacing=0]:data-[variant=outline]:rounded-3xl data-vertical:flex-col data-vertical:items-stretch",
@@ -45,7 +50,7 @@ function ToggleGroup({
       )}
       {...props}
     >
-      <ToggleGroupContext.Provider value={{ variant, size, spacing, orientation }}>
+      <ToggleGroupContext.Provider value={{ variant, size, spacing, orientation, multiple }}>
         {children}
       </ToggleGroupContext.Provider>
     </ToggleGroupPrimitive>
@@ -57,6 +62,7 @@ function ToggleGroupItem({
   children,
   variant = "default",
   size = "default",
+  onPressedChange,
   ...props
 }: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
   const context = React.useContext(ToggleGroupContext)
@@ -64,6 +70,18 @@ function ToggleGroupItem({
   return (
     <TogglePrimitive
       data-slot="toggle-group-item"
+      // The tick `Toggle` carries, which this does not get for free: an item
+      // renders the primitive directly, so the group's chips were the one set of
+      // chips in the app that changed in silence.
+      //
+      // Pressed *into*, always. Pressed out only where that is a change the app
+      // will keep: a single-selection group reports an empty selection when the
+      // chip already on is tapped again, and every caller answers that by
+      // leaving the value where it was — which is not a selection (§Motion).
+      onPressedChange={(pressed, eventDetails) => {
+        if (pressed || context.multiple === true) selectionHaptic()
+        onPressedChange?.(pressed, eventDetails)
+      }}
       data-variant={context.variant || variant}
       data-size={context.size || size}
       data-spacing={context.spacing}
