@@ -14,6 +14,15 @@ Each `dark/` and `light/` directory contains:
 - `apple-touch-icon-180.png` — the Apple touch icon.
 - `icon-192.png`, `icon-512.png` — web-app manifest icons.
 
+Each theme directory also contains:
+
+- `avatar.svg` — the resolution-independent vector version with its theme background.
+- `avatar-transparent.svg` — the mark for placement over a matching themed surface.
+
+The transparent variants omit the background entirely. Their figure color is
+adapted for contrast, and only the guiding point remains pure white. Every SVG
+uses native paths and gradients and does not embed a PNG.
+
 Treat `avatar-512.png` as the source for its theme. Regenerate the smaller
 artifacts from the master instead of editing them independently.
 
