@@ -84,11 +84,30 @@ export interface ClientsCopy {
   readonly cancel: string
 
   readonly sheetTitle: string
-  readonly kindLabel: string
   readonly dateLabel: string
   /** Opens the full month behind the day strip. */
   readonly monthLabel: string
   readonly today: string
+  /**
+   * The intake switch, which replaced a segmented control (#188).
+   *
+   * Two chips said the two kinds were equally likely and equally frequent, and
+   * neither is true: intake happens once in a client's whole history, and the
+   * screen already knows when that is. A switch states the exceptional case and
+   * leaves the ordinary one unsaid.
+   */
+  readonly firstSessionLabel: string
+  /**
+   * Why the switch came up on. A statement about the client, not about the
+   * answer — which is what lets it stay put when the coach overrules it.
+   *
+   * It names no client: «У Ирины» needs the genitive and all we hold is the
+   * nominative — the same declension trap `emptyDayLead` is shaped around. It
+   * also stays short enough for one line at 375px, so the switch beside it has
+   * an unambiguous line to sit against. What the switch *does* is not said here:
+   * the duration chips are the next thing under it, already showing 30.
+   */
+  readonly firstSessionHint: string
   readonly durationLabel: string
   readonly durationSuffix: string
   readonly timeLabel: string
@@ -111,6 +130,13 @@ export interface ClientsCopy {
   /** name · " will see it as " · offset · ", your zone, in the bot's message." */
   readonly footnotePendingTail: string
   readonly footnoteReadyTail: string
+  /**
+   * The intake switch, restated where the coach reads before pressing the
+   * button. The switch sits above the fold on a phone once the slot grid is
+   * open, and it is the one field on this screen answered by the app rather
+   * than by the coach — so it says itself once more where nothing else can.
+   */
+  readonly footnoteFirstSession: string
   readonly overlapError: string
   readonly pastError: string
   readonly invalidError: string
@@ -177,10 +203,11 @@ const en: ClientsCopy = {
   cancel: "Cancel",
 
   sheetTitle: "New session",
-  kindLabel: "Kind",
   dateLabel: "Date",
   monthLabel: "Month",
   today: "Today",
+  firstSessionLabel: "First session",
+  firstSessionHint: "No sessions with this client yet.",
   durationLabel: "Duration",
   durationSuffix: " min",
   timeLabel: "Time",
@@ -195,6 +222,7 @@ const en: ClientsCopy = {
   scheduleSubmit: "Schedule",
   footnotePendingTail: " will see it in your zone, ",
   footnoteReadyTail: " will see ",
+  footnoteFirstSession: "Marked as a first session.",
   overlapError: "That time runs into another session. Pick another one.",
   pastError: "That time has already passed. Pick a later one.",
   invalidError: "That time cannot be booked. Pick one from the grid.",
@@ -262,10 +290,11 @@ const uk: ClientsCopy = {
   cancel: "Скасувати",
 
   sheetTitle: "Нова сесія",
-  kindLabel: "Тип",
   dateLabel: "Дата",
   monthLabel: "Місяць",
   today: "Сьогодні",
+  firstSessionLabel: "Перша сесія",
+  firstSessionHint: "Сесій із цим клієнтом ще не було.",
   durationLabel: "Тривалість",
   durationSuffix: " хв",
   timeLabel: "Час",
@@ -280,6 +309,7 @@ const uk: ClientsCopy = {
   scheduleSubmit: "Запланувати",
   footnotePendingTail: " побачить час у вашій зоні, ",
   footnoteReadyTail: " побачить ",
+  footnoteFirstSession: "Позначена як перша.",
   overlapError: "Цей час перетинається з іншою сесією. Оберіть інший.",
   pastError: "Цей час уже минув. Оберіть пізніший.",
   invalidError: "Цей час не можна забронювати. Оберіть його із сітки.",
@@ -347,10 +377,11 @@ const ru: ClientsCopy = {
   cancel: "Отмена",
 
   sheetTitle: "Новая сессия",
-  kindLabel: "Тип",
   dateLabel: "Дата",
   monthLabel: "Месяц",
   today: "Сегодня",
+  firstSessionLabel: "Первая сессия",
+  firstSessionHint: "Сессий с этим клиентом ещё не было.",
   durationLabel: "Длительность",
   durationSuffix: " мин",
   timeLabel: "Время",
@@ -365,6 +396,7 @@ const ru: ClientsCopy = {
   scheduleSubmit: "Запланировать",
   footnotePendingTail: " увидит время в вашей зоне, ",
   footnoteReadyTail: " увидит ",
+  footnoteFirstSession: "Отмечена как первая.",
   overlapError: "Это время пересекается с другой сессией. Выберите другое.",
   pastError: "Это время уже прошло. Выберите более позднее.",
   invalidError: "Это время нельзя забронировать. Выберите его из сетки.",

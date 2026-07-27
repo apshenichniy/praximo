@@ -17,6 +17,7 @@ import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { Calendar } from "@/components/ui/calendar.tsx"
 import { Skeleton } from "@/components/ui/skeleton.tsx"
+import { Switch } from "@/components/ui/switch.tsx"
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import { DayStrip } from "@/features/coach/components/day-strip.tsx"
 import { extendStrip, sameDay, StripDays, stripWindow } from "@/features/coach/day-strip.ts"
@@ -27,14 +28,22 @@ import { impactHaptic, selectionHaptic } from "@/features/mini-app/haptics.ts"
 import { cn } from "@/lib/utils.ts"
 
 /**
- * The scheduling screen (#56 §Scheduling), in the order the ticket fixes:
- * **kind, date, duration, time**.
+ * The scheduling screen (#56 §Scheduling): **date, first session, duration,
+ * time**.
  *
  * Duration sits above time deliberately. Overlaps are forbidden, so a start is
  * only legal in combination with a length — 10:45 is free for 30 minutes and
  * taken for 60 when 11:00 is booked. Asking for the time first produces a choice
  * a later tap invalidates; asked in this order, the grid never offers what will
  * not fit.
+ *
+ * Kind led that order until #188, as two chips titled «Kind». A segmented
+ * control is the heaviest way to ask anything, and it was asking the one
+ * question on this screen the app can already answer: intake happens once in a
+ * client's whole history, and the client's own session count says when. So the
+ * screen now opens on the date — the thing the coach came for — and the kind is
+ * a switch beside the duration it sets, stating the exception and leaving the
+ * ordinary case unsaid.
  *
  * A screen rather than the drawer it was until #186. The form is a full screen's
  * worth of choices inside a scrolling body, which put "drag to reach the slots"
@@ -97,7 +106,15 @@ export function SchedulingScreen({
   readonly backLabel: string
   readonly language: CoachLanguage
   readonly clientName: string
-  /** Pre-selects `intake`: a client's first session usually is one, but never must be. */
+  /**
+   * Whether this client has no sessions yet — which turns the intake switch on,
+   * and is the only thing that ever does so on the coach's behalf.
+   *
+   * A guess, never a fact: it means "no sessions **in Praximo**", so a coach
+   * moving a client of three years into the app gets it wrong and has to say so.
+   * That is exactly why the switch exists rather than the server inferring the
+   * kind — and why it stays reachable in both directions.
+   */
   readonly firstSession: boolean
   /**
    * `YYYY-MM-DD` for every day that already carries a session **with this
@@ -126,10 +143,16 @@ export function SchedulingScreen({
   readonly error: string | undefined
 }) {
   const today = useMemo(() => new Date(), [])
-  const [kind, setKind] = useState<SessionKind>(firstSession ? "intake" : "regular")
+  /**
+   * What the switch and the chips open on — the app's own answer, read once at
+   * mount. The screen is keyed on the client, so «once at mount» is once per
+   * booking, and nothing after this point moves the kind except the coach.
+   */
+  const openingKind: SessionKind = firstSession ? "intake" : "regular"
+  const [kind, setKind] = useState<SessionKind>(openingKind)
   const [durationTouched, setDurationTouched] = useState(false)
   const [durationMinutes, setDurationMinutes] = useState<number>(
-    defaultDurationForKind(firstSession ? "intake" : "regular"),
+    defaultDurationForKind(openingKind),
   )
   const [selectedDay, setSelectedDay] = useState<Date>(today)
   const [stripLength, setStripLength] = useState(StripDays)
@@ -168,16 +191,25 @@ export function SchedulingScreen({
   /**
    * The default follows the kind — intake 30, regular 60 — and stops following
    * the moment the coach touches the chips themselves.
+   *
+   * The time is dropped only when that default actually moves. Until #188 it was
+   * dropped either way, which was invisible while the kind was asked first and
+   * would not be now: a switch beside the duration is a thing to flip late, and
+   * with the chips already answered the grid is the same grid — losing the slot
+   * the coach had chosen would cost them a choice for nothing.
+   *
+   * No haptic here. `Switch` ticks for itself, and a switch has no tap that
+   * chooses what was already chosen.
    */
-  const chooseKind = useCallback(
-    (next: SessionKind) => {
-      // A tap that chose what was already chosen is not a selection (§Motion).
-      if (next !== kind) selectionHaptic()
+  const toggleFirstSession = useCallback(
+    (checked: boolean) => {
+      const next: SessionKind = checked ? "intake" : "regular"
       setKind(next)
-      if (!durationTouched) setDurationMinutes(defaultDurationForKind(next))
+      if (durationTouched) return
+      setDurationMinutes(defaultDurationForKind(next))
       setStartMinutes(undefined)
     },
-    [durationTouched, kind],
+    [durationTouched],
   )
 
   const chooseDuration = useCallback(
@@ -391,40 +423,6 @@ export function SchedulingScreen({
       <h1 className="mt-2 text-title font-semibold tracking-tight">{copy.sheetTitle}</h1>
 
       <div className="mt-6">
-        <Field label={copy.kindLabel}>
-          <div className="bg-muted relative flex rounded-xl p-1">
-            {/*
-              The selected background travels rather than teleporting: two
-              choices side by side is the one place on this screen where a state
-              change has somewhere to move *to*, and a pill that slides says
-              which of the two was left behind.
-            */}
-            <span
-              aria-hidden="true"
-              className={cn(
-                "bg-card absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg shadow-sm",
-                "ease-in-out-strong transition-[translate] duration-(--duration-move) motion-reduce:transition-none",
-                kind === "regular" ? "translate-x-full" : "translate-x-0",
-              )}
-            />
-            {(["intake", "regular"] as const).map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={kind === option}
-                onClick={() => chooseKind(option)}
-                className={cn(
-                  "relative z-10 flex min-h-10 flex-1 items-center justify-center rounded-lg py-2 text-body font-semibold",
-                  "transition-colors duration-(--duration-press)",
-                  kind === option ? "text-foreground" : "text-muted-foreground",
-                )}
-              >
-                {option === "intake" ? copy.kindIntake : copy.kindRegular}
-              </button>
-            ))}
-          </div>
-        </Field>
-
         <Field
           label={copy.dateLabel}
           // Keyed on the month so the label crossfades when the strip crosses
@@ -523,6 +521,44 @@ export function SchedulingScreen({
             </div>
           </div>
         </Field>
+
+        {/*
+          No uppercase caption above it, unlike every other field: the switch's
+          own label *is* the label, and giving it the same heading as «Date» and
+          «Time» would put back the weight #188 took off. It sits here rather
+          than at the top because this is what it changes — the chips below are
+          its visible effect.
+
+          A `<label htmlFor>` beside the switch rather than around it, and
+          nothing else: `id` goes on Base UI's hidden input, the label claims it,
+          and that alone is what makes the two lines of text a tap target next to
+          a 40px control. The accessible name comes free with it — Base UI looks
+          the associated label up, stamps an id on it if it has none, and points
+          the switch's `aria-labelledby` there. An id of our own on the heading
+          only duplicates the one it generates.
+        */}
+        <div className="mt-5 flex items-center gap-4">
+          <label htmlFor="first-session" className="flex min-h-11 flex-1 flex-col justify-center">
+            <span className="text-body font-semibold">{copy.firstSessionLabel}</span>
+            {/*
+              Shown from the client rather than from the switch, so it never
+              appears or disappears while the screen is open. A line that came
+              and went on each flip would move the duration chips and the slot
+              grid under a thumb that had asked for neither — and it stays true
+              either way: it describes the client, not the answer.
+            */}
+            {firstSession ? (
+              <span className="text-muted-foreground mt-0.5 text-footnote">
+                {copy.firstSessionHint}
+              </span>
+            ) : null}
+          </label>
+          <Switch
+            id="first-session"
+            checked={kind === "intake"}
+            onCheckedChange={toggleFirstSession}
+          />
+        </div>
 
         <Field label={copy.durationLabel}>
           <div className="flex gap-2">
@@ -653,7 +689,12 @@ export function SchedulingScreen({
           </div>
         </Field>
 
-        <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-caption leading-5">
+        {/*
+          A footnote at 12px was the caption size doing a description's job — the
+          one running sentence on the screen, set smaller than the labels above
+          it. 13px is the step the scale keeps for exactly this (§Typography).
+        */}
+        <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-footnote leading-5">
           {startMinutes === undefined ? (
             <>
               {clientName}
@@ -672,6 +713,13 @@ export function SchedulingScreen({
               {")."}
             </>
           )}
+          {/*
+            Said twice on purpose. Once the slot grid is open the switch is off
+            the top of a phone, and it is the one field here the app answered
+            rather than the coach — so the line they read before pressing the
+            button carries it too.
+          */}
+          {kind === "intake" ? <> {copy.footnoteFirstSession}</> : null}
         </p>
 
         {error === undefined ? null : (
