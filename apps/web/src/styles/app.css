@@ -21,9 +21,15 @@
  * end of a card (§Motion). Rows take a press as a wash of colour rather than as
  * the 0.97 a chip takes: scaling something the width of the screen reads as the
  * page flexing, and the platform's own lists light up instead.
+ *
+ * The wash is `--pressed`, which is ink rather than a colour — see `:root`. It
+ * used to be `bg-accent/70`, an opaque value from the palette, and the moment
+ * the page stopped being white that value landed on the page's own colour: a
+ * pressed row read as a hole cut through the card, at 1.01:1 against the ground
+ * behind it (#196).
  */
 @utility pressable-row {
-  @apply ease-out-strong transition-colors duration-(--duration-press) active:bg-accent/70;
+  @apply ease-out-strong transition-colors duration-(--duration-press) active:bg-pressed;
 }
 
 @utility admin-avatar {
@@ -105,6 +111,7 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-pressed: var(--pressed);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -186,6 +193,14 @@
   --success: oklch(0.596 0.145 163.225);
   --warning: oklch(0.666 0.179 58.318);
   --info: oklch(0.588 0.158 241.966);
+
+  /* A press is a state, not a surface (#196), so it is ink rather than a
+     colour: it darkens whatever it is pressed on and therefore reads the same
+     on a white card, on the page, and inside a sheet. An opaque token cannot —
+     `bg-accent/70` was tuned against a white page and came to rest on the
+     page's own colour the moment the page receded. Both schemes land at
+     1.25:1 against the surface under them. */
+  --pressed: oklch(0 0 0 / 10%);
 }
 
 .dark {
@@ -226,6 +241,9 @@
   --success: oklch(0.845 0.143 164.978);
   --warning: oklch(0.879 0.169 91.605);
   --info: oklch(0.828 0.111 230.318);
+
+  /* The same press, in the only ink a dark ground takes. */
+  --pressed: oklch(1 0 0 / 8%);
 }
 
 /* Screens replacing one another (§Motion). The browser's own crossfade, given

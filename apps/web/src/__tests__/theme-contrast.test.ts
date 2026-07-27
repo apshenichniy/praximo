@@ -16,19 +16,23 @@ import { describe, expect, it } from "vitest"
 
 const appCss = readFileSync(fileURLToPath(new URL("../styles/app.css", import.meta.url)), "utf8")
 
-/** The `oklch(L C H)` triple a token is authored as. Alpha forms are not read. */
-const token = (scheme: "light" | "dark", name: string): readonly [number, number, number] => {
+/** `oklch(L C H)` or `oklch(L C H / P%)`, as authored. Alpha defaults to 1. */
+const token = (
+  scheme: "light" | "dark",
+  name: string,
+): readonly [number, number, number, number] => {
   const block = appCss.match(scheme === "light" ? /:root\s*{([^}]*)}/s : /\.dark\s*{([^}]*)}/s)?.[1]
   const raw = block?.match(new RegExp(`--${name}:\\s*oklch\\(([^)]*)\\)`))?.[1]
-  if (raw === undefined) throw new Error(`${scheme} --${name} is not an opaque oklch value`)
+  if (raw === undefined) throw new Error(`${scheme} --${name} is not an oklch value`)
 
-  const [l = 0, c = 0, h = 0] = raw.trim().split(/\s+/).map(Number)
-  return [l, c, h]
+  const [colour = "", alpha] = raw.split("/")
+  const [l = 0, c = 0, h = 0] = colour.trim().split(/\s+/).map(Number)
+  return [l, c, h, alpha === undefined ? 1 : Number.parseFloat(alpha) / 100]
 }
 
 const gamma = (x: number) => (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
 
-const toSrgb = ([L, C, H]: readonly [number, number, number]): ReadonlyArray<number> => {
+const toSrgb = ([L, C, H]: readonly [number, number, number, number]): ReadonlyArray<number> => {
   const hue = (H * Math.PI) / 180
   const a = C * Math.cos(hue)
   const b = C * Math.sin(hue)
@@ -49,13 +53,25 @@ const linear = (channel = 0) =>
 const luminance = (colour: ReadonlyArray<number>) =>
   0.2126 * linear(colour[0]) + 0.7152 * linear(colour[1]) + 0.0722 * linear(colour[2])
 
-/** WCAG 2 relative luminance, then the ratio the guidelines are stated in. */
-const ratio = (scheme: "light" | "dark", a: string, b: string): number => {
-  const one = luminance(toSrgb(token(scheme, a)))
-  const other = luminance(toSrgb(token(scheme, b)))
+/** A translucent token painted onto an opaque one, the way a browser does it. */
+const composite = (
+  scheme: "light" | "dark",
+  ink: string,
+  ground: string,
+): ReadonlyArray<number> => {
+  const [, , , alpha = 1] = token(scheme, ink)
+  const over = toSrgb(token(scheme, ink))
+  const under = toSrgb(token(scheme, ground))
 
-  return (Math.max(one, other) + 0.05) / (Math.min(one, other) + 0.05)
+  return over.map((channel, index) => channel * alpha + (under[index] ?? 0) * (1 - alpha))
 }
+
+const contrastOf = (one: number, other: number) =>
+  (Math.max(one, other) + 0.05) / (Math.min(one, other) + 0.05)
+
+/** WCAG 2 relative luminance, then the ratio the guidelines are stated in. */
+const ratio = (scheme: "light" | "dark", a: string, b: string): number =>
+  contrastOf(luminance(toSrgb(token(scheme, a))), luminance(toSrgb(token(scheme, b))))
 
 /** The common case: something against the ground it is read on. */
 const contrast = (scheme: "light" | "dark", name: string): number =>
@@ -111,5 +127,25 @@ describe("scheme contrast parity", () => {
   it("keeps a light hairline visible on both grounds it crosses", () => {
     expect(ratio("light", "border", "card")).toBeGreaterThan(1.2)
     expect(ratio("light", "border", "background")).toBeGreaterThan(1.15)
+  })
+
+  /**
+   * A press has to answer *and* stay on its own surface (#196). `--pressed` was
+   * an opaque `accent/70` tuned against a white page; once the page receded, a
+   * pressed row came to rest on the page's own colour — 1.01:1 against the
+   * ground behind the card, which reads as a hole rather than as a press. Ink
+   * cannot drift that way, and this is the assertion that says so.
+   */
+  it("answers a press without landing on the page", () => {
+    for (const scheme of ["light", "dark"] as const) {
+      const pressedOnCard = luminance(composite(scheme, "pressed", "card"))
+      const card = luminance(toSrgb(token(scheme, "card")))
+      const page = luminance(toSrgb(token(scheme, "background")))
+
+      // Visible against the surface it is pressed on…
+      expect(contrastOf(pressedOnCard, card)).toBeGreaterThan(1.15)
+      // …and not mistakable for the ground the card sits on.
+      expect(contrastOf(pressedOnCard, page)).toBeGreaterThan(1.1)
+    }
   })
 })

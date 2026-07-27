@@ -356,6 +356,16 @@ Rows take their press as a wash of colour rather than the 0.97 a chip takes:
 scaling something the width of the screen reads as the page flexing, and the
 platform's own lists light up. That is what `pressable-row` is.
 
+The wash is **ink, not a colour** ([#196](https://github.com/apshenichniy/praximo/issues/196)):
+`--pressed` is black or white at a low alpha, so it darkens whatever surface it
+is pressed on and reads the same on a card, on the page and inside a sheet. It
+was an opaque `bg-accent/70`, picked when the page was white — and when the page
+receded to make room for elevation (§Surfaces), that value came to rest on the
+page's own colour. A pressed row stopped reading as pressed and started reading
+as a hole cut through the card. An absolute colour cannot express a relative
+state; the contrast test now asserts the press against both its own surface and
+the ground behind it.
+
 The last two rows of that table are invariants, and
 `src/__tests__/feedback-invariants.test.ts` holds them: a file that mutates says
 how it went, a file with `aria-pressed` ticks. A hook may hand its outcome out
