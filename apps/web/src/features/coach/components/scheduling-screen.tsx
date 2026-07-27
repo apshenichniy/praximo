@@ -481,7 +481,11 @@ export function SchedulingScreen({
             inert={!monthOpen}
           >
             <div ref={monthRef}>
-              <div className="border-border overflow-hidden rounded-2xl border">
+              {/* A raised surface, not a hole: the month had a border and no fill,
+                  which read as a card only while the page happened to be white.
+                  Once the page receded (#195) it was the page showing through a
+                  rounded outline (#198). */}
+              <div className="border-border bg-card overflow-hidden rounded-2xl border">
                 <Calendar
                   mode="single"
                   required={false}
@@ -548,7 +552,7 @@ export function SchedulingScreen({
               either way: it describes the client, not the answer.
             */}
             {firstSession ? (
-              <span className="text-muted-foreground mt-0.5 text-footnote">
+              <span className="text-muted-foreground mt-0.5 text-caption">
                 {copy.firstSessionHint}
               </span>
             ) : null}
@@ -697,7 +701,7 @@ export function SchedulingScreen({
           one running sentence on the screen, set smaller than the labels above
           it. 13px is the step the scale keeps for exactly this (§Typography).
         */}
-        <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-footnote leading-5">
+        <p className="border-border text-muted-foreground mt-5 border-t pt-3 text-caption leading-5">
           {startMinutes === undefined ? (
             <>
               {clientName}

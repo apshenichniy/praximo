@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"
 import { ConfirmSheet } from "@/features/mini-app/components/confirm-sheet.tsx"
+import { StatusBadge, type StatusTone } from "@/features/mini-app/components/status-badge.tsx"
 import { DangerCard, DangerZone } from "@/features/mini-app/components/danger-zone.tsx"
 import {
   DetailCard,
@@ -21,7 +22,6 @@ import {
 import { InviteLinkPanel } from "@/features/mini-app/components/invite-link-panel.tsx"
 import { Section, SectionTitle } from "@/features/mini-app/components/section.tsx"
 import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
-import { cn } from "@/lib/utils.ts"
 import type { CoachClients } from "@/server/coach-clients.ts"
 
 /**
@@ -33,10 +33,11 @@ import type { CoachClients } from "@/server/coach-clients.ts"
  * layout, and the difference between them is nothing.
  */
 
-const stateStyles: Record<CoachClients.ClientDetail["state"], string> = {
-  invited: "text-warning",
-  expired: "text-destructive",
-  accepted: "text-success",
+/** The hero says the state as a badge; the list says it as a word (#198). */
+const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
+  invited: "warning",
+  expired: "destructive",
+  accepted: "success",
 }
 
 const initials = (name: string): string =>
@@ -123,15 +124,7 @@ export function ClientScreen({
         {client.channel?.telegramUsername === undefined ? null : (
           <p className="text-muted-foreground text-body">@{client.channel.telegramUsername}</p>
         )}
-        <p
-          className={cn(
-            "flex items-center gap-1.5 text-body font-medium",
-            stateStyles[client.state],
-          )}
-        >
-          <span className="size-1.5 rounded-full bg-current" />
-          {stateWord}
-        </p>
+        <StatusBadge tone={stateTones[client.state]}>{stateWord}</StatusBadge>
       </header>
 
       {error === undefined ? null : (
@@ -221,7 +214,7 @@ export function ClientScreen({
                   <span className="flex-1 text-body tabular-nums">
                     {sessionFormat.format(new Date(session.scheduledAt))}
                   </span>
-                  <span className="text-muted-foreground text-footnote">
+                  <span className="text-muted-foreground text-caption">
                     {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
                     {" · "}
                     {session.durationMinutes}

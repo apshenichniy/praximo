@@ -60,7 +60,7 @@ export function TodayScreen({
       {relinkLink === undefined ? null : (
         <section className="border-destructive/40 bg-destructive/10 mb-8 rounded-2xl border p-5">
           <h2 className="text-emphasis font-semibold tracking-tight">{copy.home.relinkTitle}</h2>
-          <p className="text-muted-foreground mt-2 text-footnote leading-5">
+          <p className="text-muted-foreground mt-2 text-caption leading-5">
             {copy.home.relinkLead}
             <span className="text-foreground">@{botUsername}</span>
             {copy.home.relinkTail}
@@ -220,7 +220,7 @@ function SessionCard({
       */}
       {session.clientAccepted ? null : (
         <div className="border-border/60 border-t bg-warning/10 px-5 py-3">
-          <p className="text-footnote leading-5 text-warning">
+          <p className="text-caption leading-5 text-warning">
             {copy.today.unacceptedLead}
             <span className="font-semibold">{session.clientName}</span>
             {copy.today.unacceptedTail}

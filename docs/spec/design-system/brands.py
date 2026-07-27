@@ -24,18 +24,9 @@ BRAND_HUES = [
      (0.565, 0.2685, 322), (0.7312, 0.241, 322)),
 ]
 
-BASE = {
-    "neutral_hue": 285, "neutral_chroma": (0.005, 0.024),
-    "page_light": 0.951, "page_dark": 0.148,
-    "control": "raised", "control_step": 0.040,
-    # The one number moved off Practice: we already erred once toward "not
-    # visible enough", so the control's edge goes to 1.75 rather than 1.55.
-    "border_strength": 1.75,
-    "brand_role": "primary",
-    "shadow": "hairline",
-    "type": "tracking",
-    "warm": False,
-}
+# The base is `sets.BASE` — one copy, so a change to it cannot reach the app
+# and miss the artifact, or the other way round.
+from sets import BASE  # noqa: E402
 
 
 def specs():

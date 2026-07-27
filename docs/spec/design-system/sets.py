@@ -18,7 +18,7 @@ OUT = HERE / "sets"
 
 BASE = {
     "neutral_hue": 285, "neutral_chroma": (0.005, 0.024),
-    "page_light": 0.951, "page_dark": 0.148,
+    "page_light": 0.964, "page_dark": 0.148,
     "control": "raised", "control_step": 0.040,
     "border_strength": 1.75,
     "brand_role": "primary",

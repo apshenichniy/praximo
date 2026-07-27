@@ -81,7 +81,7 @@ function CoachSteps({ steps }: { readonly steps: ReadonlyArray<CoachStep> }) {
                   {step.title}
                   <span className="sr-only"> — {stateLabel[step.state]}</span>
                 </p>
-                <p className="text-muted-foreground mt-1 text-footnote leading-[18px]">
+                <p className="text-muted-foreground mt-1 text-caption leading-[18px]">
                   {step.description}
                 </p>
               </div>

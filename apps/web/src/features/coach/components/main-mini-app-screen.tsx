@@ -47,7 +47,7 @@ export function MainMiniAppScreen({
             <span className="border-border text-muted-foreground mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-caption font-semibold tabular-nums">
               {index + 1}
             </span>
-            <span className="text-footnote leading-5">{step}</span>
+            <span className="text-caption leading-5">{step}</span>
           </li>
         ))}
       </ol>

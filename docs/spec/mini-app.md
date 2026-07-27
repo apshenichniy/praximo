@@ -421,26 +421,32 @@ is the smallest style Apple itself ships.
 
 ### The scale
 
-Seven steps, in `apps/web/src/styles/app.css`. Tailwind's own `--text-*`
-namespace is switched **off**, so this is the only scale there is: `text-sm` and
-friends do not exist here.
+Six steps, in `apps/web/src/styles/app.css`. Tailwind's own `--text-*` namespace
+is switched **off**, so this is the only scale there is: `text-sm` and friends do
+not exist here.
 
 | Step | Size | Line | For |
 | --- | --- | --- | --- |
-| `text-caption` | 12px | 16 | labels, counts, state words |
-| `text-footnote` | 13px | 18 | descriptions, leads |
+| `text-caption` | 13px | 18 | labels, counts, state words, descriptions |
 | `text-body` | 15px | 21 | running text, buttons, slots |
 | `text-emphasis` | 17px | 23 | card titles, the line that matters |
 | `text-heading` | 20px | 26 | dialog and section headings |
 | `text-title` | 24px | 30 | screen titles |
 | `text-display` | 30px | 34 | the one number a screen is about |
 
-Two numbers deserve their reasons. **The floor is 12px** because a native app's
-11pt is not our 11px: the scale was set against Nunito Sans, which had neither SF
-Pro's x-height nor its optical sizing, and 12 was where that face started being
-read rather than decoded. **Body is 15px, not 14**, which is the single change
-with the widest reach — it is the size of nearly every sentence, button and slot
-in the app.
+Seven until [#198](https://github.com/apshenichniy/praximo/issues/198), where the
+bottom two turned out to be one. `caption` at 12 and `footnote` at 13 are not a
+step anybody can see, but they were a decision every call site had to take — the
+same disease #186 diagnosed, eight sizes crowded into the seven pixels between 10
+and 17, left half-treated. The floor is now **13** and `footnote` is retired; the
+bottom of the scale reads 13 → 15 → 17, in real 2px steps.
+
+**Body is 15px, not 14**, which is the single change with the widest reach — it
+is the size of nearly every sentence, button and slot in the app. The floor was
+raised rather than the scale shifted, deliberately: moving 15 is its own decision.
+Worth knowing while reading this — the whole scale sits one step below the
+platform's, where Body is 17 and Footnote 13, and that is the conversation to have
+if 13 still reads small on a phone.
 
 ### The face
 

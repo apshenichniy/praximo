@@ -36,10 +36,10 @@ export const APP_SURFACE_COLOR: SchemeColor = { dark: "#181821", light: "#ffffff
  * The light one is not white: the page recedes so that cards and sheets have
  * something to be raised against (#195) — `styles/app.css` §`:root`.
  */
-export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#0a0a10", light: "#eeeef2" }
+export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#0a0a10", light: "#f3f3f6" }
 
 /** Running text on that ground, for the same fallback. */
-export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#f1f2f5", light: "#0b0b13" }
+export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#f1f2f5", light: "#101018" }
 
 /**
  * The primary button pair, for the same hexadecimal-only boundaries — the host
