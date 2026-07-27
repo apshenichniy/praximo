@@ -74,9 +74,13 @@ function StageMarker({ state }: { readonly state: DeletionStage["state"] }) {
 
 /**
  * The one filled destructive surface in the admin app, shared by every place
- * that commits to a deletion. The theme's destructive is a light red, so the
- * label goes dark on it — the same dark-on-light shape the primary button
- * already has, and the only combination that carries readable contrast here.
+ * that commits to a deletion.
+ *
+ * The label is the page's own ground, which is what makes it work in both
+ * schemes without a token of its own: the light scheme's destructive is a deep
+ * red and `--background` is near-white on it (4.61:1), the dark scheme's is a
+ * light red and `--background` is near-black on it (8.02:1). Stating white
+ * outright would read correctly on one ground and fail on the other.
  */
 export function DeletionActionButton({
   label,
