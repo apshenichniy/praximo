@@ -52,11 +52,13 @@ describe("global application theme", () => {
     expect(root).toContain("<TelegramTheme />")
   })
 
-  it("uses Nunito Sans, with the preset's light ground at the root and dark as the override", () => {
+  it("uses Inter, with the preset's light ground at the root and dark as the override", () => {
     const appCss = src("styles/app.css")
 
-    expect(appCss).toContain('@import "@fontsource-variable/nunito-sans')
-    expect(appCss).toContain('--font-sans: "Nunito Sans Variable"')
+    // The optical-size build, not the weight-only one — see §Typography.
+    expect(appCss).toContain('@import "@fontsource-variable/inter/opsz.css"')
+    expect(appCss).toContain('--font-sans: "Inter Variable"')
+    expect(appCss).toContain("font-optical-sizing: auto")
     expect(appCss).toMatch(/:root\s*{[^}]*color-scheme:\s*light/s)
     expect(appCss).toMatch(/\.dark\s*{[^}]*color-scheme:\s*dark/s)
   })

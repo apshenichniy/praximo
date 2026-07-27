@@ -1,9 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/nunito-sans";
+/* Inter, in its optical-size build rather than the weight-only one: the `opsz`
+   axis (14–32) is the whole reason this typeface reads as a UI face, and with
+   `font-optical-sizing: auto` below, a caption gets the wide, open text cut and
+   a screen title gets the tight display one without either being asked for. It
+   costs ~35 KB more across the two subsets we serve, once, cached. */
+@import "@fontsource-variable/inter/opsz.css";
 
-/* Global shadcn preset b7ClRmv9U: base-luma / mist / Nunito Sans / Hugeicons.
+/* Global shadcn preset b7ClRmv9U: base-luma / mist / Inter / Hugeicons.
    Both of the preset's grounds are here, the way shadcn ships them: light on
    `:root`, dark as a class override. Which one is on is not this file's
    decision — the Telegram client's scheme is, and `lib/theme.ts` puts the class
@@ -32,9 +37,10 @@
 
      The floor is 12px because the app had crowded eight sizes into the seven
      pixels between 10 and 17, and the smallest of them was below the 11pt that
-     is Apple's own smallest style. Nunito Sans has neither the x-height nor the
-     optical sizing SF Pro brings to that kegel, so a native app's 11pt is not
-     our 11px; 12 is where this typeface starts being read rather than decoded.
+     is Apple's own smallest style. The sizes were then set against Nunito Sans,
+     which had neither the x-height nor the optical sizing SF Pro brings to that
+     kegel; Inter has both (#194), so the floor now has headroom it did not have
+     — retuning the steps down is a separate decision, not a side effect.
 
      Body is 15 rather than 14 for the same reason, and the line heights are
      stated here so a screen does not have to remember them. */
@@ -73,7 +79,7 @@
 }
 
 @theme inline {
-  --font-sans: "Nunito Sans Variable", sans-serif;
+  --font-sans: "Inter Variable", sans-serif;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -136,7 +142,7 @@
   --secondary-foreground: oklch(0.218 0.008 223.9);
   --muted: oklch(0.963 0.002 197.1);
   /* Darker than the preset's own 0.56, which was the one token that did not
-     survive the move to a light ground (#191). Secondary text is what this app
+     survive the move to a light ground (#194). Secondary text is what this app
      is mostly made of — 111 `text-muted-foreground`s, and on the scheduling
      screen every section label, every unselected chip and every free slot is
      one — so its contrast is not a detail. The preset's value lands at 4.6:1 on
@@ -265,13 +271,17 @@
   }
   html {
     @apply font-sans;
+    /* Inter's `opsz` axis, driven by the size each element is actually set at.
+       `auto` is the default, but only where the font *has* the axis — stating
+       it here is what makes the difference visible when the build changes. */
+    font-optical-sizing: auto;
   }
 
-  /* Optical compensation for the light ground (#191).
+  /* Optical compensation for the light ground (#194).
      Light type on a dark ground blooms — the same weight reads heavier there —
      so a scale tuned in the dark comes out thin the moment the ground flips.
-     Half a step back on the running text answers it, and Nunito Sans is a
-     variable font, so 450 is a real instance rather than a synthesised one.
+     Half a step back on the running text answers it, and Inter is a variable
+     font, so 450 is a real instance rather than a synthesised one.
 
      Deliberately in `base`: utilities are a later layer, so every explicit
      `font-medium` / `font-semibold` still wins, and the fifteen places that say

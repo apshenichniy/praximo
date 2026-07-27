@@ -26,7 +26,7 @@ const lightForeground = "oklch(0.148 0.004 228.8)"
 const criticalCss =
   `html,body{background:${APP_BACKGROUND_COLOR.light};background:${lightBackground};` +
   `color:${APP_FOREGROUND_COLOR.light};color:${lightForeground};color-scheme:light;` +
-  `font-family:"Nunito Sans Variable",ui-sans-serif,system-ui,sans-serif}` +
+  `font-family:"Inter Variable",ui-sans-serif,system-ui,sans-serif}` +
   `html.${DARK_SCHEME_CLASS},html.${DARK_SCHEME_CLASS} body{background:${APP_BACKGROUND_COLOR.dark};` +
   `background:${darkBackground};color:${APP_FOREGROUND_COLOR.dark};color:${darkForeground};` +
   `color-scheme:dark}`

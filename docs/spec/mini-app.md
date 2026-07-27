@@ -376,12 +376,43 @@ friends do not exist here.
 | `text-title` | 24px | 30 | screen titles |
 | `text-display` | 30px | 34 | the one number a screen is about |
 
-Two numbers deserve their reasons. **The floor is 12px** because this typeface
-is not SF Pro: Nunito Sans has neither its x-height nor its optical sizing, so a
-native app's 11pt is not our 11px, and 12 is where Nunito starts being read
-rather than decoded. **Body is 15px, not 14**, which is the single change with
-the widest reach — it is the size of nearly every sentence, button and slot in
-the app.
+Two numbers deserve their reasons. **The floor is 12px** because a native app's
+11pt is not our 11px: the scale was set against Nunito Sans, which had neither SF
+Pro's x-height nor its optical sizing, and 12 was where that face started being
+read rather than decoded. **Body is 15px, not 14**, which is the single change
+with the widest reach — it is the size of nearly every sentence, button and slot
+in the app.
+
+### The face
+
+**Inter**, in the `opsz` build ([#194](https://github.com/apshenichniy/praximo/issues/194)),
+replacing Nunito Sans. Nunito is a rounded, low-contrast face built for warmth,
+and it spends that warmth on the two things this app asks of type most often:
+holding 12px labels and holding secondary greys. It was the light scheme that
+made this visible — the same strings that read on near-black went thin and
+papery on white — but the weakness was there in both.
+
+Inter was drawn for screens at UI sizes and brings the x-height Nunito lacked.
+The `opsz` axis (14–32) is why the optical-size build is imported rather than the
+weight-only one: with `font-optical-sizing: auto`, a caption gets the wide, open
+text cut and a screen title gets the tight display one, with no screen asking.
+It costs about 35 KB more across the two subsets served, once, cached.
+
+The seven steps are **unchanged** by the swap. Inter's larger x-height means the
+floor now has headroom it did not have, so retuning the scale down is available —
+but that is its own decision, taken by looking, not a side effect of changing the
+face.
+
+Running text is **450, not 400, in the light scheme only** — light type on a dark
+ground blooms, so a weight settled in the dark comes out a half step thin the
+moment the ground flips. It sits in Tailwind's `base` layer, so every explicit
+`font-medium` and `font-semibold` still wins, and the places that say
+`font-normal` to mean *de-emphasised* keep saying it.
+
+Font smoothing is deliberately **unset**. `-webkit-font-smoothing` is a macOS-only
+property — a no-op in the iOS client most coaches are in — and where it does
+apply, `antialiased` renders type *thinner*, which is the opposite of what a light
+ground needs.
 
 ### Rules
 

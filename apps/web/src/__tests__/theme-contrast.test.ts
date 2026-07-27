@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 
 /**
  * The two schemes have to be equally readable, and eyeballing a palette does not
- * establish that (#191).
+ * establish that (#194).
  *
  * The light ground shipped with the preset's own `--muted-foreground`, which put
  * secondary text at 4.6:1 on white where the dark scheme had it at 8.1:1 on
