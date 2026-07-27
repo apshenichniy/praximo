@@ -7,7 +7,7 @@ import {
   type LegalInline,
   type LegalLocale,
   legalPlaceholders,
-} from "@/features/legal/content.ts"
+} from "@praximo/i18n"
 
 /**
  * One renderer for both legal texts, in whatever locale it is handed. All three

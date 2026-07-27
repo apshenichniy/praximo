@@ -1,5 +1,5 @@
 import { narrowCoachLanguage } from "@praximo/domain"
-import type { LegalLocale } from "@/features/legal/document.ts"
+import type { LegalLocale } from "@praximo/i18n"
 
 export interface LegalSearch {
   readonly lang: LegalLocale

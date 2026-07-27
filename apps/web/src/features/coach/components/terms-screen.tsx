@@ -5,7 +5,7 @@ import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { OnboardingProgress } from "@/features/coach/components/onboarding-progress.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
-import { LEGAL_PATHS } from "@/features/legal/content.ts"
+import { LEGAL_PATHS } from "@praximo/i18n"
 
 /**
  * First login, step two: what every coach agrees to, in five lines they will

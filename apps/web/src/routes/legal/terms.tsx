@@ -2,11 +2,10 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
-import { coachTermsFor } from "@/features/legal/content.ts"
+import { TERMS_VERSION, coachTermsFor } from "@praximo/i18n"
 import { LegalPage } from "@/features/legal/components/legal-page.tsx"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { validateLegalSearch } from "@/features/legal/legal-search.ts"
-import { TERMS_VERSION } from "@/features/legal/versions.ts"
 
 /**
  * The coach terms, on an app route rather than a marketing page: the coach

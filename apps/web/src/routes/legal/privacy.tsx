@@ -2,11 +2,10 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramBackButton } from "@/components/telegram-back-button.tsx"
-import { privacyPolicyFor } from "@/features/legal/content.ts"
+import { PRIVACY_VERSION, privacyPolicyFor } from "@praximo/i18n"
 import { LegalPage } from "@/features/legal/components/legal-page.tsx"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { validateLegalSearch } from "@/features/legal/legal-search.ts"
-import { PRIVACY_VERSION } from "@/features/legal/versions.ts"
 
 /**
  * The privacy policy. Public and credential-free — the client who reads it from

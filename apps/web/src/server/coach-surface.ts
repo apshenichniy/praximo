@@ -2,7 +2,7 @@ import { CoachOnboardingToken } from "@praximo/auth"
 import { MemberRepo } from "@praximo/db"
 import { CoachLanguage } from "@praximo/domain"
 import { Clock, Context, Effect, Layer, Schema } from "effect"
-import { TERMS_VERSION } from "@/features/legal/versions.ts"
+import { TERMS_VERSION } from "@praximo/i18n"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 

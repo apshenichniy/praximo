@@ -22,10 +22,12 @@ const Shared = new Set(["mini-app", "i18n"])
  * The list is the point: an edge that is not here fails this test, and adding it
  * is a line in a review rather than an import somebody did not notice.
  */
-const Allowed = new Set([
-  // The onboarding terms screen links to the legal texts it is summarising, and
-  // reads the version a coach is accepting.
-  "coach -> legal",
+const Allowed = new Set<string>([
+  // Empty since #191. The one edge that used to be here — `coach -> legal`, the
+  // onboarding terms screen reaching for the texts it summarises and the version
+  // it is accepting — is gone because the texts are no longer in this app: they
+  // moved to `@praximo/i18n`, where the surface that shows a contract and the
+  // surface that records agreeing to it can both reach them.
 ])
 
 const sourceFiles = async (dir: string): Promise<ReadonlyArray<string>> => {
