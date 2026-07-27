@@ -15,9 +15,11 @@ function Card({
         // Elevation is the surface step plus a hairline, not a shadow (#198). A
         // card belongs to the page; a shadow says "this is temporarily on top of
         // your work", which is true of a sheet, a dialog and a toast, and of
-        // nothing that scrolls. `shadow-md` here was also the only elevation the
-        // surface carried, so it was doing a job the three surfaces of #195 had
-        // already taken over.
+        // nothing that scrolls. The medium drop shadow that used to be here was
+        // also the only elevation the surface carried, so it was doing a job the
+        // three surfaces of #195 had already taken over. (Spelled out rather than
+        // named: Tailwind scans comments too, and a class named in one is a dead
+        // utility shipped in the bundle.)
         "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-4xl border border-border bg-card py-(--card-spacing) text-body text-card-foreground [--card-spacing:--spacing(6)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] *:[img:first-child]:rounded-t-4xl *:[img:last-child]:rounded-b-4xl",
         className,
       )}
