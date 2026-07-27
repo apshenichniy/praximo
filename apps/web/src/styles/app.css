@@ -135,7 +135,15 @@
   --secondary: oklch(0.963 0.002 197.1);
   --secondary-foreground: oklch(0.218 0.008 223.9);
   --muted: oklch(0.963 0.002 197.1);
-  --muted-foreground: oklch(0.56 0.021 213.5);
+  /* Darker than the preset's own 0.56, which was the one token that did not
+     survive the move to a light ground (#191). Secondary text is what this app
+     is mostly made of — 111 `text-muted-foreground`s, and on the scheduling
+     screen every section label, every unselected chip and every free slot is
+     one — so its contrast is not a detail. The preset's value lands at 4.6:1 on
+     white where the dark scheme's equivalent reads 8.1:1 on near-black, and the
+     screen went pale exactly in proportion. This is 7.4:1: the same standing
+     against its own ground, still clearly below `--foreground`'s 19.7. */
+  --muted-foreground: oklch(0.45 0.021 213.5);
   --accent: oklch(0.963 0.002 197.1);
   --accent-foreground: oklch(0.218 0.008 223.9);
   --destructive: oklch(0.577 0.245 27.325);
@@ -257,5 +265,19 @@
   }
   html {
     @apply font-sans;
+  }
+
+  /* Optical compensation for the light ground (#191).
+     Light type on a dark ground blooms — the same weight reads heavier there —
+     so a scale tuned in the dark comes out thin the moment the ground flips.
+     Half a step back on the running text answers it, and Nunito Sans is a
+     variable font, so 450 is a real instance rather than a synthesised one.
+
+     Deliberately in `base`: utilities are a later layer, so every explicit
+     `font-medium` / `font-semibold` still wins, and the fifteen places that say
+     `font-normal` to mean *de-emphasised* keep saying it. And scoped to light —
+     the dark scheme is the one that already read well. */
+  html:not(.dark) body {
+    font-weight: 450;
   }
 }
