@@ -145,6 +145,71 @@ describe("scheme contrast parity", () => {
   })
 
   /**
+   * The two token groups #198 introduced and left unasserted (#191).
+   *
+   * That ticket added Brand and a surface per Status, and deliberately deferred
+   * their invariants: the brand hue was still being judged live, and a floor
+   * written against a value about to change is a floor nobody trusts. Iris is
+   * the chosen set, so they are written here, against final numbers.
+   *
+   * Both groups are the same shape — ink on a tint of itself — and both are read
+   * as words: a status badge, the violet step of an onboarding row, the marker
+   * that says a contract clause is unfinished. So the floor is the one for
+   * words, AA at 4.5, and not the decorative floors the surface steps take.
+   */
+  it("reads status and brand ink on the tint they sit in", () => {
+    for (const scheme of ["light", "dark"] as const) {
+      for (const status of ["success", "warning", "info", "destructive"]) {
+        expect(ratio(scheme, status, `${status}-surface`), `${scheme} ${status}`).toBeGreaterThan(
+          4.5,
+        )
+      }
+      expect(ratio(scheme, "brand", "brand-surface"), scheme).toBeGreaterThan(4.5)
+    }
+  })
+
+  /**
+   * And the tint itself has to be a tint of *something*.
+   *
+   * Asserted against `--card` rather than against the page, because that is
+   * where these are worn: a badge inside a card, a chip in a row, the step
+   * marker on a detail screen. It is the same assertion `--muted` already takes
+   * one line up, applied to the four that arrived without one — a status surface
+   * level with the card under it is a badge with no badge around it, which is
+   * exactly the failure #198 diagnosed for `--secondary` / `--muted` / `--accent`
+   * and fixed for three tokens out of eight.
+   */
+  it("steps every tinted surface off the surface it is laid on", () => {
+    for (const scheme of ["light", "dark"] as const) {
+      for (const tint of [
+        "success-surface",
+        "warning-surface",
+        "info-surface",
+        "destructive-surface",
+        "brand-surface",
+      ]) {
+        expect(ratio(scheme, tint, "card"), `${scheme} ${tint}`).toBeGreaterThan(1.08)
+      }
+    }
+  })
+
+  /**
+   * The brand's own edge, held to the control edge's floor.
+   *
+   * `--brand-border` outlines the things `--brand-surface` fills — the current
+   * step of an onboarding row, the marker on a legal text — and on the light
+   * page the fill alone is 1.04:1, a difference of hue with no difference of
+   * luminance. The edge is what makes those read as a marked region rather than
+   * as a faint violet cast, so it carries the same floor `--control-border` does
+   * and for the same reason.
+   */
+  it("outlines a brand region against the page it is marked on", () => {
+    for (const scheme of ["light", "dark"] as const) {
+      expect(ratio(scheme, "brand-border", "background"), scheme).toBeGreaterThan(1.4)
+    }
+  })
+
+  /**
    * Light only: the dark scheme authors `--border` as white at 10%, and this
    * reader takes opaque oklch. Light is where the hairline has two grounds to
    * hold on — a white card and a page that is no longer white — so it is the

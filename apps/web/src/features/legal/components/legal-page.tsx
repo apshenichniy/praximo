@@ -31,7 +31,10 @@ function Inline({ value }: { readonly value: LegalInline }) {
   // Left visible on purpose. These wait on the legal-entity decision, and a
   // silently blank contract clause is worse than one that says it is unfinished.
   return (
-    <mark className="bg-brand-surface text-brand rounded px-1 py-0.5 text-caption whitespace-nowrap">
+    // The edge, not only the fill: on the light page `--brand-surface` is 1.04:1
+    // against the ground — a difference of hue with none of luminance — and a
+    // marker that says a clause is unfinished has to read as a marked region.
+    <mark className="bg-brand-surface text-brand border-brand-border rounded border px-1 py-0.5 text-caption whitespace-nowrap">
       [{legalPlaceholders[value.placeholder]}]
     </mark>
   )

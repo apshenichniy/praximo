@@ -1,10 +1,13 @@
 # One design system for both apps
 
-Status: **Iris applied, brand hue still being judged live**
-([#198](https://github.com/apshenichniy/praximo/issues/198)).
+Status: **accepted — Iris is the brand set**
+([#198](https://github.com/apshenichniy/praximo/issues/198), settled in
+[#191](https://github.com/apshenichniy/praximo/issues/191)).
 
-The token structure and the control treatment are in `apps/web`. The brand hue is
-not settled — four sets sit in `sets/`, and swapping between them is one command:
+`origin`, `mark` and `fuchsia` stay in `sets/` as reserve rather than being
+deleted: they differ from Iris in one variable, they all pass the invariants, and
+keeping them makes a future re-judgement one command instead of a re-derivation.
+Swapping is exactly that command:
 
 ```sh
 python3 docs/spec/design-system/apply.py iris     # origin | mark | iris | fuchsia
@@ -21,10 +24,12 @@ The four sets differ **only** in the brand hue. Everything else — the neutral
 ramp, the raised control at a 1.75 edge, hairline elevation, the tracking table —
 is shared, so switching between them changes one variable.
 
-**Not yet done**, deliberately: the three new contrast invariants are not written.
-They encode the fix and belong with the final values, in one commit, once the hue
-is chosen. The four existing tests in `apps/web/src/__tests__/` already gate every
-set, and all four sets pass them.
+The contrast invariants this ticket deferred — the ones for the two groups it
+introduced — are now written, in `apps/web/src/__tests__/theme-contrast.test.ts`
+(#191): status and brand ink read at AA on the tint they sit in; every tinted
+surface steps off the surface it is laid on; `--brand-border` outlines a brand
+region against the page, because on the light ground the fill alone is 1.04:1 —
+a difference of hue with none of luminance.
 
 The four variants are rendered, in both schemes, on the comparison rig:
 <https://claude.ai/code/artifact/8c20c897-75ae-4e28-bc1d-ca230f747b48>
