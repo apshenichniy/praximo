@@ -77,6 +77,7 @@ const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => 
   disableVerticalSwipes: vi.fn(),
   shareMessage: vi.fn(),
   openTelegramLink: vi.fn(),
+  openLink: vi.fn(),
   BackButton: fakeBackButton(),
   MainButton: fakeMainButton(),
   onEvent: vi.fn(),

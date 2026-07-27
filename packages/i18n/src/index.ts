@@ -5,13 +5,21 @@
  * `apps/web`, the coach-facing bot's in `apps/bot` — because a catalogue is
  * owned by the surface that says it.
  *
- * **One exception, and it earns itself** (#56): the *client-facing* catalogue
- * lives here, because two Workers say the same words. `apps/bot` renders the
- * consent text in the acceptance conversation and `apps/web` renders it again
- * on the Acceptance Page (#57) — and a consent text with two copies is a
- * consent record nobody can reproduce, since the version recorded against a
- * grant is derived from the text itself. The rule still holds for every
- * catalogue with one reader.
+ * **One exception, and it earns itself twice** (#56, #191): a text whose
+ * *version is recorded against a person* cannot have two copies, because the
+ * version is derived from the text itself and a second copy makes the record
+ * unreproducible. Two texts are in that position, and both live here:
+ *
+ * - the *client-facing* catalogue — `apps/bot` renders the consent text in the
+ *   acceptance conversation and `apps/client` renders it again on the
+ *   Acceptance Page (#57);
+ * - the *legal* texts under `./legal` — `apps/client` renders them at
+ *   `my.praximo.io/legal/*`, while `apps/web`'s server derives `TERMS_VERSION`
+ *   from them and writes it to `member.terms_version` on acceptance. Apps never
+ *   import apps (ADR 0002), so the surface that shows a contract and the
+ *   surface that records agreeing to it can only share it through here.
+ *
+ * The rule still holds for every catalogue with one reader.
  *
  * What is otherwise shared is everything around them:
  * how a gap is filled, how a count agrees with its noun, how a moment is written
@@ -36,6 +44,27 @@ export {
   SuggestedLanguageMark,
 } from "./client-copy.ts"
 export { contentDigest } from "./digest.ts"
+/**
+ * The two legal texts and the versions derived from them.
+ *
+ * The authoring helpers (`p`, `ul`, `b`, `ph`) are deliberately **not** here:
+ * they are how the three language files are written, not how a reader consumes
+ * them, and names that short have no business in a package's public surface.
+ */
+export {
+  coachTermsFor,
+  LEGAL_PATHS,
+  type LegalBlock,
+  type LegalDocument,
+  type LegalInline,
+  type LegalLocale,
+  type LegalPlaceholder,
+  legalPlaceholders,
+  type LegalSection,
+  privacyPolicyFor,
+} from "./legal/content.ts"
+export { legalUrl, type LegalDocumentName } from "./legal/url.ts"
+export { PRIVACY_VERSION, TERMS_VERSION } from "./legal/versions.ts"
 export { DefaultTimeZone, type SessionMoment, sessionMoment } from "./session-time.ts"
 export {
   type CatalogueConfig,

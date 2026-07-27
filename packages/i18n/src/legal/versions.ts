@@ -1,5 +1,5 @@
 import { CoachLanguages } from "@praximo/domain"
-import { contentDigest } from "@praximo/i18n"
+import { contentDigest } from "../digest.ts"
 import {
   coachTermsFor,
   type LegalDocument,
@@ -7,7 +7,7 @@ import {
   type LegalPlaceholder,
   legalPlaceholders,
   privacyPolicyFor,
-} from "@/features/legal/content.ts"
+} from "./content.ts"
 
 /** The languages both texts are authored in — the product's three. */
 const LegalLocales: ReadonlyArray<LegalLocale> = CoachLanguages

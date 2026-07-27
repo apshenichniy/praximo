@@ -6,13 +6,8 @@ import {
   type LegalInline,
   legalPlaceholders,
   privacyPolicyFor,
-} from "@/features/legal/content.ts"
-import {
-  LEGAL_EFFECTIVE_DATE,
-  PRIVACY_VERSION,
-  placeholdersIn,
-  TERMS_VERSION,
-} from "@/features/legal/versions.ts"
+} from "./content.ts"
+import { LEGAL_EFFECTIVE_DATE, PRIVACY_VERSION, placeholdersIn, TERMS_VERSION } from "./versions.ts"
 
 const documents: ReadonlyArray<readonly [string, LegalDocument]> = [
   ["coach terms", coachTermsFor("en")],

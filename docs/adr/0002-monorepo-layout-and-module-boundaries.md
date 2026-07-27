@@ -19,13 +19,18 @@ Praximo ships three delivery surfaces on Cloudflare Workers — the TanStack Sta
 
 ### Deployment units — `apps/`
 
-Three Workers, each an independent deploy:
+**Four** Workers, each an independent deploy (three until [#191](https://github.com/apshenichniy/praximo/issues/191)):
 
 | App | Contents |
 | --- | --- |
-| `apps/web` | TanStack Start: coach UI, Telegram Mini App, web room (LiveKit Components React) |
+| `apps/web` | TanStack Start: the coach's Telegram Mini App and the admin surface. `app.praximo.io` |
+| `apps/client` | TanStack Start: every surface a *client* meets — the acceptance page, the legal texts, and the web room (LiveKit Components React). `my.praximo.io` |
 | `apps/bot` | grammY webhook Worker; serves all per-coach bots via per-bot webhook paths + secret tokens |
 | `apps/pipeline` | Cloudflare Workflows (session processing, ADR 0001), the LiveKit webhook receiver, and the audio-retention cron sweeper |
+
+The web room is in `apps/client` rather than in `apps/web` because the coach joins it from a browser too: by [ADR 0006](0006-coach-authentication-in-mvp.md) the Mini App credential must never reach an external browser, which makes the room a client-app surface for both actors. The split was decided in #191; the deciding reasons were that `apps/web` loads Telegram's SDK on every route, hard-codes its colour scheme in the document, and needs different response headers from pages that carry tokens in their paths.
+
+**The two apps do not share components.** shadcn primitives are copied, and the design system's tokens are duplicated and kept in step by `docs/spec/design-system/apply.py` plus a parity test. There is no `@praximo/ui` and no `@praximo/theme`: the surfaces are meant to be able to diverge — one is a webview a coach lives in daily, the other a page a stranger sees once — and a shared package would make every divergence a negotiation. That README records the trigger that would change the answer.
 
 Workflow definitions live in `apps/pipeline`; steps stay thin and call package services.
 
@@ -43,7 +48,7 @@ npm scope **`@praximo/*`**, all private:
 | `@praximo/analysis` | Prompts + Vercel AI SDK for Brief / Debrief / Mentor Review. |
 | `@praximo/telegram` | Shared grammY client, bot registry, message sending (used by `bot`; `pipeline` delivers through the `pipeline → bot` service binding and shares only the types). |
 | `@praximo/auth` | Telegram Mini App credential verification — manager HMAC for the admin, Ed25519 `validate3rd` for the coach ([ADR 0006](0006-coach-authentication-in-mvp.md)) — plus the coach onboarding deep-link token. Pure crypto and config: composition with the member lookup lives in `apps/web`, since packages carry no app wiring. The Better-Auth plugin arrives with ADR 0006's adoption step. |
-| `@praximo/i18n` | The i18n **mechanism** shared by `web` and `bot` ([#167](https://github.com/apshenichniy/praximo/issues/167)): gap filling with the `MissingTranslation` marker, plural forms over `Intl.PluralRules`, locale-aware date formatters, and the content digest that versions a text from its own content. Catalogues are **not** here — each surface owns the words it says. Depends on `domain` for the language literal; no Effect, no infrastructure. |
+| `@praximo/i18n` | The i18n **mechanism** shared by `web`, `client` and `bot` ([#167](https://github.com/apshenichniy/praximo/issues/167)): gap filling with the `MissingTranslation` marker, plural forms over `Intl.PluralRules`, locale-aware date formatters, and the content digest that versions a text from its own content. Catalogues are **not** here — each surface owns the words it says — with one exception that earns itself twice: a text whose *version is recorded against a person* cannot have two copies, so the client consent catalogue ([#56](https://github.com/apshenichniy/praximo/issues/56)) and the legal texts under `./legal` ([#191](https://github.com/apshenichniy/praximo/issues/191)) live here. `apps/client` renders the contract; `apps/web`'s server derives `TERMS_VERSION` from it and writes it to `member.terms_version`. Depends on `domain` for the language literal; no Effect, no infrastructure. |
 | `@praximo/tooling` | tsconfig and oxlint presets. |
 
 ### Effect conventions
@@ -56,11 +61,11 @@ npm scope **`@praximo/*`**, all private:
 
 ### IaC
 
-A **single root Alchemy 2 program** describes all three Workers, the shared R2 bucket, service bindings, and secrets, parameterized by stage. Detailed structure is deferred to the Alchemy IaC ADR ([#18](https://github.com/apshenichniy/praximo/issues/18)), which inherits this constraint.
+A **single root Alchemy 2 program** describes all four Workers, the shared R2 bucket, service bindings, and secrets, parameterized by stage. Detailed structure is deferred to the Alchemy IaC ADR ([#18](https://github.com/apshenichniy/praximo/issues/18)), which inherits this constraint.
 
 ## Consequences
 
-- Three independent deploys isolate bot webhook latency from pipeline load and web releases.
+- Independent deploys isolate bot webhook latency from pipeline load and web releases, and keep Telegram's runtime out of the pages a non-Telegram client reads.
 - Agents write uniform Effect code by following the installed skill; deviations are a review flag.
 - The scaffolding of this skeleton is executed as its own task ticket; this ADR is the source of truth for the layout.
 - `@effect/vitest` tracks the Effect 4 beta; the pinned beta version moves with the `effect` dependency.

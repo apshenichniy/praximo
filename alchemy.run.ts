@@ -1,9 +1,9 @@
-// The single root Alchemy 2 program for Praximo (ADR 0002, ADR 0003): all three
+// The single root Alchemy 2 program for Praximo (ADR 0002, ADR 0003): all four
 // Workers, the shared R2 bucket, the Neon project + per-stage branch, and the
 // service-binding graph, parameterized by stage. It is the one source of truth
 // for infrastructure — there is no wrangler config.
 //
-// This ticket (#46) brings up the **dev stage**: the three skeleton Workers with
+// This ticket (#46) brings up the **dev stage**: the skeleton Workers with
 // their Neon/R2 bindings and typed service bindings, each answering `/health`.
 // The canonical web Worker also owns `stage.praximo.io` (#84); workers.dev stays
 // enabled on every Worker and is the only URL for non-canonical dev stages. #47
@@ -27,6 +27,7 @@
 
 import * as Alchemy from "alchemy"
 import * as Cloudflare from "alchemy/Cloudflare"
+import * as Output from "alchemy/Output"
 import * as Neon from "alchemy/Neon"
 import * as Config from "effect/Config"
 import * as Effect from "effect/Effect"
@@ -36,6 +37,11 @@ import * as Layer from "effect/Layer"
 const compatibility = { date: "2026-07-19", flags: ["nodejs_compat"] }
 const canonicalDevStage = "dev_apshenichniy"
 const canonicalDevWebDomain = "stage.praximo.io"
+// Flat, not `stage.my.praximo.io`: Universal SSL covers `praximo.io` and
+// `*.praximo.io` but not a second label, and a deeper stage host would need
+// Advanced Certificate Manager (#191). Prod's `my.praximo.io` arrives with the
+// prod custom domains, exactly as `stage.praximo.io`'s counterpart does.
+const canonicalDevClientDomain = "my-stage.praximo.io"
 
 export default Alchemy.Stack(
   "Praximo",
@@ -93,6 +99,34 @@ export default Alchemy.Stack(
     // ── Workers: typed service-binding graph (ADR 0002) ──
     // `branch.connectionUri` is a Redacted value, so it lands as a secret_text
     // binding, not plain text.
+    // ── The client app, declared first because two Workers bind its URL ──
+    // `bot` and `web` both need `client.url`, and Alchemy resolves the graph by
+    // data flow — so this has to be constructed before them. Moving it below
+    // either of them is not a style change; it is a reference to a value that
+    // does not exist yet.
+    //
+    // No bindings of its own yet. The legal pages are constants and the health
+    // route reads nothing; `/i/<token>` brings the database with it (#57).
+    const client = yield* Cloudflare.Website.Vite("Client", {
+      rootDir: "./apps/client",
+      compatibility,
+      ...(stage === canonicalDevStage ? { domain: canonicalDevClientDomain } : {}),
+    })
+
+    // `url` prefers the custom domain and falls back to workers.dev, but it is
+    // typed optional because a Worker can have neither. Ours always has one, and
+    // the two Workers below bind this value — so an absent URL is a deploy that
+    // must stop here rather than one that quietly binds `undefined` and breaks a
+    // coach's terms link at runtime.
+    const clientAppUrl = Output.map(client.url, (url) => {
+      if (url === undefined) {
+        throw new Error(
+          "the client Worker has no URL: give it a domain, or leave workers.dev enabled",
+        )
+      }
+      return url
+    })
+
     const bot = yield* Cloudflare.Worker("Bot", {
       main: "./apps/bot/src/index.ts",
       compatibility,
@@ -106,6 +140,10 @@ export default Alchemy.Stack(
         MANAGER_BOT_WEBHOOK_URL: managerBotWebhookUrl,
         COACH_BOT_CREDENTIAL_KEY: coachBotCredentialKey,
         COACH_MINI_APP_URL: coachMiniAppUrl,
+        // Where the client-facing pages are. Taken from the Worker's own URL
+        // rather than from `.env`, so it can never name a host this stack did
+        // not actually deploy.
+        CLIENT_APP_URL: clientAppUrl,
         DEFAULT_COACH_BOT_AVATAR_R2_KEY: defaultCoachBotAvatarR2Key,
       },
     })
@@ -148,6 +186,10 @@ export default Alchemy.Stack(
         MANAGER_BOT_TOKEN: managerBotToken,
         MANAGER_BOT_USERNAME: managerBotUsername,
         TELEGRAM_ENV: telegramEnv,
+        // The legal texts left this Worker in #191. It still answers their old
+        // addresses — with a 301 to this host — and the coach's terms screen
+        // links out to it, so it has to know where "there" is.
+        CLIENT_APP_URL: clientAppUrl,
       },
     })
 
@@ -156,6 +198,7 @@ export default Alchemy.Stack(
       bucket: bucket.bucketName,
       // `web.url` prefers its custom domain; the other Workers return workers.dev.
       webUrl: web.url,
+      clientUrl: client.url,
       botUrl: bot.url,
       pipelineUrl: pipeline.url,
     }

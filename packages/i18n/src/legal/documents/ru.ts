@@ -1,4 +1,4 @@
-import { b, LEGAL_PATHS, type LegalDocument, p, ph, ul } from "@/features/legal/document.ts"
+import { b, LEGAL_PATHS, type LegalDocument, p, ph, ul } from "../document.ts"
 
 /**
  * Russian, under the same rules as the Ukrainian file beside it: a structural

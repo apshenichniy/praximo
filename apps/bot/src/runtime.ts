@@ -65,6 +65,13 @@ export interface Env {
   readonly DEFAULT_COACH_BOT_AVATAR_R2_KEY: string
   readonly COACH_MINI_APP_URL: string
   /**
+   * The client app's own origin (#191). Separate from `COACH_MINI_APP_URL`
+   * because the two surfaces are: the Mini App is where a coach lives, and this
+   * is where somebody who is not on Telegram reads a privacy policy before
+   * agreeing to anything. Bound from that Worker's `.url` in `alchemy.run.ts`.
+   */
+  readonly CLIENT_APP_URL: string
+  /**
    * This Worker's own public origin — the value `manager-bot:set-webhook`
    * installs on the manager bot, bound here because the health sweep runs on a
    * cron and a repair re-arms the coach bot's webhook (#55). There is no request
@@ -540,7 +547,7 @@ const coachBotFor = async (
           language: choice.language,
           telegramBotId: botId,
           telegramUserId: String(sender.id),
-          miniAppUrl: env.COACH_MINI_APP_URL,
+          clientAppUrl: env.CLIENT_APP_URL,
         }).pipe(Effect.orElseSucceed(() => ({ _tag: "Unknown" }) as const)),
       )
       if (outcome._tag === "Unknown") return

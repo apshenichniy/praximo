@@ -1,8 +1,8 @@
 import { CoachOnboardingToken } from "@praximo/auth"
 import { MemberRepo } from "@praximo/db"
 import { CoachLanguage } from "@praximo/domain"
-import { Clock, Context, Effect, Layer, Schema } from "effect"
-import { TERMS_VERSION } from "@/features/legal/versions.ts"
+import { Clock, Config, Context, Effect, Layer, Schema } from "effect"
+import { TERMS_VERSION } from "@praximo/i18n"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
@@ -19,6 +19,14 @@ export type CoachEntry =
   | {
       readonly kind: "terms-required"
       readonly termsVersion: string
+      /**
+       * Where the full texts are, now that they are not here (#191). The screen
+       * summarises the terms in five lines and links out to them, and that link
+       * crosses a host — so it comes from the Worker's configuration rather than
+       * from a string on the screen, and it travels on the payload the screen
+       * already waits for rather than costing a second round trip.
+       */
+      readonly legalOrigin: string
       /**
        * What the coach is being spoken to in *right now* — seeded from their
        * Telegram client when they claimed the invite (#130). Onboarding's first
@@ -101,6 +109,10 @@ export const layer = Layer.effect(
     const session = yield* CoachSession.Service
     const members = yield* MemberRepo.Service
     const tokens = yield* CoachOnboardingToken.Service
+    // Read once, at layer construction: it is a deployment fact, not a per-call
+    // one, and a stage that cannot tell a coach where the terms are should fail
+    // where that is visible rather than on somebody's onboarding screen.
+    const legalOrigin = yield* Config.string("CLIENT_APP_URL")
 
     /**
      * The home screen for one authenticated coach. It is built in one place
@@ -136,6 +148,7 @@ export const layer = Layer.effect(
         return {
           kind: "terms-required",
           termsVersion: TERMS_VERSION,
+          legalOrigin,
           language: principal.language,
         } satisfies CoachEntry
       }

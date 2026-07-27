@@ -9,14 +9,15 @@ import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
-import { LegalPage } from "@/features/legal/components/legal-page.tsx"
-import { coachTermsFor, privacyPolicyFor } from "@/features/legal/content.ts"
-import { PRIVACY_VERSION, TERMS_VERSION } from "@/features/legal/versions.ts"
+import { TERMS_VERSION } from "@praximo/i18n"
 import { MainMiniAppScreen } from "@/features/coach/components/main-mini-app-screen.tsx"
 import { TermsScreen } from "@/features/coach/components/terms-screen.tsx"
 import { coachCatalog, coachCopy } from "@/features/i18n/coach-copy.ts"
 import { acceptOnce, CoachScreen, mainMiniAppUrlFor } from "@/routes/index.tsx"
 import type { CoachEntryTransportResult } from "@/server/coach.functions.ts"
+
+/** The client app's origin, as the Worker's configuration hands it to the screen. */
+const LEGAL_ORIGIN = "https://my.praximo.io"
 
 /**
  * The screens carry internal links, so they need a router to render at all. A
@@ -72,7 +73,12 @@ const screen = (entry: CoachEntryTransportResult, launchLanguage: "en" | "uk" | 
 
 const termsRequired = (language: "en" | "uk" | "ru" = "en"): CoachEntryTransportResult => ({
   ok: true,
-  entry: { kind: "terms-required", termsVersion: TERMS_VERSION, language },
+  entry: {
+    kind: "terms-required",
+    termsVersion: TERMS_VERSION,
+    legalOrigin: LEGAL_ORIGIN,
+    language,
+  },
 })
 
 const home = (language: "en" | "uk" | "ru" = "en"): CoachEntryTransportResult => ({
@@ -114,6 +120,7 @@ describe("coach Mini App entry", () => {
       <TermsScreen
         copy={coachCopy("en")}
         locale="en"
+        legalOrigin={LEGAL_ORIGIN}
         onAccept={() => {}}
         pending={false}
         error={undefined}
@@ -122,8 +129,10 @@ describe("coach Mini App entry", () => {
 
     expect(html).toContain("Before you start")
     expect(html).toContain("assistive, not authoritative")
-    expect(html).toContain("/legal/terms")
-    expect(html).toContain("/legal/privacy")
+    // External now: the texts are served by the client app (#191), and the link
+    // has to name that host rather than a path in this one.
+    expect(html).toContain(`${LEGAL_ORIGIN}/legal/terms`)
+    expect(html).toContain(`${LEGAL_ORIGIN}/legal/privacy`)
     // No way past it but through: declining is closing the app, and a control
     // that ends onboarding with no way back is a trap rather than a choice.
     expect(html).not.toContain("Decline")
@@ -139,6 +148,7 @@ describe("coach Mini App entry", () => {
       <TermsScreen
         copy={coachCopy("ru")}
         locale="ru"
+        legalOrigin={LEGAL_ORIGIN}
         onAccept={() => {}}
         pending={false}
         error={undefined}
@@ -147,8 +157,8 @@ describe("coach Mini App entry", () => {
 
     expect(html).toContain(coachCatalog.ru.terms.title)
     expect(html).toContain(coachCatalog.ru.terms.points[0])
-    expect(html).toContain("/legal/terms?lang=ru")
-    expect(html).toContain("/legal/privacy?lang=ru")
+    expect(html).toContain(`${LEGAL_ORIGIN}/legal/terms?lang=ru`)
+    expect(html).toContain(`${LEGAL_ORIGIN}/legal/privacy?lang=ru`)
   })
 
   /**
@@ -231,41 +241,6 @@ describe("coach Mini App entry", () => {
     const failed = await screen({ ok: false, error: "server" }, "ru")
     expect(failed).toContain(coachCatalog.ru.entry.unavailableTitle)
     expect(failed).toContain(coachCatalog.ru.common.tryAgain)
-  })
-
-  it("renders both legal texts without a credential, in every language", async () => {
-    const terms = await render(
-      <LegalPage document={coachTermsFor("en")} version={TERMS_VERSION} locale="en" />,
-    )
-    expect(terms).toContain("Coach terms of service")
-    expect(terms).toContain(TERMS_VERSION)
-    // The placeholders are shown, not silently blanked: an unfinished contract
-    // clause that reads as finished is worse than one that admits it.
-    expect(terms).toContain("[operator legal name and address]")
-
-    const privacy = await render(
-      <LegalPage document={privacyPolicyFor("en")} version={PRIVACY_VERSION} locale="en" />,
-    )
-    expect(privacy).toContain("Privacy policy")
-    expect(privacy).toContain(PRIVACY_VERSION)
-    expect(privacy).toContain("Deepgram")
-
-    // The same version identifies the translated documents: they are the same
-    // contract, and the record of what a coach accepted has to mean one thing.
-    const ukrainian = await render(
-      <LegalPage document={coachTermsFor("uk")} version={TERMS_VERSION} locale="uk" />,
-    )
-    expect(ukrainian).toContain(coachTermsFor("uk").title)
-    expect(ukrainian).toContain(TERMS_VERSION)
-    expect(ukrainian).toContain('lang="uk"')
-    expect(ukrainian).toContain("[operator legal name and address]")
-
-    const russian = await render(
-      <LegalPage document={privacyPolicyFor("ru")} version={PRIVACY_VERSION} locale="ru" />,
-    )
-    expect(russian).toContain(privacyPolicyFor("ru").title)
-    expect(russian).toContain("Deepgram")
-    expect(russian).toContain('lang="ru"')
   })
 })
 

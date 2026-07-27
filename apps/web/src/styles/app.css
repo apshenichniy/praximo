@@ -32,7 +32,11 @@
   @apply ease-out-strong transition-colors duration-(--duration-press) active:bg-pressed;
 }
 
-@utility admin-avatar {
+/* The disc the mark is drawn on, and the one every workspace avatar wears.
+   Named for the brand rather than for the admin section it first appeared in
+   (#191): `praximo-mark` is its main wearer, and the client app wears the mark
+   too. */
+@utility brand-disc {
   @apply bg-gradient-to-br from-violet-700 to-indigo-950 text-white;
 }
 

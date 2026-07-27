@@ -117,9 +117,19 @@ describe("the consent step", () => {
     expect(message.buttons[1]?.callbackData).toBe(`${AcceptCallbackPrefix}${TOKEN}:ru`)
   })
 
-  it("builds the policy link on the app's own origin, in the client's language", () => {
-    expect(privacyUrl("https://stage.praximo.io/?b=9100777", "uk")).toBe(
-      "https://stage.praximo.io/legal/privacy?lang=uk",
+  /**
+   * The **client app's** origin, not the Mini App's (#191). A client tapping
+   * this is by definition somebody the Telegram surface is not for, and the page
+   * they open must not load a Telegram runtime to render a privacy policy.
+   */
+  it("builds the policy link on the client app's origin, in the client's language", () => {
+    expect(privacyUrl("https://my-stage.praximo.io", "uk")).toBe(
+      "https://my-stage.praximo.io/legal/privacy?lang=uk",
+    )
+    // Whatever the origin carries is dropped: this is a public page, and a
+    // bot id or a fragment on it says something about who was sent it.
+    expect(privacyUrl("https://my-stage.praximo.io/?b=9100777#x", "ru")).toBe(
+      "https://my-stage.praximo.io/legal/privacy?lang=ru",
     )
   })
 })
@@ -258,7 +268,7 @@ describe("accepting", () => {
         language: "ru",
         telegramBotId: BOT_ID,
         telegramUserId: CLIENT_ID,
-        miniAppUrl: "https://stage.praximo.io/",
+        clientAppUrl: "https://my-stage.praximo.io",
       }).pipe(Effect.provide(repo.layer))
 
       expect(outcome._tag).toBe("Consent")

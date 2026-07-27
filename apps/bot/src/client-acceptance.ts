@@ -10,6 +10,7 @@ import {
   clientCopy,
   ClientLanguageNames,
   DefaultTimeZone,
+  legalUrl,
   sessionMoment,
   SuggestedLanguageMark,
 } from "@praximo/i18n"
@@ -240,19 +241,17 @@ export const refusalText = (
     : copy.refusal.linkExpired(coachName)
 }
 
-/** The public privacy policy, in the language the client is being spoken to. */
-export const privacyUrl = (miniAppUrl: string, language: CoachLanguage): string => {
-  try {
-    const url = new URL(miniAppUrl)
-    url.search = ""
-    url.hash = ""
-    url.pathname = "/legal/privacy"
-    url.searchParams.set("lang", language)
-    return url.toString()
-  } catch {
-    return miniAppUrl
-  }
-}
+/**
+ * The public privacy policy, in the language the client is being spoken to.
+ *
+ * Built from the **client app's** origin since #191, not from the Mini App's.
+ * The two are different hosts now, and this is a link a client taps: they are
+ * not on Telegram's Mini App by definition — that is the whole reason the web
+ * acceptance path exists — so the page they open must not be one that loads a
+ * Telegram runtime to render a privacy policy.
+ */
+export const privacyUrl = (clientAppUrl: string, language: CoachLanguage): string =>
+  legalUrl(clientAppUrl, "privacy", language)
 
 const identifier = (prefix: string): string =>
   `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
@@ -323,7 +322,7 @@ export const showConsent = Effect.fn("ClientAcceptance.showConsent")(function* (
   readonly language: CoachLanguage
   readonly telegramBotId: string
   readonly telegramUserId: string
-  readonly miniAppUrl: string
+  readonly clientAppUrl: string
 }) {
   const repo = yield* ClientAcceptanceRepo.Service
   const lookup = yield* repo.findByToken(input.token, input.telegramBotId)
@@ -351,7 +350,7 @@ export const showConsent = Effect.fn("ClientAcceptance.showConsent")(function* (
       token: input.token,
       coachName: lookup.coachName,
       language: input.language,
-      privacyUrl: privacyUrl(input.miniAppUrl, input.language),
+      privacyUrl: privacyUrl(input.clientAppUrl, input.language),
     }),
   } as const
 })

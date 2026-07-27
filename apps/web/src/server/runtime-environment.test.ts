@@ -6,6 +6,7 @@ const completeEnvironment = {
   MANAGER_BOT_TOKEN: "token",
   MANAGER_BOT_USERNAME: "PraximoMotherBot",
   TELEGRAM_ENV: "production",
+  CLIENT_APP_URL: "http://localhost:3001",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default.jpg",
 }
 
@@ -28,6 +29,13 @@ describe("runtime environment selection", () => {
       canUseLocalProcessEnvironment(true, {
         ...completeEnvironment,
         TELEGRAM_ENV: undefined,
+      }),
+    ).toBe(false)
+    // #191's binding, and the newest instance of that same rule.
+    expect(
+      canUseLocalProcessEnvironment(true, {
+        ...completeEnvironment,
+        CLIENT_APP_URL: undefined,
       }),
     ).toBe(false)
   })

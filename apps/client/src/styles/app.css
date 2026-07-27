@@ -1,0 +1,362 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/* Inter, in its optical-size build rather than the weight-only one: the `opsz`
+   axis (14–32) is the whole reason this typeface reads as a UI face, and with
+   `font-optical-sizing: auto` below, a caption gets the wide, open text cut and
+   a screen title gets the tight display one without either being asked for. It
+   costs ~35 KB more across the two subsets we serve, once, cached. */
+@import "@fontsource-variable/inter/opsz.css";
+
+/* One design system, two apps (#198, #191).
+   base-luma / mist / Inter / Hugeicons, in the Iris set.
+
+   This file is the **same** system `apps/web` carries, not a fresh preset: the
+   token blocks below are written into both apps by
+   `docs/spec/design-system/apply.py`, and `__tests__/design-system-parity.test.ts`
+   holds them identical. Edit them there, never here.
+
+   What differs from the Mini App's copy is only what belongs to a phone webview
+   the coach lives in: the day strip's scroll-driven edges are not here, because
+   there is no day strip. Everything a stranger's browser needs — both grounds,
+   the type scale, the motion tokens, the control treatment — is shared.
+
+   Which ground is on is not this file's decision. In the Mini App the Telegram
+   client decides; here the reader does, through a preference in `localStorage`
+   falling back to `prefers-color-scheme`, applied by `lib/theme.ts` before the
+   first paint. */
+
+@custom-variant dark (&:is(.dark *));
+
+/**
+ * A full-width row that is a control — a client, a session, an action at the
+ * end of a card (§Motion). Rows take a press as a wash of colour rather than as
+ * the 0.97 a chip takes: scaling something the width of the screen reads as the
+ * page flexing, and the platform's own lists light up instead.
+ *
+ * The wash is `--pressed`, which is ink rather than a colour — see `:root`. It
+ * used to be `bg-accent/70`, an opaque value from the palette, and the moment
+ * the page stopped being white that value landed on the page's own colour: a
+ * pressed row read as a hole cut through the card, at 1.01:1 against the ground
+ * behind it (#196).
+ */
+@utility pressable-row {
+  @apply ease-out-strong transition-colors duration-(--duration-press) active:bg-pressed;
+}
+
+/* The disc the mark is drawn on, and the one every workspace avatar wears.
+   Named for the brand rather than for the admin section it first appeared in
+   (#191): `praximo-mark` is its main wearer, and the client app wears the mark
+   too. */
+@utility brand-disc {
+  @apply bg-gradient-to-br from-violet-700 to-indigo-950 text-white;
+}
+
+@theme {
+  /* Type scale (#186, narrowed in #198). Six steps, named for the job rather
+     than for a size, and Tailwind's own scale is switched off so there is
+     exactly one of them — see docs/spec/mini-app.md §Typography.
+
+     Seven until #198, where the bottom two turned out to be one: `caption` at 12
+     and `footnote` at 13 are not a step anybody can see, but they were a decision
+     every call site had to take. That is the same disease #186 diagnosed — eight
+     sizes crowded into the seven pixels between 10 and 17 — left half-treated.
+     So the floor is now 13 and `footnote` is gone; the bottom of the scale reads
+     13 → 15 → 17, in real 2px steps.
+
+     Raising the floor rather than scaling everything: 15 is still the body, and
+     moving it is #186's widest-reach decision, taken on its own or not at all.
+     Worth knowing while reading this: the whole scale sits one step below the
+     platform's (iOS Body is 17, Footnote 13), which is the conversation to have
+     if 13 still reads small on a phone.
+
+     The line heights are stated here so a screen does not have to remember them. */
+  --text-*: initial;
+
+  --text-caption: 0.8125rem; /* 13px — labels, counts, state words, descriptions */
+  --text-caption--line-height: 1.125rem;
+  --text-body: 0.9375rem; /* 15px — running text, buttons, slots */
+  --text-body--line-height: 1.3125rem;
+  --text-emphasis: 1.0625rem; /* 17px — card titles, the line that matters */
+  --text-emphasis--line-height: 1.4375rem;
+  --text-heading: 1.25rem; /* 20px — dialog and section headings */
+  --text-heading--line-height: 1.625rem;
+  --text-title: 1.5rem; /* 24px — screen titles */
+  --text-title--line-height: 1.875rem;
+  --text-display: 1.875rem; /* 30px — the one number a screen is about */
+  --text-display--line-height: 2.125rem;
+
+  /* Motion (#186). The built-in easings are too weak to read as deliberate:
+     `ease-out` on a 200ms transition looks like nothing was eased at all. These
+     are the two shapes the app needs — things arriving and leaving, and things
+     moving while they stay — plus the iOS drawer curve Base UI's own popups use. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Four durations, named for what they are for rather than for how long they
+     are — see docs/spec/mini-app.md §Motion. A number chosen at the call site is
+     a number that drifts from the one next to it. */
+  --duration-press: 120ms;
+  --duration-swap: 180ms;
+  --duration-move: 250ms;
+  --duration-screen: 320ms;
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", sans-serif;
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  /* Status, named for the meaning rather than for the hue (#190). A screen that
+     said `text-emerald-300` was stating a shade picked for a dark ground, and on
+     white it is barely there; these carry one value per scheme, and `destructive`
+     — already in the preset — is the fourth of them. */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-pressed: var(--pressed);
+  /* A tinted surface per status, so a state that needs a ground has a token
+     instead of an alpha guessed at the call site — the app had accumulated
+     twenty-two of those, six of them for this one job (#198). */
+  --color-success-surface: var(--success-surface);
+  --color-warning-surface: var(--warning-surface);
+  --color-info-surface: var(--info-surface);
+  --color-destructive-surface: var(--destructive-surface);
+  /* The edge that makes a control read as a control (#198). Separate from
+     `--border`, which is a divider between things rather than the outline of
+     one, and stronger: the hairline that was carrying every slot, chip and day
+     on its own sat at 1.22:1 against the page, and this sits at 1.56:1. It
+     applies even when the control has a fill — a control whose fill matches the
+     surface under it is exactly the failure this issue started from. */
+  --color-control-border: var(--control-border);
+  /* The mark's violet. `--primary` carries the same value while the brand is in
+     the primary role, but the two are separate tokens because the roles are: one
+     is "the main action", the other is "this product". A set that moves the
+     brand to a tint moves this and leaves `--primary` as ink. */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-border: var(--brand-border);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces — the grounds content sits on. Never the fill of a control. */
+  --background: oklch(0.964 0.005 285);
+  --foreground: oklch(0.1785 0.0168 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.1785 0.0168 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.1785 0.0168 285);
+  --muted: oklch(0.936 0.011 285);
+  --muted-foreground: oklch(0.441 0.024 285);
+
+  /* Controls — the things a thumb chooses. `--control-border` is what makes a
+     control read as one, and it applies even when the control has a fill. */
+  --primary: oklch(0.565 0.2828 299);
+  --primary-foreground: oklch(0.992 0.003 285);
+  --secondary: oklch(1 0.0007 285);
+  --secondary-foreground: oklch(0.1785 0.0168 285);
+  --control-border: oklch(0.8199 0.0144 285);
+  --accent: oklch(0.9616 0.012 285);
+  --accent-foreground: oklch(0.1785 0.0168 285);
+  --border: oklch(0.8987 0.0096 285);
+  --input: oklch(0.8987 0.0096 285);
+  --ring: oklch(0.565 0.2828 299);
+
+  /* Brand — the mark's violet. `--primary` carries it in this set, so the two
+     are the same value; they are still separate tokens because the role is. */
+  --brand: oklch(0.565 0.2828 299);
+  --brand-foreground: oklch(0.992 0.003 285);
+  --brand-surface: oklch(0.952 0.0273 299);
+  --brand-border: oklch(0.8397 0.0935 299);
+
+  /* Status — meaning, never hue. Each carries a surface so a tinted state has
+     a token instead of an improvised alpha. */
+  --destructive: oklch(0.5644 0.22 27);
+  --destructive-surface: oklch(0.967 0.017 27);
+  --success: oklch(0.523 0.127 156);
+  --success-surface: oklch(0.964 0.02032 156);
+  --warning: oklch(0.5464 0.1259 62);
+  --warning-surface: oklch(0.967 0.02014 62);
+  --info: oklch(0.5379 0.15 250);
+  --info-surface: oklch(0.964 0.0185 250);
+
+  /* State — a press is ink, so it darkens whatever surface it lands on. */
+  --pressed: oklch(0 0 0 / 8%);
+
+  --chart-1: oklch(0.872 0.01 285);
+  --chart-2: oklch(0.56 0.03 285);
+  --chart-3: oklch(0.45 0.024 285);
+  --chart-4: oklch(0.378 0.02 285);
+  --chart-5: oklch(0.275 0.016 285);
+  --radius: 0.625rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #101018;
+  --sidebar-primary: #9324ff;
+  --sidebar-primary-foreground: #fcfcfe;
+  --sidebar-accent: #f1f1fa;
+  --sidebar-accent-foreground: #101018;
+  --sidebar-border: #dddde4;
+  --sidebar-ring: #9324ff;
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces — the grounds content sits on. Never the fill of a control. */
+  --background: oklch(0.148 0.0132 285);
+  --foreground: oklch(0.9608 0.005 285);
+  --card: oklch(0.214 0.018 285);
+  --card-foreground: oklch(0.9608 0.005 285);
+  --popover: oklch(0.214 0.018 285);
+  --popover-foreground: oklch(0.9608 0.005 285);
+  --muted: oklch(0.276 0.024 285);
+  --muted-foreground: oklch(0.7192 0.024 285);
+
+  /* Controls — the things a thumb chooses. `--control-border` is what makes a
+     control read as one, and it applies even when the control has a fill. */
+  --primary: oklch(0.7175 0.1728 299);
+  --primary-foreground: oklch(0.178 0.024 285);
+  --secondary: oklch(0.266 0.0204 285);
+  --secondary-foreground: oklch(0.9608 0.005 285);
+  --control-border: oklch(0.414 0.0336 285);
+  --accent: oklch(0.314 0.0288 285);
+  --accent-foreground: oklch(0.9608 0.005 285);
+  --border: oklch(0.2944 0.024 285);
+  --input: oklch(0.2944 0.024 285);
+  --ring: oklch(0.7175 0.1728 299);
+
+  /* Brand — the mark's violet. `--primary` carries it in this set, so the two
+     are the same value; they are still separate tokens because the role is. */
+  --brand: oklch(0.7175 0.1728 299);
+  --brand-foreground: oklch(0.178 0.024 285);
+  --brand-surface: oklch(0.283 0.05184 299);
+  --brand-border: oklch(0.3897 0.1176 299);
+
+  /* Status — meaning, never hue. Each carries a surface so a tinted state has
+     a token instead of an improvised alpha. */
+  --destructive: oklch(0.741 0.1587 22);
+  --destructive-surface: oklch(0.283 0.04761 22);
+  --success: oklch(0.7035 0.15 160);
+  --success-surface: oklch(0.283 0.045 160);
+  --warning: oklch(0.7255 0.1496 82);
+  --warning-surface: oklch(0.283 0.04488 82);
+  --info: oklch(0.7185 0.15 245);
+  --info-surface: oklch(0.283 0.045 245);
+
+  /* State — a press is ink, so it darkens whatever surface it lands on. */
+  --pressed: oklch(1 0 0 / 7%);
+
+  --chart-1: oklch(0.872 0.01 285);
+  --chart-2: oklch(0.56 0.03 285);
+  --chart-3: oklch(0.45 0.024 285);
+  --chart-4: oklch(0.378 0.02 285);
+  --chart-5: oklch(0.275 0.016 285);
+  --sidebar: #181821;
+  --sidebar-foreground: #f1f2f5;
+  --sidebar-primary: #b488ff;
+  --sidebar-primary-foreground: #10101b;
+  --sidebar-accent: #302f40;
+  --sidebar-accent-foreground: #f1f2f5;
+  --sidebar-border: #2b2b38;
+  --sidebar-ring: #b488ff;
+}
+
+/* Screens replacing one another (§Motion). The browser's own crossfade, given
+   this app's duration and curve; a coach who has asked for less movement gets
+   the navigation without it. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--duration-screen);
+  animation-timing-function: var(--ease-out-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* The registry's own iOS advice, which this app never had (#198): a backdrop
+       needs `body` to be a containing block so it covers the visual viewport
+       after the page has been scrolled.
+
+       The drawer's backdrop is `fixed` here, so this changes nothing today. It is
+       stated because the component shipped with a supports-variant keyed on the
+       iOS-only touch-callout property that made the backdrop absolute, and that
+       assumed this rule — without it, `inset-0` resolved against the initial
+       containing block, and
+       the scrim landed on the top of the *document*: on a scrolled page it dimmed
+       a band across the upper screen and left the rest bright under an open
+       sheet. A CLI re-pull would bring that branch back, and this is what makes
+       it harmless when it does. */
+    position: relative;
+  }
+  html {
+    @apply font-sans;
+    /* Inter's `opsz` axis, driven by the size each element is actually set at.
+       `auto` is the default, but only where the font *has* the axis — stating
+       it here is what makes the difference visible when the build changes. */
+    font-optical-sizing: auto;
+  }
+
+  /* Optical compensation for the light ground (#194).
+     Light type on a dark ground blooms — the same weight reads heavier there —
+     so a scale tuned in the dark comes out thin the moment the ground flips.
+     Half a step back on the running text answers it, and Inter is a variable
+     font, so 450 is a real instance rather than a synthesised one.
+
+     Deliberately in `base`: utilities are a later layer, so every explicit
+     `font-medium` / `font-semibold` still wins, and the fifteen places that say
+     `font-normal` to mean *de-emphasised* keep saying it. And scoped to light —
+     the dark scheme is the one that already read well. */
+  html:not(.dark) body {
+    font-weight: 450;
+  }
+}

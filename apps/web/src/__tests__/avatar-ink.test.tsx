@@ -16,10 +16,10 @@ describe("the workspace avatar", () => {
       "avatar-fallback",
     )
 
-    expect(classes).toContain("admin-avatar")
+    expect(classes).toContain("brand-disc")
     expect(classes).toContain("text-white")
     // The fallback primitive ships a muted ink for the grey disc it assumes.
-    // `admin-avatar` carries `text-white` behind `@apply`, where tailwind-merge
+    // `brand-disc` carries `text-white` behind `@apply`, where tailwind-merge
     // cannot see it, so without the colour named here both survive the merge and
     // the muted one wins in the cascade — grey initials on the violet ground.
     expect(classes).not.toContain("text-muted-foreground")
@@ -47,7 +47,7 @@ describe("the workspace avatar", () => {
 
 describe("the entry frame's brand mark", () => {
   it("leaves the disc's ink alone, having no colour of its own to state", () => {
-    // The counterpart to the avatar: nothing here competes with `admin-avatar`,
+    // The counterpart to the avatar: nothing here competes with `brand-disc`,
     // so the icon inherits its white and the utility needs no help.
     expect(entryMarkClass("brand")).not.toMatch(/\btext-/)
     expect(entryMarkClass("muted")).toContain("text-muted-foreground")

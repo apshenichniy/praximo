@@ -1,7 +1,7 @@
-import type { LegalDocument, LegalLocale } from "@/features/legal/document.ts"
-import { coachTermsEn, privacyPolicyEn } from "@/features/legal/documents/en.ts"
-import { coachTermsRu, privacyPolicyRu } from "@/features/legal/documents/ru.ts"
-import { coachTermsUk, privacyPolicyUk } from "@/features/legal/documents/uk.ts"
+import type { LegalDocument, LegalLocale } from "./document.ts"
+import { coachTermsEn, privacyPolicyEn } from "./documents/en.ts"
+import { coachTermsRu, privacyPolicyRu } from "./documents/ru.ts"
+import { coachTermsUk, privacyPolicyUk } from "./documents/uk.ts"
 
 export {
   b,
@@ -16,7 +16,7 @@ export {
   p,
   ph,
   ul,
-} from "@/features/legal/document.ts"
+} from "./document.ts"
 
 /**
  * The two legal texts, as data, in the three languages the product speaks.

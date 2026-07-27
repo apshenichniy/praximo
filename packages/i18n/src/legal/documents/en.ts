@@ -1,4 +1,4 @@
-import { b, LEGAL_PATHS, type LegalDocument, p, ph, ul } from "@/features/legal/document.ts"
+import { b, LEGAL_PATHS, type LegalDocument, p, ph, ul } from "../document.ts"
 
 /**
  * The English originals. This is the reference text: the version both documents

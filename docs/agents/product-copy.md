@@ -12,6 +12,8 @@ Three voices, one per reader. Getting the reader wrong is the single most expens
 
 **The client.** Addressed by **their coach's assistant**, never by a platform ([client-onboarding-auth.md](../spec/client-onboarding-auth.md) §Principles). The client did not choose Praximo, has no account with us, and is not our user in any sense they would recognise — they are their coach's client, and the bot they are talking to belongs to that coach. The catalogue is [`packages/i18n/src/client-copy.ts`](../../packages/i18n/src/client-copy.ts), in the package rather than in an app because two Workers render the same consent text.
 
+**The client app's page chrome** is a fourth, smaller thing and not a fourth voice: the footer's appearance switch, and whatever the acceptance page's frame comes to need. It says nothing *to* anybody — it labels controls — so it stays in the app that renders it, [`apps/client/src/features/i18n/chrome-copy.ts`](../../apps/client/src/features/i18n/chrome-copy.ts), and speaks in the client's register when it does speak. Words addressed to the client belong in the catalogue above, not here.
+
 ## Standing rules
 
 **No URLs in body text.** Every action is an inline button ([#164](https://github.com/apshenichniy/praximo/issues/164)). A `t.me/…?start=` payload wrapped across four lines of a phone reads like phishing, and it is worst in the one message that asks for a legal agreement.
@@ -24,7 +26,7 @@ Three voices, one per reader. Getting the reader wrong is the single most expens
 
 **Versioned text is versioned by its content.** `contentDigest` over the text produces the version recorded against an acceptance, so an edit cannot ship as the same document somebody already agreed to. Whether that version is *one across all three languages* or *one per language* depends on who can change language afterwards: the coach can and is never re-asked, so their terms carry one version ([#130](https://github.com/apshenichniy/praximo/issues/130)); the client cannot, so their consent carries one per language ([#56](https://github.com/apshenichniy/praximo/issues/56)).
 
-**English is the reference.** Every other catalogue is filled out against it leaf by leaf, and a blank leaf throws in development and falls back in production — a coach reading one English sentence in a Ukrainian screen is a smaller failure than a coach reading `terms.points.3`.
+**English is the reference.** Every other catalogue is filled out against it leaf by leaf, and a blank leaf throws in development and falls back in production. The two client-facing catalogues resolve *non-strict* in every build — nobody mid-consent should meet a thrown `MissingTranslation` — so each carries a test holding its three locales level instead (`client-copy.test.ts`, `chrome-copy.test.ts`). A catalogue that opts out of strictness owes one — a coach reading one English sentence in a Ukrainian screen is a smaller failure than a coach reading `terms.points.3`.
 
 ## What to check before adding a string
 
