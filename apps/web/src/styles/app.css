@@ -341,9 +341,10 @@
        after the page has been scrolled.
 
        The drawer's backdrop is `fixed` here, so this changes nothing today. It is
-       stated because the component shipped with an
-       `supports-[-webkit-touch-callout:none]:absolute` branch that assumed it —
-       without it, `inset-0` resolved against the initial containing block, and
+       stated because the component shipped with a supports-variant keyed on the
+       iOS-only touch-callout property that made the backdrop absolute, and that
+       assumed this rule — without it, `inset-0` resolved against the initial
+       containing block, and
        the scrim landed on the top of the *document*: on a scrolled page it dimmed
        a band across the upper screen and left the rest bright under an open
        sheet. A CLI re-pull would bring that branch back, and this is what makes
