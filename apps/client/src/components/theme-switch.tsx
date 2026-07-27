@@ -2,13 +2,12 @@ import { useEffect, useState } from "react"
 
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group.tsx"
 import type { ChromeCopy } from "@/features/i18n/chrome-copy.ts"
+import { useSystemThemeWhileUnset } from "@/lib/use-system-theme.ts"
 import {
   applyColorScheme,
-  preferredColorScheme,
   readThemePreference,
   resolveColorScheme,
   type ThemePreference,
-  watchPreferredColorScheme,
   writeThemePreference,
 } from "@/lib/theme.ts"
 
@@ -34,21 +33,14 @@ export function ThemeSwitch({ copy }: { readonly copy: ChromeCopy }) {
     setPreference(readThemePreference())
   }, [])
 
-  // While `system` is on, the page keeps following the browser. `ClientTheme`
-  // watches this too, for the page that is never touched; this one exists for
-  // the reader who switches *to* system and expects it to start following at
-  // once rather than on the next load.
-  useEffect(() => {
-    if (preference !== "system") return
-    return watchPreferredColorScheme(applyColorScheme)
-  }, [preference])
+  useSystemThemeWhileUnset(preference)
 
   if (preference === undefined) return null
 
   const choose = (next: ThemePreference) => {
     setPreference(next)
     writeThemePreference(next)
-    applyColorScheme(next === "system" ? preferredColorScheme() : resolveColorScheme(next))
+    applyColorScheme(resolveColorScheme(next))
   }
 
   return (

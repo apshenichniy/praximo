@@ -80,6 +80,25 @@ describe("feedback invariants", () => {
   })
 
   /**
+   * Danger answers in one shape (#197, carried over).
+   *
+   * There is nothing destructive on these pages yet, so this reads as a guard
+   * against a future rather than a check on a present — which is exactly what it
+   * is, and why it is worth having now. The way an `AlertDialog` arrives is a
+   * fresh pull from the shadcn CLI, and it looks perfectly reasonable on the line
+   * it lands on. The rule is the same one the Mini App holds: a confirmation is
+   * asked from the bottom of the screen, where a thumb already is.
+   */
+  it("asks a destructive question from the bottom of the screen", async () => {
+    const dialogs = (await files())
+      .filter(({ path: file }) => !file.startsWith(UiDirectory))
+      .filter(({ source }) => source.includes("components/ui/alert-dialog.tsx"))
+      .map(({ path: file }) => file)
+
+    expect(dialogs).toEqual([])
+  })
+
+  /**
    * Every control here is reachable by keyboard, which the Mini App's are not —
    * a Telegram webview is a thumb. So the ring is this app's own invariant, and
    * a primitive copied across from `apps/web` without it is the way it goes

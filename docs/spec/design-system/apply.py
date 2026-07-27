@@ -96,9 +96,15 @@ def apply_to_app(app, token_blocks, light, dark):
     # Not every app declares every one of these. The last two are the Telegram
     # bottom button, painted through a bridge call, and `apps/client` has no
     # bridge — so a constant a file does not declare is skipped rather than
-    # demanded. The three above it are the page's own colours and the
-    # `theme-color` meta, which every app has; the count below is what keeps
-    # "skipped because absent" from quietly becoming "skipped because renamed".
+    # demanded.
+    #
+    # What must not happen is a *renamed* constant reading as an absent one: that
+    # is exactly the silent half-application this script exists to prevent. So
+    # the file is asked how many it declares, and every one of them has to be
+    # rewritten. Absent is fine; present-and-unmatched is not.
+    declared = len(re.findall(r"export const \w+: SchemeColor = ", theme))
+    if declared == 0:
+        raise SystemExit(f"{theme_path} declares no SchemeColor constants")
     written = 0
     for name, dark_token, light_token in (
         # The Telegram chrome — header, webview background, bottom bar — borders
@@ -118,8 +124,10 @@ def apply_to_app(app, token_blocks, light, dark):
         theme, n = re.subn(rf"export const {name}: SchemeColor = \{{[^}}]*\}}",
                            f"export const {name}: SchemeColor = {pair}", theme, count=1)
         written += n
-    if written < 3:
-        raise SystemExit(f"{theme_path} declares {written} SchemeColor constants, expected 3 or more")
+    if written != declared:
+        raise SystemExit(
+            f"{theme_path} declares {declared} SchemeColor constants but {written} were written — "
+            "one of them is named something this script does not know")
     theme_path.write_text(theme, encoding="utf-8")
 
     return [app_css_path, root_path, theme_path]

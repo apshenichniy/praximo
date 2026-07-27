@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { legalUrl } from "@/lib/legal-url.ts"
+import { legalUrl } from "@praximo/i18n"
 import { legalRedirect } from "@/server/legal-redirect.ts"
 
 const ORIGIN = "https://my.praximo.io"
@@ -20,11 +20,25 @@ describe("legalUrl", () => {
   })
 
   /**
-   * Total on purpose: a coach reading the terms they are about to accept must
-   * not meet an exception because a binding was set to something odd.
+   * These are public pages, and the bot builds this from an origin that may
+   * carry `?b=<botId>`. A consent button that forwarded it would say something
+   * about who was sent it.
    */
-  it("falls back to concatenation rather than throwing on a malformed origin", () => {
+  it("drops whatever the origin was carrying", () => {
+    expect(legalUrl("https://my.praximo.io/?b=9100777#x", "privacy", "ru")).toBe(
+      "https://my.praximo.io/legal/privacy?lang=ru",
+    )
+  })
+
+  /**
+   * Total on purpose: a coach reading the terms they are about to accept must
+   * not meet an exception because a binding was set to something odd. There is
+   * no throwing path at all — the callers that need to *know* an origin is
+   * usable check it themselves, which is what `legalRedirect` does below.
+   */
+  it("never throws, whatever it is handed", () => {
     expect(legalUrl("not a url", "privacy", "en")).toBe("not a url/legal/privacy?lang=en")
+    expect(legalUrl("", "terms", "uk")).toBe("/legal/terms?lang=uk")
   })
 })
 
@@ -35,6 +49,10 @@ describe("legalRedirect", () => {
     // Permanent, because the move is: the texts are not coming back to this app.
     expect(response.status).toBe(301)
     expect(location(response)).toBe("https://my.praximo.io/legal/privacy?lang=en")
+    // …but the *destination* is configuration, and on a dev stage it is a
+    // rotating workers.dev host. A permanently cached pair would strand a
+    // developer on a Worker that no longer exists.
+    expect(response.headers.get("cache-control")).toBe("no-cache")
   })
 
   /**

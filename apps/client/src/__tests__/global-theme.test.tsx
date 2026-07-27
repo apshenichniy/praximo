@@ -46,7 +46,9 @@ describe("global application theme", () => {
 
     // A class here would be the server guessing: the reader's preference lives
     // in their browser's storage, which no request carries.
-    expect(root).toContain('<html lang="en" suppressHydrationWarning>')
+    // Not a literal: the document declares the language it is actually in, and
+    // these pages are a contract in three of them.
+    expect(root).toContain("<html lang={useDocumentLanguage()} suppressHydrationWarning>")
     expect(root).not.toContain('className="dark"')
     expect(root).toContain("<ClientTheme />")
   })

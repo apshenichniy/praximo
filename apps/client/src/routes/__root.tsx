@@ -1,4 +1,5 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
+import { narrowCoachLanguage } from "@praximo/domain"
+import { HeadContent, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router"
 
 import { ClientTheme } from "@/components/client-theme.tsx"
 import {
@@ -56,6 +57,26 @@ export const Route = createRootRoute({
 })
 
 /**
+ * The language the document declares.
+ *
+ * It has to be the language the document is *in*: these pages are a contract in
+ * three languages, and a Ukrainian text served as `lang="en"` is one a screen
+ * reader pronounces in the wrong voice and a translation tool offers to
+ * translate into the language it already is.
+ *
+ * Read from the URL rather than from a header, for the same reason the pages
+ * take it that way: the link a client is sent already names the language, and
+ * these routes have no member to read one from. Narrowed here so an unknown
+ * `?lang` cannot land in the attribute.
+ */
+function useDocumentLanguage(): string {
+  const lang = useRouterState({
+    select: (state) => (state.location.search as { lang?: unknown }).lang,
+  })
+  return narrowCoachLanguage(typeof lang === "string" ? lang : undefined)
+}
+
+/**
  * The document is rendered **scheme-less**: the server cannot know which one it
  * is — the reader's preference lives in their browser's storage, which no
  * request carries — so the class is put on by the blocking script below,
@@ -65,7 +86,7 @@ export const Route = createRootRoute({
  */
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={useDocumentLanguage()} suppressHydrationWarning>
       <head>
         <style>{criticalCss}</style>
         {/* oxlint-disable-next-line no-danger -- an inline blocking script is the only thing that runs before the first paint */}

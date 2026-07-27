@@ -134,8 +134,12 @@ export const writeThemePreference = (preference: ThemePreference): void => {
   }
 }
 
-/** The browser's own answer, for the `system` preference and as the fallback. */
-export const preferredColorScheme = (): ColorScheme =>
+/**
+ * The browser's own answer. Not exported: `resolveColorScheme` below is the only
+ * thing that should ever ask, because asking directly is how a caller ends up
+ * following the browser past a choice the reader made.
+ */
+const preferredColorScheme = (): ColorScheme =>
   typeof window !== "undefined" &&
   window.matchMedia !== undefined &&
   window.matchMedia("(prefers-color-scheme: dark)").matches

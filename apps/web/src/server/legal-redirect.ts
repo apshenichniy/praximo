@@ -1,6 +1,5 @@
 import { narrowCoachLanguage } from "@praximo/domain"
-
-import { legalUrl, type LegalDocumentName } from "@/lib/legal-url.ts"
+import { legalUrl, type LegalDocumentName } from "@praximo/i18n"
 
 /**
  * What `app.praximo.io/legal/*` now does: send the reader to `my.praximo.io`.
@@ -11,8 +10,15 @@ import { legalUrl, type LegalDocumentName } from "@/lib/legal-url.ts"
  * routes stay and answer with a redirect instead of a page.
  *
  * **301, not 302.** The move is permanent, and a permanent answer is what lets a
- * browser and a crawler stop asking. The cost of being wrong is a cached
- * redirect, and the URL it caches is one we own.
+ * crawler stop asking.
+ *
+ * **And `no-cache` with it**, which reads like a contradiction and is not. The
+ * status says the resource moved for good; the header says re-ask *where to*.
+ * The destination is configuration, and on every stage but prod it is a
+ * `workers.dev` hostname that rotates — a browser that had cached the pair
+ * permanently would keep sending a developer to a Worker that no longer exists,
+ * with no way to clear it but the address bar. Permanence is a fact about the
+ * move, not a promise about the host.
  *
  * The language is preserved because it is the whole content of these links: a
  * client sent a Russian policy must not land on an English one because a

@@ -10,6 +10,7 @@ import {
   clientCopy,
   ClientLanguageNames,
   DefaultTimeZone,
+  legalUrl,
   sessionMoment,
   SuggestedLanguageMark,
 } from "@praximo/i18n"
@@ -249,18 +250,8 @@ export const refusalText = (
  * acceptance path exists — so the page they open must not be one that loads a
  * Telegram runtime to render a privacy policy.
  */
-export const privacyUrl = (clientAppUrl: string, language: CoachLanguage): string => {
-  try {
-    const url = new URL(clientAppUrl)
-    url.search = ""
-    url.hash = ""
-    url.pathname = "/legal/privacy"
-    url.searchParams.set("lang", language)
-    return url.toString()
-  } catch {
-    return clientAppUrl
-  }
-}
+export const privacyUrl = (clientAppUrl: string, language: CoachLanguage): string =>
+  legalUrl(clientAppUrl, "privacy", language)
 
 const identifier = (prefix: string): string =>
   `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`

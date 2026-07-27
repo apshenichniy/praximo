@@ -22,6 +22,13 @@ import { describe, expect, it } from "vitest"
  * strip, and its type scale may yet take a desktop step the Mini App must not.
  * What may not differ is the palette, because that is the product's identity and
  * the thing every contrast invariant is written against.
+ *
+ * That includes the sixteen unused `--sidebar-*` tokens. #191 meant to drop them
+ * from the new app as preset residue, and could not: `sets.py` generates them as
+ * tokens the shadcn preset expects, `apply.py` writes the block wholesale, and a
+ * block that differed by sixteen lines could not be held identical. Removing
+ * them is a change to the generator, for both apps at once, on a day that is
+ * about them.
  */
 const appCss = (app: string): string =>
   readFileSync(

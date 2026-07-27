@@ -63,6 +63,7 @@ export {
   type LegalSection,
   privacyPolicyFor,
 } from "./legal/content.ts"
+export { legalUrl, type LegalDocumentName } from "./legal/url.ts"
 export { PRIVACY_VERSION, TERMS_VERSION } from "./legal/versions.ts"
 export { DefaultTimeZone, type SessionMoment, sessionMoment } from "./session-time.ts"
 export {

@@ -1,10 +1,11 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 
+import { useSystemThemeWhileUnset } from "@/lib/use-system-theme.ts"
 import {
   applyColorScheme,
-  preferredColorScheme,
   readThemePreference,
-  watchPreferredColorScheme,
+  resolveColorScheme,
+  type ThemePreference,
 } from "@/lib/theme.ts"
 
 /**
@@ -16,22 +17,19 @@ import {
  * exist yet when the bootstrap runs (it is emitted by `HeadContent`, further
  * down the head), and a phone crossing into night with the page still on screen.
  *
- * The media query is watched only while the preference is `system`. A reader who
- * has chosen light does not want their choice overridden at sunset — that is the
- * difference between a default and a decision, and it is the reason the
- * preference stores three values rather than two.
- *
  * Mounted once, in the root shell, so it covers every route rather than the ones
  * that remembered it. Renders nothing.
  */
 export function ClientTheme() {
-  useEffect(() => {
-    const preference = readThemePreference()
-    applyColorScheme(preference === "system" ? preferredColorScheme() : preference)
+  const [preference, setPreference] = useState<ThemePreference>()
 
-    if (preference !== "system") return
-    return watchPreferredColorScheme(applyColorScheme)
+  useEffect(() => {
+    const stored = readThemePreference()
+    setPreference(stored)
+    applyColorScheme(resolveColorScheme(stored))
   }, [])
+
+  useSystemThemeWhileUnset(preference)
 
   return null
 }
