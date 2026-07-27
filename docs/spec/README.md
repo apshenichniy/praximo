@@ -24,7 +24,7 @@ This document is the **assembly point** of the MVP spec: the end-to-end product 
 
 | Piece | Decision | Where |
 |---|---|---|
-| Deploy units | Three Cloudflare Workers — `web` (TanStack Start: coach UI, Mini App, web room), `bot` (grammY, all per-coach bots path-routed), `pipeline` (Workflows, LiveKit webhook receiver, retention cron). Cross-worker communication is typed service bindings only. | [ADR 0002](../adr/0002-monorepo-layout-and-module-boundaries.md) |
+| Deploy units | Four Cloudflare Workers — `web` (TanStack Start: coach Mini App and admin surface), `client` (TanStack Start: acceptance page, legal texts, web room), `bot` (grammY, all per-coach bots path-routed), `pipeline` (Workflows, LiveKit webhook receiver, retention cron). Cross-worker communication is typed service bindings only. | [ADR 0002](../adr/0002-monorepo-layout-and-module-boundaries.md) |
 | Processing | Cloudflare Workflows orchestrator; R2 pass-by-reference (1 MiB step-payload discipline); **no Queues in MVP**; no container worker. | [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md) |
 | Session concurrency | One Durable Object per session — serializes webhooks, commands, due evaluation; alarm at earliest due instant + 15-min safety-net sweeper. Chosen over a minute-cron to let Neon autosuspend. | [ADR 0005](../adr/0005-session-reconciler-on-durable-objects.md) |
 | Bots | Bot-per-coach via Telegram Managed Bots, one-tap provisioning; manual token paste fallback; one `bot` Worker serves all bots; tokens AES-GCM-encrypted in Postgres. | [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) |

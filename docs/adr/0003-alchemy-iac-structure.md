@@ -6,7 +6,7 @@
 
 ## Context
 
-ADR 0002 fixed a **single root Alchemy 2 program** describing all three Workers (`web`, `bot`, `pipeline`), the shared R2 bucket, service bindings, and secrets, parameterized by stage. This ADR details that program: stages and naming, file layout, secrets and configuration flow, how non-Cloudflare pieces (Neon, self-hosted LiveKit) are represented, and the deploy path.
+ADR 0002 fixed a **single root Alchemy 2 program** describing all the Workers (`web`, `bot`, `pipeline` when this was written; `client` joined them with [#191](https://github.com/apshenichniy/praximo/issues/191)), the shared R2 bucket, service bindings, and secrets, parameterized by stage. This ADR details that program: stages and naming, file layout, secrets and configuration flow, how non-Cloudflare pieces (Neon, self-hosted LiveKit) are represented, and the deploy path.
 
 Alchemy 2 (`2.0.0-beta.x`, npm tag `next`) is a ground-up rewrite **on Effect**: the program is an `Alchemy.Stack` running an `Effect.gen` body, Workers are declared as Effect classes next to their runtime code, and cross-worker RPC, Workflows, cron, R2, AI Gateway, and Neon are first-class resources. This matches the project's Effect 4 commitment ideologically — and adds a third deliberate beta to the stack (after TS 7.0 and Effect 4). Facts below were first verified against the v2 source (`alchemy-run/alchemy@main`), since beta docs lag, and then **proven by execution against the real Cloudflare + Neon accounts** in [#32](https://github.com/apshenichniy/praximo/issues/32) (`alchemy@2.0.0-beta.63`, deploy → verify → destroy). See [Verification and adoption](#verification-and-adoption-32) for the corrections that surfaced.
 

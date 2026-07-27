@@ -6,7 +6,7 @@
 
 ## Context
 
-Praximo ships three delivery surfaces on Cloudflare Workers — the TanStack Start web app (including the Telegram Mini App and the web room), the grammY bot serving all per-coach bots, and the processing pipeline on Cloudflare Workflows (ADR 0001). The stack is TypeScript 7.0 + Effect 4 beta, Drizzle + Neon, Deepgram STT behind a provider-agnostic transcription module, Vercel AI SDK, Alchemy 2 IaC. Solo dev + AI agents; agents rely on the `effect` skill (kitlangton/skills) and the vendored Effect source in `.repos/effect`.
+Praximo ships its delivery surfaces on Cloudflare Workers — the TanStack Start web app (the Telegram Mini App; the client-facing surfaces and the web room split off into a second app with [#191](https://github.com/apshenichniy/praximo/issues/191)), the grammY bot serving all per-coach bots, and the processing pipeline on Cloudflare Workflows (ADR 0001). The stack is TypeScript 7.0 + Effect 4 beta, Drizzle + Neon, Deepgram STT behind a provider-agnostic transcription module, Vercel AI SDK, Alchemy 2 IaC. Solo dev + AI agents; agents rely on the `effect` skill (kitlangton/skills) and the vendored Effect source in `.repos/effect`.
 
 ## Decision
 

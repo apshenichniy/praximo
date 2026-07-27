@@ -81,7 +81,7 @@ Decided in wayfinder ticket [#25](https://github.com/apshenichniy/praximo/issues
   clientGate = valid client join link                                       -- the client's only credential, always
   ```
 
-- **Token mechanics:** opaque random token, ≥128 bits of entropy, base64url; the DB stores a SHA-256 hash per (session, role); validation is a DB lookup in the `web` Worker. Not signed (no HMAC/JWT): revocation and rotation must be instant and stateful, and the join endpoint is not a hot path.
+- **Token mechanics:** opaque random token, ≥128 bits of entropy, base64url; the DB stores a SHA-256 hash per (session, role); validation is a DB lookup in the `client` Worker, which is where the room runs (below). Not signed (no HMAC/JWT): revocation and rotation must be instant and stateful, and the join endpoint is not a hot path.
 - Join links are **multi-use** (reconnects after a drop), valid while the session is `scheduled` / `in_progress`, dead in terminal states — revocation is implicit in the session lifecycle (this is the "access not revoked" mechanism referenced by the web-room spec).
 - **Stable across rescheduling** — a reschedule mutates the time in place, the link keeps working, nothing is resent.
 - **Rotation on compromise:** a coach command — "reissue links", on the session card in the Mini App and in the bot — rotates both (session, role) tokens and re-delivers them through the usual channels; old links die instantly (one UPDATE on the hashed rows).

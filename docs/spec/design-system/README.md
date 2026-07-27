@@ -38,10 +38,12 @@ What is duplicated is only the palette. The parity test is scoped to the
 no coach day strip, and its pages pick different steps of the scale.
 
 **Extraction trigger.** Revisit when a *third* surface needs the system — the
-landing page on `praximo.io`, or the web room if it grows its own app. Before
-committing, spike Tailwind v4 content detection across a package boundary:
-neither app declares `@source`, both rely on automatic detection, and a `@theme`
-arriving from `node_modules` is not obviously covered by it.
+landing page on `praximo.io` ([#177](https://github.com/apshenichniy/praximo/issues/177)).
+The web room is not a candidate: it is a route inside `apps/client`, which is
+already the second surface. Before committing, spike Tailwind v4 content
+detection across a package boundary: neither app declares `@source`, both rely
+on automatic detection, and a `@theme` arriving from `node_modules` is not
+obviously covered by it.
 
 The four sets differ **only** in the brand hue. Everything else — the neutral
 ramp, the raised control at a 1.75 edge, hairline elevation, the tracking table —
