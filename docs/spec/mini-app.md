@@ -421,7 +421,7 @@ is the smallest style Apple itself ships.
 
 ### The scale
 
-Six steps, in `apps/web/src/styles/app.css`. Tailwind's own `--text-*` namespace
+Six steps, in `apps/web/src/styles/app.css` — and in `apps/client`'s copy of it, written by the same script (#191). The client app's legal pages take every step up one past `md`: the scale is calibrated for a phone webview, and a contract read on a desktop needs the step back. Tailwind's own `--text-*` namespace
 is switched **off**, so this is the only scale there is: `text-sm` and friends do
 not exist here.
 

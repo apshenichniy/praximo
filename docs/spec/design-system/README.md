@@ -13,12 +13,35 @@ Swapping is exactly that command:
 python3 docs/spec/design-system/apply.py iris     # origin | mark | iris | fuchsia
 ```
 
-Three files restate these values and all three move together — `styles/app.css`,
-`routes/__root.tsx` (the critical stylesheet carries both grounds inline, because
-the scheme is not known a few bytes further down the head) and `lib/theme.ts` (the
-Telegram host chrome is painted through a bridge call and cannot read a token).
-Leaving one behind is silent: the app renders, one test fails, and the Telegram
-chrome keeps the previous colour. `apply.py` is what keeps them in step.
+Three files **per app** restate these values, and all of them move together —
+`styles/app.css`, `routes/__root.tsx` (the critical stylesheet carries both
+grounds inline, because the scheme is not known a few bytes further down the
+head) and `lib/theme.ts` (the Telegram host chrome is painted through a bridge
+call and cannot read a token). Six files since #191, when `apps/client` took the
+same system. Leaving one behind is silent: the app renders, one test fails, and
+the Telegram chrome keeps the previous colour. `apply.py` is what keeps them in
+step, and `apps/client/src/__tests__/design-system-parity.test.ts` is what
+notices a run that never happened.
+
+## Two apps, one system, no package
+
+The tokens are duplicated between `apps/web` and `apps/client` rather than
+extracted into `@praximo/theme`. Considered and declined in #191, for the reason
+#191 declined `@praximo/ui`: the surfaces are meant to be able to diverge, and
+there is already one case in hand — the type scale is calibrated for a phone
+webview and the client app's legal pages step it up on desktop. With one real
+consumer and a second that had no screens yet, extracting would have been
+guessing at which divergences are real.
+
+What is duplicated is only the palette. The parity test is scoped to the
+`:root` / `.dark` blocks precisely so the rest may differ: `apps/client` carries
+no coach day strip, and its pages pick different steps of the scale.
+
+**Extraction trigger.** Revisit when a *third* surface needs the system — the
+landing page on `praximo.io`, or the web room if it grows its own app. Before
+committing, spike Tailwind v4 content detection across a package boundary:
+neither app declares `@source`, both rely on automatic detection, and a `@theme`
+arriving from `node_modules` is not obviously covered by it.
 
 The four sets differ **only** in the brand hue. Everything else — the neutral
 ramp, the raised control at a 1.75 edge, hairline elevation, the tracking table —
@@ -70,7 +93,7 @@ Four groups. The group an element belongs to decides which tokens may touch it.
 `--secondary` · **`--control-border`** · `--primary` · `--accent` · `--ring`
 
 **Brand** — new. The mark's own violet, which appears nowhere in the interface
-today except the `admin-avatar` gradient.
+today except the `brand-disc` gradient (`admin-avatar` until #191).
 **`--brand`** · **`--brand-foreground`** · **`--brand-surface`** · **`--brand-border`**
 
 **Status** — meaning, never hue. Already in place; gains a surface per status so
@@ -105,18 +128,29 @@ inside a field, a day inside the calendar's grid, or the quiet destructive actio
 under a big Cancel that [#197](https://github.com/apshenichniy/praximo/issues/197)
 made quiet deliberately.
 
-## The three missing invariants
+## The invariants this added
 
-`theme-contrast.test.ts` asserts running text, secondary text, the surface
+**All written** — the control ones with #198, the Brand and Status ones with #191
+once Iris was settled. Kept here because the floors are the decision, not the
+code.
+
+`theme-contrast.test.ts` had asserted running text, secondary text, the surface
 steps, the hairline and the press — and **nothing about a control at rest**.
-That is the gap the regression came through, and it is the one thing that has to
-be added whichever variant wins:
+That is the gap the regression came through:
 
 | assertion | floor |
 | --- | --- |
 | control against its page | 1.08 |
 | control's edge against the page | 1.40 |
 | control's edge against its own fill | 1.25 |
+
+And, for the two groups this ticket introduced (#191):
+
+| assertion | floor |
+| --- | --- |
+| status or brand ink on its own tint | 4.50 (AA — these are words) |
+| any tinted surface against the card it is laid on | 1.08 |
+| `--brand-border` against the page | 1.40 |
 
 Two existing assertions also need revisiting: `accent` should be measured
 against the **card** (a hover wash lands on raised surfaces, never on the page),
@@ -134,7 +168,7 @@ both masters, agreeing to within half a degree (chroma-weighted mean 285.5° /
 and closer to indigo. `oklch(0.42 0.207 282.8)` (`#4627B6`) is the single most
 common chromatic pixel in the light master.
 
-Worth noting: the hardcoded `admin-avatar` gradient uses `violet-700 →
+Worth noting: the hardcoded `brand-disc` gradient uses `violet-700 →
 indigo-950`, about 10° more violet than the mark actually is.
 
 ### How far toward fuchsia

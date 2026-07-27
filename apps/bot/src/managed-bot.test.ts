@@ -26,6 +26,7 @@ const env = {
   MANAGER_BOT_TOKEN: "manager-token",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default-coach-avatar.jpg",
   COACH_MINI_APP_URL: "https://stage.praximo.io/",
+  CLIENT_APP_URL: "https://my-stage.praximo.io",
   UPLOADS: {} as R2Bucket,
 }
 
@@ -223,6 +224,7 @@ const workerEnv = {
   COACH_BOT_CREDENTIAL_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default-coach-avatar.jpg",
   COACH_MINI_APP_URL: "https://stage.praximo.io/",
+  CLIENT_APP_URL: "https://my-stage.praximo.io",
   UPLOADS: {} as R2Bucket,
 }
 
