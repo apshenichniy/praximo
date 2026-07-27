@@ -1,5 +1,6 @@
 import type { CoachLanguage } from "@praximo/domain"
 
+import { Label } from "@/components/ui/label.tsx"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group.tsx"
 import { languageOptions } from "@/features/admin/formatting.ts"
 
@@ -29,7 +30,12 @@ export function InviteLanguageChips({
 }) {
   return (
     <div className={className}>
-      <p className="text-body font-medium">Coach&rsquo;s language</p>
+      {/* The primitive, not a hand-rolled `text-body font-medium` (#201). This
+          was the second one, and it is why raising the weight in `Label` fixed
+          the field above it and left this one behind: a label that is not a
+          `Label` does not move when labels do. The coach’s own new-client
+          screen already uses it for the same name-plus-chips shape. */}
+      <Label>Coach&rsquo;s language</Label>
       <ToggleGroup
         aria-label="Invite language"
         className="mt-2"
