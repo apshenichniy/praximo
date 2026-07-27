@@ -1,5 +1,6 @@
 import { type CoachLanguage, CoachLanguages } from "@praximo/domain"
 
+import { PraximoMark } from "@/components/praximo-mark.tsx"
 import { TelegramMainButton } from "@/components/telegram-main-button.tsx"
 import { Button } from "@/components/ui/button.tsx"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group.tsx"
@@ -45,12 +46,7 @@ export function LanguageStep({
     <main className="mx-auto flex min-h-svh w-full max-w-md flex-col px-5 pt-10 pb-24">
       <OnboardingProgress step={1} label={copy.language.step} />
 
-      <span
-        aria-hidden="true"
-        className="admin-avatar shadow-primary/20 ring-primary/25 mt-9 flex size-14 items-center justify-center rounded-full text-title font-semibold shadow-2xl ring-1"
-      >
-        P
-      </span>
+      <PraximoMark size={56} className="mt-9" />
 
       <h1 className="mt-6 text-title font-semibold tracking-tight text-pretty">
         {copy.language.greeting}
