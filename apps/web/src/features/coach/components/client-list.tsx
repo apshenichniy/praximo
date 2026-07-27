@@ -48,7 +48,12 @@ export function ClientList({
    * Absent on the clients list, where it opens the client's own route.
    */
   readonly onPick?: (clientId: string) => void
-  readonly newClientPosition?: "first" | "last"
+  /**
+   * `"none"` on the clients route, where creating is the host's bottom button
+   * rather than a row that scrolls away (#198). The picker keeps `"last"`: there
+   * the action is choosing somebody, and creating is the escape hatch.
+   */
+  readonly newClientPosition?: "first" | "last" | "none"
 }) {
   const newClient = (
     <li key="new-client">
@@ -84,7 +89,11 @@ export function ClientList({
   return (
     <Card className="mt-4 gap-0 overflow-hidden py-0">
       <ul className="divide-border divide-y">
-        {newClientPosition === "first" ? [newClient, ...rows] : [...rows, newClient]}
+        {newClientPosition === "none"
+          ? rows
+          : newClientPosition === "first"
+            ? [newClient, ...rows]
+            : [...rows, newClient]}
       </ul>
     </Card>
   )

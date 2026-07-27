@@ -205,7 +205,7 @@
   --info-surface: oklch(0.964 0.0185 250);
 
   /* State — a press is ink, so it darkens whatever surface it lands on. */
-  --pressed: oklch(0 0 0 / 11%);
+  --pressed: oklch(0 0 0 / 8%);
 
   --chart-1: oklch(0.872 0.01 285);
   --chart-2: oklch(0.56 0.03 285);
@@ -336,6 +336,19 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* The registry's own iOS advice, which this app never had (#198): a backdrop
+       needs `body` to be a containing block so it covers the visual viewport
+       after the page has been scrolled.
+
+       The drawer's backdrop is `fixed` here, so this changes nothing today. It is
+       stated because the component shipped with an
+       `supports-[-webkit-touch-callout:none]:absolute` branch that assumed it —
+       without it, `inset-0` resolved against the initial containing block, and
+       the scrim landed on the top of the *document*: on a scrolled page it dimmed
+       a band across the upper screen and left the rest bright under an open
+       sheet. A CLI re-pull would bring that branch back, and this is what makes
+       it harmless when it does. */
+    position: relative;
   }
   html {
     @apply font-sans;

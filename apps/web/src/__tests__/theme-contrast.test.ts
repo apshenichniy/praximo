@@ -145,7 +145,15 @@ describe("scheme contrast parity", () => {
       // Visible against the surface it is pressed on…
       expect(contrastOf(pressedOnCard, card)).toBeGreaterThan(1.15)
       // …and not mistakable for the ground the card sits on.
-      expect(contrastOf(pressedOnCard, page)).toBeGreaterThan(1.1)
+      //
+      // Relaxed from 1.1 in #198. The defect this guards was a pressed row
+      // landing on the page's *own* colour — 1.01:1, a hole cut through the
+      // card — and anything past about 1.04 is already not that. The higher
+      // floor had a cost: with the page lightened it forced the wash to 11%
+      // black, and a full-width row at that weight reads as a second surface
+      // rather than as the moment somebody's thumb is down. The card is where
+      // the press has to be legible, and that is the assertion above.
+      expect(contrastOf(pressedOnCard, page)).toBeGreaterThan(1.04)
     }
   })
 })

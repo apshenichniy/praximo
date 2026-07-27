@@ -29,7 +29,7 @@
       "brand-foreground": "#fcfcfe",
       "brand-surface": "#e7e8ff",
       "brand-border": "#bdbffb",
-      "pressed": "rgb(0 0 0 / 13%)",
+      "pressed": "rgb(0 0 0 / 9%)",
       "success": "#007b47",
       "success-surface": "#e4f2e9",
       "warning": "#9f5a00",
@@ -95,7 +95,7 @@
       "brand-foreground": "oklch(0.992 0.003 285)",
       "brand-surface": "oklch(0.937 0.0317 283)",
       "brand-border": "oklch(0.8233 0.084 283)",
-      "pressed": "oklch(0 0 0 / 13%)",
+      "pressed": "oklch(0 0 0 / 9%)",
       "success": "oklch(0.5128 0.1245 156)",
       "success-surface": "oklch(0.949 0.01992 156)",
       "warning": "oklch(0.5357 0.1235 62)",
@@ -159,9 +159,9 @@
         "accent/card": 1.12,
         "border/card": 1.42,
         "border/page": 1.22,
-        "pressed/card": 1.35,
-        "pressed/page": 1.16,
-        "pressed/control": 1.35
+        "pressed/card": 1.22,
+        "pressed/page": 1.05,
+        "pressed/control": 1.22
       },
       "dark": {
         "fg/page": 17.6,
@@ -217,7 +217,7 @@
       "brand-foreground": "#fcfcfe",
       "brand-surface": "#e9ebff",
       "brand-border": "#bfc1fe",
-      "pressed": "rgb(0 0 0 / 12%)",
+      "pressed": "rgb(0 0 0 / 8%)",
       "success": "#007d48",
       "success-surface": "#e6f5eb",
       "warning": "#a15b00",
@@ -283,7 +283,7 @@
       "brand-foreground": "oklch(0.992 0.003 285)",
       "brand-surface": "oklch(0.944 0.0282 283)",
       "brand-border": "oklch(0.8299 0.0861 283)",
-      "pressed": "oklch(0 0 0 / 12%)",
+      "pressed": "oklch(0 0 0 / 8%)",
       "success": "oklch(0.5175 0.1257 156)",
       "success-surface": "oklch(0.956 0.02011 156)",
       "warning": "oklch(0.5407 0.1246 62)",
@@ -347,9 +347,9 @@
         "accent/card": 1.12,
         "border/card": 1.39,
         "border/page": 1.22,
-        "pressed/card": 1.32,
-        "pressed/page": 1.16,
-        "pressed/control": 1.31
+        "pressed/card": 1.2,
+        "pressed/page": 1.05,
+        "pressed/control": 1.2
       },
       "dark": {
         "fg/page": 17.6,
@@ -405,7 +405,7 @@
       "brand-foreground": "#fcfcfe",
       "brand-surface": "#eff0ff",
       "brand-border": "#c6c7ef",
-      "pressed": "rgb(0 0 0 / 10%)",
+      "pressed": "rgb(0 0 0 / 8%)",
       "success": "#00804a",
       "success-surface": "#eaf9ee",
       "warning": "#a55d00",
@@ -471,7 +471,7 @@
       "brand-foreground": "oklch(0.992 0.003 284)",
       "brand-surface": "oklch(0.958 0.02112 284)",
       "brand-border": "oklch(0.841 0.05544 284)",
-      "pressed": "oklch(0 0 0 / 10%)",
+      "pressed": "oklch(0 0 0 / 8%)",
       "success": "oklch(0.5268 0.1279 156)",
       "success-surface": "oklch(0.967 0.02046 156)",
       "warning": "oklch(0.5504 0.1268 62)",
@@ -535,9 +535,9 @@
         "accent/card": 1.12,
         "border/card": 1.33,
         "border/page": 1.22,
-        "pressed/card": 1.25,
-        "pressed/page": 1.15,
-        "pressed/control": 1.25
+        "pressed/card": 1.2,
+        "pressed/page": 1.09,
+        "pressed/control": 1.19
       },
       "dark": {
         "fg/page": 17.6,
@@ -593,7 +593,7 @@
       "brand-foreground": "#fcfcfe",
       "brand-surface": "#e6e4ff",
       "brand-border": "#c0baff",
-      "pressed": "rgb(0 0 0 / 14%)",
+      "pressed": "rgb(0 0 0 / 10%)",
       "success": "#007946",
       "success-surface": "#e2f0e6",
       "warning": "#9d5900",
@@ -663,7 +663,7 @@
       "brand-foreground": "oklch(0.992 0.003 285)",
       "brand-surface": "oklch(0.929 0.0368 288)",
       "brand-border": "oklch(0.8173 0.0966 288)",
-      "pressed": "oklch(0 0 0 / 14%)",
+      "pressed": "oklch(0 0 0 / 10%)",
       "success": "oklch(0.5073 0.1232 156)",
       "success-surface": "oklch(0.941 0.01971 156)",
       "warning": "oklch(0.53 0.1222 62)",
@@ -731,9 +731,9 @@
         "accent/card": 1.12,
         "border/card": 1.45,
         "border/page": 1.22,
-        "pressed/card": 1.38,
-        "pressed/page": 1.16,
-        "pressed/control": 1.38
+        "pressed/card": 1.25,
+        "pressed/page": 1.05,
+        "pressed/control": 1.25
       },
       "dark": {
         "fg/page": 17.6,

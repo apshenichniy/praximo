@@ -371,7 +371,13 @@ describe("sessions list", () => {
 
   it("groups by day, names today and tomorrow, and dates the rest", async () => {
     const html = await render(
-      <SessionsScreen copy={coachCopy("en")} language="en" upcoming={upcoming} now={NOW} />,
+      <SessionsScreen
+        copy={coachCopy("en")}
+        language="en"
+        upcoming={upcoming}
+        now={NOW}
+        onCreate={() => {}}
+      />,
     )
 
     expect(html).toContain(coachCatalog.en.sessions.today)
@@ -387,7 +393,13 @@ describe("sessions list", () => {
    */
   it("has no past section", async () => {
     const html = await render(
-      <SessionsScreen copy={coachCopy("en")} language="en" upcoming={upcoming} now={NOW} />,
+      <SessionsScreen
+        copy={coachCopy("en")}
+        language="en"
+        upcoming={upcoming}
+        now={NOW}
+        onCreate={() => {}}
+      />,
     )
 
     for (const absent of ["Past", "History", "Completed"]) {
@@ -397,7 +409,13 @@ describe("sessions list", () => {
 
   it("says nothing about a healthy session, and warns about a broken one", async () => {
     const healthy = await render(
-      <SessionsScreen copy={coachCopy("en")} language="en" upcoming={upcoming} now={NOW} />,
+      <SessionsScreen
+        copy={coachCopy("en")}
+        language="en"
+        upcoming={upcoming}
+        now={NOW}
+        onCreate={() => {}}
+      />,
     )
     expect(healthy).not.toContain(coachCatalog.en.sessions.rowUnaccepted)
 
@@ -407,6 +425,7 @@ describe("sessions list", () => {
         language="en"
         upcoming={{ ...upcoming, sessions: [session({ clientAccepted: false })] }}
         now={NOW}
+        onCreate={() => {}}
       />,
     )
     expect(broken).toContain(coachCatalog.en.sessions.rowUnaccepted)
@@ -419,6 +438,7 @@ describe("sessions list", () => {
         language="en"
         upcoming={{ timezone: "Europe/Kyiv", sessions: [] }}
         now={NOW}
+        onCreate={() => {}}
       />,
     )
     expect(html).toContain(coachCatalog.en.sessions.empty)
@@ -487,13 +507,27 @@ describe("clients list and the picker", () => {
     },
   ]
 
-  it("moves the clients list to its own route, New client first", async () => {
-    const html = await withFormat(<ClientsScreen copy={coachCopy("en")} clients={clients} />)
+  /**
+   * New client moved off the list and onto the host's bottom button in #198, so
+   * the list is only clients.
+   *
+   * The label being absent from this markup is the assertion, not an oversight.
+   * `TelegramMainButton` chooses between the host's own button and the in-page
+   * fallback only once it knows whether there is a host, which cannot be known
+   * on the server — so neither renders here. What is checkable server-side is
+   * that the row is gone and the list no longer navigates to `/clients/new`,
+   * and that is exactly what moved.
+   */
+  it("moves the clients list to its own route, with New client off the list", async () => {
+    const html = await withFormat(
+      <ClientsScreen copy={coachCopy("en")} clients={clients} onCreate={() => {}} />,
+    )
 
     expect(html).toContain(coachCatalog.en.clients.listTitle)
-    expect(html).toContain(coachCatalog.en.clients.newClient)
-    expect(html.indexOf(coachCatalog.en.clients.newClient)).toBeLessThan(html.indexOf("Maria K."))
     expect(html).toContain("/clients/cl_1")
+    expect(html).toContain("Maria K.")
+    expect(html).not.toContain('href="/clients/new"')
+    expect(html).not.toContain(coachCatalog.en.clients.newClient)
   })
 
   /**

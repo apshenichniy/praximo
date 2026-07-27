@@ -495,3 +495,13 @@ ground needs.
   `tracking-wide`.
 - **Touch targets are 44px**, per the platform, regardless of the type inside
   them: `min-h-11` on anything a thumb chooses — slots, chips, rows.
+- **A value the reader has to transcribe is never a caption.** `caption` is for
+  what the eye passes over — a count, a state word, a timestamp. A URL, a token
+  or a code is read character by character and retyped somewhere else, and a
+  wrong character costs the coach the thing they were doing. The Mini App
+  address was 13px monospace, which is two steps down rather than one: at the
+  same nominal size a monospaced face reads smaller than a proportional one.
+- **The content of a screen outranks the note explaining it.** The same screen
+  set its four numbered steps at 13 and the paragraph interpreting them at 15,
+  which is the hierarchy upside down. A title/description pair is the opposite
+  case and stays as it is — there the small line is genuinely subordinate.

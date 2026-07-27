@@ -110,8 +110,16 @@ def tint_dark(base, page_l, hue, chroma_share=0.30, drop=0.135, floor=4.6):
     return (L, clamp_chroma(L, base[1] * chroma_share, hue), hue)
 
 
-def solve_press_alpha(surface_rgb, page_rgb, ink_rgb, floor=1.20, page_floor=1.14):
-    """The least ink that both answers the press and stays off the page's colour."""
+def solve_press_alpha(surface_rgb, page_rgb, ink_rgb, floor=1.18, page_floor=1.05):
+    """The least ink that both answers the press and stays off the page's colour.
+
+    `page_floor` is deliberately low. #196's defect was a pressed row landing on
+    the page's *own* colour — 1.01:1, indistinguishable, a hole cut through the
+    card. Anything past about 1.05 is already not that, and asking for more buys
+    nothing while costing a lot: a press is a momentary answer, and a wash heavy
+    enough to read as a second surface is worse than one that is merely visible.
+    The card is where the press has to be legible, and that is `floor`.
+    """
     for step in range(4, 40):
         alpha = step / 100
         pressed = over(ink_rgb, alpha, surface_rgb)
@@ -327,7 +335,10 @@ def check(key, built):
         r["pressed/page"] = contrast(on_card, oklch_to_srgb(*s["background"][:3]))
         on_control = over(ink, s["pressed"][3], oklch_to_srgb(*s["secondary"][:3]))
         r["pressed/control"] = contrast(on_control, oklch_to_srgb(*s["secondary"][:3]))
-        for label, floor in (("pressed/card", 1.15), ("pressed/page", 1.10),
+        # Same reading as `solve_press_alpha`: the press has to be legible on the
+        # surface it lands on, and merely *not* the page behind it. A high page
+        # floor buys nothing and makes the wash read as a second surface.
+        for label, floor in (("pressed/card", 1.15), ("pressed/page", 1.04),
                              ("pressed/control", 1.15)):
             if r[label] < floor:
                 failures.append(f"{key}/{mode}: {label} = {r[label]:.2f} < {floor}")
