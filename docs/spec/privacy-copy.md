@@ -83,7 +83,7 @@ Surrounding screen copy (title, session line, join button, device-check hint) is
 
 ## 3. Privacy policy
 
-Static page on praximo.io, linked from the client consent and from the coach terms. Written in EN; UK / RU translated at implementation. Structure, in order:
+An app route on `my.praximo.io`, served by the `client` Worker ([#191](https://github.com/apshenichniy/praximo/issues/191)) — [privacy-retention.md](privacy-retention.md) §Documents owns why it is a route rather than a static page. Linked from the client consent and from the coach terms. Authored in all three languages and rendered per locale out of `@praximo/i18n` ([#130](https://github.com/apshenichniy/praximo/issues/130)). Structure, in order:
 
 1. **Opening** — one sentence on what Praximo is.
 2. **Who is responsible for what** — coach = controller and the person to ask; platform = processor running the software on their instructions. Operator legal name placeholder.
@@ -99,7 +99,7 @@ Full drafted text: `prototypes/privacy-copy.html`, tab 3, on branch `prototype/p
 
 ## 4. Coach terms of service
 
-Accepted at first Mini App login; the acceptance fact and text version are recorded on Member. Written in EN; UK / RU translated at implementation. Ten sections:
+Accepted at first Mini App login; the acceptance fact and text version are recorded on Member. Authored in all three languages and rendered per locale out of `@praximo/i18n` ([#130](https://github.com/apshenichniy/praximo/issues/130)). Ten sections:
 
 1. **What Praximo is** — and, explicitly, that it never coaches the client and never speaks to them beyond scheduling and reminders.
 2. **Your account** — created by us on request, no self-registration, Telegram sign-in, per-workspace bot, account not shareable.
