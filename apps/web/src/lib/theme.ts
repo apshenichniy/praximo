@@ -23,13 +23,24 @@ export interface SchemeColor {
 }
 
 /**
- * The surface color at the boundaries that require hexadecimal RGB: the initial
- * browser paint, the Telegram host chrome (header, background, bottom bar), and
- * the `theme-color` meta. The dark value is also the native splash screen's,
- * configured separately in BotFather — Telegram takes one color there, not a
- * pair, so the splash stays dark whatever the client is set to.
+ * The color of the Telegram host chrome — header, webview background, bottom bar
+ * — and of the `theme-color` meta a plain browser reads. Hexadecimal because all
+ * of these are handed over as strings across a bridge, or to the browser, and
+ * neither can read a token.
+ *
+ * **It is the page's colour, not the card's** (#198). The chrome borders the
+ * page: it is what an overscroll pulls into view above the content, so anything
+ * else shows as a band of the wrong colour at the top of the screen. That is
+ * exactly what a light page and a white chrome produced.
+ *
+ * It therefore holds the same value as `APP_BACKGROUND_COLOR` below, and the two
+ * are still separate names because they are separate boundaries: this one is the
+ * host and the browser, that one is the first paint before the stylesheet lands.
+ *
+ * The native splash screen is configured in BotFather rather than here —
+ * Telegram takes one colour there, not a pair, so it cannot follow the scheme.
  */
-export const APP_SURFACE_COLOR: SchemeColor = { dark: "#181821", light: "#ffffff" }
+export const APP_SURFACE_COLOR: SchemeColor = { dark: "#0a0a10", light: "#f3f3f6" }
 
 /**
  * The page's own ground, in hex, for the pre-oklch fallback in critical CSS.

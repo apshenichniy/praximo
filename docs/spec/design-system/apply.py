@@ -78,7 +78,12 @@ def apply(key):
     theme_path = WEB / "lib" / "theme.ts"
     theme = theme_path.read_text(encoding="utf-8")
     for name, dark_token, light_token in (
-        ("APP_SURFACE_COLOR", "card", "card"),
+        # The Telegram chrome — header, webview background, bottom bar — borders
+        # the *page*, so it is the page's colour. Mapping it to `card` put pure
+        # white around a receded light page, and an overscroll showed the seam as
+        # a white band above the content (#198). `theme-color` is the same
+        # boundary in a plain browser.
+        ("APP_SURFACE_COLOR", "background", "background"),
         ("APP_BACKGROUND_COLOR", "background", "background"),
         ("APP_FOREGROUND_COLOR", "foreground", "foreground"),
         ("APP_PRIMARY_COLOR", "primary", "primary"),
