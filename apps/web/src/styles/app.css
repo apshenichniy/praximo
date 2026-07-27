@@ -112,6 +112,28 @@
   --color-warning: var(--warning);
   --color-info: var(--info);
   --color-pressed: var(--pressed);
+  /* A tinted surface per status, so a state that needs a ground has a token
+     instead of an alpha guessed at the call site — the app had accumulated
+     twenty-two of those, six of them for this one job (#198). */
+  --color-success-surface: var(--success-surface);
+  --color-warning-surface: var(--warning-surface);
+  --color-info-surface: var(--info-surface);
+  --color-destructive-surface: var(--destructive-surface);
+  /* The edge that makes a control read as a control (#198). Separate from
+     `--border`, which is a divider between things rather than the outline of
+     one, and stronger: the hairline that was carrying every slot, chip and day
+     on its own sat at 1.22:1 against the page, and this sits at 1.56:1. It
+     applies even when the control has a fill — a control whose fill matches the
+     surface under it is exactly the failure this issue started from. */
+  --color-control-border: var(--control-border);
+  /* The mark's violet. `--primary` carries the same value while the brand is in
+     the primary role, but the two are separate tokens because the roles are: one
+     is "the main action", the other is "this product". A set that moves the
+     brand to a tint moves this and leaves `--primary` as ink. */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-border: var(--brand-border);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -137,113 +159,127 @@
 
 :root {
   color-scheme: light;
-  /* Three surfaces, not one (#195).
-     The preset's light ground made page, card and popover all `oklch(1 0 0)` —
-     one colour where the dark scheme has three steps — so nothing elevated had
-     anything to be elevated *against*: a bottom sheet was white on white, and a
-     card carried its whole existence on a shadow. Here the page recedes and the
-     raised surfaces keep the white, which is the direction light interfaces run
-     in (and what iOS does with grouped lists). The steps are sized to the dark
-     scheme's own: page→card 1.11 there against 1.14 here, card→muted 1.17 in
-     both. */
-  --background: oklch(0.965 0.002 197.1);
-  --foreground: oklch(0.148 0.004 228.8);
+
+  /* Surfaces — the grounds content sits on. Never the fill of a control. */
+  --background: oklch(0.951 0.005 285);
+  --foreground: oklch(0.1528 0.0168 285);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.148 0.004 228.8);
+  --card-foreground: oklch(0.1528 0.0168 285);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.148 0.004 228.8);
-  --primary: oklch(0.218 0.008 223.9);
-  --primary-foreground: oklch(0.987 0.002 197.1);
-  --secondary: oklch(0.945 0.002 197.1);
-  --secondary-foreground: oklch(0.218 0.008 223.9);
-  --muted: oklch(0.945 0.002 197.1);
-  /* Darker than the preset's own 0.56, which was the one token that did not
-     survive the move to a light ground (#194). Secondary text is what this app
-     is mostly made of — 111 `text-muted-foreground`s, and on the scheduling
-     screen every section label, every unselected chip and every free slot is
-     one — so its contrast is not a detail. The preset's value lands at 4.6:1 on
-     white where the dark scheme's equivalent reads 8.1:1 on near-black, and the
-     screen went pale exactly in proportion. This is 7.0:1 against the page: the
-     same standing as the dark one, still far below `--foreground`'s 17.8. */
-  --muted-foreground: oklch(0.44 0.021 213.5);
-  --accent: oklch(0.945 0.002 197.1);
-  --accent-foreground: oklch(0.218 0.008 223.9);
-  --destructive: oklch(0.577 0.245 27.325);
-  /* A hairline has to hold on both grounds now — 1.35:1 on a white card and
-     1.22:1 on the page, against the dark scheme's 1.26:1. */
-  --border: oklch(0.9 0.005 214.3);
-  --input: oklch(0.9 0.005 214.3);
-  --ring: oklch(0.723 0.014 214.4);
-  --chart-1: oklch(0.872 0.007 219.6);
-  --chart-2: oklch(0.56 0.021 213.5);
-  --chart-3: oklch(0.45 0.017 213.2);
-  --chart-4: oklch(0.378 0.015 216);
-  --chart-5: oklch(0.275 0.011 216.9);
+  --popover-foreground: oklch(0.1528 0.0168 285);
+  --muted: oklch(0.923 0.011 285);
+  --muted-foreground: oklch(0.432 0.024 285);
+
+  /* Controls — the things a thumb chooses. `--control-border` is what makes a
+     control read as one, and it applies even when the control has a fill. */
+  --primary: oklch(0.565 0.2828 299);
+  --primary-foreground: oklch(0.992 0.003 285);
+  --secondary: oklch(0.991 0.0051 285);
+  --secondary-foreground: oklch(0.1528 0.0168 285);
+  --control-border: oklch(0.812 0.0144 285);
+  --accent: oklch(0.9616 0.012 285);
+  --accent-foreground: oklch(0.1528 0.0168 285);
+  --border: oklch(0.8864 0.0096 285);
+  --input: oklch(0.8864 0.0096 285);
+  --ring: oklch(0.565 0.2828 299);
+
+  /* Brand — the mark's violet. `--primary` carries it in this set, so the two
+     are the same value; they are still separate tokens because the role is. */
+  --brand: oklch(0.565 0.2828 299);
+  --brand-foreground: oklch(0.992 0.003 285);
+  --brand-surface: oklch(0.954 0.0262 299);
+  --brand-border: oklch(0.8415 0.0924 299);
+
+  /* Status — meaning, never hue. Each carries a surface so a tinted state has
+     a token instead of an improvised alpha. */
+  --destructive: oklch(0.5554 0.22 27);
+  --destructive-surface: oklch(0.954 0.0236 27);
+  --success: oklch(0.5142 0.1249 156);
+  --success-surface: oklch(0.951 0.01998 156);
+  --warning: oklch(0.5371 0.1238 62);
+  --warning-surface: oklch(0.954 0.01981 62);
+  --info: oklch(0.5289 0.1499 250);
+  --info-surface: oklch(0.951 0.02398 250);
+
+  /* State — a press is ink, so it darkens whatever surface it lands on. */
+  --pressed: oklch(0 0 0 / 13%);
+
+  --chart-1: oklch(0.872 0.01 285);
+  --chart-2: oklch(0.56 0.03 285);
+  --chart-3: oklch(0.45 0.024 285);
+  --chart-4: oklch(0.378 0.02 285);
+  --chart-5: oklch(0.275 0.016 285);
   --radius: 0.625rem;
-  --sidebar: oklch(0.987 0.002 197.1);
-  --sidebar-foreground: oklch(0.148 0.004 228.8);
-  --sidebar-primary: oklch(0.218 0.008 223.9);
-  --sidebar-primary-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-accent: oklch(0.945 0.002 197.1);
-  --sidebar-accent-foreground: oklch(0.218 0.008 223.9);
-  --sidebar-border: oklch(0.9 0.005 214.3);
-  --sidebar-ring: oklch(0.723 0.014 214.4);
-
-  /* The 600s of Tailwind's own ramps: on white, a 300 is a tint, not a word. */
-  --success: oklch(0.596 0.145 163.225);
-  --warning: oklch(0.666 0.179 58.318);
-  --info: oklch(0.588 0.158 241.966);
-
-  /* A press is a state, not a surface (#196), so it is ink rather than a
-     colour: it darkens whatever it is pressed on and therefore reads the same
-     on a white card, on the page, and inside a sheet. An opaque token cannot —
-     `bg-accent/70` was tuned against a white page and came to rest on the
-     page's own colour the moment the page receded. Both schemes land at
-     1.25:1 against the surface under them. */
-  --pressed: oklch(0 0 0 / 10%);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0b0b13;
+  --sidebar-primary: #9324ff;
+  --sidebar-primary-foreground: #fcfcfe;
+  --sidebar-accent: #f1f1fa;
+  --sidebar-accent-foreground: #0b0b13;
+  --sidebar-border: #d9d9e0;
+  --sidebar-ring: #9324ff;
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.148 0.004 228.8);
-  --foreground: oklch(0.987 0.002 197.1);
-  --card: oklch(0.218 0.008 223.9);
-  --card-foreground: oklch(0.987 0.002 197.1);
-  --popover: oklch(0.218 0.008 223.9);
-  --popover-foreground: oklch(0.987 0.002 197.1);
-  --primary: oklch(0.925 0.005 214.3);
-  --primary-foreground: oklch(0.218 0.008 223.9);
-  --secondary: oklch(0.275 0.011 216.9);
-  --secondary-foreground: oklch(0.987 0.002 197.1);
-  --muted: oklch(0.275 0.011 216.9);
-  --muted-foreground: oklch(0.723 0.014 214.4);
-  --accent: oklch(0.275 0.011 216.9);
-  --accent-foreground: oklch(0.987 0.002 197.1);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.56 0.021 213.5);
-  --chart-1: oklch(0.872 0.007 219.6);
-  --chart-2: oklch(0.56 0.021 213.5);
-  --chart-3: oklch(0.45 0.017 213.2);
-  --chart-4: oklch(0.378 0.015 216);
-  --chart-5: oklch(0.275 0.011 216.9);
-  --sidebar: oklch(0.218 0.008 223.9);
-  --sidebar-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-accent: oklch(0.275 0.011 216.9);
-  --sidebar-accent-foreground: oklch(0.987 0.002 197.1);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.56 0.021 213.5);
 
-  /* The 300s: on this ground a 600 is a smudge. */
-  --success: oklch(0.845 0.143 164.978);
-  --warning: oklch(0.879 0.169 91.605);
-  --info: oklch(0.828 0.111 230.318);
+  /* Surfaces — the grounds content sits on. Never the fill of a control. */
+  --background: oklch(0.148 0.0132 285);
+  --foreground: oklch(0.9608 0.005 285);
+  --card: oklch(0.214 0.018 285);
+  --card-foreground: oklch(0.9608 0.005 285);
+  --popover: oklch(0.214 0.018 285);
+  --popover-foreground: oklch(0.9608 0.005 285);
+  --muted: oklch(0.276 0.024 285);
+  --muted-foreground: oklch(0.7192 0.024 285);
 
-  /* The same press, in the only ink a dark ground takes. */
-  --pressed: oklch(1 0 0 / 8%);
+  /* Controls — the things a thumb chooses. `--control-border` is what makes a
+     control read as one, and it applies even when the control has a fill. */
+  --primary: oklch(0.7175 0.1728 299);
+  --primary-foreground: oklch(0.178 0.024 285);
+  --secondary: oklch(0.266 0.0204 285);
+  --secondary-foreground: oklch(0.9608 0.005 285);
+  --control-border: oklch(0.414 0.0336 285);
+  --accent: oklch(0.314 0.0288 285);
+  --accent-foreground: oklch(0.9608 0.005 285);
+  --border: oklch(0.2944 0.024 285);
+  --input: oklch(0.2944 0.024 285);
+  --ring: oklch(0.7175 0.1728 299);
+
+  /* Brand — the mark's violet. `--primary` carries it in this set, so the two
+     are the same value; they are still separate tokens because the role is. */
+  --brand: oklch(0.7175 0.1728 299);
+  --brand-foreground: oklch(0.178 0.024 285);
+  --brand-surface: oklch(0.283 0.05184 299);
+  --brand-border: oklch(0.3897 0.1176 299);
+
+  /* Status — meaning, never hue. Each carries a surface so a tinted state has
+     a token instead of an improvised alpha. */
+  --destructive: oklch(0.741 0.1587 22);
+  --destructive-surface: oklch(0.283 0.04761 22);
+  --success: oklch(0.7035 0.15 160);
+  --success-surface: oklch(0.283 0.045 160);
+  --warning: oklch(0.7255 0.1496 82);
+  --warning-surface: oklch(0.283 0.04488 82);
+  --info: oklch(0.7185 0.15 245);
+  --info-surface: oklch(0.283 0.045 245);
+
+  /* State — a press is ink, so it darkens whatever surface it lands on. */
+  --pressed: oklch(1 0 0 / 7%);
+
+  --chart-1: oklch(0.872 0.01 285);
+  --chart-2: oklch(0.56 0.03 285);
+  --chart-3: oklch(0.45 0.024 285);
+  --chart-4: oklch(0.378 0.02 285);
+  --chart-5: oklch(0.275 0.016 285);
+  --sidebar: #181821;
+  --sidebar-foreground: #f1f2f5;
+  --sidebar-primary: #b488ff;
+  --sidebar-primary-foreground: #10101b;
+  --sidebar-accent: #302f40;
+  --sidebar-accent-foreground: #f1f2f5;
+  --sidebar-border: #2b2b38;
+  --sidebar-ring: #b488ff;
 }
 
 /* Screens replacing one another (§Motion). The browser's own crossfade, given

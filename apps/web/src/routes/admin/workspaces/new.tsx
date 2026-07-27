@@ -309,7 +309,7 @@ function InviteAction({
       className="pressable-row hover:bg-muted min-h-[70px] w-full rounded-none border-0 text-left transition-colors disabled:opacity-60"
     >
       <ItemMedia>
-        <span className="border-primary/50 text-primary flex size-11 items-center justify-center rounded-full border">
+        <span className="border-brand-border text-brand flex size-11 items-center justify-center rounded-full border">
           {icon}
         </span>
       </ItemMedia>

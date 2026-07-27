@@ -29,17 +29,17 @@ export interface SchemeColor {
  * configured separately in BotFather — Telegram takes one color there, not a
  * pair, so the splash stays dark whatever the client is set to.
  */
-export const APP_SURFACE_COLOR: SchemeColor = { dark: "#191c1d", light: "#f2f4f4" }
+export const APP_SURFACE_COLOR: SchemeColor = { dark: "#181821", light: "#ffffff" }
 
 /**
  * The page's own ground, in hex, for the pre-oklch fallback in critical CSS.
  * The light one is not white: the page recedes so that cards and sheets have
  * something to be raised against (#195) — `styles/app.css` §`:root`.
  */
-export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#090b0c", light: "#f2f4f4" }
+export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#0a0a10", light: "#eeeef2" }
 
 /** Running text on that ground, for the same fallback. */
-export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#f9fbfb", light: "#090b0c" }
+export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#f1f2f5", light: "#0b0b13" }
 
 /**
  * The primary button pair, for the same hexadecimal-only boundaries — the host
@@ -48,8 +48,8 @@ export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#f9fbfb", light: "#090
  * in oklch and cannot be handed to Telegram as they are. The two schemes invert
  * each other: a near-white button on dark, a near-black one on light.
  */
-export const APP_PRIMARY_COLOR: SchemeColor = { dark: "#e3e7e8", light: "#161b1d" }
-export const APP_ON_PRIMARY_COLOR: SchemeColor = { dark: "#161b1d", light: "#f9fbfb" }
+export const APP_PRIMARY_COLOR: SchemeColor = { dark: "#b488ff", light: "#9324ff" }
+export const APP_ON_PRIMARY_COLOR: SchemeColor = { dark: "#10101b", light: "#fcfcfe" }
 
 /**
  * The scheme, decided before the first paint.

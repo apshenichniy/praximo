@@ -24,7 +24,7 @@ import type { ViewerRole } from "@/server/viewer-role.ts"
 
 const markerClass = {
   done: "border-success/30 bg-success/12 text-success",
-  current: "border-primary/50 bg-primary/10 text-primary",
+  current: "border-brand-border bg-brand-surface text-brand",
   upcoming: "border-border text-muted-foreground/70",
 } as const satisfies Record<CoachStepState, string>
 

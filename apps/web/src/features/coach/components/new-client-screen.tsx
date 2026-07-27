@@ -77,10 +77,11 @@ export function NewClientScreen({
                 setInviteLanguage(option)
               }}
               className={cn(
-                "flex-1 rounded-full border py-2 text-body font-semibold transition-colors",
+                "flex min-h-11 flex-1 items-center justify-center rounded-full border text-body font-semibold",
+                "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press) active:scale-[0.97]",
                 inviteLanguage === option
                   ? "bg-primary text-primary-foreground border-transparent"
-                  : "border-border text-muted-foreground",
+                  : "bg-secondary border-control-border text-foreground",
               )}
             >
               {languageNames[option]}

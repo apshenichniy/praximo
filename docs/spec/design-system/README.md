@@ -1,7 +1,30 @@
 # One design system for both apps
 
-Status: **proposal, awaiting a chosen variant** ([#198](https://github.com/apshenichniy/praximo/issues/198)).
-Nothing here has been applied to `apps/web`.
+Status: **Iris applied, brand hue still being judged live**
+([#198](https://github.com/apshenichniy/praximo/issues/198)).
+
+The token structure and the control treatment are in `apps/web`. The brand hue is
+not settled — four sets sit in `sets/`, and swapping between them is one command:
+
+```sh
+python3 docs/spec/design-system/apply.py iris     # origin | mark | iris | fuchsia
+```
+
+Three files restate these values and all three move together — `styles/app.css`,
+`routes/__root.tsx` (the critical stylesheet carries both grounds inline, because
+the scheme is not known a few bytes further down the head) and `lib/theme.ts` (the
+Telegram host chrome is painted through a bridge call and cannot read a token).
+Leaving one behind is silent: the app renders, one test fails, and the Telegram
+chrome keeps the previous colour. `apply.py` is what keeps them in step.
+
+The four sets differ **only** in the brand hue. Everything else — the neutral
+ramp, the raised control at a 1.75 edge, hairline elevation, the tracking table —
+is shared, so switching between them changes one variable.
+
+**Not yet done**, deliberately: the three new contrast invariants are not written.
+They encode the fix and belong with the final values, in one commit, once the hue
+is chosen. The four existing tests in `apps/web/src/__tests__/` already gate every
+set, and all four sets pass them.
 
 The four variants are rendered, in both schemes, on the comparison rig:
 <https://claude.ai/code/artifact/8c20c897-75ae-4e28-bc1d-ca230f747b48>

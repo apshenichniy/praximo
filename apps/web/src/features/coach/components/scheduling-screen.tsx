@@ -573,7 +573,10 @@ export function SchedulingScreen({
                   "ease-out-strong transition-[color,background-color,border-color,scale] duration-(--duration-press) active:scale-[0.97]",
                   durationMinutes === minutes
                     ? "bg-primary text-primary-foreground border-transparent"
-                    : "border-border text-muted-foreground",
+                    : // A control at rest is a fill *and* an edge (#198). This used
+                      // to be `border-border` on nothing, which put the whole
+                      // affordance on a hairline 1.22:1 from the page.
+                      "bg-secondary border-control-border text-foreground",
                 )}
               >
                 {minutes}
@@ -671,7 +674,7 @@ export function SchedulingScreen({
                               "enabled:active:scale-[0.97]",
                               startMinutes === slot.startMinutes
                                 ? "bg-primary text-primary-foreground border-transparent"
-                                : "border-border",
+                                : "bg-secondary border-control-border",
                               // Taken, not gone: hiding it would reflow a
                               // three-column grid between days and cost the
                               // positional memory the layout trades on.

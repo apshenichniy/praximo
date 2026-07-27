@@ -39,7 +39,7 @@ export function InviteCoachLink() {
       to="/admin/workspaces/new"
       className="text-primary pressable-row hover:bg-muted flex h-16 w-full items-center gap-3.5 px-4 text-left font-semibold"
     >
-      <span className="border-primary/50 flex size-[38px] items-center justify-center rounded-full border">
+      <span className="border-brand-border text-brand flex size-[38px] items-center justify-center rounded-full border">
         <HugeiconsIcon icon={AddMaleIcon} size={22} strokeWidth={1.8} />
       </span>
       Invite a coach
@@ -163,7 +163,7 @@ export function ViewerCoachCard({
         className="pressable-row hover:bg-muted w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
       >
         <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
-          <span className="border-primary/50 text-primary flex size-[38px] items-center justify-center rounded-full border">
+          <span className="border-brand-border text-brand flex size-[38px] items-center justify-center rounded-full border">
             <HugeiconsIcon icon={UserSharingIcon} size={20} strokeWidth={1.8} />
           </span>
         </ItemMedia>

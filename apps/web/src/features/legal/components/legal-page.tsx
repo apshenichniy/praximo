@@ -31,7 +31,7 @@ function Inline({ value }: { readonly value: LegalInline }) {
   // Left visible on purpose. These wait on the legal-entity decision, and a
   // silently blank contract clause is worse than one that says it is unfinished.
   return (
-    <mark className="bg-primary/15 text-primary rounded px-1 py-0.5 text-footnote whitespace-nowrap">
+    <mark className="bg-brand-surface text-brand rounded px-1 py-0.5 text-footnote whitespace-nowrap">
       [{legalPlaceholders[value.placeholder]}]
     </mark>
   )
