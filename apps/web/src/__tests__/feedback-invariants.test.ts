@@ -125,9 +125,7 @@ describe("feedback invariants", () => {
         SelectionHandler.test(source) ||
         // The closing quote matters: it is what keeps `toggle` from claiming
         // `toggle-group`, and `radio` from claiming `radio-group`.
-        SelectionPrimitives.some((primitive) =>
-          source.includes(`@base-ui/react/${primitive}"`),
-        ),
+        SelectionPrimitives.some((primitive) => source.includes(`@base-ui/react/${primitive}"`)),
     )
     // A rename of the directory, or of the primitives, must not quietly turn
     // this into a test that reads nothing and passes.
