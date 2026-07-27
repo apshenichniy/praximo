@@ -46,22 +46,22 @@ describe("detailStatus", () => {
   it("names a coach exactly as the list row names them", () => {
     expect(detailStatus(workspace({ onboarding: "invited" }))).toMatchObject({
       label: "Invited",
-      tone: "amber",
+      tone: "warning",
     })
     expect(detailStatus(workspace({ onboarding: "stalled" }))).toMatchObject({
       label: "Setup stalled",
-      tone: "amber",
+      tone: "warning",
     })
   })
 
   it("falls back to the bot's connection once onboarding is complete", () => {
     expect(detailStatus(workspace({ botStatus: "connected" }))).toMatchObject({
       label: "Connected",
-      tone: "emerald",
+      tone: "success",
     })
     expect(detailStatus(workspace({ botStatus: "needs-relink" }))).toMatchObject({
       label: "Needs re-link",
-      tone: "rose",
+      tone: "destructive",
     })
   })
 

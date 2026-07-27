@@ -9,10 +9,10 @@ import { detailStatus, type WorkspaceDetail } from "@/features/admin/workspace-d
 import { cn } from "@/lib/utils.ts"
 
 const toneClass = {
-  amber: "text-amber-300",
-  sky: "text-sky-300",
-  emerald: "text-emerald-300",
-  rose: "text-rose-300",
+  warning: "text-warning",
+  info: "text-info",
+  success: "text-success",
+  destructive: "text-destructive",
   muted: "text-muted-foreground",
 } as const satisfies Record<CoachStateTone, string>
 

@@ -22,9 +22,9 @@ import type { CoachClients } from "@/server/coach-clients.ts"
  */
 
 const stateStyles: Record<CoachClients.ClientSummary["state"], string> = {
-  invited: "text-amber-300",
-  expired: "text-rose-300",
-  accepted: "text-emerald-300",
+  invited: "text-warning",
+  expired: "text-destructive",
+  accepted: "text-success",
 }
 
 const initials = (name: string): string =>

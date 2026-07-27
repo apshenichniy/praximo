@@ -85,7 +85,7 @@ export function SessionsScreen({
                           className="mt-0.5"
                         />
                         {session.clientAccepted ? null : (
-                          <span className="mt-1 block truncate text-caption text-amber-200/80">
+                          <span className="mt-1 block truncate text-caption text-warning/80">
                             {copy.sessions.rowUnaccepted}
                           </span>
                         )}

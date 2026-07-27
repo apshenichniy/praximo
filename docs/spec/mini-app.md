@@ -183,6 +183,93 @@ for a first session: "no history yet").
   ([ADR 0005](../adr/0005-session-reconciler-on-durable-objects.md)); the UI
   shows an automatic cancellation with its reason.
 
+## Theme
+
+The app is in whatever scheme its host is in. Decided in
+[#190](https://github.com/apshenichniy/praximo/issues/190), which replaced a
+dark-only app: a coach who reads their phone in light mode used to meet one black
+rectangle inside a white client, and the Mini App was the only surface on their
+phone ignoring a setting they had made.
+
+`Telegram.WebApp.colorScheme` is the answer while the app runs, and the
+`themeChanged` event is how it moves — a coach can flip the setting, or their
+phone can cross into night, with the app still on screen. Outside a Telegram
+launch (a client's browser on the acceptance page, local development) the
+browser's own `prefers-color-scheme` stands in for both.
+
+**The first paint is settled before it happens.** The scheme is not knowable on
+the server — Telegram publishes it as `tgWebAppThemeParams` in the URL *hash*,
+which no request carries — so the document is rendered scheme-less and a blocking
+script in `<head>` (`COLOR_SCHEME_BOOTSTRAP` in `apps/web/src/lib/theme.ts`) puts
+the class on ahead of the body. Reading the launch's `bg_color` luminance is the
+same derivation Telegram's own SDK makes; the critical stylesheet carries both
+grounds, because which one it will be is unknown a few bytes earlier.
+
+**Three surfaces answer to a change, and only one is CSS.** The `dark` class on
+`<html>` carries the palette. The Telegram chrome — header, webview background,
+bottom bar — and the host's own bottom button are painted through bridge calls,
+because a page stylesheet does not reach them. `TelegramTheme`, mounted once in
+the root shell, keeps all three in step.
+
+**Status is named by meaning, never by hue.** `--success`, `--warning`, `--info`
+and the preset's own `--destructive` carry one value per scheme — Tailwind's 300s
+on the dark ground, its 600s on the light one. A screen that said
+`text-emerald-300` was stating a shade chosen for near-black, and on white the
+same shade is a tint rather than a word; `src/__tests__/global-theme.test.tsx`
+fails on one reappearing anywhere in `src`.
+
+### Where a dangerous question is asked
+
+**From the bottom of the screen, always**
+([#197](https://github.com/apshenichniy/praximo/issues/197)). Deleting a
+workspace asked from a sheet and deleting a client asked from a centred dialog,
+so the decision moved around the screen depending on which decision it was and
+the coach learned the shape of neither. A phone's thumb rests at the bottom; a
+centred dialog puts a destructive choice under the hand rather than in it.
+
+Every confirmation goes through `ConfirmSheet`. A **destructive** one spends its
+buttons the way the deletion sheet does — Cancel as the big comfortable target,
+the destructive action as quiet text under it, so the easy press is the safe one.
+A merely **lossy** one, which can be done again, keeps its own action on top.
+
+The arming step is *not* shared. Three seconds of countdown belongs to deleting a
+workspace ([admin-surface.md](admin-surface.md) §Deletion), where a bot is
+released and a practice erased; charging the same toll for re-issuing an invite
+would teach the coach to sit through it. `feedback-invariants.test.ts` holds the
+shape: nothing outside `components/ui` imports `alert-dialog.tsx`.
+
+### Surfaces
+
+**Three, not one** ([#195](https://github.com/apshenichniy/praximo/issues/195)).
+The page, the raised surface (card, popover, sheet) and the recessed fill are
+distinct grounds, and they have to be distinct in *both* schemes: elevation needs
+something to be elevated against. The light ground first shipped with all three
+at pure white, and a bottom sheet opened over a screen simply was not there — it
+read as the page growing some buttons.
+
+On light the page recedes and the raised surfaces keep the white, which is the
+direction light interfaces run in; on dark the page is the darkest and raised
+surfaces lift off it. The steps are the same size in both — page→card 1.14:1
+dark against 1.11:1 light, card→recessed 1.17:1 in both — so a screen designed in
+one scheme keeps its structure in the other.
+
+`src/__tests__/theme-contrast.test.ts` reads the two blocks out of `app.css` and
+asserts the steps, the hairline against both of its grounds, and the text
+parity. None of these are visible in a diff: the miss that prompted this was one
+token copied from the registry.
+
+A **backdrop is not a substitute for a surface.** The drawer has always had one —
+`modal` defaults to `true`, and it paints a scrim with a blur — and the sheet was
+still invisible, because the scrim separates the sheet from the *content* behind
+it, not from the ground it is drawn on. Two more things the sheet needs and now
+has: a border of `--border` rather than of its own fill, and its shadow cast
+**upward**. Every Tailwind `shadow-*` falls downward, which on a sheet pinned to
+the bottom of the screen puts the whole shadow off-screen and leaves the one edge
+anybody sees with nothing under it.
+
+The BotFather splash screen stays dark. It is configured outside this repository
+and Telegram takes one colour there, not a pair.
+
 ## Motion
 
 Decided in #186, after walking the scheduling flow on a phone. The rules are
@@ -289,6 +376,16 @@ Rows take their press as a wash of colour rather than the 0.97 a chip takes:
 scaling something the width of the screen reads as the page flexing, and the
 platform's own lists light up. That is what `pressable-row` is.
 
+The wash is **ink, not a colour** ([#196](https://github.com/apshenichniy/praximo/issues/196)):
+`--pressed` is black or white at a low alpha, so it darkens whatever surface it
+is pressed on and reads the same on a card, on the page and inside a sheet. It
+was an opaque `bg-accent/70`, picked when the page was white — and when the page
+receded to make room for elevation (§Surfaces), that value came to rest on the
+page's own colour. A pressed row stopped reading as pressed and started reading
+as a hole cut through the card. An absolute colour cannot express a relative
+state; the contrast test now asserts the press against both its own surface and
+the ground behind it.
+
 The last two rows of that table are invariants, and
 `src/__tests__/feedback-invariants.test.ts` holds them: a file that mutates says
 how it went, a file with `aria-pressed` ticks. A hook may hand its outcome out
@@ -338,12 +435,43 @@ friends do not exist here.
 | `text-title` | 24px | 30 | screen titles |
 | `text-display` | 30px | 34 | the one number a screen is about |
 
-Two numbers deserve their reasons. **The floor is 12px** because this typeface
-is not SF Pro: Nunito Sans has neither its x-height nor its optical sizing, so a
-native app's 11pt is not our 11px, and 12 is where Nunito starts being read
-rather than decoded. **Body is 15px, not 14**, which is the single change with
-the widest reach — it is the size of nearly every sentence, button and slot in
-the app.
+Two numbers deserve their reasons. **The floor is 12px** because a native app's
+11pt is not our 11px: the scale was set against Nunito Sans, which had neither SF
+Pro's x-height nor its optical sizing, and 12 was where that face started being
+read rather than decoded. **Body is 15px, not 14**, which is the single change
+with the widest reach — it is the size of nearly every sentence, button and slot
+in the app.
+
+### The face
+
+**Inter**, in the `opsz` build ([#194](https://github.com/apshenichniy/praximo/issues/194)),
+replacing Nunito Sans. Nunito is a rounded, low-contrast face built for warmth,
+and it spends that warmth on the two things this app asks of type most often:
+holding 12px labels and holding secondary greys. It was the light scheme that
+made this visible — the same strings that read on near-black went thin and
+papery on white — but the weakness was there in both.
+
+Inter was drawn for screens at UI sizes and brings the x-height Nunito lacked.
+The `opsz` axis (14–32) is why the optical-size build is imported rather than the
+weight-only one: with `font-optical-sizing: auto`, a caption gets the wide, open
+text cut and a screen title gets the tight display one, with no screen asking.
+It costs about 35 KB more across the two subsets served, once, cached.
+
+The seven steps are **unchanged** by the swap. Inter's larger x-height means the
+floor now has headroom it did not have, so retuning the scale down is available —
+but that is its own decision, taken by looking, not a side effect of changing the
+face.
+
+Running text is **450, not 400, in the light scheme only** — light type on a dark
+ground blooms, so a weight settled in the dark comes out a half step thin the
+moment the ground flips. It sits in Tailwind's `base` layer, so every explicit
+`font-medium` and `font-semibold` still wins, and the places that say
+`font-normal` to mean *de-emphasised* keep saying it.
+
+Font smoothing is deliberately **unset**. `-webkit-font-smoothing` is a macOS-only
+property — a no-op in the iOS client most coaches are in — and where it does
+apply, `antialiased` renders type *thinner*, which is the opposite of what a light
+ground needs.
 
 ### Rules
 

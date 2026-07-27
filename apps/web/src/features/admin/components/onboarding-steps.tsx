@@ -11,10 +11,10 @@ import {
 import { cn } from "@/lib/utils.ts"
 
 const markerClass = {
-  done: "border-emerald-400/30 bg-emerald-400/12 text-emerald-300",
+  done: "border-success/30 bg-success/12 text-success",
   current: "border-primary/50 bg-primary/10 text-primary",
   upcoming: "border-border text-muted-foreground/70",
-  blocked: "border-amber-400/30 bg-amber-400/12 text-amber-300",
+  blocked: "border-warning/30 bg-warning/12 text-warning",
 } as const satisfies Record<StepState, string>
 
 function StepMarker({ state, index }: { readonly state: StepState; readonly index: number }) {
@@ -71,7 +71,7 @@ export function OnboardingStepsSection({ workspace }: { readonly workspace: Work
                       aria-hidden="true"
                       className={cn(
                         "w-px flex-1",
-                        step.state === "done" ? "bg-emerald-400/30" : "bg-border",
+                        step.state === "done" ? "bg-success/30" : "bg-border",
                       )}
                     />
                   )}

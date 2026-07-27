@@ -151,9 +151,9 @@ describe("Today", () => {
     expect(html).toContain(coachCatalog.en.today.unacceptedLead.trim())
     expect(html).toContain(coachCatalog.en.today.unacceptedTail.trim())
     expect(html).toContain(coachCatalog.en.today.resend)
-    // Amber, never the bot-down tone: red belongs to the one thing here the
+    // The warning tone, never the bot-down one: red belongs to the one thing here the
     // coach cannot fix by talking to their client.
-    expect(html).toContain("amber")
+    expect(html).toContain("text-warning")
     expect(html).not.toContain("bg-destructive")
   })
 
@@ -171,7 +171,7 @@ describe("Today", () => {
     )
 
     expect(html).not.toContain(coachCatalog.en.today.resend)
-    expect(html).not.toContain("amber")
+    expect(html).not.toContain("text-warning")
   })
 
   it("hides needs attention when there is nothing in it", async () => {

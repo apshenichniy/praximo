@@ -48,18 +48,18 @@ export function InviteCoachLink() {
 }
 
 const toneClass = {
-  amber: "text-amber-300",
-  sky: "text-sky-300",
-  emerald: "text-emerald-300",
-  rose: "text-rose-300",
+  warning: "text-warning",
+  info: "text-info",
+  success: "text-success",
+  destructive: "text-destructive",
   muted: "text-muted-foreground",
 } as const satisfies Record<CoachStateTone, string>
 
 const dotClass = {
-  amber: "bg-amber-300",
-  sky: "bg-sky-300",
-  emerald: "bg-emerald-300",
-  rose: "bg-rose-300",
+  warning: "bg-warning",
+  info: "bg-info",
+  success: "bg-success",
+  destructive: "bg-destructive",
   muted: "bg-muted-foreground/60",
 } as const satisfies Record<CoachStateTone, string>
 

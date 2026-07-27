@@ -30,13 +30,16 @@ describe("coachRowState", () => {
   it("describes a finished coach by their bot and everyone else by the invite", () => {
     expect(coachRowState(coach({ botStatus: "connected" }))).toEqual({
       label: "Connected",
-      tone: "emerald",
+      tone: "success",
     })
     expect(coachRowState(coach({ botStatus: "needs-relink" }))).toEqual({
       label: "Needs re-link",
-      tone: "rose",
+      tone: "destructive",
     })
-    expect(coachRowState(onboarding("stalled"))).toEqual({ label: "Setup stalled", tone: "amber" })
+    expect(coachRowState(onboarding("stalled"))).toEqual({
+      label: "Setup stalled",
+      tone: "warning",
+    })
     // Terminal history recedes rather than alarming: nothing is owed on it.
     expect(coachRowState(onboarding("declined")).tone).toBe("muted")
   })

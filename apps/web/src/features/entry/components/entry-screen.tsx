@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils.ts"
 import type { ViewerRole } from "@/server/viewer-role.ts"
 
 const markerClass = {
-  done: "border-emerald-400/30 bg-emerald-400/12 text-emerald-300",
+  done: "border-success/30 bg-success/12 text-success",
   current: "border-primary/50 bg-primary/10 text-primary",
   upcoming: "border-border text-muted-foreground/70",
 } as const satisfies Record<CoachStepState, string>
@@ -66,7 +66,7 @@ function CoachSteps({ steps }: { readonly steps: ReadonlyArray<CoachStep> }) {
                     aria-hidden="true"
                     className={cn(
                       "w-px flex-1",
-                      step.state === "done" ? "bg-emerald-400/30" : "bg-border",
+                      step.state === "done" ? "bg-success/30" : "bg-border",
                     )}
                   />
                 )}

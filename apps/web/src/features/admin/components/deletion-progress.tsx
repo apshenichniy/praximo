@@ -35,7 +35,7 @@ export function DeletionStageList({
               stage.state === "pending"
                 ? "text-muted-foreground"
                 : stage.state === "warned"
-                  ? "font-medium text-amber-300"
+                  ? "font-medium text-warning"
                   : "font-medium",
             )}
           >
@@ -55,13 +55,11 @@ function StageMarker({ state }: { readonly state: DeletionStage["state"] }) {
           icon={CheckmarkCircle02Icon}
           size={20}
           strokeWidth={2}
-          className="text-emerald-300"
+          className="text-success"
         />
       )
     case "warned":
-      return (
-        <HugeiconsIcon icon={Alert02Icon} size={20} strokeWidth={2} className="text-amber-300" />
-      )
+      return <HugeiconsIcon icon={Alert02Icon} size={20} strokeWidth={2} className="text-warning" />
     case "running":
       return <Spinner className="text-primary size-[18px]" />
     case "pending":

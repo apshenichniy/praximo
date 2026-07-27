@@ -136,7 +136,7 @@ export function LabelSettingsSection({ workspace }: { readonly workspace: Worksp
               )}
             </Button>
           ) : saved ? (
-            <p className="mt-4 text-body text-emerald-300">Label saved</p>
+            <p className="mt-4 text-body text-success">Label saved</p>
           ) : null}
         </CardContent>
       </Card>

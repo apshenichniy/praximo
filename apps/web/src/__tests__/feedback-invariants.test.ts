@@ -137,4 +137,27 @@ describe("feedback invariants", () => {
 
     expect(silent).toEqual([])
   })
+
+  /**
+   * Danger answers in one shape (#197).
+   *
+   * Deleting a workspace asked from a bottom sheet and deleting a client asked
+   * from a centred dialog, which taught the coach nothing about either: the
+   * decision moved to a different part of the screen depending on which decision
+   * it was. A phone's thumb rests at the bottom, so the sheet is the shape that
+   * won, and `ConfirmSheet` is where every confirmation goes.
+   *
+   * Asserted against the import rather than against a rendering, because the way
+   * back is a `git revert` or an `AlertDialog` pulled fresh from the shadcn CLI —
+   * both of which are an import appearing in a screen, and neither of which
+   * looks wrong on the line it lands on.
+   */
+  it("asks a destructive question from the bottom of the screen", async () => {
+    const dialogs = (await files())
+      .filter(({ path: file }) => !file.startsWith(UiDirectory))
+      .filter(({ source }) => source.includes("components/ui/alert-dialog.tsx"))
+      .map(({ path: file }) => file)
+
+    expect(dialogs).toEqual([])
+  })
 })

@@ -12,11 +12,12 @@ import {
   readTelegramInitData,
   revealTelegramWebApp,
   shareInviteMessage,
+  watchTelegramColorScheme,
   type TelegramBackButton,
   type TelegramMainButton,
   type TelegramWebApp,
 } from "@/lib/telegram.ts"
-import { APP_DARK_COLOR, APP_ON_PRIMARY_COLOR, APP_PRIMARY_COLOR } from "@/lib/theme.ts"
+import { APP_ON_PRIMARY_COLOR, APP_PRIMARY_COLOR, APP_SURFACE_COLOR } from "@/lib/theme.ts"
 
 // The fullscreen requirement (mini-app.md: opens fullscreen via Bot API 8.0
 // `requestFullscreen`, with `fullscreenChanged` handling + safe-area insets)
@@ -52,6 +53,7 @@ const fakeWebApp = (overrides: Partial<TelegramWebApp> = {}): TelegramWebApp => 
   initData: "signed-init-data",
   version: "8.0",
   platform: "ios",
+  colorScheme: "dark",
   isFullscreen: false,
   ready: vi.fn(),
   expand: vi.fn(),
@@ -98,8 +100,8 @@ describe("Telegram admin adapters", () => {
     const detach = attachMainButton(webApp, "Invite a coach", onClick)
 
     expect(webApp.MainButton.setParams).toHaveBeenCalledWith({
-      color: APP_PRIMARY_COLOR,
-      text_color: APP_ON_PRIMARY_COLOR,
+      color: APP_PRIMARY_COLOR.dark,
+      text_color: APP_ON_PRIMARY_COLOR.dark,
     })
     expect(webApp.MainButton.setText).toHaveBeenCalledWith("Invite a coach")
     expect(webApp.MainButton.onClick).toHaveBeenCalledWith(onClick)
@@ -121,15 +123,15 @@ describe("Telegram admin adapters", () => {
 })
 
 describe("enterFullscreen", () => {
-  it("sets dark host chrome before revealing and requesting fullscreen", () => {
+  it("paints the host chrome in the client's scheme before revealing", () => {
     const webApp = fakeWebApp()
     const onChange = vi.fn()
 
     const detach = enterFullscreen(webApp, onChange)
 
-    expect(webApp.setHeaderColor).toHaveBeenCalledWith(APP_DARK_COLOR)
-    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_DARK_COLOR)
-    expect(webApp.setBottomBarColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    expect(webApp.setHeaderColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.dark)
+    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.dark)
+    expect(webApp.setBottomBarColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.dark)
     const [readyOrder = Number.POSITIVE_INFINITY] = vi.mocked(webApp.ready).mock.invocationCallOrder
     expect(vi.mocked(webApp.setHeaderColor).mock.invocationCallOrder[0]).toBeLessThan(readyOrder)
     expect(vi.mocked(webApp.setBackgroundColor).mock.invocationCallOrder[0]).toBeLessThan(
@@ -193,10 +195,53 @@ describe("enterFullscreen", () => {
 
     revealTelegramWebApp(webApp)
 
-    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_DARK_COLOR)
+    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.dark)
     expect(webApp.setHeaderColor).not.toHaveBeenCalled()
     expect(webApp.setBottomBarColor).not.toHaveBeenCalled()
     expect(webApp.disableVerticalSwipes).not.toHaveBeenCalled()
+  })
+})
+
+describe("the client's colour scheme", () => {
+  it("paints the host chrome and the bottom button light when the client is light", () => {
+    const webApp = fakeWebApp({ colorScheme: "light" })
+
+    revealTelegramWebApp(webApp)
+    attachMainButton(webApp, "Invite a coach", vi.fn())
+
+    expect(webApp.setHeaderColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.light)
+    expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.light)
+    expect(webApp.setBottomBarColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.light)
+    expect(webApp.MainButton.setParams).toHaveBeenCalledWith({
+      color: APP_PRIMARY_COLOR.light,
+      text_color: APP_ON_PRIMARY_COLOR.light,
+    })
+  })
+
+  it("reports the scheme the host is in whenever it moves, and unsubscribes", () => {
+    let fire: (() => void) | undefined
+    let scheme: "light" | "dark" = "dark"
+    const webApp = fakeWebApp({
+      onEvent: vi.fn((event: string, handler: () => void) => {
+        if (event === "themeChanged") fire = handler
+      }),
+    })
+    // The host mutates its own `colorScheme` and then fires the event; the
+    // handler must read it at that moment rather than close over the launch one.
+    Object.defineProperty(webApp, "colorScheme", { get: () => scheme })
+    const onScheme = vi.fn()
+
+    const detach = watchTelegramColorScheme(webApp, onScheme)
+
+    // Subscribing is not itself a change: the launch scheme is already applied.
+    expect(onScheme).not.toHaveBeenCalled()
+
+    scheme = "light"
+    fire?.()
+    expect(onScheme).toHaveBeenCalledWith("light")
+
+    detach()
+    expect(webApp.offEvent).toHaveBeenCalledWith("themeChanged", expect.any(Function))
   })
 })
 
