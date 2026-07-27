@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
 import {
-  attachMainButton,
+  claimMainButton,
   loadTelegramWebApp,
   readTelegramInitData,
   type TelegramWebApp,
@@ -32,12 +32,16 @@ export function TelegramMainButton({
   /**
    * The current handler and label, read through refs.
    *
-   * The button is attached **once**. Attaching per render would mean a `hide()`
-   * and a `show()` on every keystroke and every chip a screen offers — the host
-   * animates both, so the button blinked at the bottom of the scheduling screen
-   * each time the kind, the duration or the day changed, none of which the
-   * button is about. `onClick` is a fresh closure whenever the draft moves, so
-   * the host gets a stable wrapper and the closure is read at press time.
+   * The button is claimed **once per mount**. Claiming per render would mean a
+   * `hide()` and a `show()` on every keystroke and every chip a screen offers —
+   * the host animates both, so the button blinked at the bottom of the
+   * scheduling screen each time the kind, the duration or the day changed, none
+   * of which the button is about. `onClick` is a fresh closure whenever the
+   * draft moves, so the host gets a stable wrapper and the closure is read at
+   * press time.
+   *
+   * Across *routes* the same blink came from the mount itself, and that is
+   * `claimMainButton`'s job rather than this component's — see `lib/telegram.ts`.
    */
   const handler = useRef(onClick)
   handler.current = onClick
@@ -54,7 +58,7 @@ export function TelegramMainButton({
       setUsesNativeButton(isTelegramLaunch)
       if (webApp && isTelegramLaunch) {
         setHost(webApp)
-        detach = attachMainButton(webApp, label.current, () => handler.current())
+        detach = claimMainButton(webApp, label.current, () => handler.current())
       }
     })
 

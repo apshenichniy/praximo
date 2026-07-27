@@ -7,7 +7,7 @@ import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { TelegramFullscreen } from "@/components/telegram-fullscreen.tsx"
 import {
   attachBackButton,
-  attachMainButton,
+  claimMainButton,
   enterFullscreen,
   readTelegramInitData,
   revealTelegramWebApp,
@@ -36,13 +36,25 @@ const fakeBackButton = (): TelegramBackButton => {
   return backButton
 }
 
+/**
+ * `isVisible` is modelled rather than pinned to `false`, because the handoff
+ * reads it: a claim shows the button only when it is down. A fake that never
+ * becomes visible reports a second `show()` as if it were the first, which is
+ * precisely the animation #198 removed.
+ */
 const fakeMainButton = (): TelegramMainButton => {
-  const mainButton: TelegramMainButton = {
+  const mainButton = {
     isVisible: false,
     setText: vi.fn(() => mainButton),
     setParams: vi.fn(() => mainButton),
-    show: vi.fn(() => mainButton),
-    hide: vi.fn(() => mainButton),
+    show: vi.fn(() => {
+      mainButton.isVisible = true
+      return mainButton
+    }),
+    hide: vi.fn(() => {
+      mainButton.isVisible = false
+      return mainButton
+    }),
     onClick: vi.fn(() => mainButton),
     offClick: vi.fn(() => mainButton),
   }
@@ -94,28 +106,63 @@ describe("Telegram admin adapters", () => {
   })
 
   it("hands the screen's action to the host MainButton in the app's own palette", () => {
+    vi.useFakeTimers()
     const webApp = fakeWebApp()
     const onClick = vi.fn()
 
-    const detach = attachMainButton(webApp, "Invite a coach", onClick)
+    const release = claimMainButton(webApp, "Invite a coach", onClick)
 
     expect(webApp.MainButton.setParams).toHaveBeenCalledWith({
       color: APP_PRIMARY_COLOR.dark,
       text_color: APP_ON_PRIMARY_COLOR.dark,
     })
     expect(webApp.MainButton.setText).toHaveBeenCalledWith("Invite a coach")
-    expect(webApp.MainButton.onClick).toHaveBeenCalledWith(onClick)
     expect(webApp.MainButton.show).toHaveBeenCalledOnce()
 
-    detach()
-    expect(webApp.MainButton.offClick).toHaveBeenCalledWith(onClick)
+    // The host is given a stable wrapper, never the screen's own closure: the
+    // closure changes on every render and `offClick` could not remove it.
+    expect(webApp.MainButton.onClick).toHaveBeenCalledOnce()
+    const bound = vi.mocked(webApp.MainButton.onClick).mock.calls[0]?.[0]
+    bound?.()
+    expect(onClick).toHaveBeenCalledOnce()
+
+    // Releasing schedules the hide rather than doing it, so the next screen can
+    // take the button over without it sliding away and back.
+    release()
+    expect(webApp.MainButton.hide).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(200)
     expect(webApp.MainButton.hide).toHaveBeenCalledOnce()
+    vi.useRealTimers()
+  })
+
+  /**
+   * The blink this whole handoff exists for (#198): every screen mounts its own
+   * `TelegramMainButton`, so a route change released one and claimed the next,
+   * and the host animates a `hide()` and a `show()`. Button → button has to be a
+   * `setText` and nothing more.
+   */
+  it("stays on screen when one route hands the button to the next", () => {
+    vi.useFakeTimers()
+    const webApp = fakeWebApp()
+
+    const releaseFirst = claimMainButton(webApp, "New client", vi.fn())
+    releaseFirst()
+    claimMainButton(webApp, "New session", vi.fn())
+    vi.advanceTimersByTime(200)
+
+    expect(webApp.MainButton.hide).not.toHaveBeenCalled()
+    expect(webApp.MainButton.setText).toHaveBeenLastCalledWith("New session")
+    // Shown once for the pair, and bound once: a claim per route would otherwise
+    // pile handlers up over a session.
+    expect(webApp.MainButton.show).toHaveBeenCalledOnce()
+    expect(webApp.MainButton.onClick).toHaveBeenCalledOnce()
+    vi.useRealTimers()
   })
 
   it("leaves a pre-6.1 host its own button colors rather than styling it halfway", () => {
     const webApp = fakeWebApp({ version: "6.0", isVersionAtLeast: () => false })
 
-    attachMainButton(webApp, "Invite a coach", vi.fn())
+    claimMainButton(webApp, "Invite a coach", vi.fn())
 
     expect(webApp.MainButton.setParams).not.toHaveBeenCalled()
     expect(webApp.MainButton.show).toHaveBeenCalledOnce()
@@ -207,7 +254,7 @@ describe("the client's colour scheme", () => {
     const webApp = fakeWebApp({ colorScheme: "light" })
 
     revealTelegramWebApp(webApp)
-    attachMainButton(webApp, "Invite a coach", vi.fn())
+    claimMainButton(webApp, "Invite a coach", vi.fn())
 
     expect(webApp.setHeaderColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.light)
     expect(webApp.setBackgroundColor).toHaveBeenCalledWith(APP_SURFACE_COLOR.light)

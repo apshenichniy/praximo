@@ -682,7 +682,14 @@ export function SchedulingScreen({
                               // Taken, not gone: hiding it would reflow a
                               // three-column grid between days and cost the
                               // positional memory the layout trades on.
-                              slot.available ? undefined : "text-muted-foreground/40 border-dashed",
+                              //
+                              // Faded, not dashed (#198). A dashed edge reads as
+                              // a different *kind* of thing — which is why the
+                              // strip's month tail keeps one — and unavailable
+                              // is not a different kind of slot, it is the same
+                              // slot in a state. A state is said by weakening
+                              // the control, not by redrawing its outline.
+                              slot.available ? undefined : "opacity-45",
                             )}
                           >
                             {clock(slot.startMinutes)}

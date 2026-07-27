@@ -176,16 +176,80 @@ export const applyMainButtonColors = (webApp: TelegramWebApp, scheme: ColorSchem
  * much the list above it grows — which is the whole reason to prefer it to a
  * row inside the list.
  */
-export const attachMainButton = (
+/**
+ * How long the button waits, after its screen lets go, for the next screen to
+ * take it.
+ *
+ * A route change unmounts one owner and mounts the next in the same frame, but
+ * the new one has to await `loadTelegramWebApp()` first — a resolved promise, so
+ * a microtask, yet still not synchronous. This has to outlast that and nothing
+ * more: it is the delay before the button goes away on a screen that genuinely
+ * has no action, and there it is imperceptible.
+ */
+const MainButtonHandoffMs = 80
+
+let mainButtonOwner: symbol | undefined
+let mainButtonHandoff: ReturnType<typeof setTimeout> | undefined
+/** The button the wrapper is bound to, not merely *whether* it is bound. */
+let mainButtonBoundTo: TelegramMainButton | undefined
+const mainButtonHandler = { current: () => {} }
+const invokeMainButton = () => mainButtonHandler.current()
+
+/**
+ * Take the host's bottom button for one screen, and hand it over rather than
+ * give it back.
+ *
+ * There is exactly one of these buttons on the phone, and every screen that
+ * wants it mounted its own component — so navigating from a screen with a button
+ * to another screen with a button ran `hide()` and then `show()`, and the host
+ * animates both. The button slid away and slid back on every route change, which
+ * is the app announcing its own component tree.
+ *
+ * So ownership is a claim, not an attachment. Claiming cancels any pending
+ * release, sets the label and the handler, and shows the button only if it is
+ * not already up; releasing schedules the hide far enough out for the next
+ * screen to cancel it. Button → button is now a `setText` and nothing else.
+ *
+ * The click handler is bound once for the page's lifetime and reads the current
+ * owner's closure when it fires. Binding per claim would accumulate handlers on
+ * a long session, and `offClick` cannot remove a closure nobody kept.
+ */
+export const claimMainButton = (
   webApp: TelegramWebApp,
   text: string,
   onClick: () => void,
 ): (() => void) => {
+  const token = Symbol("main-button")
+
+  if (mainButtonHandoff !== undefined) {
+    clearTimeout(mainButtonHandoff)
+    mainButtonHandoff = undefined
+  }
+
+  mainButtonOwner = token
+  mainButtonHandler.current = onClick
   applyMainButtonColors(webApp, webApp.colorScheme)
-  webApp.MainButton.setText(text).onClick(onClick).show()
+
+  if (mainButtonBoundTo !== webApp.MainButton) {
+    webApp.MainButton.onClick(invokeMainButton)
+    mainButtonBoundTo = webApp.MainButton
+  }
+
+  webApp.MainButton.setText(text)
+  // Re-showing a visible button is another animation in some clients, and the
+  // handoff exists precisely to avoid those.
+  if (!webApp.MainButton.isVisible) webApp.MainButton.show()
 
   return () => {
-    webApp.MainButton.offClick(onClick).hide()
+    // Somebody already took it: this owner has nothing left to release.
+    if (mainButtonOwner !== token) return
+
+    mainButtonHandoff = setTimeout(() => {
+      mainButtonHandoff = undefined
+      if (mainButtonOwner !== token) return
+      mainButtonOwner = undefined
+      webApp.MainButton.hide()
+    }, MainButtonHandoffMs)
   }
 }
 
