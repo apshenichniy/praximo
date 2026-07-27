@@ -56,6 +56,18 @@ the twenty-two ad-hoc alpha steps in use today have something to become.
 > `--primary` (or `--brand`); its press is `--pressed` on top. `--muted` is a
 > surface. `--accent` is a state.
 
+### The edge is not optional
+
+`--control-border` applies even when the control already has a fill. The rig
+found this the moment a sheet was drawn on it: Signal raises `--secondary` to
+pure white, and a `secondary` button on a white sheet is nothing at all —
+shadcn's own `secondary` variant ships `border-transparent`. That is the slot
+failure again, one surface up, and it is why the edge is a token rather than a
+per-variant flourish.
+
+A control's fill says how far it sits from the page. Its edge says it is a
+control. The fill can legitimately go to zero — the edge cannot.
+
 ## The three missing invariants
 
 `theme-contrast.test.ts` asserts running text, secondary text, the surface
