@@ -4,7 +4,7 @@ import { useMemo } from "react"
 
 import { HostBackButton } from "@/presentation-host"
 import { HostMainButton } from "@/presentation-host"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
 import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import { groupByDay, sessionClock } from "@/features/coach/session-days.ts"

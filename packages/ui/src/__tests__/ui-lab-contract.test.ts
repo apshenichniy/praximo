@@ -8,6 +8,7 @@ const packageJson = JSON.parse(
 const rootPackageJson = JSON.parse(
   readFileSync(new URL("../../../../package.json", import.meta.url), "utf8"),
 ) as { scripts?: Record<string, string> }
+const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8")
 const lab = readFileSync(new URL("../lab/app.tsx", import.meta.url), "utf8")
 const labStyles = readFileSync(new URL("../lab/ui-lab.css", import.meta.url), "utf8")
 
@@ -15,6 +16,11 @@ describe("UI Lab contract", () => {
   it("has independent root and package commands", () => {
     expect(packageJson.scripts?.dev).toContain("vite")
     expect(rootPackageJson.scripts?.["ui:dev"]).toContain("@praximo/ui")
+  })
+
+  it("uses the shared light and dark favicons", () => {
+    expect(html).toContain("../../assets/branding/coach-bot/dark/favicon.ico")
+    expect(html).toContain("../../assets/branding/coach-bot/light/favicon.ico")
   })
 
   it("owns interactive theme, motion, and status inspection", () => {
@@ -28,6 +34,9 @@ describe("UI Lab contract", () => {
       "OKLCH",
       "primaryStorageKey",
       "Theme colors",
+      "Pure shadcn",
+      "Praximo extensions",
+      "oklch(0.432 0.232 292.759)",
       "Light",
       "Dark",
     ]) {
@@ -35,17 +44,11 @@ describe("UI Lab contract", () => {
     }
   })
 
-  it("mirrors production reduced-motion behavior in forced inspection mode", () => {
+  it("forces reduced motion only on the Praximo feedback wrapper", () => {
     expect(labStyles).toMatch(
-      /\.reduce-motion \[data-slot="drawer-overlay"\],\s*\.reduce-motion \[data-slot="drawer-popup"\],\s*\.reduce-motion \[data-slot="toast"\]\s*{\s*transition-duration: 0\.01ms !important;\s*}/s,
+      /\.reduce-motion \[data-praximo-feedback-button\]\s*{\s*transform: none !important;\s*transition-duration: 100ms !important;\s*}/s,
     )
-    expect(labStyles).toMatch(
-      /\.reduce-motion button,\s*\.reduce-motion \[data-slot="toggle"\]\s*{\s*transform: none !important;\s*}/s,
-    )
-    expect(labStyles).toMatch(
-      /\.reduce-motion \[data-slot="button"\],\s*\.reduce-motion \[data-slot="toggle"\],\s*\.reduce-motion \[data-slot="toast-content"\]\s*{\s*transition-duration: 100ms !important;\s*}/s,
-    )
-    expect(labStyles).not.toMatch(/\.reduce-motion \*::after\s*{[^}]*transition-duration:/s)
+    expect(lab).toContain("<FeedbackButton>")
   })
 
   it("renders every typography role with localization and layout stress cases", () => {

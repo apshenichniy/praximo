@@ -1,7 +1,7 @@
 import { Copy01Icon, TelegramIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card, CardContent } from "@praximo/ui/components/card"
 import { Spinner } from "@praximo/ui/components/spinner"
 import {

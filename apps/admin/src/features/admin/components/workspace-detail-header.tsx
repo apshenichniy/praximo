@@ -2,7 +2,7 @@ import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { Heading, Text } from "@praximo/ui"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { WorkspaceAvatar } from "@/features/admin/components/workspace-avatar.tsx"
 import { displayName } from "@/features/admin/formatting.ts"
 import { StatusBadge } from "@/features/mini-app/components/status-badge.tsx"

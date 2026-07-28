@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router"
 
 import { Heading, Section, Text } from "@praximo/ui"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card, CardContent } from "@praximo/ui/components/card"
 import {
   DeletionActionButton,

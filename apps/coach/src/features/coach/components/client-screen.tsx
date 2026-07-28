@@ -7,7 +7,7 @@ import { useMemo, useState } from "react"
 
 import { HostBackButton } from "@/presentation-host"
 import { Heading, Section, SectionTitle, Text } from "@praximo/ui"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"

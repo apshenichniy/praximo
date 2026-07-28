@@ -2,7 +2,7 @@ import { useState } from "react"
 
 import { HostBackButton } from "@/presentation-host"
 import { Heading } from "@praximo/ui"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 
 /**

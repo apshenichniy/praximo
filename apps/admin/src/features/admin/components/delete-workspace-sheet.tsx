@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import {
   Drawer,
   DrawerContent,

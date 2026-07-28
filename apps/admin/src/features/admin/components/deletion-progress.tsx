@@ -2,7 +2,7 @@ import { Alert02Icon, CheckmarkCircle02Icon } from "@hugeicons-pro/core-stroke-r
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { Alert, AlertDescription } from "@praximo/ui/components/alert"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Spinner } from "@praximo/ui/components/spinner"
 import type { DeletionStage } from "@/features/admin/workspace-deletion.ts"
 import { cn } from "@praximo/ui"

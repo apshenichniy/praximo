@@ -14,7 +14,7 @@ import { localeTag, sessionMoment } from "@praximo/i18n"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { HostBackButton } from "@/presentation-host"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Calendar } from "@praximo/ui/components/calendar"
 import { Skeleton } from "@praximo/ui/components/skeleton"
 import { Switch } from "@praximo/ui/components/switch"

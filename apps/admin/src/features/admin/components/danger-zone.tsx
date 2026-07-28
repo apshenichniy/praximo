@@ -1,4 +1,4 @@
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Spinner } from "@praximo/ui/components/spinner"
 import type { DeletionHeadline } from "@/features/admin/workspace-deletion.ts"
 import { DangerCard } from "@/features/mini-app/components/danger-zone.tsx"

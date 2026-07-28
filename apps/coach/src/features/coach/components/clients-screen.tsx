@@ -1,7 +1,7 @@
 import { HostBackButton } from "@/presentation-host"
 import { HostMainButton } from "@/presentation-host"
 import { Heading } from "@praximo/ui"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { ClientList } from "@/features/coach/components/client-list.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"

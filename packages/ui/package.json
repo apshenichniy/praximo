@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles.css",
+    "./custom/*": "./src/components/*.tsx",
     "./components/*": "./src/components/ui/*.tsx"
   },
   "scripts": {

@@ -2,7 +2,7 @@ import { type CoachLanguage, CoachLanguages } from "@praximo/domain"
 
 import { Heading, PraximoMark, Text } from "@praximo/ui"
 import { HostMainButton } from "@/presentation-host"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { ToggleGroup, ToggleGroupItem } from "@praximo/ui/components/toggle-group"
 import { OnboardingProgress } from "@/features/coach/components/onboarding-progress.tsx"
 import { type CoachCopy, languageNames } from "@/features/i18n/coach-copy.ts"

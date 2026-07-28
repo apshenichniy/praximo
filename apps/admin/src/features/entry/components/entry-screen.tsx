@@ -9,7 +9,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { useCallback } from "react"
 
 import { Text, cn } from "@praximo/ui"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card, CardContent } from "@praximo/ui/components/card"
 import { HostMainButton } from "@/presentation-host"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"

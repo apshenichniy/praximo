@@ -1,4 +1,5 @@
 export { Heading, type HeadingProps } from "./components/heading.tsx"
+export { FeedbackButton, type FeedbackButtonProps } from "./components/feedback-button.tsx"
 export { PraximoMark } from "./components/praximo-mark.tsx"
 export { FeedbackProvider, useFeedback } from "./components/feedback-provider.tsx"
 export { Section, SectionTitle } from "./components/section.tsx"

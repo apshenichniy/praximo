@@ -3,7 +3,7 @@ import { WorkspaceNameMaxLength } from "@praximo/domain"
 import { useState } from "react"
 
 import { Alert, AlertDescription } from "@praximo/ui/components/alert"
-import { Button } from "@praximo/ui/components/button"
+import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card, CardContent } from "@praximo/ui/components/card"
 import { Spinner } from "@praximo/ui/components/spinner"
 import { TextField } from "@/features/admin/components/form-fields.tsx"

@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import { DayPicker, getDefaultClassNames, type DayButton, type Locale } from "react-day-picker"
 
@@ -152,7 +150,7 @@ function Calendar({
           )
         },
         DayButton: ({ ...dayButtonProps }) => (
-          <CalendarDayButton locale={locale} {...dayButtonProps} />
+          <CalendarDayButton {...dayButtonProps} {...(locale === undefined ? {} : { locale })} />
         ),
         WeekNumber: ({ children, ...weekNumberProps }) => {
           return (
@@ -176,9 +174,7 @@ function CalendarDayButton({
   modifiers,
   locale,
   ...props
-}: React.ComponentProps<typeof DayButton> & {
-  locale?: Partial<Locale> | undefined
-}) {
+}: React.ComponentProps<typeof DayButton> & { locale?: Partial<Locale> }) {
   const defaultClassNames = getDefaultClassNames()
 
   const ref = React.useRef<HTMLButtonElement>(null)

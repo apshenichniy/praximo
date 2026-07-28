@@ -1,9 +1,10 @@
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
 import { describe, expect, it } from "vitest"
 
 import {
+  FeedbackButton,
   FeedbackProvider,
   feedbackEvents,
   interfaceTypographyRoles,
@@ -14,13 +15,24 @@ import {
 const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8")
 const componentSources = Object.fromEntries(
-  ["badge", "button", "card", "drawer", "field", "item", "label", "switch", "toast"].map(
-    (component) => [
-      component,
-      readFileSync(new URL(`../components/ui/${component}.tsx`, import.meta.url), "utf8"),
-    ],
-  ),
+  readdirSync(new URL("../components/ui/", import.meta.url))
+    .filter((file) => file.endsWith(".tsx"))
+    .map((file) => [
+      file.replace(/\.tsx$/, ""),
+      readFileSync(new URL(`../components/ui/${file}`, import.meta.url), "utf8"),
+    ]),
 )
+const feedbackButtonSource = readFileSync(
+  new URL("../components/feedback-button.tsx", import.meta.url),
+  "utf8",
+)
+const primitive = (component: string): string => {
+  const source = componentSources[component]
+  if (source === undefined) {
+    throw new Error(`Missing primitive source: ${component}`)
+  }
+  return source
+}
 const packageJson = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
 ) as {
@@ -79,20 +91,22 @@ function contrastRatio(first: string, second: string): number {
 
 function variablesFor(selector: ":root" | ".dark"): Readonly<Record<string, string>> {
   const escaped = selector === ":root" ? ":root" : String.raw`\.dark`
-  const block = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(styles)?.[1]
-  if (block === undefined) {
+  const blocks = [...styles.matchAll(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, "g"))]
+  if (blocks.length === 0) {
     throw new Error(`Missing ${selector} token block`)
   }
 
   return Object.fromEntries(
-    [...block.matchAll(/--([a-z-]+):\s*([^;]+);/g)].map((match) => {
-      const name = match[1]
-      const value = match[2]
-      if (name === undefined || value === undefined) {
-        throw new Error(`Malformed ${selector} token`)
-      }
-      return [name, value.trim()]
-    }),
+    blocks.flatMap((block) =>
+      [...(block[1] ?? "").matchAll(/--([a-z-]+):\s*([^;]+);/g)].map((match) => {
+        const name = match[1]
+        const value = match[2]
+        if (name === undefined || value === undefined) {
+          throw new Error(`Malformed ${selector} token`)
+        }
+        return [name, value.trim()]
+      }),
+    ),
   )
 }
 
@@ -162,21 +176,25 @@ describe("@praximo/ui public foundation", () => {
     }
   })
 
-  it("keeps default Button and Badge text at WCAG AA without changing shadcn tokens", () => {
+  it("keeps the live Maia/Violet primary pairs and primitive ink unchanged", () => {
     const light = variablesFor(":root")
     const dark = variablesFor(".dark")
+
+    expect(variable(light, "primary")).toBe("oklch(0.491 0.27 292.581)")
+    expect(variable(dark, "primary")).toBe("oklch(0.432 0.232 292.759)")
 
     expect(
       contrastRatio(variable(light, "primary-foreground"), variable(light, "primary")),
       "light primary foreground on primary",
     ).toBeGreaterThanOrEqual(4.5)
     expect(
-      contrastRatio(variable(dark, "background"), variable(dark, "primary")),
-      "dark background ink on primary",
+      contrastRatio(variable(dark, "primary-foreground"), variable(dark, "primary")),
+      "dark primary foreground on primary",
     ).toBeGreaterThanOrEqual(4.5)
 
     for (const component of ["button", "badge"]) {
-      expect(componentSources[component]).toContain("dark:text-background")
+      expect(primitive(component)).toContain("text-primary-foreground")
+      expect(primitive(component)).not.toContain("dark:text-background")
     }
   })
 
@@ -188,29 +206,25 @@ describe("@praximo/ui public foundation", () => {
     expect(styles).not.toContain("--pressed")
   })
 
-  it("publishes the shared interface motion curves", () => {
+  it("keeps product motion tokens additive without rewriting primitive motion", () => {
     expect(styles).toContain("--ease-out: cubic-bezier(0.23, 1, 0.32, 1)")
     expect(styles).toContain("--ease-in-out: cubic-bezier(0.77, 0, 0.175, 1)")
     expect(styles).toContain("--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1)")
-    expect(componentSources.toast).toContain(
-      "[transition:transform_300ms_var(--ease-out),opacity_300ms_var(--ease-out),height_150ms]",
+    expect(primitive("toast")).toContain(
+      "[transition:transform_500ms_cubic-bezier(0.22,1,0.36,1),opacity_500ms,height_150ms]",
     )
-    expect(componentSources.toast).not.toContain("transform_500ms")
+    expect(primitive("drawer")).not.toContain("var(--ease")
+    expect(primitive("toast")).not.toContain("var(--ease")
   })
 
-  it("removes spatial motion while retaining brief non-spatial feedback", () => {
+  it("scopes reduced motion and feedback above the pure Button primitive", () => {
     expect(styles).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/)
-    expect(styles).toContain("animation-duration: 0.01ms")
     expect(styles).toMatch(
-      /\[data-slot="drawer-overlay"\],\s*\[data-slot="drawer-popup"\],\s*\[data-slot="toast"\]\s*{\s*transition-duration: 0\.01ms !important;\s*}/s,
+      /\[data-praximo-feedback-button\]\s*{\s*transform: none !important;\s*transition-duration: 100ms !important;\s*}/s,
     )
-    expect(styles).toMatch(
-      /button,\s*\[data-slot="toggle"\]\s*{\s*transform: none !important;\s*}/s,
-    )
-    expect(styles).toMatch(
-      /\[data-slot="button"\],\s*\[data-slot="toggle"\],\s*\[data-slot="toast-content"\]\s*{\s*transition-duration: 100ms !important;\s*}/s,
-    )
-    expect(styles).not.toMatch(/\*::after\s*{[^}]*transition-duration:/s)
+    expect(feedbackButtonSource).toContain("data-praximo-feedback-button")
+    expect(feedbackButtonSource).toContain("useFeedback")
+    expect(primitive("button")).not.toContain("useFeedback")
   })
 
   it("keeps the package independent from Telegram and application frameworks", () => {
@@ -223,6 +237,7 @@ describe("@praximo/ui public foundation", () => {
   })
 
   it("defines a host-neutral feedback vocabulary and a browser fallback", () => {
+    expect(FeedbackButton).toBeTypeOf("function")
     expect(FeedbackProvider).toBeTypeOf("function")
     expect(feedbackEvents).toEqual([
       "selection",
@@ -235,14 +250,19 @@ describe("@praximo/ui public foundation", () => {
     expect(prefersReducedMotion(undefined)).toBe(false)
   })
 
-  it("keeps primitive motion specific and component typography centralized", () => {
+  it("keeps the shadcn primitive directory free of Praximo styling and behavior", () => {
     for (const source of Object.values(componentSources)) {
-      expect(source).not.toContain("transition-all")
+      expect(source).not.toContain("typographyRecipe")
+      expect(source).not.toContain("useFeedback")
+      expect(source).not.toContain("data-praximo")
+      expect(source).not.toContain("dark:text-background")
+      expect(source).not.toContain("var(--ease")
     }
 
-    for (const component of ["badge", "button", "card", "drawer", "field", "item", "label"]) {
-      expect(componentSources[component]).toContain("typographyRecipe")
-    }
-    expect(componentSources.button).toContain("useFeedback")
+    expect(Object.keys(componentSources)).toHaveLength(24)
+  })
+
+  it("enables Tailwind font antialiasing at the shared body boundary", () => {
+    expect(styles).toMatch(/body\s*{\s*@apply bg-background text-foreground antialiased;/s)
   })
 })

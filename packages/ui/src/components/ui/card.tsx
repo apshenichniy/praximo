@@ -1,6 +1,5 @@
 import * as React from "react"
 
-import { typographyRecipe } from "../../lib/typography.ts"
 import { cn } from "../../lib/utils.ts"
 
 function Card({
@@ -38,7 +37,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn(typographyRecipe({ role: "card-title" }), className)}
+      className={cn("font-heading text-base font-medium", className)}
       {...props}
     />
   )
@@ -48,7 +47,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-description"
-      className={cn(typographyRecipe({ role: "body-small" }), "text-muted-foreground", className)}
+      className={cn("text-sm text-muted-foreground", className)}
       {...props}
     />
   )

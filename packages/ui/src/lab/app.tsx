@@ -10,6 +10,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import tailwindColors from "tailwindcss/colors"
 
 import { Heading } from "../components/heading.tsx"
+import { FeedbackButton } from "../components/feedback-button.tsx"
 import { Text } from "../components/text.tsx"
 import {
   AlertDialog,
@@ -145,15 +146,16 @@ const tailwindShades = [
 const tailwindFixedColors = ["white", "black"] as const
 const storageKey = "praximo.ui-lab.status-draft.v2"
 const legacyStorageKey = "praximo.ui-lab.status-draft.v1"
-const primaryStorageKey = "praximo.ui-lab.primary-draft.v1"
+const primaryStorageKey = "praximo.ui-lab.primary-draft.v2"
+const legacyPrimaryStorageKey = "praximo.ui-lab.primary-draft.v1"
 
 const defaultPrimaryDraft: PrimaryDraft = {
   light: "oklch(0.491 0.27 292.581)",
-  dark: "oklch(0.606 0.25 292.717)",
+  dark: "oklch(0.432 0.232 292.759)",
 }
 const primaryInk: PrimaryDraft = {
   light: "oklch(0.969 0.016 293.756)",
-  dark: "oklch(0.141 0.005 285.823)",
+  dark: "oklch(0.969 0.016 293.756)",
 }
 
 const defaultStatusDraft: StatusDraft = {
@@ -335,7 +337,6 @@ function TailwindSwatch({
       type="button"
       variant="outline"
       size="icon-xs"
-      feedback={false}
       aria-label={`Tailwind ${name}`}
       title={`${name} · ${value}`}
       className="size-5 rounded-full border-black/10 p-0 shadow-xs transition-transform hover:scale-110 dark:border-white/15"
@@ -445,7 +446,7 @@ function ColorControl({
   }
 
   return (
-    <Field data-invalid={invalid} className="min-w-64 gap-1.5">
+    <Field data-invalid={invalid} className="relative min-w-64 gap-1.5">
       <FieldLabel className="sr-only" htmlFor={`${label.replaceAll(" ", "-")}-oklch`}>
         {label} in OKLCH
       </FieldLabel>
@@ -1007,17 +1008,44 @@ export function UiLab() {
           <div className="space-y-3">
             <Badge variant="secondary">
               <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} />
-              Static CSS is authoritative
+              Live shadcn registry is authoritative
             </Badge>
             <Heading as="h1" role="page-title">
               Shared interface foundation
             </Heading>
             <Text className="max-w-3xl text-muted-foreground">
-              Inspect semantic typography, primitive states, status contrast, and meaningful motion
-              before the same package is consumed by Admin, Coach, Client, and WWW.
+              Inspect the untouched Maia/Violet baseline first, then compare the additive Praximo
+              layer consumed by Admin, Coach, Client, and WWW.
             </Text>
             <Text role="caption" className="text-muted-foreground">
               System prefers-reduced-motion: {systemPrefersReducedMotion ? "reduce" : "normal"}
+            </Text>
+          </div>
+
+          <div className="space-y-3 border-b pb-6">
+            <Heading as="h2" role="section-title">
+              Pure shadcn
+            </Heading>
+            <Text className="max-w-3xl text-muted-foreground">
+              Live Maia primitives with the Violet theme, Base UI, Hugeicons, and Inter. No Praximo
+              typography, motion, feedback, or color overrides are applied inside these primitives.
+            </Text>
+          </div>
+
+          <Section
+            title="Primitives"
+            description="The installed live-registry union with representative interaction and open states."
+          >
+            <PrimitiveGallery />
+          </Section>
+
+          <div className="space-y-3 border-b pb-6">
+            <Heading as="h2" role="section-title">
+              Praximo extensions
+            </Heading>
+            <Text className="max-w-3xl text-muted-foreground">
+              Product-owned typography, semantic status colors, host-neutral feedback, and local
+              theme drafts composed above the pure primitives.
             </Text>
           </div>
 
@@ -1041,6 +1069,7 @@ export function UiLab() {
                 localStorage.removeItem(storageKey)
                 localStorage.removeItem(legacyStorageKey)
                 localStorage.removeItem(primaryStorageKey)
+                localStorage.removeItem(legacyPrimaryStorageKey)
                 setDraft(defaultStatusDraft)
                 setPrimaryDraft(defaultPrimaryDraft)
               }}
@@ -1048,10 +1077,10 @@ export function UiLab() {
           </Section>
 
           <Section
-            title="Primitives"
-            description="The installed product union with representative interaction and open states."
+            title="Feedback"
+            description="Host-neutral feedback is composed by a Praximo wrapper; the raw shadcn Button above remains untouched."
           >
-            <PrimitiveGallery />
+            <FeedbackButton>Praximo feedback button</FeedbackButton>
           </Section>
         </main>
       </div>
