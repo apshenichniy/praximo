@@ -1,6 +1,8 @@
 import type { WorkingHours } from "@praximo/domain"
+import { useQueryClient } from "@tanstack/react-query"
 import { useCallback, useRef, useState } from "react"
 
+import { dayScheduleKeys } from "@/features/coach/day-schedule-queries.ts"
 import { notifyHaptic } from "@/presentation-host"
 import { saveWorkingHours } from "@/server/coach-clients.functions.ts"
 
@@ -44,6 +46,7 @@ export const useWorkingHoursDraft = (
   const confirmed = useRef(initial)
   const generation = useRef(0)
   const seeded = useRef(initial)
+  const client = useQueryClient()
 
   /**
    * Re-seed when the week the loader holds changes under us.
@@ -70,6 +73,11 @@ export const useWorkingHoursDraft = (
           if (mine !== generation.current) return
           if (result.ok) {
             confirmed.current = next
+            // Every day already in hand was filed under the old week. Left
+            // alone it would outlive this change by its whole stale window, so
+            // a coach who narrows Saturday and goes straight to the sheet would
+            // be offered the hours they just removed.
+            void client.invalidateQueries({ queryKey: dayScheduleKeys.all })
             return
           }
           notifyHaptic("error")
@@ -83,7 +91,7 @@ export const useWorkingHoursDraft = (
           setError(failedMessage)
         })
     },
-    [failedMessage],
+    [client, failedMessage],
   )
 
   return hours === undefined ? undefined : { hours, error, commit }

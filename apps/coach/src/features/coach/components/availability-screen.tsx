@@ -1,4 +1,5 @@
-import { Calendar03Icon, ArrowRight01Icon, Clock01Icon } from "@hugeicons/core-free-icons"
+import { GoogleIcon } from "@hugeicons-pro/core-stroke-rounded"
+import { ArrowRight01Icon, Clock01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { CoachLanguage, WorkingHours } from "@praximo/domain"
 import { Heading } from "@praximo/ui"
@@ -93,8 +94,14 @@ export function AvailabilityScreen({
       */}
       <Card className="mt-3 gap-0 px-5 py-4">
         <div className="flex items-center gap-3">
+          {/*
+            The vendor's own mark rather than a generic calendar: the row above
+            is already a clock, and two calendar glyphs on one screen would say
+            these are two of the same thing. It names *whose* calendar this is,
+            which is the only question the card's first line leaves open.
+          */}
           <HugeiconsIcon
-            icon={Calendar03Icon}
+            icon={GoogleIcon}
             size={18}
             strokeWidth={2}
             className="text-muted-foreground shrink-0"
