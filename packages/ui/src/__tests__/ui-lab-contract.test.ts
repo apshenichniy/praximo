@@ -26,6 +26,8 @@ describe("UI Lab contract", () => {
       "Reset colors",
       "Tailwind palette",
       "OKLCH",
+      "primaryStorageKey",
+      "Theme colors",
       "Light",
       "Dark",
     ]) {

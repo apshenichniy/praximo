@@ -97,6 +97,7 @@ type ThemeName = "light" | "dark"
 type StatusName = "success" | "warning" | "error" | "info"
 type StatusToken = "base" | "foreground" | "surface" | "border"
 type StatusDraft = Record<ThemeName, Record<StatusName, Record<StatusToken, string>>>
+type PrimaryDraft = Record<ThemeName, string>
 
 const statusNames: readonly StatusName[] = ["success", "warning", "error", "info"]
 const statusTokens: readonly StatusToken[] = ["base", "foreground", "surface", "border"]
@@ -144,6 +145,16 @@ const tailwindShades = [
 const tailwindFixedColors = ["white", "black"] as const
 const storageKey = "praximo.ui-lab.status-draft.v2"
 const legacyStorageKey = "praximo.ui-lab.status-draft.v1"
+const primaryStorageKey = "praximo.ui-lab.primary-draft.v1"
+
+const defaultPrimaryDraft: PrimaryDraft = {
+  light: "oklch(0.491 0.27 292.581)",
+  dark: "oklch(0.606 0.25 292.717)",
+}
+const primaryInk: PrimaryDraft = {
+  light: "oklch(0.969 0.016 293.756)",
+  dark: "oklch(0.141 0.005 285.823)",
+}
 
 const defaultStatusDraft: StatusDraft = {
   light: {
@@ -238,11 +249,30 @@ function readDraft(): StatusDraft {
   }
 }
 
+function readPrimaryDraft(): PrimaryDraft {
+  try {
+    const persisted = localStorage.getItem(primaryStorageKey)
+    if (persisted === null) return defaultPrimaryDraft
+
+    const value = JSON.parse(persisted) as unknown
+    if (typeof value !== "object" || value === null) return defaultPrimaryDraft
+
+    const source = value as Record<string, unknown>
+    const light = typeof source.light === "string" ? normalizeOklch(source.light) : null
+    const dark = typeof source.dark === "string" ? normalizeOklch(source.dark) : null
+    return light === null || dark === null ? defaultPrimaryDraft : { light, dark }
+  } catch {
+    return defaultPrimaryDraft
+  }
+}
+
 function cssVariable(status: StatusName, token: StatusToken): string {
   return `--${status}${token === "base" ? "" : `-${token}`}`
 }
 
-function applyDraft(theme: ThemeName, draft: StatusDraft) {
+function applyDraft(theme: ThemeName, draft: StatusDraft, primaryDraft: PrimaryDraft) {
+  document.documentElement.style.setProperty("--primary", primaryDraft[theme])
+
   for (const status of statusNames) {
     for (const token of statusTokens) {
       document.documentElement.style.setProperty(
@@ -253,17 +283,23 @@ function applyDraft(theme: ThemeName, draft: StatusDraft) {
   }
 }
 
-function draftToCss(draft: StatusDraft): string {
+function draftToCss(draft: StatusDraft, primaryDraft: PrimaryDraft): string {
   return (["light", "dark"] as const)
     .map((theme) => {
       const selector = theme === "light" ? ":root" : ".dark"
-      const declarations = statusNames.flatMap((status) =>
-        statusTokens.map((token) => {
-          const value = normalizeOklch(draft[theme][status][token])
-          if (value === null) throw new Error(`Invalid OKLCH value for ${theme} ${status} ${token}`)
-          return `  ${cssVariable(status, token)}: ${value};`
-        }),
-      )
+      const primary = normalizeOklch(primaryDraft[theme])
+      if (primary === null) throw new Error(`Invalid OKLCH value for ${theme} primary`)
+      const declarations = [
+        `  --primary: ${primary};`,
+        ...statusNames.flatMap((status) =>
+          statusTokens.map((token) => {
+            const value = normalizeOklch(draft[theme][status][token])
+            if (value === null)
+              throw new Error(`Invalid OKLCH value for ${theme} ${status} ${token}`)
+            return `  ${cssVariable(status, token)}: ${value};`
+          }),
+        ),
+      ]
       return `${selector} {\n${declarations.join("\n")}\n}`
     })
     .join("\n\n")
@@ -385,7 +421,7 @@ function TailwindPalette({
   )
 }
 
-function StatusColorControl({
+function ColorControl({
   label,
   value,
   onChange,
@@ -447,6 +483,61 @@ function StatusColorControl({
   )
 }
 
+function PrimaryEditor({
+  draft,
+  onChange,
+}: {
+  readonly draft: PrimaryDraft
+  readonly onChange: (draft: PrimaryDraft) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <Heading as="h3" role="card-title">
+          Primary
+        </Heading>
+        <Text role="body-small" className="text-muted-foreground">
+          Draft the shadcn primary locally. Static theme defaults remain unchanged.
+        </Text>
+      </div>
+      <div className="overflow-x-auto rounded-2xl border bg-card">
+        <table className="w-full min-w-xl border-collapse text-left">
+          <caption className="sr-only">Editable light and dark primary colors</caption>
+          <thead>
+            <tr className="border-b">
+              <th className="p-3">Theme</th>
+              <th className="p-3">Primary</th>
+              <th className="p-3">Contrast</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(["light", "dark"] as const).map((theme) => {
+              const ratio = contrastRatio(primaryInk[theme], draft[theme])
+              return (
+                <tr key={theme} className="border-b last:border-0">
+                  <th className="p-3 capitalize">{theme}</th>
+                  <td className="p-3">
+                    <ColorControl
+                      label={`${theme} primary`}
+                      value={draft[theme]}
+                      onChange={(value) => onChange({ ...draft, [theme]: value })}
+                    />
+                  </td>
+                  <td className="p-3">
+                    <Badge variant={ratio >= 4.5 ? "secondary" : "destructive"}>
+                      {ratio.toFixed(2)}:1 {ratio >= 4.5 ? "AA" : "Fail"}
+                    </Badge>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function Section({
   children,
   description,
@@ -475,14 +566,18 @@ function Section({
 
 function StatusEditor({
   draft,
+  primaryDraft,
   onChange,
+  onPrimaryChange,
   onReset,
 }: {
   readonly draft: StatusDraft
+  readonly primaryDraft: PrimaryDraft
   readonly onChange: (draft: StatusDraft) => void
+  readonly onPrimaryChange: (draft: PrimaryDraft) => void
   readonly onReset: () => void
 }) {
-  const css = draftToCss(draft)
+  const css = draftToCss(draft, primaryDraft)
   const updateColor = (theme: ThemeName, status: StatusName, token: StatusToken, value: string) => {
     onChange({
       ...draft,
@@ -497,55 +592,67 @@ function StatusEditor({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto rounded-2xl border bg-card">
-        <table className="w-full min-w-[84rem] border-collapse text-left">
-          <caption className="sr-only">Editable light and dark status colors</caption>
-          <thead>
-            <tr className="border-b">
-              <th className="p-3">Theme / family</th>
-              {statusTokens.map((token) => (
-                <th key={token} className="p-3 capitalize">
-                  {token}
-                </th>
-              ))}
-              <th className="p-3">Contrast</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(["light", "dark"] as const).flatMap((theme) =>
-              statusNames.map((status) => {
-                const values = draft[theme][status]
-                const ratio = contrastRatio(values.foreground, values.base)
+    <div className="space-y-8">
+      <PrimaryEditor draft={primaryDraft} onChange={onPrimaryChange} />
+      <div className="space-y-3">
+        <div>
+          <Heading as="h3" role="card-title">
+            Status families
+          </Heading>
+          <Text role="body-small" className="text-muted-foreground">
+            Edit the repository-owned semantic families for both themes.
+          </Text>
+        </div>
+        <div className="overflow-x-auto rounded-2xl border bg-card">
+          <table className="w-full min-w-[84rem] border-collapse text-left">
+            <caption className="sr-only">Editable light and dark status colors</caption>
+            <thead>
+              <tr className="border-b">
+                <th className="p-3">Theme / family</th>
+                {statusTokens.map((token) => (
+                  <th key={token} className="p-3 capitalize">
+                    {token}
+                  </th>
+                ))}
+                <th className="p-3">Contrast</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(["light", "dark"] as const).flatMap((theme) =>
+                statusNames.map((status) => {
+                  const values = draft[theme][status]
+                  const ratio = contrastRatio(values.foreground, values.base)
 
-                return (
-                  <tr key={`${theme}-${status}`} className="border-b last:border-0">
-                    <th className="p-3 capitalize">
-                      {theme} · {status}
-                    </th>
-                    {statusTokens.map((token) => (
-                      <td key={token} className="p-3">
-                        <StatusColorControl
-                          label={`${theme} ${status} ${token}`}
-                          value={values[token]}
-                          onChange={(value) => updateColor(theme, status, token, value)}
-                        />
+                  return (
+                    <tr key={`${theme}-${status}`} className="border-b last:border-0">
+                      <th className="p-3 capitalize">
+                        {theme} · {status}
+                      </th>
+                      {statusTokens.map((token) => (
+                        <td key={token} className="p-3">
+                          <ColorControl
+                            label={`${theme} ${status} ${token}`}
+                            value={values[token]}
+                            onChange={(value) => updateColor(theme, status, token, value)}
+                          />
+                        </td>
+                      ))}
+                      <td className="p-3">
+                        <Badge variant={ratio >= 4.5 ? "secondary" : "destructive"}>
+                          {ratio.toFixed(2)}:1 {ratio >= 4.5 ? "AA" : "Fail"}
+                        </Badge>
                       </td>
-                    ))}
-                    <td className="p-3">
-                      <Badge variant={ratio >= 4.5 ? "secondary" : "destructive"}>
-                        {ratio.toFixed(2)}:1 {ratio >= 4.5 ? "AA" : "Fail"}
-                      </Badge>
-                    </td>
-                  </tr>
-                )
-              }),
-            )}
-          </tbody>
-        </table>
+                    </tr>
+                  )
+                }),
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
       <Text role="caption" className="text-muted-foreground">
-        Drafts, Tailwind selections, and copied CSS are normalized and stored as OKLCH.
+        Primary and status drafts, Tailwind selections, and copied CSS are normalized and stored as
+        OKLCH.
       </Text>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => void navigator.clipboard.writeText(css)}>
@@ -835,6 +942,7 @@ export function UiLab() {
   const [theme, setTheme] = useState<ThemeName>("light")
   const [reducedMotion, setReducedMotion] = useState(false)
   const [draft, setDraft] = useState<StatusDraft>(readDraft)
+  const [primaryDraft, setPrimaryDraft] = useState<PrimaryDraft>(readPrimaryDraft)
   const systemPrefersReducedMotion = useMemo(
     () => matchMedia("(prefers-reduced-motion: reduce)").matches,
     [],
@@ -844,12 +952,16 @@ export function UiLab() {
     document.documentElement.classList.toggle("dark", theme === "dark")
     document.documentElement.classList.toggle("reduce-motion", reducedMotion)
     document.documentElement.style.colorScheme = theme
-    applyDraft(theme, draft)
-  }, [draft, reducedMotion, theme])
+    applyDraft(theme, draft, primaryDraft)
+  }, [draft, primaryDraft, reducedMotion, theme])
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(draft))
   }, [draft])
+
+  useEffect(() => {
+    localStorage.setItem(primaryStorageKey, JSON.stringify(primaryDraft))
+  }, [primaryDraft])
 
   return (
     <Toaster>
@@ -917,16 +1029,20 @@ export function UiLab() {
           </Section>
 
           <Section
-            title="Status colors"
-            description="Draft both themes locally, inspect WCAG contrast, and copy candidate static CSS."
+            title="Theme colors"
+            description="Draft primary and status colors locally, inspect WCAG contrast, and copy candidate static CSS."
           >
             <StatusEditor
               draft={draft}
+              primaryDraft={primaryDraft}
               onChange={setDraft}
+              onPrimaryChange={setPrimaryDraft}
               onReset={() => {
                 localStorage.removeItem(storageKey)
                 localStorage.removeItem(legacyStorageKey)
+                localStorage.removeItem(primaryStorageKey)
                 setDraft(defaultStatusDraft)
+                setPrimaryDraft(defaultPrimaryDraft)
               }}
             />
           </Section>
