@@ -1,7 +1,7 @@
 import type { CoachLanguage } from "@praximo/domain"
+import { PraximoMark, Text } from "@praximo/ui"
 import type { ReactNode } from "react"
 
-import { PraximoMark } from "@/components/praximo-mark.tsx"
 import { ThemeSwitch } from "@/components/theme-switch.tsx"
 import { chromeCopy } from "@/features/i18n/chrome-copy.ts"
 
@@ -33,10 +33,10 @@ export function ClientShell({
       <div className="flex-1">{children}</div>
 
       <footer className="border-border mx-auto flex w-full max-w-2xl items-center justify-between gap-4 border-t px-5 py-6">
-        <span className="text-muted-foreground flex items-center gap-2 text-caption">
+        <Text as="span" role="caption" className="text-muted-foreground flex items-center gap-2">
           <PraximoMark size={20} />
           Praximo
-        </span>
+        </Text>
         <ThemeSwitch copy={copy} />
       </footer>
     </div>

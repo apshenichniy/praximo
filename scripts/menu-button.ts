@@ -6,8 +6,8 @@
  *
  * The operator opens the admin Mini App from the manager bot's chat menu button
  * (admin-surface.md §Auth): a `web_app` button pointing at the stage's deployed
- * `/admin`. The URL is per-stage, so it is derived from the deployed web origin at
- * setup time, never a committed constant.
+ * `/admin`. The URL is per-stage, so it is derived from the deployed Admin
+ * origin at setup time, never a committed constant.
  */
 
 /**
@@ -19,19 +19,19 @@
 export const MENU_BUTTON_TEXT = "Open"
 
 /**
- * The admin route URL for a stage, from its deployed `web` Worker origin (the
- * `webUrl` Alchemy output). Telegram requires an HTTPS `web_app` URL, so a
+ * The admin route URL for a stage, from its deployed Admin Worker origin (the
+ * `adminUrl` Alchemy output). Telegram requires an HTTPS `web_app` URL, so a
  * non-HTTPS origin is rejected here rather than silently accepted by the API.
  */
-export const adminUrlForOrigin = (webOrigin: string): string => {
+export const adminUrlForOrigin = (adminOrigin: string): string => {
   let url: URL
   try {
-    url = new URL(webOrigin)
+    url = new URL(adminOrigin)
   } catch {
-    throw new Error(`invalid web origin: ${webOrigin}`)
+    throw new Error(`invalid admin origin: ${adminOrigin}`)
   }
   if (url.protocol !== "https:") {
-    throw new Error(`web origin must be https (Telegram web_app requirement): ${webOrigin}`)
+    throw new Error(`admin origin must be https (Telegram web_app requirement): ${adminOrigin}`)
   }
   url.pathname = "/admin"
   url.search = ""

@@ -29,8 +29,8 @@ const ANNOUNCEMENT_MESSAGE_ID = 777
 const env = {
   MANAGER_BOT_TOKEN,
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
-  COACH_MINI_APP_URL: "https://stage.praximo.io/",
-  CLIENT_APP_URL: "https://my-stage.praximo.io",
+  COACH_MINI_APP_URL: "https://coach.praximo.io/",
+  CLIENT_APP_URL: "https://me.praximo.io",
   UPLOADS: uploadsStub({ [BRANDING_AVATAR_KEY]: BRANDING_AVATAR_BYTES }).bucket,
 }
 
@@ -228,7 +228,7 @@ describe("what the coach sees while their bot is set up", () => {
           [
             {
               text: messages("ru").openButton,
-              web_app: { url: `https://stage.praximo.io/?b=${MANAGED_BOT_ID}` },
+              web_app: { url: `https://coach.praximo.io/?b=${MANAGED_BOT_ID}` },
             },
           ],
         ],

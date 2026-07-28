@@ -2,7 +2,7 @@
  * The i18n **mechanism**, shared by every Worker that speaks to a human.
  *
  * Catalogues stay where they are consumed — the coach Mini App's words in
- * `apps/web`, the coach-facing bot's in `apps/bot` — because a catalogue is
+ * the product apps, the coach-facing bot's in `apps/bot` — because a catalogue is
  * owned by the surface that says it.
  *
  * **One exception, and it earns itself twice** (#56, #191): a text whose
@@ -14,7 +14,7 @@
  *   acceptance conversation and `apps/client` renders it again on the
  *   Acceptance Page (#57);
  * - the *legal* texts under `./legal` — `apps/client` renders them at
- *   `my.praximo.io/legal/*`, while `apps/web`'s server derives `TERMS_VERSION`
+ *   `me.praximo.io/legal/*`, while the Coach server derives `TERMS_VERSION`
  *   from them and writes it to `member.terms_version` on acceptance. Apps never
  *   import apps (ADR 0002), so the surface that shows a contract and the
  *   surface that records agreeing to it can only share it through here.

@@ -4,7 +4,7 @@
  * Not a security primitive — its whole job is that two different texts cannot
  * share a version. It lives here rather than beside the legal texts because a
  * version derived from content is what every piece of versioned copy needs:
- * `apps/web` dates the coach terms and the privacy policy with it today, and the
+ * Client dates the coach terms and the privacy policy with it today, and the
  * client-facing consent text needs one per language next (#56).
  */
 export const contentDigest = (value: string): string => {

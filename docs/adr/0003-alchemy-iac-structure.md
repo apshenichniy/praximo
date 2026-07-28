@@ -11,7 +11,7 @@ Client, WWW Assets, Bot, Pipeline, the shared R2 bucket, service bindings, and
 secrets. This ADR details that program: environment naming, file layout, secrets
 and configuration flow, domains, external systems, and the deploy path.
 
-Alchemy 2 (`2.0.0-beta.x`, npm tag `next`) is a ground-up rewrite **on Effect**: the program is an `Alchemy.Stack` running an `Effect.gen` body, Workers are declared as Effect classes next to their runtime code, and cross-worker RPC, Workflows, cron, R2, AI Gateway, and Neon are first-class resources. This matches the project's Effect 4 commitment ideologically — and adds a third deliberate beta to the stack (after TS 7.0 and Effect 4). Facts below were first verified against the v2 source (`alchemy-run/alchemy@main`), since beta docs lag, and then **proven by execution against the real Cloudflare + Neon accounts** in [#32](https://github.com/apshenichniy/praximo/issues/32) (`alchemy@2.0.0-beta.63`, deploy → verify → destroy). See [Verification and adoption](#verification-and-adoption-32) for the corrections that surfaced.
+Alchemy 2 (`2.0.0-beta.x`, npm tag `next`) is a ground-up rewrite **on Effect**: the program is an `Alchemy.Stack` running an `Effect.gen` body, and Workers, static sites, cron, R2, AI Gateway, and Neon are first-class resources in that graph. This matches the project's Effect 4 commitment ideologically — and adds a third deliberate beta to the stack (after TS 7.0 and Effect 4). Facts below were first verified against the v2 source (`alchemy-run/alchemy@main`), since beta docs lag, and then **proven by execution against the real Cloudflare + Neon accounts** in [#32](https://github.com/apshenichniy/praximo/issues/32) (`alchemy@2.0.0-beta.63`, deploy → verify → destroy). See [Verification and adoption](#verification-and-adoption-32) for the corrections that surfaced.
 
 Guiding principle for every choice here: **the agent does all devops; the human only supplies a secrets file.**
 
@@ -35,12 +35,14 @@ Guiding principle for every choice here: **the agent does all devops; the human 
 ### Program layout
 
 - Root **`alchemy.run.ts`** holds the single `Alchemy.Stack("Praximo", { providers, state }, ...)` — providers: `Cloudflare.providers()` + `Neon.providers()`.
-- **Worker declarations live next to their code** in `apps/*/src`; the root
-  stack imports and yields them. Astro WWW static output is attached through
-  Cloudflare Assets in the same graph.
-- Service bindings are typed RPC via `Cloudflare.Worker.bind` /
-  `Cloudflare.Workers.bindWorker` (Admin/Coach → Pipeline or Bot as required;
-  Pipeline → Bot); cron and Workflows remain owned by Pipeline.
+- The root stack declares the complete resource graph inline, while each
+  deployable app owns only its runtime entry point and build configuration.
+  Keeping topology in one file makes domains, environment bindings, and
+  cross-resource dependencies reviewable together.
+- Service bindings pass the yielded Worker resources through each consumer's
+  `env` contract (Admin/Coach → Pipeline or Bot as required; Pipeline → Bot);
+  cron remains owned by Pipeline. Astro WWW is a static-site resource in the
+  same graph.
 
 ### Domains and routing
 

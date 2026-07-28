@@ -47,6 +47,7 @@
   "type": "module",
   "scripts": {
     "build": "turbo build",
+    "dev": "turbo dev --filter=@praximo/admin --filter=@praximo/coach --filter=@praximo/client --filter=@praximo/www",
     "ui:dev": "bun run --filter @praximo/ui dev",
     "branding:avatar:set": "bun scripts/set-branding-avatar.ts",
     "check": "turbo check && bun run lint && bun run livekit:ops:check && bun run alchemy:check && bun run scripts:check",
@@ -60,7 +61,7 @@
     "manager-bot:set-webhook": "bun scripts/configure-manager-webhook.ts",
     "manager-bot:set-menu": "bun scripts/set-menu-button.ts",
     "scripts:check": "tsc --noEmit -p scripts/tsconfig.json",
-    "scripts:test": "vitest run --maxWorkers=1 scripts/menu-button.test.ts scripts/manager-bot-canary.test.ts scripts/manager-webhook.test.ts scripts/set-branding-avatar.test.ts scripts/ci-neon-branch.test.ts scripts/env.test.ts scripts/deploy.test.ts",
+    "scripts:test": "vitest run --maxWorkers=1 scripts/menu-button.test.ts scripts/manager-bot-canary.test.ts scripts/manager-webhook.test.ts scripts/set-branding-avatar.test.ts scripts/ci-neon-branch.test.ts scripts/env.test.ts scripts/deploy.test.ts scripts/topology.test.ts",
     "livekit:canary": "bash deploy/livekit/ops.sh track-canary",
     "livekit:check": "bash deploy/livekit/check.sh && bun run livekit:ops:check",
     "livekit:control-plane": "bash deploy/livekit/control-plane.sh verify",

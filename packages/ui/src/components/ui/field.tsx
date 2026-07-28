@@ -3,10 +3,10 @@
 import { useMemo } from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 
-import { typographyRecipe } from "@/lib/typography"
-import { cn } from "@/lib/utils"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
+import { typographyRecipe } from "../../lib/typography.ts"
+import { cn } from "../../lib/utils.ts"
+import { Label } from "./label.tsx"
+import { Separator } from "./separator.tsx"
 
 function FieldSet({ className, ...props }: React.ComponentProps<"fieldset">) {
   return (

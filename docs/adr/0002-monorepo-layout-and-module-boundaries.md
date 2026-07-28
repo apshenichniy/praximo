@@ -25,6 +25,11 @@ Effect source in `.repos/effect`.
 
 - **bun workspaces + Turborepo** orchestrate the monorepo; bun is the package manager for everything.
 - **TypeScript 7.0 (tsgo)** for typechecking; **oxlint + oxfmt** for linting and formatting (no ESLint/Prettier/Biome); **vitest + `@effect/vitest`** (published from the Effect 4 monorepo, currently `4.0.0-beta.99`) for tests.
+- `apps/www` temporarily pins TypeScript 6 for `astro check`, because Astro's
+  language server currently rejects the TypeScript 7 programmatic API. This is
+  a bounded checker-only exception; application source still follows the
+  repository settings. Remove the local pin and return it to the root catalog
+  as soon as `astro check` supports TypeScript 7.
 - Turbo task baseline: `build`, `check` (typecheck + lint), `test`.
 - Shared presets (tsconfig, oxlint config) live in `@praximo/tooling`; the oxfmt config sits at the repo root.
 

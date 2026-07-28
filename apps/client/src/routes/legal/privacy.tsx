@@ -10,7 +10,7 @@ import { validateLegalSearch } from "@/features/legal/legal-search.ts"
  * the consent page has no account by design, and the coach who reaches it from
  * the terms screen has not accepted anything yet.
  *
- * Server-rendered, unlike the copy this replaced in `apps/web` (#191). That one
+ * Server-rendered, unlike the Telegram-hosted copy this replaced in #191. That one
  * was `ssr: false` because it lived in an app whose every route waits for a
  * Telegram credential that arrives after load. Nothing here waits for anything:
  * the text is a constant and the language is in the URL, so the reader should be

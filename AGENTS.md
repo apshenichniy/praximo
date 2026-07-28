@@ -15,6 +15,10 @@ is the source of truth for the layout and the module boundaries.
 
 Commands: `bun run check` (typecheck every workspace, then lint), `bun run test`, `bun run build` (bundles each Worker for workerd via `wrangler --dry-run`), `bun run format`, `bun run deploy` (deploys the personal stage; `--dry-run` to rehearse it, and `prod` needs `--confirm-prod`).
 
+`bun run dev` starts Admin, Coach, Client, and WWW on ports 3000–3003;
+`bun run ui:dev` starts UI Lab on 3004. Exact URLs and real-auth parameters live
+in [`docs/agents/local-development.md`](docs/agents/local-development.md).
+
 Conventions worth knowing before writing code here:
 
 - **Packages are consumed as TypeScript source.** Every `@praximo/*` package points `exports` at `./src/index.ts`; nothing builds to `dist`. Only apps have a `build`, and it is the Worker bundle.
@@ -28,7 +32,10 @@ Conventions worth knowing before writing code here:
   foundation, feedback contract, and UI Lab are consumed as TypeScript source
   by Admin, Coach, Client, and WWW islands. Apps may add app-only CSS but must
   not override the shared base contract or copy shared primitives.
-- **Toolchain pins live in the root `catalog`.** `effect` and `@effect/vitest` track the same beta and move together.
+- **Toolchain pins live in the root `catalog`.** `effect` and `@effect/vitest`
+  track the same beta and move together. The documented `apps/www` TypeScript 6
+  checker shim is the one temporary exception (ADR 0002); remove it when Astro
+  supports the TypeScript 7 programmatic API.
 - **This repository owns LiveKit maintenance.** `deploy/livekit/README.md` is the canonical rebuild, upgrade, rollback, rotation, and diagnostics runbook. The local root `.env.livekit` is the mode-`0600`, gitignored five-key recovery source; never print or commit its values. Run `bun run livekit:check` before maintenance and `bun run livekit:status` for read-only live verification.
 
 ## Agent skills

@@ -67,24 +67,14 @@ describe("legal pages", () => {
     expect(russian).toContain('lang="ru"')
   })
 
-  /**
-   * The one thing that is genuinely this app's and not the Mini App's (#191).
-   *
-   * The type scale is calibrated for a phone webview and sits a step below the
-   * platform's; a contract read on a desktop needs the step back. Asserted
-   * because it is invisible in a diff and the first component copied from the
-   * other app will arrive without it.
-   */
-  it("takes the type scale up a step at desktop widths", async () => {
+  it("keeps legal typography on the shared semantic recipes", async () => {
     const html = await render(
       <LegalPage document={coachTermsFor("en")} version={TERMS_VERSION} locale="en" />,
     )
 
-    // Running text, the heading levels, and the marker that says a clause is
-    // unfinished — each named at the step above the one it holds on a phone.
-    expect(html).toContain("md:text-emphasis")
-    expect(html).toContain("md:text-display")
-    expect(html).toContain("md:text-heading")
-    expect(html).toContain("md:text-body")
+    expect(html).toContain("text-3xl")
+    expect(html).toContain("text-base")
+    expect(html).toContain("text-xs")
+    expect(html).not.toMatch(/\bmd:text-/)
   })
 })

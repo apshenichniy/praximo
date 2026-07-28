@@ -106,7 +106,7 @@ describe("the consent step", () => {
       token: TOKEN,
       coachName: "Ada Coaching",
       language: "ru",
-      privacyUrl: "https://stage.praximo.io/legal/privacy?lang=ru",
+      privacyUrl: "https://me.praximo.io/legal/privacy?lang=ru",
     })
 
     for (const index of [1, 2, 3, 4, 5]) expect(message.text).toContain(`${index}. `)
@@ -123,13 +123,13 @@ describe("the consent step", () => {
    * they open must not load a Telegram runtime to render a privacy policy.
    */
   it("builds the policy link on the client app's origin, in the client's language", () => {
-    expect(privacyUrl("https://my-stage.praximo.io", "uk")).toBe(
-      "https://my-stage.praximo.io/legal/privacy?lang=uk",
+    expect(privacyUrl("https://me.praximo.io", "uk")).toBe(
+      "https://me.praximo.io/legal/privacy?lang=uk",
     )
     // Whatever the origin carries is dropped: this is a public page, and a
     // bot id or a fragment on it says something about who was sent it.
-    expect(privacyUrl("https://my-stage.praximo.io/?b=9100777#x", "ru")).toBe(
-      "https://my-stage.praximo.io/legal/privacy?lang=ru",
+    expect(privacyUrl("https://me.praximo.io/?b=9100777#x", "ru")).toBe(
+      "https://me.praximo.io/legal/privacy?lang=ru",
     )
   })
 })
@@ -268,7 +268,7 @@ describe("accepting", () => {
         language: "ru",
         telegramBotId: BOT_ID,
         telegramUserId: CLIENT_ID,
-        clientAppUrl: "https://my-stage.praximo.io",
+        clientAppUrl: "https://me.praximo.io",
       }).pipe(Effect.provide(repo.layer))
 
       expect(outcome._tag).toBe("Consent")

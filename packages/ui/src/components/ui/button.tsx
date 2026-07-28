@@ -1,8 +1,10 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
-import { typographyRecipe } from "@/lib/typography"
-import { cn } from "@/lib/utils"
+import { useFeedback } from "../feedback-provider.tsx"
+import type { FeedbackEvent } from "../../lib/feedback.ts"
+import { typographyRecipe } from "../../lib/typography.ts"
+import { cn } from "../../lib/utils.ts"
 
 const buttonVariants = cva(
   cn(
@@ -12,7 +14,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
+        default: "bg-primary text-primary-foreground hover:bg-primary/80 dark:text-background",
         outline:
           "border-border bg-input/30 hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         secondary:
@@ -47,14 +49,25 @@ const buttonVariants = cva(
 
 function Button({
   className,
+  feedback = "impact-light",
+  onClick,
   variant = "default",
   size = "default",
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & {
+    feedback?: FeedbackEvent | false
+  }) {
+  const adapter = useFeedback()
+
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      onClick={(event) => {
+        if (feedback !== false) adapter.emit(feedback)
+        onClick?.(event)
+      }}
       {...props}
     />
   )

@@ -1,7 +1,7 @@
 import * as React from "react"
 
-import { typographyRecipe } from "@/lib/typography"
-import { cn } from "@/lib/utils"
+import { typographyRecipe } from "../../lib/typography.ts"
+import { cn } from "../../lib/utils.ts"
 
 function Label({ className, ...props }: React.ComponentProps<"label">) {
   return (

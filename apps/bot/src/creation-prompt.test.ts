@@ -29,8 +29,8 @@ const env = {
   MANAGER_BOT_TOKEN: "manager-token",
   MANAGER_BOT_USERNAME: "PraximoManagerBot",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
-  COACH_MINI_APP_URL: "https://stage.praximo.io/",
-  CLIENT_APP_URL: "https://my-stage.praximo.io",
+  COACH_MINI_APP_URL: "https://coach.praximo.io/",
+  CLIENT_APP_URL: "https://me.praximo.io",
   UPLOADS: uploadsStub({ [BRANDING_AVATAR_KEY]: BRANDING_AVATAR_BYTES }).bucket,
 }
 

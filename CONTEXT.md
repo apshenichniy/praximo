@@ -17,7 +17,7 @@ The platform-owned Telegram bot that opens the Admin App and sends
 platform-operation messages. `@PraximoBot` is the active identity in the
 single disposable development environment; `@PraximoDevBot` is reserved and
 unused.
-_Avoid_: admin bot, mother bot, PraximoMother
+_Avoid_: admin bot, mother bot
 
 **Admin App**:
 The Platform Admin console and Manager Bot onboarding companion at

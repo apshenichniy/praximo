@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img">
+  <title>Praximo coach-bot mark for dark surfaces, transparent background</title>
+  <desc>
+    A light-indigo abstract person embraced by a violet orbit, reaching a white glowing point.
+  </desc>
+  <defs>
+    <linearGradient id="orbit-back" x1="90" y1="326" x2="387" y2="109" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7c3aed"/>
+      <stop offset=".5" stop-color="#8b5cf6"/>
+      <stop offset=".82" stop-color="#a855f7"/>
+      <stop offset="1" stop-color="#ddd6fe"/>
+    </linearGradient>
+    <linearGradient id="orbit-front" x1="260" y1="350" x2="409" y2="152" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7c3aed"/>
+      <stop offset=".52" stop-color="#a855f7"/>
+      <stop offset="1" stop-color="#c084fc"/>
+    </linearGradient>
+    <radialGradient id="guide-halo">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity=".6"/>
+      <stop offset=".42" stop-color="#a78bfa" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <path
+    d="M198 401C126 374 84 316 84 247 84 155 163 80 253 79c51-1 95 14 126 43-30-12-60-16-92-16-93 0-172 63-172 142 0 64 30 117 83 153Z"
+    fill="url(#orbit-back)"
+  />
+  <path
+    d="M402 151c20 64-5 127-51 164-28 23-60 33-92 36 12-21 26-36 45-48 47-31 88-79 98-152Z"
+    fill="url(#orbit-front)"
+  />
+
+  <circle cx="253" cy="238" r="43" fill="#c4b5fd"/>
+  <path
+    d="M319 290c-27 10-46 12-66 12-31 0-48 20-48 49 0 39 19 76 47 102-4-40-6-78 3-109 9-28 29-44 64-54Z"
+    fill="#c4b5fd"
+  />
+
+  <circle cx="389" cy="134" r="43" fill="url(#guide-halo)"/>
+  <circle cx="389" cy="134" r="15.5" fill="#fff"/>
+</svg>

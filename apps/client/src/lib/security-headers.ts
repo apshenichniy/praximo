@@ -4,7 +4,7 @@
  * `Referrer-Policy: no-referrer` is required rather than advisable here
  * (client-onboarding-auth.md §Acceptance sequence — web page, §Web-room access):
  * the two URLs a client is ever handed carry a token in the path —
- * `my.praximo.io/i/<token>` and the room's join link — and the default
+ * `me.praximo.io/i/<token>` and the room's join link — and the default
  * `strict-origin-when-cross-origin` sends the full URL to any same-origin
  * destination and the origin to cross-origin ones. One image, one font, one
  * analytics beacon on a page that names a single-use invitation is all it takes

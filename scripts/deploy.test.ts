@@ -17,7 +17,7 @@ describe("the deploy command", () => {
   it("refuses a stage name this project does not have", () => {
     // `staging` is the name an operator reaches for and the one stage that does
     // not exist: the canonical dev stage is `dev_apshenichniy`, which is what
-    // `stage.praximo.io` is bound to.
+    // the canonical development domains are bound to.
     expect(() => resolveDeployStage(["--stage", "staging"], { USER: "ada" })).toThrow(/dev_<name>/)
     expect(() => resolveDeployStage(["--stage"], { USER: "ada" })).toThrow(/--stage <name>/)
     expect(() => resolveDeployStage([], {})).toThrow(/cannot resolve stage/)

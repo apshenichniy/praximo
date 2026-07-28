@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useId, useMemo, useState } from "react"
 import {
   CheckmarkCircle02Icon,
   Copy01Icon,
@@ -8,8 +8,8 @@ import {
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
-import { Heading } from "@/components/heading"
-import { Text } from "@/components/text"
+import { Heading } from "../components/heading.tsx"
+import { Text } from "../components/text.tsx"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,13 +20,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+} from "../components/ui/alert-dialog.tsx"
+import { Alert, AlertDescription, AlertTitle } from "../components/ui/alert.tsx"
+import { Avatar, AvatarBadge, AvatarFallback } from "../components/ui/avatar.tsx"
+import { Badge } from "../components/ui/badge.tsx"
+import { Button } from "../components/ui/button.tsx"
+import { Calendar } from "../components/ui/calendar.tsx"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card.tsx"
 import {
   Drawer,
   DrawerClose,
@@ -36,7 +42,7 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
-} from "@/components/ui/drawer"
+} from "../components/ui/drawer.tsx"
 import {
   Empty,
   EmptyContent,
@@ -44,31 +50,37 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+} from "../components/ui/empty.tsx"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "../components/ui/field.tsx"
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   InputGroupText,
-} from "@/components/ui/input-group"
-import { Input } from "@/components/ui/input"
-import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
-import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
-import { Toaster, toast } from "@/components/ui/toast"
-import { Toggle } from "@/components/ui/toggle"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+} from "../components/ui/input-group.tsx"
+import { Input } from "../components/ui/input.tsx"
+import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../components/ui/item.tsx"
+import { Label } from "../components/ui/label.tsx"
+import { Separator } from "../components/ui/separator.tsx"
+import { Skeleton } from "../components/ui/skeleton.tsx"
+import { Spinner } from "../components/ui/spinner.tsx"
+import { Switch } from "../components/ui/switch.tsx"
+import { Textarea } from "../components/ui/textarea.tsx"
+import { Toaster, toast } from "../components/ui/toast.tsx"
+import { Toggle } from "../components/ui/toggle.tsx"
+import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group.tsx"
 import {
   interfaceTypographyRoles,
   typographyRecipe,
   type InterfaceTypographyRole,
-} from "@/lib/typography"
-import { cn } from "@/lib/utils"
+} from "../lib/typography.ts"
+import { cn } from "../lib/utils.ts"
 
 type ThemeName = "light" | "dark"
 type StatusName = "success" | "warning" | "error" | "info"
@@ -82,7 +94,7 @@ const storageKey = "praximo.ui-lab.status-draft.v1"
 const defaultStatusDraft: StatusDraft = {
   light: {
     success: { base: "#16803b", foreground: "#ffffff", surface: "#effcf3", border: "#8ed5a5" },
-    warning: { base: "#a65400", foreground: "#2c1600", surface: "#fff7e1", border: "#e9b961" },
+    warning: { base: "#a65400", foreground: "#ffffff", surface: "#fff7e1", border: "#e9b961" },
     error: { base: "#d52b36", foreground: "#ffffff", surface: "#fff1f2", border: "#ef9aa0" },
     info: { base: "#2463d4", foreground: "#ffffff", surface: "#eff5ff", border: "#9ebbf0" },
   },
@@ -168,10 +180,12 @@ function Section({
   readonly description: string
   readonly title: string
 }) {
+  const headingId = useId()
+
   return (
-    <section className="space-y-5" aria-labelledby={`section-${title}`}>
+    <section className="space-y-5" aria-labelledby={headingId}>
       <div className="space-y-1">
-        <Heading id={`section-${title}`} as="h2" role="section-title">
+        <Heading id={headingId} as="h2" role="section-title">
           {title}
         </Heading>
         <Text role="body-small" className="text-muted-foreground">

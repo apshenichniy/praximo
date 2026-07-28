@@ -28,7 +28,7 @@ describe("adminUrlForOrigin", () => {
   })
 
   it("rejects a malformed origin", () => {
-    expect(() => adminUrlForOrigin("not a url")).toThrow(/invalid web origin/)
+    expect(() => adminUrlForOrigin("not a url")).toThrow(/invalid admin origin/)
   })
 })
 

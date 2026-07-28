@@ -12,8 +12,8 @@ const WORKSPACE_AVATAR_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x0
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
-  COACH_MINI_APP_URL: "https://stage.praximo.io/",
-  CLIENT_APP_URL: "https://my-stage.praximo.io",
+  COACH_MINI_APP_URL: "https://coach.praximo.io/",
+  CLIENT_APP_URL: "https://me.praximo.io",
   UPLOADS: uploadsStub({ [BRANDING_AVATAR_KEY]: BRANDING_AVATAR_BYTES }).bucket,
 }
 
@@ -150,16 +150,16 @@ describe("coach bot configuration", () => {
 
 describe("coach Mini App URL", () => {
   it("names the bot without disturbing whatever else the base carries", () => {
-    expect(coachMiniAppUrl("https://stage.praximo.io/", "9100777")).toBe(
-      "https://stage.praximo.io/?b=9100777",
+    expect(coachMiniAppUrl("https://coach.praximo.io/", "9100777")).toBe(
+      "https://coach.praximo.io/?b=9100777",
     )
-    expect(coachMiniAppUrl("https://stage.praximo.io/app?utm=x", "9100777")).toBe(
-      "https://stage.praximo.io/app?utm=x&b=9100777",
+    expect(coachMiniAppUrl("https://coach.praximo.io/app?utm=x", "9100777")).toBe(
+      "https://coach.praximo.io/app?utm=x&b=9100777",
     )
     // Re-provisioning the same bot reproduces the same URL rather than stacking
     // a second `b`, which Telegram would hand the app as an array.
-    expect(coachMiniAppUrl(coachMiniAppUrl("https://stage.praximo.io/", "1"), "2")).toBe(
-      "https://stage.praximo.io/?b=2",
+    expect(coachMiniAppUrl(coachMiniAppUrl("https://coach.praximo.io/", "1"), "2")).toBe(
+      "https://coach.praximo.io/?b=2",
     )
   })
 

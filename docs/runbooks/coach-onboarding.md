@@ -16,7 +16,7 @@ below.
 - The active Manager Bot (`@PraximoBot`, display name `Praximo`) exists, has
   bot management enabled in the @BotFather Mini App (`can_manage_bots`), and its
   token is in `MANAGER_BOT_TOKEN` ([#84](https://github.com/apshenichniy/praximo/issues/84)).
-  **Verify it rather than assume it** — `bun run manager-bot:set-menu <web-origin>`
+  **Verify it rather than assume it** — `bun run manager-bot:set-menu <admin-origin>`
   reports both manual @BotFather flags. With bot management off the coach's tap
   cannot produce a bot, and nothing fails server-side — the attempt simply sits at
   `requested` waiting for a `managed_bot` update Telegram never sends — so the only

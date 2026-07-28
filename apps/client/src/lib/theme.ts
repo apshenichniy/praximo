@@ -2,7 +2,7 @@
  * The app's two colour schemes, and the one place that decides which is on.
  *
  * The Mini App has a host to follow — a coach's Telegram client already knows
- * which scheme they are in, and `apps/web` reads it rather than asking again.
+ * which scheme they are in, and the Telegram host adapter reads it.
  * This app has no host. A client meets it once, in their own browser, so the
  * decision belongs to them: the browser's `prefers-color-scheme` by default, and
  * an explicit choice in the footer when the default is wrong for them.
@@ -49,19 +49,19 @@ export interface SchemeColor {
  * when an overscroll pulls it into view.
  *
  * Written by `docs/spec/design-system/apply.py`, together with the same constant
- * in `apps/web`. Do not edit by hand.
+ * in the Telegram-hosted apps.
  */
-export const APP_SURFACE_COLOR: SchemeColor = { dark: "#0a0a10", light: "#f3f3f6" }
+export const APP_SURFACE_COLOR: SchemeColor = { dark: "#18181b", light: "#ffffff" }
 
 /**
  * The page's own ground, in hex, for the pre-oklch fallback in critical CSS.
  * The light one is not white: the page recedes so that cards and sheets have
  * something to be raised against (#195) — `styles/app.css` §`:root`.
  */
-export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#0a0a10", light: "#f3f3f6" }
+export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#18181b", light: "#ffffff" }
 
 /** Running text on that ground, for the same fallback. */
-export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#f1f2f5", light: "#101018" }
+export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#fafafa", light: "#18181b" }
 
 /**
  * The scheme, decided before the first paint.

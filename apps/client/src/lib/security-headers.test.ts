@@ -33,14 +33,14 @@ describe("security headers", () => {
    * rather than here.
    */
   it("seals a response whose headers cannot be mutated in place", () => {
-    const redirect = Response.redirect("https://my.praximo.io/legal/privacy", 301)
+    const redirect = Response.redirect("https://me.praximo.io/legal/privacy", 301)
 
     expect(() => redirect.headers.set("x-nope", "1")).toThrow()
 
     const sealed = withSecurityHeaders(redirect)
 
     expect(sealed.status).toBe(301)
-    expect(sealed.headers.get("location")).toBe("https://my.praximo.io/legal/privacy")
+    expect(sealed.headers.get("location")).toBe("https://me.praximo.io/legal/privacy")
     expect(sealed.headers.get("referrer-policy")).toBe("no-referrer")
   })
 

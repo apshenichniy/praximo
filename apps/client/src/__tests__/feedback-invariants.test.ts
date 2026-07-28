@@ -9,7 +9,7 @@ const sourceDir = fileURLToPath(new URL("..", import.meta.url))
  * The Mini App's feedback contract, in the half of it that survives the crossing
  * (#191).
  *
- * `apps/web` asserts that a mutation reports its outcome and that a selection
+ * Admin and Coach assert that a mutation reports its outcome and that a selection
  * ticks, both through Telegram's haptic bridge. **Neither is portable, and the
  * honest thing is to say so rather than to pass by pretending.** There is no
  * haptic channel in a browser: `navigator.vibrate` does not exist on iOS Safari,
@@ -37,17 +37,6 @@ const files = async (): Promise<ReadonlyArray<{ path: string; source: string }>>
   )
 }
 
-/** Where the shared controls live. */
-const UiDirectory = `${path.join("components", "ui")}${path.sep}`
-
-/**
- * Base UI primitives whose whole job is one value in a set replacing another.
- * Named rather than derived, because a pass-through wrapper gives itself away
- * only by its import: a component that spreads `Root.Props` may never write the
- * word `onPressedChange` and still owe a visible selected state.
- */
-const SelectionPrimitives = ["checkbox", "radio", "select", "switch", "toggle"] as const
-
 describe("feedback invariants", () => {
   /**
    * A control a reader can choose has to look chosen. On a phone the Mini App
@@ -59,24 +48,13 @@ describe("feedback invariants", () => {
    * whose selection is invisible, which is the failure this replaces the haptic
    * cases with.
    */
-  it("gives every selection control a state you can see", async () => {
-    const controls = (await files()).filter(({ path: file }) => file.startsWith(UiDirectory))
-    expect(controls.length).toBeGreaterThan(0)
+  it("uses the shared selection controls", async () => {
+    const themeSwitch = (await files()).find(({ path: file }) =>
+      file.endsWith("components/theme-switch.tsx"),
+    )?.source
 
-    const selecting = controls.filter(({ source }) =>
-      // The closing quote matters: it is what keeps `toggle` from claiming
-      // `toggle-group`, and `radio` from claiming `radio-group`.
-      SelectionPrimitives.some((primitive) => source.includes(`@base-ui/react/${primitive}"`)),
-    )
-    // A rename of the directory, or of the primitives, must not quietly turn
-    // this into a test that reads nothing and passes.
-    expect(selecting.length).toBeGreaterThan(0)
-
-    const invisible = selecting
-      .filter(({ source }) => !/\b(aria-pressed:|data-\[state=on\]:)/.test(source))
-      .map(({ path: file }) => file)
-
-    expect(invisible).toEqual([])
+    expect(themeSwitch).toContain("@praximo/ui/components/toggle-group")
+    expect(themeSwitch).toContain("pressed={preference === option}")
   })
 
   /**
@@ -91,30 +69,17 @@ describe("feedback invariants", () => {
    */
   it("asks a destructive question from the bottom of the screen", async () => {
     const dialogs = (await files())
-      .filter(({ path: file }) => !file.startsWith(UiDirectory))
       .filter(({ source }) => source.includes("components/ui/alert-dialog.tsx"))
       .map(({ path: file }) => file)
 
     expect(dialogs).toEqual([])
   })
 
-  /**
-   * Every control here is reachable by keyboard, which the Mini App's are not —
-   * a Telegram webview is a thumb. So the ring is this app's own invariant, and
-   * a primitive copied across from `apps/web` without it is the way it goes
-   * missing.
-   */
-  it("keeps a visible focus ring on everything a keyboard can reach", async () => {
-    const controls = (await files()).filter(
-      ({ path: file, source }) =>
-        file.startsWith(UiDirectory) && /@base-ui\/react\/(button|toggle)/.test(source),
-    )
-    expect(controls.length).toBeGreaterThan(0)
-
-    const unfocusable = controls
-      .filter(({ source }) => !source.includes("focus-visible:"))
+  it("does not keep a private primitive directory", async () => {
+    const privatePrimitives = (await files())
+      .filter(({ path: file }) => file.startsWith("components/ui/"))
       .map(({ path: file }) => file)
 
-    expect(unfocusable).toEqual([])
+    expect(privatePrimitives).toEqual([])
   })
 })

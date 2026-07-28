@@ -36,8 +36,8 @@ const FRESH_TOKEN = `${BOT_ID}:AAHfreshAAHfreshAAHfreshAAHfreshAAH`
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
-  COACH_MINI_APP_URL: "https://stage.praximo.io/",
-  CLIENT_APP_URL: "https://my-stage.praximo.io",
+  COACH_MINI_APP_URL: "https://coach.praximo.io/",
+  CLIENT_APP_URL: "https://me.praximo.io",
   MANAGER_BOT_WEBHOOK_URL: "https://bot.praximo.test/telegram/manager",
   UPLOADS: uploadsStub({ [BRANDING_AVATAR_KEY]: BRANDING_AVATAR_BYTES }).bucket,
 }

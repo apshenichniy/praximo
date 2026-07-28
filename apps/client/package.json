@@ -4,29 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --env-file=../../.env node_modules/vite/bin/vite.js dev --port 3001",
+    "dev": "bun --env-file=../../.env node_modules/vite/bin/vite.js dev --port 3002",
     "build": "vite build",
     "check": "tsc --noEmit && oxlint -c ../../.oxlintrc.json src",
     "test": "vitest run"
   },
   "dependencies": {
-    "@base-ui/react": "catalog:",
-    "@fontsource-variable/inter": "catalog:",
-    "@hugeicons-pro/core-stroke-rounded": "catalog:",
-    "@hugeicons/core-free-icons": "catalog:",
-    "@hugeicons/react": "catalog:",
     "@praximo/domain": "workspace:*",
     "@praximo/i18n": "workspace:*",
+    "@praximo/ui": "workspace:*",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",
-    "class-variance-authority": "catalog:",
-    "clsx": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "shadcn": "catalog:",
-    "tailwind-merge": "catalog:",
-    "tailwindcss": "catalog:",
-    "tw-animate-css": "catalog:"
+    "tailwindcss": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",

@@ -6,28 +6,28 @@ import {
 import { requireEnv } from "./env.ts"
 
 /**
- * `bun run manager-bot:set-menu <web-origin>` — point the dev manager bot's chat menu
- * button at the stage's deployed `/admin`, so the operator opens the admin Mini
+ * `bun run manager-bot:set-menu <admin-origin>` — point the active manager bot's chat menu
+ * button at the Admin Worker's `/admin`, so the operator opens the admin Mini
  * App "the normal way" from their phone (#80, admin-surface.md §Entry points).
  *
  * One-time per stage, run after `alchemy deploy`. The web origin is the deploy's
- * `webUrl` output (per-stage, never committed); the token comes from the root
+ * `adminUrl` output (per-stage, never committed); the token comes from the root
  * `.env`. The pure shaping/guards live in `menu-button.ts`; this runner only
  * supplies env + args, checks whether the manual Main Mini App setup is visible
  * through `getMe`, makes the call, and logs.
  *
- *   bun run manager-bot:set-menu https://stage.praximo.io
+ *   bun run manager-bot:set-menu https://admin.praximo.io
  */
 
-const webOrigin = process.argv[2] ?? process.env.WEB_URL
-if (!webOrigin) {
+const adminOrigin = process.argv[2] ?? process.env.ADMIN_URL
+if (!adminOrigin) {
   throw new Error(
-    "missing web origin — pass the deployed web URL as the first argument " +
-      "(the `webUrl` from `alchemy deploy`), e.g. manager-bot:set-menu https://stage.praximo.io",
+    "missing Admin origin — pass the deployed Admin URL as the first argument " +
+      "(the `adminUrl` from `alchemy deploy`), e.g. manager-bot:set-menu https://admin.praximo.io",
   )
 }
 
-const adminUrl = adminUrlForOrigin(webOrigin)
+const adminUrl = adminUrlForOrigin(adminOrigin)
 const botToken = requireEnv("MANAGER_BOT_TOKEN")
 const request = buildSetMenuButtonRequest({
   botToken,
