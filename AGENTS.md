@@ -27,11 +27,10 @@ Conventions worth knowing before writing code here:
 - **The `effect` skill's names win** where a doc paraphrases it loosely — the skill is maintained by an Effect maintainer and tracks the library. Test layers are `testLayer`, not `layerTest`.
 - **Placeholder layers fail loudly.** Every adapter in the skeleton is unwired and returns a typed error rather than pretending to work; they use `Layer.sync` because they acquire nothing yet.
 - **The `@praximo/db` suites need a real Postgres.** Locally they skip (loudly) without `DATABASE_URL` — `bun run db:reset` provisions the dev Neon branch. `bun run db:demo` is the other half: it seeds clients and sessions into an existing connected workspace without touching the schema or the bot, so a UI iteration never costs a bot re-provisioning (`--clear` removes exactly what it wrote; `--bot <username|id>` picks the workspace). CI creates a schema-only branch per run and _fails_ when the URL is missing, so a skipped database suite can never read as a passing one (#136).
-- **`@praximo/ui` owns the shared interface foundation.** Its Maia CSS, light
-  and dark semantic tokens, interface typography recipes, primitives, motion
-  foundation, feedback contract, and UI Lab are consumed as TypeScript source
-  by Admin, Coach, Client, and WWW islands. Apps may add app-only CSS but must
-  not override the shared base contract or copy shared primitives.
+- **UI development has a strict baseline/extension boundary.** Read
+  [`docs/agents/ui-development.md`](docs/agents/ui-development.md) before
+  changing `@praximo/ui`, shadcn primitives, theme tokens, or application
+  styling.
 - **Toolchain pins live in the root `catalog`.** `effect` and `@effect/vitest`
   track the same beta and move together. The documented `apps/www` TypeScript 6
   checker shim is the one temporary exception (ADR 0002); remove it when Astro

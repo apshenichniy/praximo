@@ -8,13 +8,14 @@ Status: **accepted** by implementation issue
 `@praximo/ui` is the only owner of the shared visual foundation used by Admin,
 Coach, Client, WWW React islands, and UI Lab:
 
-- the clean shadcn preset `bdKVekM4` — Maia, Base UI, zinc/violet, Inter, and
+- the clean shadcn preset `bcB3Gj2` — Maia, Base UI, Zinc/Violet, Inter, and
   HugeIcons;
 - Geist Mono;
 - light and dark semantic CSS tokens;
 - the union of shadcn primitives actually consumed by the applications;
 - `cn` with standard `tailwind-merge`;
-- interface typography recipes and the shared `Heading` / `Text` primitives;
+- transitional `Heading`, `Text`, and typography recipe compatibility
+  scaffolding;
 - motion foundations and reduced-motion behavior;
 - a host-neutral feedback contract;
 - UI Lab.
@@ -28,6 +29,9 @@ or business/domain features. Admin and Coach adapt feedback to Telegram at
 their presentation-host boundary. Client and WWW use the no-op adapter until a
 browser-specific effect is justified. Mutation-outcome feedback remains in
 feature code.
+
+The operational baseline/extension rules for implementation agents live in
+[`docs/agents/ui-development.md`](../../agents/ui-development.md).
 
 ## Removed contract
 
@@ -46,30 +50,15 @@ colors live and copy CSS, but it is not a generator.
 
 ## Interface typography
 
-The shared semantic vocabulary is:
+The semantic interface typography contract was intentionally deferred after the
+#215 reset. The current `Heading`, `Text`, and `typographyRecipe` exports keep
+existing screens working, but their role names and values are transitional
+compatibility scaffolding rather than accepted design decisions.
 
-| Role | Purpose |
-| --- | --- |
-| `display` | Rare primary value or WWW hero |
-| `page-title` | Page-level heading |
-| `section-title` | Section heading |
-| `card-title` | Card and compact panel heading |
-| `body` | Default product copy |
-| `body-small` | Supporting product copy |
-| `label` | Control and data label |
-| `caption` | Metadata and compact annotation |
-
-`mono` is a font-family modifier, not a size role. Each recipe owns family,
-size, line height, weight, and tracking. Tone remains independent.
-
-`Heading` keeps semantic HTML (`h1`–`h6`) independent from visual role. `Text`
-does the same for free-standing copy. Component slots such as `CardTitle`,
-`CardDescription`, `FieldLabel`, `Button`, and `Badge` consume the same recipes
-instead of reconstructing typography in caller `className` values.
-
-Typeset is an opt-in prose layer only. It may be added when a real rendered
-HTML/Markdown, legal, or long-report consumer needs it; it never styles
-application shells, cards, forms, or dashboards.
+Do not inject those recipes into copied shadcn primitives. A follow-up
+typography round starts from the accepted pure baseline, chooses the semantic
+vocabulary and values deliberately, and migrates application composition only
+after that choice.
 
 ## Theme behavior
 
@@ -103,17 +92,16 @@ Tests own completeness and contrast at this shared boundary.
 - live status-color editing for both themes, contrast indicators, reset, local
   draft persistence, and copyable CSS output;
 - normal and reduced-motion inspection;
-- every typography role and component recipe across page, section, card, form,
-  table, and dense application contexts;
-- short/long Latin and Cyrillic samples, wrapping, truncation, tabular numbers,
-  mobile/desktop widths, and both themes.
+- an informational view of the transitional typography scaffolding, clearly
+  separated from accepted foundation decisions.
 
 ## Motion
 
 Start from the clean Maia baseline, then audit for purposeful motion.
 
 - Prefer CSS and `data-state` transitions for primitive state changes.
-- Do not use `transition-all`, default mount animation, or decorative stagger.
+- Do not add product-specific `transition-all`, default mount animation, or
+  decorative stagger. Preserve live-registry primitive classes verbatim.
 - Add a motion library only for a proven layout or screen-transition need.
 - Reduced motion is mandatory.
 - Tune durations/easings in UI Lab and on a real device.
@@ -126,5 +114,6 @@ Tests at the `@praximo/ui` owner boundary cover:
 - contrast for text and status usages;
 - package exports and absence of Telegram/TanStack/router dependencies;
 - reduced-motion behavior;
-- typography role completeness and shared recipe ownership;
+- absence of Praximo typography, feedback, motion-token, and color overrides
+  inside copied shadcn primitives;
 - absence of the old private type scale and merge extension.
