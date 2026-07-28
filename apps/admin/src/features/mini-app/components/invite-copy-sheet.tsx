@@ -4,6 +4,7 @@ import {
   Drawer,
   DrawerContent,
   DrawerDescription,
+  DrawerFooter,
   DrawerHeader,
   DrawerTitle,
 } from "@praximo/ui/components/drawer"
@@ -52,9 +53,9 @@ export function InviteCopySheet({
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="flex flex-col gap-5 pt-5">
+        <div className="flex min-h-0 flex-1 flex-col pt-5">
           {fallbackMessage === undefined ? (
-            <>
+            <div className="flex flex-col gap-5">
               {error === undefined ? null : (
                 <Alert variant="destructive" className="bg-destructive/10 border-transparent">
                   <AlertDescription className="text-destructive">{error}</AlertDescription>
@@ -76,34 +77,38 @@ export function InviteCopySheet({
                   "Copy invite message"
                 )}
               </Button>
-            </>
+            </div>
           ) : (
             <>
-              <Alert className="border-transparent">
-                <AlertDescription>
-                  Automatic copy was blocked by the browser. Tap Copy below, or long-press the
-                  message to copy it manually.
-                </AlertDescription>
-              </Alert>
-              {error === undefined ? null : (
-                <Alert variant="destructive" className="bg-destructive/10 border-transparent">
-                  <AlertDescription className="text-destructive">{error}</AlertDescription>
+              <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden">
+                <Alert className="border-transparent">
+                  <AlertDescription>
+                    Automatic copy was blocked by the browser. Tap Copy below, or long-press the
+                    message to copy it manually.
+                  </AlertDescription>
                 </Alert>
-              )}
-              <Textarea
-                readOnly
-                value={fallbackMessage}
-                rows={6}
-                className="bg-muted rounded-2xl p-4 text-base leading-relaxed"
-                onFocus={(event) => event.target.select()}
-              />
-              <Button
-                size="lg"
-                className="h-13 w-full font-semibold"
-                onClick={() => onCopyFallback(fallbackMessage)}
-              >
-                Copy
-              </Button>
+                {error === undefined ? null : (
+                  <Alert variant="destructive" className="bg-destructive/10 border-transparent">
+                    <AlertDescription className="text-destructive">{error}</AlertDescription>
+                  </Alert>
+                )}
+                <Textarea
+                  readOnly
+                  value={fallbackMessage}
+                  rows={6}
+                  className="bg-muted min-h-32 flex-1 field-sizing-fixed overflow-y-auto overscroll-contain rounded-2xl p-4 text-base leading-relaxed"
+                  onFocus={(event) => event.target.select()}
+                />
+              </div>
+              <DrawerFooter className="px-0 pt-5 pb-0">
+                <Button
+                  size="lg"
+                  className="h-13 w-full font-semibold"
+                  onClick={() => onCopyFallback(fallbackMessage)}
+                >
+                  Copy
+                </Button>
+              </DrawerFooter>
             </>
           )}
         </div>
