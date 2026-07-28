@@ -6,7 +6,19 @@ The operator's surface for creating and managing coach workspaces in MVP. Vocabu
 
 ## Principle
 
-**The management surface is an admin section in the Mini App, modeled on the BotFather Mini App; the manager bot keeps only what a Mini App cannot do.** The Mini App already exists (the coach app, TanStack Start on the `web` Worker), so the admin surface is a **self-contained `/admin` route tree in that same app and Worker** — not a separate app, not a Worker of its own (ADR 0002 enumerates the deployment units, and an admin surface is not one of them). "Self-contained" means the `/admin` tree has its **own root layout**, its **own Tailwind theme** (which may diverge freely from the coach app's — a different design system is expected), is **English-only** (see [Language](#language)), is **code-split** so no admin JS/CSS ships to coaches, and is **server-gated** on the admin flag. BotFather's Mini App gives a proven structure to copy — a list of bots, tap into one, edit its fields as a form — which maps almost one-to-one onto workspaces. Forms beat a linear bot conversation for the create/edit operations: every field is visible at once, any field is editable, and the avatar is a native upload.
+**The Admin App is a separate Platform Admin application modeled on the
+BotFather Mini App; the Manager Bot keeps only what an application cannot do.**
+`apps/admin` / `@praximo/admin` is an independent TanStack Start Worker at
+`admin.praximo.io`, server-gated on the Platform Admin capability and
+English-only (see [Language](#language)). It shares the Maia foundation with
+Coach through `@praximo/ui`, but no routes, business feature modules, Telegram
+adapters, or application bundles.
+
+BotFather's Mini App gives a proven structure to copy — a list of bots, tap
+into one, edit its fields as a form — which maps almost one-to-one onto
+workspaces. Forms beat a linear bot conversation for the create/edit
+operations: every field is visible at once, any field is editable, and the
+avatar is a native upload.
 
 ## Separation model (coach vs admin)
 
@@ -15,11 +27,19 @@ The coach surface and the admin surface are **deliberately separated where it ma
 Separated at the layers a human perceives:
 
 - **Bot account / chat.** Coach-facing notifications (sessions, artifacts, service notices) are delivered by the coach's **own branded bot** ([ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md), [ADR 0004](../adr/0004-bot-per-coach-provisioning.md)). Admin-facing notifications (onboarding loop, deep links) are delivered by the **manager bot** (below). For a dual-role person these are **two distinct bot chats** — a session notification never arrives from the same account that reports "a coach onboarded."
-- **Mini App entry point.** The coach opens the coach Mini App from **their coach bot**; the admin opens the admin Mini App from the **manager bot** (Telegram display name `PraximoMother`). Each bot exposes its app two ways — both labelled **"Open"**, both opening that bot's own app (see [Entry points and the Open button](#entry-points-and-the-open-button)). Different bots, different `initData`, different auth, different `.admin`-themed experience. A coach never sees an admin entry inside the coach app.
+- **Mini App entry point.** The coach opens the Coach App from **their Workspace
+  Bot**; the Platform Admin opens the Admin App from the active **Manager Bot**
+  (`@PraximoBot`, display name `Praximo`). Each bot exposes its app two ways —
+  both labelled **"Open"**, both opening that bot's own app. Different bots,
+  domains, `initData`, auth, and application bundles. A coach never sees an
+  Admin entry inside Coach.
 
-Unified where only the codebase is affected:
+Unified only at the interface-foundation layer:
 
-- **One TanStack Start app, one `web` Worker.** The `/admin` route tree shares the deploy, the build, and reusable primitives with the coach app, but nothing a coach sees. The wins of a separate app (independent deploy cadence, zero admin bytes in the coach bundle) are marginal for a solo dev and the second is already covered by code-splitting; they do not justify a Worker of its own plus the ADR 0002 / IaC cost. Refinement of ticket [#34](https://github.com/apshenichniy/praximo/issues/34): the "one app, not a new Worker" decision stands; this section makes the intended isolation (own route tree, own theme, English-only) explicit.
+- **One `@praximo/ui` package, two applications.** Admin and Coach share the
+  Maia theme, semantic typography, primitives, utilities, motion, and feedback
+  contract. They do not share application routes or host adapters. This
+  supersedes #34's historical one-Worker refinement.
 
 ### Entry points and the Open button
 
@@ -30,9 +50,18 @@ Each bot surfaces its Mini App two ways, both shown to the user as **"Open"** (m
 
 This makes the "Open" pattern **two-layered**: the menu button is automatable everywhere; the chat-list Main Mini App is a manual @BotFather step. For the platform-owned manager bot the operator enables it once, by hand ([#84](https://github.com/apshenichniy/praximo/issues/84)). For coach bots it is **optional coach self-service** — a coach may enable it in their own @BotFather (managed bots appear there), but the platform cannot do it for them and onboarding never blocks on it ([#86](https://github.com/apshenichniy/praximo/issues/86); the steps to hand such a coach are in the [coach onboarding runbook](../runbooks/coach-onboarding.md)). This is a Telegram limitation, not deferred work; revisit only if Telegram ships a setter ([#83](https://github.com/apshenichniy/praximo/issues/83)).
 
-The canonical dev manager bot uses `https://stage.praximo.io/admin` for both entry points. Alchemy binds `stage.praximo.io` directly to the `dev_apshenichniy` web Worker, so the BotFather-owned Main Mini App URL remains short and stable across Worker deployments; non-canonical personal stages keep their generated `workers.dev` URLs.
+The active Manager Bot uses `https://admin.praximo.io/` for both entry points.
+Alchemy binds that domain to the `dev_apshenichniy` Admin Worker during the
+single-environment phase. The domain looks canonical, but resource names,
+telemetry, database configuration, and secrets remain explicitly development.
 
-**Universal entry with role dispatch** ([#106](https://github.com/apshenichniy/praximo/issues/106)): the manager bot's Mini App entry resolves the viewer's role server-side (`resolveRole(initData)`) instead of hard-gating on the admin flag. Admin → `/admin`; coach mid-onboarding → a stub status screen (full onboarding companion: [#112](https://github.com/apshenichniy/praximo/issues/112)); active coach → an "open your bot" pointer screen; anyone else → an invite-only landing. `AccessDenied` never renders as a 404, and no admin content flashes before the gate resolves. This retires the former known limitation (non-admin landing on a rejected admin app).
+**Universal entry with role dispatch** ([#106](https://github.com/apshenichniy/praximo/issues/106)):
+the Admin App root resolves the viewer server-side (`resolveRole(initData)`)
+instead of hard-gating on the admin flag. Platform Admin → workspace list;
+coach mid-onboarding → a status screen; active Coach → an "open your bot"
+pointer; anyone else → an invite-only landing. `AccessDenied` never renders as
+a 404, no Admin content flashes before resolution, and no result cross-navigates
+into the Coach App.
 
 ## Language
 
@@ -81,7 +110,12 @@ Joint Join as `startedAt`.
 
 - Admin is a **flat, seeded set of Telegram ids** — a handful, not a role hierarchy: no admin-role model, no super-admin, and no way to grant admin *inside* the product. In practice the set is one or two people ([Rollout phases](#rollout-phases)).
 - **Who is admin lives in the database**, not in config: an admin flag / record keyed by Telegram id, **seeded by the reset/seed script** (below) from `ADMIN_TELEGRAM_IDS` in the root `.env` (a comma-separated list, [#85](https://github.com/apshenichniy/praximo/issues/85)). This is deliberately the same shape a future assignable role will use — seeding is simply the only way to grant it in MVP, so no migration is needed when the role graduates.
-- **Auth is the simplest case in the whole system.** The admin opens the Mini App from the **manager bot** (`PraximoMother`) via either "Open" surface ([Entry points and the Open button](#entry-points-and-the-open-button)), both landing on the admin route of the same TanStack Start app. The manager bot is platform-owned and its token is a stack secret we hold ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)), so its `initData` is validated by **standard HMAC against our own token** — not the third-party Ed25519 scheme the coach path needs to avoid touching per-coach bot tokens ([client-onboarding-auth.md](client-onboarding-auth.md), [#5](https://github.com/apshenichniy/praximo/issues/5)). The validated Telegram id is then gated on the admin flag; a non-admin opening the route gets nothing.
+- **Auth is the simplest case in the whole system.** The Platform Admin opens
+  the Admin App from `@PraximoBot` via either "Open" surface. The Manager Bot
+  is platform-owned and its token is a stack secret, so `initData` is validated
+  by **standard HMAC against our own token** — not the third-party Ed25519
+  scheme Coach uses. The validated Telegram id is independently gated on the
+  Platform Admin capability.
 - A coach **may also be an admin** (dogfooding): the admin section is orthogonal to owning a workspace and is entered from the manager bot, not a coach bot. Such a person carries two hats on one Telegram id — an admin record *and* workspace ownership — checked independently (admin app → admin flag; coach app → workspace membership).
 
 ### Rollout phases

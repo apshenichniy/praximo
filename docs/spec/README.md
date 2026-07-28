@@ -8,7 +8,13 @@ This document is the **assembly point** of the MVP spec: the end-to-end product 
 
 ## The product flow, end to end
 
-1. **Coach onboarding — manual, no self-registration.** The admin invites the coach from the Mini App's admin section ([admin-surface.md](admin-surface.md)) — the workspace is created lazily behind the invite — delivering a single-use deep link to the platform's manager bot over one of three channels (Telegram share, email, copied link). One tap provisions the coach's own Telegram bot via Managed Bots (manual BotFather token paste is the permanent fallback); branding, webhook, and the Mini App menu button are set programmatically. The coach signs into the Mini App by Ed25519 `initData` verification — no server session, no access to per-coach bot tokens ([ADR 0006](../adr/0006-coach-authentication-in-mvp.md)) — and accepts the terms of service on first login. Acceptance is followed by two **optional** steps, each skippable in one tap and repeatable from the settings screen: the hours they work, and connecting a Google Calendar ([#213](https://github.com/apshenichniy/praximo/issues/213)). → [ADR 0004](../adr/0004-bot-per-coach-provisioning.md), [client-onboarding-auth.md](client-onboarding-auth.md), [privacy-copy.md](privacy-copy.md) §4
+1. **Coach onboarding — manual, no self-registration.** The Platform Admin
+invites the Coach from the Admin App at `admin.praximo.io`; the Workspace is
+created lazily behind the invite. The active `@PraximoBot` Manager Bot
+provisions the Coach's Workspace Bot. The Coach enters the separate Coach App
+at `coach.praximo.io` through that bot and authenticates with Ed25519
+`initData`. Admin and Coach are separate job contexts and applications even
+when one person has both capabilities.
 
 2. **Client onboarding — invite is the only door.** The coach creates a client (name only) and schedules the first session (kind `intake`) in one Mini App flow — scheduling while consent is pending is allowed. The invite (single-use token, TTL 7 days) is delivered over one of three paths: Telegram share-card, an invite email the service sends itself, or a link the coach forwards manually. Acceptance — in the bot or on the web Acceptance Page — is atomic: language → consent, with an editable profile step (optional Google import) on the web page only (the bot captures the Telegram profile snapshot automatically); it creates the client's Channel, appends the Consent Grant, and sets the client's language. Clients have no accounts — identity attestations (Telegram id, email, Google `sub`) are captured for a post-MVP portal. → [client-onboarding-auth.md](client-onboarding-auth.md), [privacy-retention.md](privacy-retention.md), [privacy-copy.md](privacy-copy.md) §1
 
@@ -24,16 +30,19 @@ This document is the **assembly point** of the MVP spec: the end-to-end product 
 
 | Piece | Decision | Where |
 |---|---|---|
-| Deploy units | Four Cloudflare Workers — `web` (TanStack Start: coach Mini App and admin surface), `client` (TanStack Start: acceptance page, legal texts, web room), `bot` (grammY, all per-coach bots path-routed), `pipeline` (Workflows, LiveKit webhook receiver, retention cron). Cross-worker communication is typed service bindings only. | [ADR 0002](../adr/0002-monorepo-layout-and-module-boundaries.md) |
+| Deploy units | Admin, Coach, and minimal Client TanStack Start Workers; Bot and Pipeline Workers; Astro WWW through Cloudflare Assets. Shared UI source lives in `@praximo/ui`; cross-worker communication is typed service bindings only. | [ADR 0002](../adr/0002-monorepo-layout-and-module-boundaries.md) |
 | Processing | Cloudflare Workflows orchestrator; R2 pass-by-reference (1 MiB step-payload discipline); **no Queues in MVP**; no container worker. | [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md) |
 | Session concurrency | One Durable Object per session — serializes webhooks, commands, due evaluation; alarm at earliest due instant + 15-min safety-net sweeper. Chosen over a minute-cron to let Neon autosuspend. | [ADR 0005](../adr/0005-session-reconciler-on-durable-objects.md) |
 | Bots | Bot-per-coach via Telegram Managed Bots, one-tap provisioning; manual token paste fallback; one `bot` Worker serves all bots; tokens AES-GCM-encrypted in Postgres. | [ADR 0004](../adr/0004-bot-per-coach-provisioning.md) |
 | Data | Neon Postgres (`aws-eu-central-1`) via Drizzle + serverless driver; content (transcripts, audio, avatars) in R2 (`jurisdiction: eu`), metadata in Postgres. | [domain-model.md](domain-model.md), [ADR 0003](../adr/0003-alchemy-iac-structure.md) |
-| IaC | Single root Alchemy 2 stack (pinned `2.0.0-beta.63`), stages `dev_<user>` / `prod`; canonical dev web at `stage.praximo.io`, prod deploys from GitHub Actions on merge. Agent-operable — the human only supplies a secrets file; bootstrap proven by execution from three credential variables. | [ADR 0003](../adr/0003-alchemy-iac-structure.md) |
+| IaC | Single root Alchemy 2 stack (pinned `2.0.0-beta.63`). During the single-environment phase `dev_apshenichniy` owns the canonical-looking application domains and disposable development resources; no production contour is activated by #215. | [ADR 0003](../adr/0003-alchemy-iac-structure.md) |
 | External systems | LiveKit self-hosted (EU, `room.praximo.io` per ticket [#8](https://github.com/apshenichniy/praximo/issues/8)) — secrets-only in IaC; Deepgram EU endpoint, zero retention; LLMs via Vercel AI SDK through Cloudflare AI Gateway (the only US transfer); Cloudflare Email Service (`mail.praximo.io`); Telegram Bot API 10.x via grammY. | [ADR 0001](../adr/0001-processing-pipeline-on-cloudflare-workflows.md), [ADR 0003](../adr/0003-alchemy-iac-structure.md), [privacy-retention.md](privacy-retention.md), [#8](https://github.com/apshenichniy/praximo/issues/8) |
 | Language/runtime | TypeScript 7.0 (tsgo), Effect 4 beta (workerd compatibility proven by spike, [#17](https://github.com/apshenichniy/praximo/issues/17)), bun + Turborepo, oxlint/oxfmt, `@effect/vitest`. | [ADR 0002](../adr/0002-monorepo-layout-and-module-boundaries.md) |
 
-Domains: `stage.praximo.io` (canonical dev web), `app.praximo.io` (prod web), `api.praximo.io` (prod path-routed webhooks/API), `mail.praximo.io` (email sending) — all per [ADR 0003](../adr/0003-alchemy-iac-structure.md); `room.praximo.io` (LiveKit, external appliance per ticket [#8](https://github.com/apshenichniy/praximo/issues/8)).
+Application domains in the active disposable development environment:
+`admin.praximo.io`, `coach.praximo.io`, `me.praximo.io`, and the staged WWW
+shell at `stage.praximo.io`. Public `praximo.io` is unchanged until #176.
+`room.praximo.io` remains the external LiveKit appliance.
 
 ## Cross-cutting invariants
 

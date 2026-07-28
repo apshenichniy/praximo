@@ -65,4 +65,11 @@ The **only US transfer** is LLM analysis: LLM providers under no-training API te
 
 ## Documents
 
-Two pages served by the `client` Worker on `my.praximo.io` as ordinary app routes — the privacy policy and the coach terms — linked from the client consent and the coach ToS acceptance. They moved off the `web` Worker with the client-app split ([#191](https://github.com/apshenichniy/praximo/issues/191)); `app.praximo.io/legal/*` redirects permanently, so a link already sent in a bot message keeps working. App routes rather than static pages on praximo.io because the texts live in `@praximo/i18n` and are rendered per locale from the same catalogue their recorded versions are derived from — `legalUrl`, `TERMS_VERSION` and `PRIVACY_VERSION` come out of that one module, so the client consent and the Acceptance Page consume them instead of re-deciding. From the Mini App both are external links either way, and the coach's ToS screen opens them through `Telegram.WebApp.openLink`: Telegram's own in-app browser opens *over* the Mini App with a back arrow that returns to it, where the system browser would eject a coach in the middle of accepting. Copy for both, plus the client consent and the pre-join notice, is in [privacy-copy.md](privacy-copy.md); the coach terms carry the data-processing agreement as a section rather than as a separate document. The operator / legal-entity name and the other legal placeholders stay open until the entity is decided.
+Two ordinary Client App routes on `me.praximo.io` serve the privacy policy and
+Coach terms. There are no compatibility redirects from old application
+domains. The texts live in `@praximo/i18n` and are rendered per locale from the
+same catalogue that derives their recorded versions. From the Coach App both
+are external links opened through the Telegram host adapter. Copy for both,
+plus Client consent and the pre-join notice, is in `privacy-copy.md`; the Coach
+terms carry the data-processing agreement as a section rather than as a
+separate document.

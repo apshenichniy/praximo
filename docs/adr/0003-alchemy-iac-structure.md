@@ -1,12 +1,15 @@
 # ADR 0003: Alchemy IaC structure
 
 - **Status**: accepted
-- **Date**: 2026-07-19 (verified by execution 2026-07-20, [#32](https://github.com/apshenichniy/praximo/issues/32); dev-domain exception added 2026-07-23, [#84](https://github.com/apshenichniy/praximo/issues/84))
+- **Date**: 2026-07-19 (verified by execution 2026-07-20; application/domain topology amended 2026-07-28 by #215)
 - **Ticket**: [#18](https://github.com/apshenichniy/praximo/issues/18) — bootstrap proven by [#32](https://github.com/apshenichniy/praximo/issues/32)
 
 ## Context
 
-ADR 0002 fixed a **single root Alchemy 2 program** describing all the Workers (`web`, `bot`, `pipeline` when this was written; `client` joined them with [#191](https://github.com/apshenichniy/praximo/issues/191)), the shared R2 bucket, service bindings, and secrets, parameterized by stage. This ADR details that program: stages and naming, file layout, secrets and configuration flow, how non-Cloudflare pieces (Neon, self-hosted LiveKit) are represented, and the deploy path.
+ADR 0002 fixes a **single root Alchemy 2 program** describing Admin, Coach,
+Client, WWW Assets, Bot, Pipeline, the shared R2 bucket, service bindings, and
+secrets. This ADR details that program: environment naming, file layout, secrets
+and configuration flow, domains, external systems, and the deploy path.
 
 Alchemy 2 (`2.0.0-beta.x`, npm tag `next`) is a ground-up rewrite **on Effect**: the program is an `Alchemy.Stack` running an `Effect.gen` body, Workers are declared as Effect classes next to their runtime code, and cross-worker RPC, Workflows, cron, R2, AI Gateway, and Neon are first-class resources. This matches the project's Effect 4 commitment ideologically — and adds a third deliberate beta to the stack (after TS 7.0 and Effect 4). Facts below were first verified against the v2 source (`alchemy-run/alchemy@main`), since beta docs lag, and then **proven by execution against the real Cloudflare + Neon accounts** in [#32](https://github.com/apshenichniy/praximo/issues/32) (`alchemy@2.0.0-beta.63`, deploy → verify → destroy). See [Verification and adoption](#verification-and-adoption-32) for the corrections that surfaced.
 
@@ -14,37 +17,70 @@ Guiding principle for every choice here: **the agent does all devops; the human 
 
 ## Decision
 
-### Stages and naming
+### Environment and naming
 
-- Two stages: the personal default **`dev_<user>`** (Alchemy's default, e.g. `dev_alexander`) and **`prod`** (`--stage prod`). Ad-hoc named stages (`--stage exp-foo`) are allowed by construction; nothing depends on them.
-- **No preview/per-PR environments in MVP.**
+- During the single-environment phase, **`dev_apshenichniy` is the only active
+  product environment**. It is disposable development infrastructure even
+  though its application domains look canonical.
+- `@PraximoBot` is the active Manager Bot for this environment;
+  `@PraximoDevBot` is reserved and unused.
+- Do not create a parallel production contour or bind the reserved bot in this
+  phase. A future environment-split ticket reassigns identities and domains
+  through configuration/IaC without another application split.
+- Ad-hoc stages remain possible for bounded infrastructure probes, but never
+  claim the canonical application domains. There are no preview/per-PR
+  environments.
 - Physical resource names are **Alchemy-generated** (`praximo-<stage>-<id>-<hash>`); we do not pin `name` manually. State tracks identity; dashboard aesthetics lose to zero naming decisions.
 
 ### Program layout
 
 - Root **`alchemy.run.ts`** holds the single `Alchemy.Stack("Praximo", { providers, state }, ...)` — providers: `Cloudflare.providers()` + `Neon.providers()`.
-- **Worker declarations live next to their code** in `apps/*/src` (`class Web extends Cloudflare.Worker<Web>()(...)` with `main: import.meta.path`); the root stack imports and `yield*`s them. This is the official v2 monorepo-single-stack pattern.
-- Service bindings are typed RPC via `Cloudflare.Worker.bind` / `Cloudflare.Workers.bindWorker` (web → pipeline, pipeline → bot, per ADR 0002); cron via `Cloudflare.Workers.cron` in the pipeline Worker's init phase; Workflows as Effect-native `Cloudflare.Workflow` classes in `apps/pipeline`.
+- **Worker declarations live next to their code** in `apps/*/src`; the root
+  stack imports and yields them. Astro WWW static output is attached through
+  Cloudflare Assets in the same graph.
+- Service bindings are typed RPC via `Cloudflare.Worker.bind` /
+  `Cloudflare.Workers.bindWorker` (Admin/Coach → Pipeline or Bot as required;
+  Pipeline → Bot); cron and Workflows remain owned by Pipeline.
 
 ### Domains and routing
 
-- Prod web: **`app.praximo.io`** as a Worker custom domain.
-- Prod webhooks/API: one **`api.praximo.io`** hostname shared by path-based zone routes — `api.praximo.io/telegram/*` → bot Worker, `api.praximo.io/livekit/*` and STT callback paths → pipeline Worker (`routes: [{ pattern, zoneName }]` + a proxied `Cloudflare.DNS.Record` AAAA `100::` for the hostname). Verified: distinct path patterns on one hostname may target different Workers.
+- **`admin.praximo.io`** → Admin Worker.
+- **`coach.praximo.io`** → Coach Worker.
+- **`me.praximo.io`** → Client Worker.
+- **`stage.praximo.io`** → staged WWW Assets shell until #176 authorizes a
+  public launch.
+- The four domains above are bound only by `dev_apshenichniy` during the
+  single-environment phase and must emit noindex policy.
+- Do not add aliases or redirects for `app.praximo.io`,
+  `my.praximo.io`, `my-stage.praximo.io`, or the old combined
+  `stage.praximo.io/admin`/Coach routes.
+- Bot and Pipeline keep their existing non-application routing contracts. One
+  API hostname may continue to use path routes for Telegram, LiveKit, and STT
+  callbacks; it does not select a production data environment.
 - The `praximo.io` **zone pre-exists** in the Cloudflare account; Alchemy manages records and routes inside it, not the zone itself.
-- Canonical dev web: **`stage.praximo.io`** is a Worker custom domain bound only to `dev_apshenichniy`. Telegram's @BotFather Main Mini App input could not persist the generated hostname, so the platform-owned dev manager bot needs one short URL that remains stable across Worker deployments ([#84](https://github.com/apshenichniy/praximo/issues/84)).
-- Other dev surfaces stay on **`workers.dev`**: the canonical bot and pipeline Workers, and every non-canonical personal/ad-hoc stage including its web Worker. `stage.praximo.io` is singular by design and must never move implicitly when another personal stage deploys.
+- The existing public **`praximo.io`** response is unchanged by #215. Neither
+  the root nor `www.praximo.io` is rebound.
 
 ### Deploy and state
 
-- **Dev** deploys from the developer's machine: `alchemy dev` (local workerd + real cloud resources in the personal stage) and `alchemy deploy`. **Non-interactive runs must set `CI=1`** (e.g. `CI=1 alchemy deploy --stage dev_<user> --yes`) — without it Alchemy expects an interactive `alchemy login` and fails with `AuthError` even when the `.env` creds are present ([#32](https://github.com/apshenichniy/praximo/issues/32)).
-- **`bun run deploy` is that command** ([#152](https://github.com/apshenichniy/praximo/issues/152)): it sets `CI=1`, resolves the stage as `--stage` → `APP_STAGE` → `dev_<user>` so a deploy cannot target a different stage from the `db:reset` that just ran against it, refuses a stage that is neither `dev_<name>` nor `prod` (`staging` does not exist here), requires `--confirm-prod` before prod, and forwards everything else — `--dry-run`, `--force`, `--adopt` — to the CLI.
-- **Prod** deploys from **GitHub Actions on merge to `main`**: `CI=1 bun alchemy deploy --stage prod --yes`. PRs run `check`/`test` only — no `alchemy plan`, no deploys. **`alchemy destroy` is forbidden in CI.**
+- The active environment deploys from the developer's machine through
+  `bun run deploy`; non-interactive Alchemy runs set `CI=1`.
+- Branch deploys for #215 may update `dev_apshenichniy`. After merge,
+  closeout redeploys the exact merged `main` state to the same environment and
+  verifies all application domains and bot routes.
+- No `prod` deploy is performed in #215. Existing legacy production resources
+  are not adopted, rebound, or treated as the active product environment.
+- PR CI runs checks/tests with an isolated Neon branch and does not deploy.
+  `alchemy destroy` remains forbidden in CI.
 - Branch-per-stage extends to **branch-per-CI-run**: every run creates a schema-only `ci-run-*` branch of the dev project, migrates it with this checkout's `packages/db/migrations`, runs the repository suites against it and deletes it (`scripts/ci-neon-branch.ts`, [#136](https://github.com/apshenichniy/praximo/issues/136)). The suites use the same **neon-http** driver as production, so the no-interactive-transactions constraint they are written around still holds; a run without `DATABASE_URL` fails rather than skipping them.
 - State store: **`Cloudflare.state()`** (Durable Object + SQLite in our account) — required for CI, survives machine changes; no local state files as source of truth.
 
 ### Secrets and configuration
 
-- Boundary: **IaC secrets are platform keys** — Deepgram, LLM/AI Gateway keys, Neon (provider API key), Telegram manager-bot token, LiveKit URL/API key/secret. (Better-Auth keys were listed here before [ADR 0006](0006-coach-authentication-in-mvp.md) deferred Better Auth; none exist. Coach auth needs no secret at all — the Ed25519 trust anchor is Telegram's public key, hardcoded and selected by the non-secret `TELEGRAM_ENV`.) **Per-coach bot tokens are runtime data in Postgres** (created during coach onboarding via Managed Bots); IaC never sees them.
+- Boundary: **IaC secrets are platform keys** — Deepgram, LLM/AI Gateway
+  keys, Neon, the active `@PraximoBot` Manager Bot token, and LiveKit
+  URL/API key/secret. Better Auth remains deferred. Per-coach bot tokens are
+  runtime data in Postgres; IaC never sees them.
 - Source of truth: a single gitignored **`.env` at the repo root**. The program reads values via `Config.redacted(...)`; Redacted/Config values become Worker **`secret_text` bindings** (v2 routes them by shape; prop name is `env`).
 - CI receives secrets as **one GitHub Actions secret `ENV_FILE`** (the file's contents), synced by the agent with `gh secret set ENV_FILE < .env`, plus `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `NEON_API_KEY` for Alchemy itself. `NEON_API_KEY` is also what PR CI provisions its per-run database branch with, alongside the non-secret repository variable `NEON_PROJECT_ID`; the connection URI is masked and never leaves `$GITHUB_ENV`.
 - **We declare no Cloudflare Secrets Store resources of our own**: `.env` is already the source of truth; an account-level store adds nothing at this scale. This is not the same as the account never using one — Alchemy's `Cloudflare.state()` keeps its own bearer token and AES-CTR key in the account-wide Secrets Store, so the deploy token **must** carry `Secrets Store Edit` (rendered *Account Secrets Store Edit* in the dashboard). Amended per [#31](https://github.com/apshenichniy/praximo/issues/31), which corrects the original wording.

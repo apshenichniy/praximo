@@ -68,7 +68,12 @@ Constraints inherited from prior decisions: the `bot` Worker owns all Telegram t
 
 ### Bot roles
 
-- The **manager bot** (platform-owned; Telegram display name `PraximoMother`, dev instance suffixed) does provisioning and service notifications — to the coach ("bot needs re-link", permanent pipeline failures) and to the invite issuer, whose own bot cannot carry them. After onboarding it is mostly silent.
+- The **Manager Bot** (platform-owned; active identity `@PraximoBot`, display
+  name `Praximo`) does provisioning and platform-operation notifications — to
+  the coach ("bot needs re-link", permanent pipeline failures) and to the
+  invite issuer, whose own bot cannot carry them. `@PraximoDevBot` is reserved
+  and unused during the single-environment phase. After onboarding the Manager
+  Bot is mostly silent.
 - The **coach's own bot is the single surface** for both the coach (Mini App entry, briefs / debriefs / mentor reviews as messages) and their clients. This is the "workspace bot" of the client-onboarding spec.
 
 ### Provisioning flow (within manual coach onboarding)
