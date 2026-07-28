@@ -1,3 +1,4 @@
+import type { WorkingHours } from "@praximo/domain"
 import { createServerFn } from "@tanstack/react-start"
 import type { CoachClients } from "./coach-clients.ts"
 import { type CoachTransportError, isTagged, transportError } from "./coach-transport.ts"
@@ -9,11 +10,13 @@ import {
   loadCoachClients,
   loadCoachDaySchedule,
   loadCoachRangeSchedule,
+  loadCoachWorkingHours,
   prepareCoachInviteCard,
   removeCoachClient,
   resendCoachClientInvite,
   resetCoachClientInvite,
   saveCoachTimezone,
+  saveCoachWorkingHours,
   scheduleCoachSession,
 } from "./runtime.server.ts"
 
@@ -303,6 +306,46 @@ export const hideMainMiniAppHint = createServerFn({ method: "POST" })
     try {
       await hideCoachMainMiniAppHint(context.credential)
       return { ok: true }
+    } catch {
+      return { ok: false }
+    }
+  })
+
+export type WorkingHoursResult =
+  | { readonly ok: true; readonly hours: WorkingHours }
+  | { readonly ok: false; readonly error: CoachClientsTransportError }
+
+export const getWorkingHours = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .handler(async ({ context }): Promise<WorkingHoursResult> => {
+    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
+    try {
+      return { ok: true, hours: await loadCoachWorkingHours(context.credential) }
+    } catch (error) {
+      return { ok: false, error: transportError(error) }
+    }
+  })
+
+/**
+ * The screen commits on change, so this is called once per tap rather than once
+ * per visit — and the answer matters, unlike `saveTimezone`: a coach who cannot
+ * see that a change failed will keep the week they think they set.
+ *
+ * The value crosses unvalidated on purpose and is parsed strictly on the far
+ * side. A validator here that fell back would turn a mangled request into a
+ * silent reset, which is the one failure this write must not have.
+ */
+export const saveWorkingHours = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator((input: unknown): { readonly hours: unknown } => ({
+    hours:
+      typeof input === "object" && input !== null && "hours" in input ? input.hours : undefined,
+  }))
+  .handler(async ({ context, data }): Promise<{ readonly ok: boolean }> => {
+    if (context.credential.initData.length === 0) return { ok: false }
+    try {
+      const outcome = await saveCoachWorkingHours(context.credential, data.hours)
+      return { ok: outcome.saved }
     } catch {
       return { ok: false }
     }

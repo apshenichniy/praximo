@@ -115,6 +115,22 @@ export interface ClientsCopy {
   readonly afternoon: string
   readonly evening: string
   readonly freeSuffix: string
+  /**
+   * The hours outside the coach's own, as two more groups of the day (#210).
+   *
+   * They name the boundary rather than the group — «Earlier · from 06:00» — so
+   * a coach reads what the reveal holds without opening it, and reads their own
+   * window off the screen at the same time. Both take a clock value, which is
+   * the same token in all three languages.
+   */
+  readonly earlierHeading: (from: string) => string
+  readonly laterHeading: (until: string) => string
+  /**
+   * A day the coach does not work at all. It says the day is off rather than
+   * that an hour is early — for this day both ends of the window are the same
+   * end, and there is no window to be outside of.
+   */
+  readonly dayOffHeading: string
   /** "No 60-minute slot fits on " · day · " before 22:00." */
   /**
    * The day is set off by punctuation rather than joined by a preposition. The
@@ -215,6 +231,9 @@ const en: ClientsCopy = {
   afternoon: "Afternoon",
   evening: "Evening",
   freeSuffix: " free",
+  earlierHeading: (from) => `Earlier · from ${from}`,
+  laterHeading: (until) => `Later · until ${until}`,
+  dayOffHeading: "Not a working day",
   emptyDayLead: "No slot of this length fits on ",
   emptyDayTail: " before 22:00.",
   nextDay: "Try the next day",
@@ -302,6 +321,9 @@ const uk: ClientsCopy = {
   afternoon: "День",
   evening: "Вечір",
   freeSuffix: " вільно",
+  earlierHeading: (from) => `Раніше · з ${from}`,
+  laterHeading: (until) => `Пізніше · до ${until}`,
+  dayOffHeading: "Неробочий день",
   emptyDayLead: "Сесія такої тривалості не вміщається — ",
   emptyDayTail: ", до 22:00.",
   nextDay: "Спробувати наступний день",
@@ -389,6 +411,9 @@ const ru: ClientsCopy = {
   afternoon: "День",
   evening: "Вечер",
   freeSuffix: " свободно",
+  earlierHeading: (from) => `Раньше · с ${from}`,
+  laterHeading: (until) => `Позже · до ${until}`,
+  dayOffHeading: "Нерабочий день",
   emptyDayLead: "Сессия такой длительности не помещается — ",
   emptyDayTail: ", до 22:00.",
   nextDay: "Попробовать следующий день",

@@ -23,10 +23,12 @@ export {
   type MemberSettings,
   readMemberSettings,
 } from "./member-settings.ts"
+export { type DayWindow, isDayWindow, MinutesInDay, SlotStepMinutes } from "./day-window.ts"
 export {
   type BusyInterval,
-  BusinessDayEndMinutes,
-  BusinessDayStartMinutes,
+  type DayGrid,
+  type DayGridInput,
+  dayGrid,
   type DaySlot,
   type DaySlotsInput,
   daySlots,
@@ -39,10 +41,27 @@ export {
   PartsOfDay,
   PlannedDuration,
   PlannedDurations,
+  RevealFromMinutes,
+  RevealUntilMinutes,
+  revealWindow,
   SessionKind,
   SessionKinds,
-  SlotStepMinutes,
 } from "./scheduling.ts"
+export {
+  DefaultWorkingDayEndMinutes,
+  DefaultWorkingDayStartMinutes,
+  DefaultWorkingHours,
+  daysWithOwnHours,
+  followsWindowEveryDay,
+  parseWorkingHours,
+  readWorkingHours,
+  type Weekday,
+  Weekdays,
+  weekdayOfIndex,
+  windowForWeekday,
+  type WorkingDay,
+  type WorkingHours,
+} from "./working-hours.ts"
 export {
   CoachOnboardingInviteCode,
   CoachOnboardingInviteCodeAlphabet,

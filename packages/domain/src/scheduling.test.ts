@@ -1,17 +1,26 @@
 import { describe, expect, it } from "@effect/vitest"
+import { MinutesInDay } from "./day-window.ts"
 import {
-  BusinessDayEndMinutes,
-  BusinessDayStartMinutes,
+  dayGrid,
   daySlots,
   defaultDurationForKind,
   isSchedulableStart,
   nextSlotStart,
   partOfDay,
   PlannedDurations,
+  RevealFromMinutes,
+  RevealUntilMinutes,
   SlotStepMinutes,
 } from "./scheduling.ts"
+import { DefaultWorkingDayEndMinutes, DefaultWorkingDayStartMinutes } from "./working-hours.ts"
 
 const at = (hours: number, minutes = 0) => hours * 60 + minutes
+
+/** Today's default: the hours a coach who never opens the screen still has. */
+const DefaultDay = {
+  startMinutes: DefaultWorkingDayStartMinutes,
+  endMinutes: DefaultWorkingDayEndMinutes,
+}
 
 describe("scheduling constants", () => {
   // The fourth chip was considered and dropped (#56 §No 90-minute chip): running
@@ -50,22 +59,22 @@ describe("nextSlotStart", () => {
 })
 
 describe("daySlots", () => {
-  it("runs the business day in quarter-hour steps", () => {
-    const slots = daySlots({ durationMinutes: 30, busy: [] })
+  it("runs the window in quarter-hour steps", () => {
+    const slots = daySlots({ window: DefaultDay, durationMinutes: 30, busy: [] })
 
-    expect(slots[0]?.startMinutes).toBe(BusinessDayStartMinutes)
-    expect(slots[1]?.startMinutes).toBe(BusinessDayStartMinutes + SlotStepMinutes)
-    // The last start is `22:00 − duration`: a session that starts free must also
-    // end inside the day.
-    expect(slots.at(-1)?.startMinutes).toBe(BusinessDayEndMinutes - 30)
+    expect(slots[0]?.startMinutes).toBe(DefaultWorkingDayStartMinutes)
+    expect(slots[1]?.startMinutes).toBe(DefaultWorkingDayStartMinutes + SlotStepMinutes)
+    // The last start is `end − duration`: a session that starts free must also
+    // end inside the window.
+    expect(slots.at(-1)?.startMinutes).toBe(DefaultWorkingDayEndMinutes - 30)
     expect(slots.every((slot) => slot.available)).toBe(true)
   })
 
-  it("ends the day earlier for a longer session", () => {
-    const half = daySlots({ durationMinutes: 30, busy: [] })
-    const hour = daySlots({ durationMinutes: 60, busy: [] })
+  it("ends the window earlier for a longer session", () => {
+    const half = daySlots({ window: DefaultDay, durationMinutes: 30, busy: [] })
+    const hour = daySlots({ window: DefaultDay, durationMinutes: 60, busy: [] })
 
-    expect(hour.at(-1)?.startMinutes).toBe(BusinessDayEndMinutes - 60)
+    expect(hour.at(-1)?.startMinutes).toBe(DefaultWorkingDayEndMinutes - 60)
     expect(hour.length).toBeLessThan(half.length)
   })
 
@@ -73,6 +82,7 @@ describe("daySlots", () => {
   // never removed, so the three-column grid does not reflow between days.
   it("keeps a busy start in the grid and marks it unavailable", () => {
     const slots = daySlots({
+      window: DefaultDay,
       durationMinutes: 30,
       busy: [{ startMinutes: at(11), endMinutes: at(12) }],
     })
@@ -83,6 +93,7 @@ describe("daySlots", () => {
 
   it("refuses a start whose session would run into a booked one", () => {
     const slots = daySlots({
+      window: DefaultDay,
       durationMinutes: 60,
       busy: [{ startMinutes: at(11), endMinutes: at(12) }],
     })
@@ -100,6 +111,7 @@ describe("daySlots", () => {
   // why yesterday is unavailable.
   it("does not render a start that has already passed", () => {
     const slots = daySlots({
+      window: DefaultDay,
       durationMinutes: 30,
       busy: [],
       earliestStartMinutes: at(15, 45),
@@ -110,25 +122,121 @@ describe("daySlots", () => {
   })
 
   it("returns nothing when the day is too far gone for the chosen duration", () => {
-    expect(daySlots({ durationMinutes: 60, busy: [], earliestStartMinutes: at(21, 15) })).toEqual(
-      [],
-    )
+    expect(
+      daySlots({
+        window: DefaultDay,
+        durationMinutes: 60,
+        busy: [],
+        earliestStartMinutes: at(21, 15),
+      }),
+    ).toEqual([])
+  })
+
+  // A window read from an older blob, or written by a client that rounded
+  // badly, must never generate a start the server would then refuse.
+  it("aligns a window that is off the grid", () => {
+    const slots = daySlots({
+      window: { startMinutes: at(9, 7), endMinutes: at(11) },
+      durationMinutes: 30,
+      busy: [],
+    })
+
+    expect(slots[0]?.startMinutes).toBe(at(9, 15))
+    expect(slots.every((slot) => slot.startMinutes % SlotStepMinutes === 0)).toBe(true)
+  })
+})
+
+describe("dayGrid", () => {
+  // A coach who never opens the settings screen sees exactly today's grid.
+  it("gives the default day the same starts it has always had", () => {
+    const grid = dayGrid({ working: DefaultDay, durationMinutes: 30, busy: [] })
+
+    expect(grid.working[0]?.startMinutes).toBe(at(8))
+    expect(grid.working.at(-1)?.startMinutes).toBe(at(21, 30))
+    // 06:00–08:00 before it, and 22:00–23:00 after: the reveal reaches further
+    // than the default day at both ends.
+    expect(grid.earlier[0]?.startMinutes).toBe(RevealFromMinutes)
+    expect(grid.earlier.at(-1)?.startMinutes).toBe(at(7, 45))
+    expect(grid.later[0]?.startMinutes).toBe(at(21, 45))
+    expect(grid.later.at(-1)?.startMinutes).toBe(RevealUntilMinutes - 30)
+  })
+
+  it("stops offering starts outside a narrowed day", () => {
+    const grid = dayGrid({
+      working: { startMinutes: at(9), endMinutes: at(19) },
+      durationMinutes: 30,
+      busy: [],
+    })
+    const starts = grid.working.map((slot) => slot.startMinutes)
+
+    expect(starts).not.toContain(at(8))
+    expect(starts[0]).toBe(at(9))
+    expect(starts.at(-1)).toBe(at(18, 30))
+    // 18:45 begins inside the window but would end outside it, so it is late
+    // rather than working — one definition of "outside", not two.
+    expect(grid.later[0]?.startMinutes).toBe(at(18, 45))
+    expect(grid.earlier.at(-1)?.startMinutes).toBe(at(8, 45))
+  })
+
+  // Not an empty interval: the day is not worked at all, and the screen says so
+  // rather than showing a grid with nothing in it.
+  it("gives a day that is not worked one reveal and no working starts", () => {
+    const grid = dayGrid({ working: undefined, durationMinutes: 30, busy: [] })
+
+    expect(grid.working).toEqual([])
+    expect(grid.later).toEqual([])
+    expect(grid.earlier[0]?.startMinutes).toBe(RevealFromMinutes)
+    expect(grid.earlier.at(-1)?.startMinutes).toBe(RevealUntilMinutes - 30)
+  })
+
+  // Narrowing the hours is not a statement about the past. The session stays
+  // where it is; the grid simply stops offering the hour it sits in.
+  it("keeps a session booked outside the new hours marked as busy", () => {
+    const grid = dayGrid({
+      working: { startMinutes: at(9), endMinutes: at(19) },
+      durationMinutes: 30,
+      busy: [{ startMinutes: at(20), endMinutes: at(21) }],
+    })
+
+    expect(grid.working.some((slot) => slot.startMinutes >= at(20))).toBe(false)
+    const taken = grid.later.filter((slot) => !slot.available).map((slot) => slot.startMinutes)
+    expect(taken).toEqual([at(19, 45), at(20), at(20, 15), at(20, 30), at(20, 45)])
+  })
+
+  it("carries the past cut into every group", () => {
+    const grid = dayGrid({
+      working: { startMinutes: at(9), endMinutes: at(19) },
+      durationMinutes: 30,
+      busy: [],
+      earliestStartMinutes: at(10),
+    })
+
+    expect(grid.earlier).toEqual([])
+    expect(grid.working[0]?.startMinutes).toBe(at(10))
   })
 })
 
 describe("isSchedulableStart", () => {
   it("accepts a start on the grid that fits inside the day", () => {
     expect(isSchedulableStart(at(10), 30)).toBe(true)
-    expect(isSchedulableStart(BusinessDayEndMinutes - 45, 45)).toBe(true)
+    expect(isSchedulableStart(MinutesInDay - 45, 45)).toBe(true)
   })
 
   it("refuses a start off the quarter-hour grid", () => {
     expect(isSchedulableStart(at(10, 7), 30)).toBe(false)
   })
 
-  it("refuses a start outside business hours or one that overruns the day", () => {
-    expect(isSchedulableStart(at(7, 45), 30)).toBe(false)
-    expect(isSchedulableStart(BusinessDayEndMinutes - 30, 60)).toBe(false)
+  // The bound this ticket removed. Working hours narrow the grid; the server
+  // stays wider, so the exception a coach needs is still bookable.
+  it("accepts a start outside any plausible working hours", () => {
+    expect(isSchedulableStart(at(7), 30)).toBe(true)
+    expect(isSchedulableStart(at(23), 30)).toBe(true)
+    expect(isSchedulableStart(at(5, 30), 60)).toBe(true)
+  })
+
+  it("refuses a session that would run past midnight, or start before the day", () => {
+    expect(isSchedulableStart(MinutesInDay - 30, 60)).toBe(false)
+    expect(isSchedulableStart(-15, 30)).toBe(false)
   })
 
   it("refuses a duration the product does not plan", () => {

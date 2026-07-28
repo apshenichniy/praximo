@@ -23,6 +23,13 @@ export const MemberSettings = Schema.Struct({
 
 export interface MemberSettings {
   readonly mainMiniAppHintDismissed?: boolean
+  /**
+   * The week a coach works (#210). Deliberately `unknown` here: it is read with
+   * `readWorkingHours`, which falls back per-day rather than per-blob, and
+   * typing it as its own shape would put a second, stricter reader in front of
+   * the tolerant one.
+   */
+  readonly workingHours?: unknown
   /** Keys written by a newer deploy, carried through untouched. */
   readonly [key: string]: unknown
 }
