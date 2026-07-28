@@ -47,11 +47,35 @@ The manager bot is **not** the management surface. It retains exactly two jobs i
 
 Structure follows the BotFather Mini App, reframed around coaches rather than workspaces ([design artifact](https://claude.ai/code/artifact/e0dd5959-2b86-4415-9a11-cd58dbc58e69)):
 
-- **Coaches list** ([#107](https://github.com/apshenichniy/praximo/issues/107)) — pending invites pinned on top with a status progression ("Invited via {channel} · expires in Nd" → "Link opened · creating bot…" → "Invite expired"), active coaches below (bot avatar, name, `@botUsername`, status badge, "active Nh ago"). Client/session counts render as muted placeholders until practice aggregates land ([#113](https://github.com/apshenichniy/praximo/issues/113)).
-- **Details page** (tap a row, [#108](https://github.com/apshenichniy/praximo/issues/108)) — two variants. *Pending:* invite status card (channel, issued, expires, link-opened), Resend / Copy link, a "what happens next" step list, danger zone. *Active:* status-first — bot + coach activity, About (coach language, joined date), practice placeholders, Settings (internal-label rename only), danger zone.
+- **Coaches list** ([#107](https://github.com/apshenichniy/praximo/issues/107)) — pending invites pinned on top with a status progression ("Invited via {channel} · expires in Nd" → "Link opened · creating bot…" → "Invite expired"), active coaches below (bot avatar, name, `@botUsername`, status badge, "active Nh ago"). Practice aggregates deliberately stay out of this fixed-height scanning row ([#113](https://github.com/apshenichniy/praximo/issues/113)).
+- **Details page** (tap a row, [#108](https://github.com/apshenichniy/praximo/issues/108)) — two variants. *Pending:* invite status card (channel, issued, expires, link-opened), Resend / Copy link, a "what happens next" step list, danger zone. *Active:* status-first — bot + coach activity, About (coach language, joined date), Practice operational-health metrics, Settings (internal-label rename only), danger zone.
 - **Invite a coach** ([#103](https://github.com/apshenichniy/praximo/issues/103)) — an action-first screen, not a profile form: one optional internal-label field and three delivery actions. See [Invite a coach](#invite-a-coach).
 
 Concrete screen layouts live in the design artifact; this spec fixes the surface, the operation set, and the semantics.
+
+### Practice activity aggregates
+
+The active details page carries three live-derived operational-health metrics
+([decision #113](https://github.com/apshenichniy/praximo/issues/113), production
+[#214](https://github.com/apshenichniy/praximo/issues/214)):
+
+- **Active clients (30 days)** — distinct Clients whose Session reached Joint Join in the exact rolling interval `startedAt >= now - 30 * 24 hours`.
+- **Sessions (30 days)** — Sessions whose Joint Join falls inside that same interval.
+- **Last session** — the latest Joint Join over all surviving Session rows, rendered as relative plus absolute time.
+
+Joint Join (`session.started_at`) is the usage boundary. A current `in_progress`
+Session counts immediately; a scheduled Session, a cancellation before Joint
+Join, and a no-show do not. An empty practice renders `0`, `0`, and `Never`,
+never a placeholder. The window is a duration, not a calendar month, so it does
+not reset on the first day or depend on a timezone boundary.
+
+The metrics are derived at read time from data that still exists. Hard-deleting
+a Session or Client recomputes them and may move or clear **Last session**; there
+is no retained analytics ledger or materialized counter. `WorkspaceRepo.getDetail`
+owns one workspace-scoped Session aggregate for all three values. The Coaches
+list payload and query remain unchanged. Delivery is blocked by the reconciler
+in [#65](https://github.com/apshenichniy/praximo/issues/65), which first records
+Joint Join as `startedAt`.
 
 ## Admin identity and auth
 
@@ -197,7 +221,6 @@ For the Mini App this is enough on its own: a launch is verified against the bot
 - **Coach self-service rebranding UI** — the coach owns their bot's branding (redesign decision, [#108](https://github.com/apshenichniy/praximo/issues/108)); in MVP they exercise it via @BotFather on their managed bot, an in-product surface is post-MVP. The former admin "Edit profile / rebranding on request" path is removed, not deferred.
 - **Email invite delivery** — the channel ships as a UI stub ([#105](https://github.com/apshenichniy/praximo/issues/105)); the Cloudflare Email Service sender is a follow-up (facts: [#114](https://github.com/apshenichniy/praximo/issues/114)).
 - **Full coach onboarding companion** in the manager Mini App — MVP ships a stub via role dispatch ([#106](https://github.com/apshenichniy/praximo/issues/106)); the companion is [#112](https://github.com/apshenichniy/praximo/issues/112).
-- **Practice aggregates** (client/session counts on list and details) — muted placeholders in MVP; scoped in [#113](https://github.com/apshenichniy/praximo/issues/113).
 
 ## Prototype note
 
