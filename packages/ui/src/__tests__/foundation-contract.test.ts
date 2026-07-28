@@ -130,6 +130,8 @@ describe("@praximo/ui public foundation", () => {
     for (const family of ["success", "warning", "error", "info"]) {
       for (const token of ["", "-foreground", "-surface", "-border"]) {
         expect(styles.match(new RegExp(`--${family}${token}:`, "g"))).toHaveLength(2)
+        expect(variable(variablesFor(":root"), `${family}${token}`)).toMatch(/^oklch\(/)
+        expect(variable(variablesFor(".dark"), `${family}${token}`)).toMatch(/^oklch\(/)
       }
     }
   })

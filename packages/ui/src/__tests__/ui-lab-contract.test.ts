@@ -24,6 +24,8 @@ describe("UI Lab contract", () => {
       "navigator.clipboard",
       "contrastRatio",
       "Reset colors",
+      "Tailwind palette",
+      "OKLCH",
       "Light",
       "Dark",
     ]) {

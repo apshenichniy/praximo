@@ -7,6 +7,7 @@ import {
   RefreshIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
+import tailwindColors from "tailwindcss/colors"
 
 import { Heading } from "../components/heading.tsx"
 import { Text } from "../components/text.tsx"
@@ -67,6 +68,15 @@ import {
 import { Input } from "../components/ui/input.tsx"
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "../components/ui/item.tsx"
 import { Label } from "../components/ui/label.tsx"
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "../components/ui/popover.tsx"
+import { ScrollArea } from "../components/ui/scroll-area.tsx"
 import { Separator } from "../components/ui/separator.tsx"
 import { Skeleton } from "../components/ui/skeleton.tsx"
 import { Spinner } from "../components/ui/spinner.tsx"
@@ -81,6 +91,7 @@ import {
   type InterfaceTypographyRole,
 } from "../lib/typography.ts"
 import { cn } from "../lib/utils.ts"
+import { contrastRatio, hexToOklch, normalizeOklch, oklchToHex } from "./status-colors.ts"
 
 type ThemeName = "light" | "dark"
 type StatusName = "success" | "warning" | "error" | "info"
@@ -89,54 +100,139 @@ type StatusDraft = Record<ThemeName, Record<StatusName, Record<StatusToken, stri
 
 const statusNames: readonly StatusName[] = ["success", "warning", "error", "info"]
 const statusTokens: readonly StatusToken[] = ["base", "foreground", "surface", "border"]
-const storageKey = "praximo.ui-lab.status-draft.v1"
+const tailwindFamilies = [
+  "slate",
+  "gray",
+  "zinc",
+  "neutral",
+  "stone",
+  "mauve",
+  "olive",
+  "mist",
+  "taupe",
+  "red",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  "green",
+  "emerald",
+  "teal",
+  "cyan",
+  "sky",
+  "blue",
+  "indigo",
+  "violet",
+  "purple",
+  "fuchsia",
+  "pink",
+  "rose",
+] as const
+const tailwindShades = [
+  "50",
+  "100",
+  "200",
+  "300",
+  "400",
+  "500",
+  "600",
+  "700",
+  "800",
+  "900",
+  "950",
+] as const
+const tailwindFixedColors = ["white", "black"] as const
+const storageKey = "praximo.ui-lab.status-draft.v2"
+const legacyStorageKey = "praximo.ui-lab.status-draft.v1"
 
 const defaultStatusDraft: StatusDraft = {
   light: {
-    success: { base: "#16803b", foreground: "#ffffff", surface: "#effcf3", border: "#8ed5a5" },
-    warning: { base: "#a65400", foreground: "#ffffff", surface: "#fff7e1", border: "#e9b961" },
-    error: { base: "#d52b36", foreground: "#ffffff", surface: "#fff1f2", border: "#ef9aa0" },
-    info: { base: "#2463d4", foreground: "#ffffff", surface: "#eff5ff", border: "#9ebbf0" },
+    success: {
+      base: "oklch(0.527142 0.138742 149.393)",
+      foreground: "oklch(1 0 0)",
+      surface: "oklch(0.978938 0.018074 155.825)",
+      border: "oklch(0.81303 0.098609 154.122)",
+    },
+    warning: {
+      base: "oklch(0.53567 0.132805 54.892)",
+      foreground: "oklch(1 0 0)",
+      surface: "oklch(0.976562 0.030054 90.324)",
+      border: "oklch(0.811489 0.119614 80.886)",
+    },
+    error: {
+      base: "oklch(0.569446 0.204136 23.849)",
+      foreground: "oklch(1 0 0)",
+      surface: "oklch(0.96941 0.015168 12.422)",
+      border: "oklch(0.773069 0.10222 15.117)",
+    },
+    info: {
+      base: "oklch(0.527401 0.185892 261.051)",
+      foreground: "oklch(1 0 0)",
+      surface: "oklch(0.96852 0.014848 260.73)",
+      border: "oklch(0.789593 0.082309 262.281)",
+    },
   },
   dark: {
-    success: { base: "#49cc76", foreground: "#071f0f", surface: "#143320", border: "#287b43" },
-    warning: { base: "#f0a132", foreground: "#291700", surface: "#39280e", border: "#8f5a19" },
-    error: { base: "#f06a72", foreground: "#2a090b", surface: "#3c171a", border: "#943c43" },
-    info: { base: "#73a5ff", foreground: "#07162d", surface: "#152844", border: "#3f6daf" },
+    success: {
+      base: "oklch(0.752819 0.167918 151.343)",
+      foreground: "oklch(0.214738 0.043673 152.115)",
+      surface: "oklch(0.291125 0.051042 154.663)",
+      border: "oklch(0.51861 0.118061 150.665)",
+    },
+    warning: {
+      base: "oklch(0.769588 0.150375 70.204)",
+      foreground: "oklch(0.22369 0.047976 71.705)",
+      surface: "oklch(0.290916 0.046915 75.559)",
+      border: "oklch(0.515505 0.103285 66.234)",
+    },
+    error: {
+      base: "oklch(0.689981 0.165384 18.865)",
+      foreground: "oklch(0.199081 0.05497 20.062)",
+      surface: "oklch(0.261651 0.05837 17.014)",
+      border: "oklch(0.477707 0.118743 17.97)",
+    },
+    info: {
+      base: "oklch(0.725501 0.142209 261.448)",
+      foreground: "oklch(0.201659 0.050721 258.426)",
+      surface: "oklch(0.276339 0.05785 257.985)",
+      border: "oklch(0.533769 0.115953 257.537)",
+    },
   },
 }
 
-function hexToRgb(hex: string): readonly [number, number, number] {
-  const normalized = hex.replace("#", "")
-  const value = Number.parseInt(normalized, 16)
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255]
-}
+function normalizeStoredDraft(value: unknown): StatusDraft | null {
+  if (typeof value !== "object" || value === null) return null
 
-function linearizeColorChannel(channel: number): number {
-  const value = channel / 255
-  return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
-}
+  const source = value as Record<string, unknown>
+  const normalized = structuredClone(defaultStatusDraft)
 
-function relativeLuminance(hex: string): number {
-  const [red, green, blue] = hexToRgb(hex)
+  for (const theme of ["light", "dark"] as const) {
+    const themeSource = source[theme]
+    if (typeof themeSource !== "object" || themeSource === null) return null
 
-  return (
-    0.2126 * linearizeColorChannel(red) +
-    0.7152 * linearizeColorChannel(green) +
-    0.0722 * linearizeColorChannel(blue)
-  )
-}
+    for (const status of statusNames) {
+      const statusSource = (themeSource as Record<string, unknown>)[status]
+      if (typeof statusSource !== "object" || statusSource === null) return null
 
-function contrastRatio(first: string, second: string): number {
-  const lighter = Math.max(relativeLuminance(first), relativeLuminance(second))
-  const darker = Math.min(relativeLuminance(first), relativeLuminance(second))
-  return (lighter + 0.05) / (darker + 0.05)
+      for (const token of statusTokens) {
+        const color = (statusSource as Record<string, unknown>)[token]
+        if (typeof color !== "string") return null
+        const oklch = normalizeOklch(color) ?? hexToOklch(color)
+        if (oklch === null) return null
+        normalized[theme][status][token] = oklch
+      }
+    }
+  }
+
+  return normalized
 }
 
 function readDraft(): StatusDraft {
   try {
-    const persisted = localStorage.getItem(storageKey)
-    return persisted ? (JSON.parse(persisted) as StatusDraft) : defaultStatusDraft
+    const persisted = localStorage.getItem(storageKey) ?? localStorage.getItem(legacyStorageKey)
+    return persisted
+      ? (normalizeStoredDraft(JSON.parse(persisted)) ?? defaultStatusDraft)
+      : defaultStatusDraft
   } catch {
     return defaultStatusDraft
   }
@@ -162,13 +258,193 @@ function draftToCss(draft: StatusDraft): string {
     .map((theme) => {
       const selector = theme === "light" ? ":root" : ".dark"
       const declarations = statusNames.flatMap((status) =>
-        statusTokens.map(
-          (token) => `  ${cssVariable(status, token)}: ${draft[theme][status][token]};`,
-        ),
+        statusTokens.map((token) => {
+          const value = normalizeOklch(draft[theme][status][token])
+          if (value === null) throw new Error(`Invalid OKLCH value for ${theme} ${status} ${token}`)
+          return `  ${cssVariable(status, token)}: ${value};`
+        }),
       )
       return `${selector} {\n${declarations.join("\n")}\n}`
     })
     .join("\n\n")
+}
+
+function tailwindColor(
+  family: (typeof tailwindFamilies)[number],
+  shade: (typeof tailwindShades)[number],
+) {
+  const value = tailwindColors[family][shade]
+  const normalized = normalizeOklch(value)
+  if (normalized === null) throw new Error(`Tailwind ${family}-${shade} is not an OKLCH color`)
+  return normalized
+}
+
+function tailwindFixedColor(name: (typeof tailwindFixedColors)[number]) {
+  const value = hexToOklch(tailwindColors[name])
+  if (value === null) throw new Error(`Tailwind ${name} is not a supported color`)
+  return value
+}
+
+function TailwindSwatch({
+  name,
+  value,
+  onChange,
+}: {
+  readonly name: string
+  readonly value: string
+  readonly onChange: (value: string) => void
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-xs"
+      feedback={false}
+      aria-label={`Tailwind ${name}`}
+      title={`${name} · ${value}`}
+      className="size-5 rounded-full border-black/10 p-0 shadow-xs transition-transform hover:scale-110 dark:border-white/15"
+      style={{ backgroundColor: value }}
+      onClick={() => onChange(value)}
+    />
+  )
+}
+
+function TailwindPalette({
+  label,
+  onChange,
+}: {
+  readonly label: string
+  readonly onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<Button variant="outline" size="xs" />}>Tailwind</PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(38rem,calc(100vw-2rem))] gap-3 p-0">
+        <PopoverHeader className="px-4 pt-4">
+          <PopoverTitle>Tailwind palette</PopoverTitle>
+          <PopoverDescription>
+            Choose a color from the pinned Tailwind palette for {label}.
+          </PopoverDescription>
+        </PopoverHeader>
+        <div className="grid grid-cols-[3.75rem_repeat(11,1.25rem)] items-center gap-1 px-4 text-center">
+          <span />
+          {tailwindShades.map((shade) => (
+            <span key={shade} className="font-mono text-[8px] leading-none text-muted-foreground">
+              {shade}
+            </span>
+          ))}
+        </div>
+        <ScrollArea className="h-64 sm:h-80">
+          <div className="space-y-1 px-4 pb-4">
+            <div className="grid grid-cols-[3.75rem_repeat(11,1.25rem)] items-center gap-1">
+              <Text as="span" role="caption" className="truncate capitalize">
+                fixed
+              </Text>
+              {tailwindFixedColors.map((name) => (
+                <TailwindSwatch
+                  key={name}
+                  name={name}
+                  value={tailwindFixedColor(name)}
+                  onChange={(value) => {
+                    onChange(value)
+                    setOpen(false)
+                  }}
+                />
+              ))}
+            </div>
+            {tailwindFamilies.map((family) => (
+              <div
+                key={family}
+                className="grid grid-cols-[3.75rem_repeat(11,1.25rem)] items-center gap-1"
+              >
+                <Text as="span" role="caption" className="truncate capitalize">
+                  {family}
+                </Text>
+                {tailwindShades.map((shade) => {
+                  const value = tailwindColor(family, shade)
+                  return (
+                    <TailwindSwatch
+                      key={shade}
+                      name={`${family}-${shade}`}
+                      value={value}
+                      onChange={(nextValue) => {
+                        onChange(nextValue)
+                        setOpen(false)
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function StatusColorControl({
+  label,
+  value,
+  onChange,
+}: {
+  readonly label: string
+  readonly value: string
+  readonly onChange: (value: string) => void
+}) {
+  const [inputValue, setInputValue] = useState(value)
+  const normalizedInput = normalizeOklch(inputValue)
+  const invalid = normalizedInput === null
+
+  useEffect(() => {
+    setInputValue(value)
+  }, [value])
+
+  const commit = () => {
+    if (normalizedInput === null) return
+    setInputValue(normalizedInput)
+    onChange(normalizedInput)
+  }
+
+  return (
+    <Field data-invalid={invalid} className="min-w-64 gap-1.5">
+      <FieldLabel className="sr-only" htmlFor={`${label.replaceAll(" ", "-")}-oklch`}>
+        {label} in OKLCH
+      </FieldLabel>
+      <Input
+        id={`${label.replaceAll(" ", "-")}-oklch`}
+        aria-invalid={invalid}
+        aria-label={`${label} OKLCH`}
+        className="font-mono text-xs"
+        value={inputValue}
+        onChange={(event) => setInputValue(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") commit()
+        }}
+      />
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-2">
+          <input
+            aria-label={`${label} visual picker`}
+            type="color"
+            value={oklchToHex(value)}
+            onChange={(event) => {
+              const oklch = hexToOklch(event.target.value)
+              if (oklch !== null) onChange(oklch)
+            }}
+          />
+          <Text as="span" role="caption" className="text-muted-foreground">
+            Picker
+          </Text>
+        </label>
+        <TailwindPalette label={label} onChange={onChange} />
+      </div>
+      {invalid && <FieldError>Use a solid color such as oklch(0.637 0.237 25.331).</FieldError>}
+    </Field>
+  )
 }
 
 function Section({
@@ -207,11 +483,23 @@ function StatusEditor({
   readonly onReset: () => void
 }) {
   const css = draftToCss(draft)
+  const updateColor = (theme: ThemeName, status: StatusName, token: StatusToken, value: string) => {
+    onChange({
+      ...draft,
+      [theme]: {
+        ...draft[theme],
+        [status]: {
+          ...draft[theme][status],
+          [token]: value,
+        },
+      },
+    })
+  }
 
   return (
     <div className="space-y-4">
       <div className="overflow-x-auto rounded-2xl border bg-card">
-        <table className="w-full min-w-3xl border-collapse text-left">
+        <table className="w-full min-w-[84rem] border-collapse text-left">
           <caption className="sr-only">Editable light and dark status colors</caption>
           <thead>
             <tr className="border-b">
@@ -237,28 +525,11 @@ function StatusEditor({
                     </th>
                     {statusTokens.map((token) => (
                       <td key={token} className="p-3">
-                        <label className="flex items-center gap-2">
-                          <input
-                            aria-label={`${theme} ${status} ${token}`}
-                            type="color"
-                            value={values[token]}
-                            onChange={(event) =>
-                              onChange({
-                                ...draft,
-                                [theme]: {
-                                  ...draft[theme],
-                                  [status]: {
-                                    ...values,
-                                    [token]: event.target.value,
-                                  },
-                                },
-                              })
-                            }
-                          />
-                          <Text as="span" role="caption" mono>
-                            {values[token]}
-                          </Text>
-                        </label>
+                        <StatusColorControl
+                          label={`${theme} ${status} ${token}`}
+                          value={values[token]}
+                          onChange={(value) => updateColor(theme, status, token, value)}
+                        />
                       </td>
                     ))}
                     <td className="p-3">
@@ -273,6 +544,9 @@ function StatusEditor({
           </tbody>
         </table>
       </div>
+      <Text role="caption" className="text-muted-foreground">
+        Drafts, Tailwind selections, and copied CSS are normalized and stored as OKLCH.
+      </Text>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => void navigator.clipboard.writeText(css)}>
           <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} data-icon="inline-start" />
@@ -651,6 +925,7 @@ export function UiLab() {
               onChange={setDraft}
               onReset={() => {
                 localStorage.removeItem(storageKey)
+                localStorage.removeItem(legacyStorageKey)
                 setDraft(defaultStatusDraft)
               }}
             />
