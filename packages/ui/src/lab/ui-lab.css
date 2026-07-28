@@ -1,0 +1,44 @@
+@layer base {
+  .reduce-motion [data-praximo-feedback-button] {
+    transform: none !important;
+    transition-duration: 100ms !important;
+  }
+}
+
+@layer components {
+  .lab-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  }
+
+  .lab-checker {
+    background-image:
+      linear-gradient(
+        45deg,
+        color-mix(in oklch, var(--foreground) 7%, transparent) 25%,
+        transparent 25%
+      ),
+      linear-gradient(
+        -45deg,
+        color-mix(in oklch, var(--foreground) 7%, transparent) 25%,
+        transparent 25%
+      ),
+      linear-gradient(
+        45deg,
+        transparent 75%,
+        color-mix(in oklch, var(--foreground) 7%, transparent) 75%
+      ),
+      linear-gradient(
+        -45deg,
+        transparent 75%,
+        color-mix(in oklch, var(--foreground) 7%, transparent) 75%
+      );
+    background-position:
+      0 0,
+      0 6px,
+      6px -6px,
+      -6px 0;
+    background-size: 12px 12px;
+  }
+}

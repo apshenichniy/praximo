@@ -1,6 +1,9 @@
 import { narrowCoachLanguage } from "@praximo/domain"
+import { FeedbackProvider, Heading, Text } from "@praximo/ui"
 import { HeadContent, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router"
 
+import faviconDark from "../../../../assets/branding/coach-bot/dark/favicon.ico?url"
+import faviconLight from "../../../../assets/branding/coach-bot/light/favicon.ico?url"
 import { ClientTheme } from "@/components/client-theme.tsx"
 import {
   APP_BACKGROUND_COLOR,
@@ -11,10 +14,10 @@ import {
 } from "@/lib/theme.ts"
 import appCss from "@/styles/app.css?url"
 
-const darkBackground = "oklch(0.148 0.0132 285)"
-const darkForeground = "oklch(0.9608 0.005 285)"
-const lightBackground = "oklch(0.964 0.005 285)"
-const lightForeground = "oklch(0.1785 0.0168 285)"
+const darkBackground = "oklch(0.141 0.005 285.823)"
+const darkForeground = "oklch(0.985 0 0)"
+const lightBackground = "oklch(1 0 0)"
+const lightForeground = "oklch(0.141 0.005 285.823)"
 
 /**
  * The first paint, before the stylesheet arrives — both schemes, because which
@@ -39,18 +42,30 @@ export const Route = createRootRoute({
       // scheme is known, and again whenever it moves. Light rather than dark
       // because light is what `:root` carries with no class on the document.
       { name: "theme-color", content: APP_SURFACE_COLOR.light },
+      { name: "robots", content: "noindex,nofollow" },
       { title: "Praximo" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
-    // No `scripts` entry, and that absence is the point (#191): `apps/web` loads
-    // Telegram's `telegram-web-app.js` on every route, this app on none. A person
+    links: [
+      { rel: "icon", href: faviconDark, sizes: "any" },
+      {
+        rel: "icon",
+        href: faviconLight,
+        sizes: "any",
+        media: "(prefers-color-scheme: light)",
+      },
+      { rel: "stylesheet", href: appCss },
+    ],
+    // No `scripts` entry, and that absence is the point (#191): Admin and Coach
+    // load Telegram's runtime, this app does not. A person
     // who is not on Telegram — and whose whole point is that they are not —
     // should not be served Telegram's runtime to read a privacy policy.
   }),
   notFoundComponent: () => (
     <main className="mx-auto w-full max-w-2xl px-5 pt-16">
-      <h1 className="text-title font-semibold tracking-tight">404</h1>
-      <p className="text-muted-foreground mt-2 text-body">The requested page could not be found.</p>
+      <Heading as="h1" role="page-title">
+        404
+      </Heading>
+      <Text className="text-muted-foreground mt-2">The requested page could not be found.</Text>
     </main>
   ),
   shellComponent: RootDocument,
@@ -94,8 +109,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        <ClientTheme />
-        {children}
+        <FeedbackProvider>
+          <ClientTheme />
+          {children}
+        </FeedbackProvider>
         <Scripts />
       </body>
     </html>

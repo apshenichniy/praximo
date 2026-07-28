@@ -9,7 +9,7 @@ export type LegalDocumentName = keyof typeof LEGAL_PATHS
  * A legal text's address on the client app, in a given language.
  *
  * Here rather than in either app because three callers in two Workers build it
- * (#191): the coach's onboarding summary links out to it, `apps/web` redirects
+ * (#191): the coach's onboarding summary links out to it, and Coach redirects
  * the old addresses to it, and the bot puts the privacy policy on a consent
  * button. The bot used to write `/legal/privacy` as a literal while depending on
  * this very package — one rename away from a dead link in a consent flow.

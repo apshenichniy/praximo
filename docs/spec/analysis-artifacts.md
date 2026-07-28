@@ -61,7 +61,7 @@ await api.sendDocument(
     parse_mode: "MarkdownV2",
     reply_markup: { inline_keyboard: [[{
       text: "Открыть в приложении",
-      web_app: { url: readerUrl }, // app.praximo.io/a/<artifact>
+      web_app: { url: readerUrl }, // coach.praximo.io/a/<artifact>
     }]] },
   },
 );

@@ -1,0 +1,69 @@
+---
+import { typographyRecipe } from "@praximo/ui"
+
+import PageLayout from "../layouts/PageLayout.astro"
+
+const title = "Praximo"
+const description = "You hold the client. Praximo holds the practice."
+---
+
+<PageLayout {title} {description}>
+  <main class="relative isolate flex min-h-svh items-center overflow-hidden px-5 py-16 sm:px-8">
+    <div
+      aria-hidden="true"
+      class="bg-primary/10 absolute top-[-12rem] right-[-12rem] -z-10 size-[30rem] rounded-full blur-3xl sm:size-[42rem]"
+    >
+    </div>
+    <div
+      aria-hidden="true"
+      class="bg-info/10 absolute bottom-[-16rem] left-[-14rem] -z-10 size-[34rem] rounded-full blur-3xl"
+    >
+    </div>
+
+    <section class="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
+      <div class="max-w-3xl">
+        <p class:list={[typographyRecipe({ role: "caption" }), "text-primary uppercase"]}>
+          Preview environment
+        </p>
+        <h1 class:list={[typographyRecipe({ role: "display" }), "mt-4 text-balance"]}>
+          Praximo
+        </h1>
+        <p
+          class:list={[
+            typographyRecipe({ role: "body" }),
+            "text-muted-foreground mt-6 max-w-2xl text-pretty",
+          ]}
+        >
+          You hold the client. Praximo holds the practice.
+        </p>
+        <p
+          class:list={[
+            typographyRecipe({ role: "body-small" }),
+            "text-muted-foreground mt-10 max-w-xl",
+          ]}
+        >
+          The public landing page is being prepared. This staged shell validates the shared visual
+          foundation, responsive layout, and deployment path without making the unfinished public
+          launch.
+        </p>
+      </div>
+
+      <div class="relative mx-auto w-full max-w-md">
+        <div class="border-border bg-card/80 rounded-3xl border p-8 shadow-xl backdrop-blur-sm sm:p-12">
+          <picture>
+            <source srcset="/praximo-mark-dark.svg" media="(prefers-color-scheme: dark)" />
+            <img
+              src="/praximo-mark-light.svg"
+              width="512"
+              height="512"
+              alt="Praximo guiding orbit"
+              class="mx-auto aspect-square w-full max-w-72"
+              loading="eager"
+              decoding="sync"
+            />
+          </picture>
+        </div>
+      </div>
+    </section>
+  </main>
+</PageLayout>

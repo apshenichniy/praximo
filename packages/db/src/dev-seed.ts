@@ -59,7 +59,7 @@ const Day = 24
 
 /**
  * A plausible content-derived terms version for fixtures. The real one is
- * computed from the rendered legal modules in `apps/web`, which this package
+ * computed from the rendered legal modules in Client, which this package
  * cannot see; the fixtures only need a value of the right shape.
  */
 const DemoTermsVersion = "2026-08-01+devseed"

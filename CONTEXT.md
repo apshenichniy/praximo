@@ -4,6 +4,38 @@ Multi-tenant platform for coaches: session scheduling, video calls, recording, t
 
 ## Language
 
+### Platform actors
+
+**Platform Admin**:
+A person with the independent platform capability to operate workspaces and
+coach onboarding through the Admin App. This is not a Workspace Member role. A
+person may also be a Coach, but the two job contexts never cross-navigate.
+_Avoid_: admin member, workspace admin
+
+**Manager Bot**:
+The platform-owned Telegram bot that opens the Admin App and sends
+platform-operation messages. `@PraximoBot` is the active identity in the
+single disposable development environment; `@PraximoDevBot` is reserved and
+unused.
+_Avoid_: admin bot, mother bot
+
+**Admin App**:
+The Platform Admin console and Manager Bot onboarding companion at
+`admin.praximo.io`.
+_Avoid_: admin section, admin tree
+
+**Coach App**:
+The Coach's practice workspace, opened from the Workspace's Bot at
+`coach.praximo.io`. Telegram is its only deployed MVP host, but Telegram
+presentation concerns stay behind a host boundary.
+_Avoid_: web app, coach web app
+
+**Client App**:
+The browser application at `me.praximo.io`. During the #215 foundation
+migration it is only a minimal deployable shell; Client product work begins
+with #57.
+_Avoid_: client portal
+
 ### Tenancy
 
 **Workspace**:

@@ -8,7 +8,7 @@ Three voices, one per reader. Getting the reader wrong is the single most expens
 
 **The coach, in the bot.** A partner's register, settled in [#164](https://github.com/apshenichniy/praximo/issues/164): tell them what happened, then what to do about it, and put the explanation where it costs nothing to skip. The catalogue is [`apps/bot/src/messages.ts`](../../apps/bot/src/messages.ts).
 
-**The coach, in the Mini App.** The same face without the chat's emoji density. A screen carries its own structure — headings, sections, a bottom button — so the copy does not have to signal any of it. The catalogue is [`apps/web/src/features/i18n/coach-copy/`](../../apps/web/src/features/i18n/coach-copy).
+**The coach, in the Coach App.** The same face without the chat's emoji density. A screen carries its own structure — headings, sections, a bottom button — so the copy does not have to signal any of it. The catalogue is [`apps/coach/src/features/i18n/coach-copy/`](../../apps/coach/src/features/i18n/coach-copy).
 
 **The client.** Addressed by **their coach's assistant**, never by a platform ([client-onboarding-auth.md](../spec/client-onboarding-auth.md) §Principles). The client did not choose Praximo, has no account with us, and is not our user in any sense they would recognise — they are their coach's client, and the bot they are talking to belongs to that coach. The catalogue is [`packages/i18n/src/client-copy.ts`](../../packages/i18n/src/client-copy.ts), in the package rather than in an app because two Workers render the same consent text.
 

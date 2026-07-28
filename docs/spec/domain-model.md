@@ -62,7 +62,10 @@ The onboarding entry point, uniform across current and future channel kinds.
 - `status`: `pending → accepted`, or `expired`
 - `delivery`: `{ kind: telegram | email | link, address? }` — how the invite reaches the client: Telegram deep link, an invite email the service sends itself, or a web URL the coach forwards manually
 - optional `expected_telegram_user_id` — enables recognition on a bare `/start`; the UI that sets it (Telegram user picker) is deferred post-MVP, the field ships so it can be added without migration ([client-onboarding-auth.md](client-onboarding-auth.md))
-- The same token has two forms: the bot deep link and the web URL `app.praximo.io/invite/<token>` (web acceptance page). Accepting is atomic on either door — creates the client's channel (`telegram` with profile snapshot; `email` when an address is known; else `manual`), appends the Consent Grant, sets the client's language and profile. Flow details: [client-onboarding-auth.md](client-onboarding-auth.md).
+- The same token has two forms: the bot deep link and the future web URL
+  `me.praximo.io/i/<token>`. Accepting is atomic on either door — it creates the
+  client's Channel, appends the Consent Grant, and sets the client's language
+  and profile. The web door is owned by #57 and is not implemented by #215.
 
 ### Consent Grant
 

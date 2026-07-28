@@ -2,6 +2,10 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "stream",
   "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
     "check": {
       "dependsOn": ["^check"],
       "inputs": ["src/**", "tsconfig.json", "package.json"],
@@ -24,6 +28,28 @@
     "build": {
       "dependsOn": ["^check"],
       "inputs": ["src/**", "tsconfig.json", "package.json"],
+      "outputs": ["dist/**"]
+    },
+    "@praximo/www#check": {
+      "dependsOn": ["^check"],
+      "inputs": ["src/**", "public/**", "astro.config.mjs", "tsconfig.json", "package.json"],
+      "outputs": []
+    },
+    "@praximo/www#test": {
+      "dependsOn": ["^check"],
+      "inputs": [
+        "src/**",
+        "public/**",
+        "astro.config.mjs",
+        "tsconfig.json",
+        "package.json",
+        "vitest.config.ts"
+      ],
+      "outputs": []
+    },
+    "@praximo/www#build": {
+      "dependsOn": ["^check"],
+      "inputs": ["src/**", "public/**", "astro.config.mjs", "tsconfig.json", "package.json"],
       "outputs": ["dist/**"]
     }
   }

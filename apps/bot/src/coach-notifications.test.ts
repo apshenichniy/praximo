@@ -32,7 +32,7 @@ interface Marks {
   readonly deferred: Ref.Ref<ReadonlyArray<string>>
 }
 
-const env = { COACH_MINI_APP_URL: "https://stage.praximo.io/" }
+const env = { COACH_MINI_APP_URL: "https://coach.praximo.io/" }
 
 /** The client-accepted push reads one client; every other kind reads none. */
 const clientsLayer = Layer.succeed(

@@ -1,8 +1,8 @@
 # Runbook — Coach onboarding
 
 Coach onboarding is **manual by design**: there is no self-registration
-([README](../spec/README.md) §The product flow, end to end). The admin drives it from the
-admin Mini App; everything after the coach's tap is automatic
+([README](../spec/README.md) §The product flow, end to end). The Platform Admin
+drives it from the Admin App; everything after the Coach's tap is automatic
 ([ADR 0004](../adr/0004-bot-per-coach-provisioning.md)). This runbook is the
 operator's checklist for one coach, end to end, plus the one **optional** step
 the coach can do for themselves afterwards.
@@ -13,17 +13,18 @@ below.
 
 ## Prerequisites
 
-- The stage's manager bot (`PraximoMother`, dev instance suffixed) exists, has
+- The active Manager Bot (`@PraximoBot`, display name `Praximo`) exists, has
   bot management enabled in the @BotFather Mini App (`can_manage_bots`), and its
   token is in `MANAGER_BOT_TOKEN` ([#84](https://github.com/apshenichniy/praximo/issues/84)).
-  **Verify it rather than assume it** — `bun run manager-bot:set-menu <web-origin>`
+  **Verify it rather than assume it** — `bun run manager-bot:set-menu <admin-origin>`
   reports both manual @BotFather flags. With bot management off the coach's tap
   cannot produce a bot, and nothing fails server-side — the attempt simply sits at
   `requested` waiting for a `managed_bot` update Telegram never sends — so the only
   other way to notice is a phone.
 - The stage is deployed and `COACH_MINI_APP_URL` points at its coach Mini App
   origin — this is the URL every coach bot's menu button will open.
-- The operator's Telegram id carries the admin flag, so the `/admin` route opens
+- The operator's Telegram id carries the Platform Admin capability, so
+  `https://admin.praximo.io/` opens
   ([admin-surface.md](../spec/admin-surface.md) §Admin identity and auth).
 
 ## 1. Invite the coach
@@ -208,7 +209,7 @@ What to tell a coach who wants it:
 2. **Bot Settings → Configure Mini App → Enable Mini App**.
 3. Paste the coach Mini App URL — the same address the in-chat **Open** button
    already uses, **including its `?b=` parameter**, e.g.
-   `https://stage.praximo.io/?b=9100777`.
+   `https://coach.praximo.io/?b=9100777`.
 
 The parameter is per bot: it names which bot the launch came from, so the app can
 verify the launch signature against that bot before it reads anything (ADR 0006).

@@ -19,7 +19,7 @@ import { CoachMenuButtonText, setCoachBotMenuButton } from "./provisioning.ts"
 const TOKEN = "9100010:AAHkq2Lb8fN1sQx3TzVpYr7WcJd4MgEuKvB"
 const BOT_ID = "9100010"
 const COACH_CHAT_ID = TelegramId.make("800000101")
-const MINI_APP_URL = "https://stage.praximo.io/"
+const MINI_APP_URL = "https://coach.praximo.io/"
 
 interface TelegramCall {
   readonly method: string
@@ -105,7 +105,7 @@ describe("the coach bot's menu button", () => {
     Effect.gen(function* () {
       const telegram = telegramStub()
 
-      const failure = yield* Effect.flip(setButton(telegram, "http://stage.praximo.io/"))
+      const failure = yield* Effect.flip(setButton(telegram, "http://coach.praximo.io/"))
 
       expect(failure).toMatchObject({
         _tag: "BotWorker.TelegramSetupFailed",

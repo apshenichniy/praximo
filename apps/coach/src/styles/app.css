@@ -1,0 +1,10 @@
+@import "@praximo/ui/styles.css";
+
+@source "../../../../packages/ui/src";
+@source "../";
+
+@layer base {
+  body {
+    position: relative;
+  }
+}

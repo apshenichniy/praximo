@@ -10,6 +10,7 @@ dist/
 .output/
 .nitro/
 .tanstack/
+.astro/
 
 # Local recovery secrets
 .env

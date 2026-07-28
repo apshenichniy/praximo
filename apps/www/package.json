@@ -1,0 +1,25 @@
+{
+  "name": "@praximo/www",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --port 3003",
+    "build": "astro build",
+    "check": "astro check",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@praximo/ui": "workspace:*",
+    "astro": "7.1.4",
+    "tailwindcss": "catalog:"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "6.0.3",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

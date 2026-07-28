@@ -29,7 +29,7 @@ export interface FillGapsOptions {
    * reference one.
    *
    * An explicit flag rather than a build-time global on purpose. `import.meta.env.DEV`
-   * is a Vite construct: it exists in `apps/web`, and reading it inside a Worker
+   * is a Vite construct: it exists in product apps, and reading it inside a Worker
    * bundled by wrangler is a runtime crash. Each consumer says what it wants.
    */
   readonly strict: boolean

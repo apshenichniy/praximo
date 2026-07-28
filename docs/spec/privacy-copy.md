@@ -83,7 +83,11 @@ Surrounding screen copy (title, session line, join button, device-check hint) is
 
 ## 3. Privacy policy
 
-An app route on `my.praximo.io`, served by the `client` Worker ([#191](https://github.com/apshenichniy/praximo/issues/191)) — [privacy-retention.md](privacy-retention.md) §Documents owns why it is a route rather than a static page. Linked from the client consent and from the coach terms. Authored in all three languages and rendered per locale out of `@praximo/i18n` ([#130](https://github.com/apshenichniy/praximo/issues/130)). Structure, in order:
+An app route on `me.praximo.io`, served by the Client Worker —
+[privacy-retention.md](privacy-retention.md) §Documents owns why it is a route
+rather than a static page. Linked from Client consent and Coach terms. Authored
+in all three languages and rendered per locale out of `@praximo/i18n`.
+Structure, in order:
 
 1. **Opening** — one sentence on what Praximo is.
 2. **Who is responsible for what** — coach = controller and the person to ask; platform = processor running the software on their instructions. Operator legal name placeholder.

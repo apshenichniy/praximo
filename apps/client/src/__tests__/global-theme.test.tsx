@@ -21,19 +21,14 @@ const sourcesUnder = (directory: string): ReadonlyArray<string> =>
   })
 
 describe("global application theme", () => {
-  it("loads one global stylesheet and paints both grounds in the document head", () => {
+  it("consumes the shared Maia stylesheet without owning a token copy", () => {
     const root = src("routes/__root.tsx")
     const appCss = src("styles/app.css")
-    const light = appCss.match(/:root\s*{[^}]*--background:\s*([^;]+);/s)?.[1]
-    const dark = appCss.match(/\.dark\s*{[^}]*--background:\s*([^;]+);/s)?.[1]
 
     expect(root).toContain("app.css?url")
-    // The critical stylesheet carries both, because which one it will be is not
-    // known until the bootstrap script runs a few bytes further down the head.
-    expect(root).toContain(`const lightBackground = "${light}"`)
-    expect(root).toContain(`const darkBackground = "${dark}"`)
-    // Each colour is declared twice: the hex a browser without oklch falls back
-    // to, then the token's own value.
+    expect(appCss).toContain('@import "@praximo/ui/styles.css"')
+    expect(appCss).not.toMatch(/:root\s*{/)
+    expect(appCss).not.toMatch(/\.dark\s*{/)
     expect(root).toContain("background:${APP_BACKGROUND_COLOR.light}")
     expect(root).toContain("color:${APP_FOREGROUND_COLOR.dark}")
     expect(APP_BACKGROUND_COLOR.light).toMatch(/^#[0-9a-f]{6}$/)
@@ -54,7 +49,7 @@ describe("global application theme", () => {
   })
 
   /**
-   * The reason this app exists as its own Worker (#191). `apps/web` loads
+   * The reason this app exists as its own Worker (#191). Telegram-hosted apps load
    * Telegram's SDK on every route, `/legal/privacy` included — the page a client
    * reads before agreeing to anything. A person who is not on Telegram should
    * not be served Telegram's runtime to read a privacy policy.
@@ -78,34 +73,10 @@ describe("global application theme", () => {
     expect(offenders.map((path) => path.slice(srcRoot.length))).toEqual([])
   })
 
-  it("uses Inter, with the light ground at the root and dark as the override", () => {
-    const appCss = src("styles/app.css")
+  it("keeps the Worker private and has no Telegram presentation host", () => {
+    const root = src("routes/__root.tsx")
 
-    // The optical-size build, not the weight-only one — see §Typography. Served
-    // from fontsource, in the bundle, never from a CDN.
-    expect(appCss).toContain('@import "@fontsource-variable/inter/opsz.css"')
-    expect(appCss).toContain('--font-sans: "Inter Variable"')
-    expect(appCss).toContain("font-optical-sizing: auto")
-    expect(appCss).toMatch(/:root\s*{[^}]*color-scheme:\s*light/s)
-    expect(appCss).toMatch(/\.dark\s*{[^}]*color-scheme:\s*dark/s)
-  })
-
-  it("states status by meaning, so each scheme picks its own shade", () => {
-    const appCss = src("styles/app.css")
-
-    for (const token of ["--success", "--warning", "--info"]) {
-      expect(appCss).toMatch(new RegExp(`:root\\s*{[^}]*${token}:`, "s"))
-      expect(appCss).toMatch(new RegExp(`\\.dark\\s*{[^}]*${token}:`, "s"))
-    }
-
-    // A shade picked for one ground is unreadable on the other — `emerald-300`
-    // is a word on near-black and a tint on white — so no screen names one.
-    const offenders = sourcesUnder(srcRoot).filter((path) =>
-      /\b(?:bg|text|ring|border|from|to|via)-(?:emerald|amber|rose|sky|green|red|yellow|blue)-\d{2,3}\b/.test(
-        readFileSync(path, "utf8"),
-      ),
-    )
-
-    expect(offenders.map((path) => path.slice(srcRoot.length))).toEqual([])
+    expect(root).toContain('{ name: "robots", content: "noindex,nofollow" }')
+    expect(root).toContain("<FeedbackProvider>")
   })
 })

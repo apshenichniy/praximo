@@ -185,323 +185,85 @@ for a first session: "no history yet").
 
 ## Theme
 
-The app is in whatever scheme its host is in. Decided in
-[#190](https://github.com/apshenichniy/praximo/issues/190), which replaced a
-dark-only app: a coach who reads their phone in light mode used to meet one black
-rectangle inside a white client, and the Mini App was the only surface on their
-phone ignoring a setting they had made.
+Coach follows its Telegram presentation host. The host adapter owns theme
+subscription, safe-area values, Back/Main Button integration, host chrome, and
+feedback. Feature code and shared primitives call no raw Telegram API. Local
+browser preview falls back to `prefers-color-scheme` and uses safe no-op host
+capabilities while retaining the real signed development authentication flow.
 
-`Telegram.WebApp.colorScheme` is the answer while the app runs, and the
-`themeChanged` event is how it moves — a coach can flip the setting, or their
-phone can cross into night, with the app still on screen. Outside a Telegram
-launch (a client's browser on the acceptance page, local development) the
-browser's own `prefers-color-scheme` stands in for both.
+The first paint is settled before the body appears: the Coach App head bootstrap
+derives the Telegram launch scheme when present and otherwise uses the system
+preference. The shared light/dark palette and status families come only from
+`@praximo/ui/styles.css`.
 
-**The first paint is settled before it happens.** The scheme is not knowable on
-the server — Telegram publishes it as `tgWebAppThemeParams` in the URL *hash*,
-which no request carries — so the document is rendered scheme-less and a blocking
-script in `<head>` (`COLOR_SCHEME_BOOTSTRAP` in `apps/web/src/lib/theme.ts`) puts
-the class on ahead of the body. Reading the launch's `bg_color` luminance is the
-same derivation Telegram's own SDK makes; the critical stylesheet carries both
-grounds, because which one it will be is unknown a few bytes earlier.
-
-**Three surfaces answer to a change, and only one is CSS.** The `dark` class on
-`<html>` carries the palette. The Telegram chrome — header, webview background,
-bottom bar — and the host's own bottom button are painted through bridge calls,
-because a page stylesheet does not reach them. `TelegramTheme`, mounted once in
-the root shell, keeps all three in step.
-
-**Status is named by meaning, never by hue.** `--success`, `--warning`, `--info`
-and the preset's own `--destructive` carry one value per scheme — Tailwind's 300s
-on the dark ground, its 600s on the light one. A screen that said
-`text-emerald-300` was stating a shade chosen for near-black, and on white the
-same shade is a tint rather than a word; `src/__tests__/global-theme.test.tsx`
-fails on one reappearing anywhere in `src`.
+Status is named by meaning: `success`, `warning`, `error`, and `info`
+each own base, foreground, surface, and border tokens. `destructive` remains
+an action semantic.
 
 ### Where a dangerous question is asked
 
-**From the bottom of the screen, always**
-([#197](https://github.com/apshenichniy/praximo/issues/197)). Deleting a
-workspace asked from a sheet and deleting a client asked from a centred dialog,
-so the decision moved around the screen depending on which decision it was and
-the coach learned the shape of neither. A phone's thumb rests at the bottom; a
-centred dialog puts a destructive choice under the hand rather than in it.
-
-Every confirmation goes through `ConfirmSheet`. A **destructive** one spends its
-buttons the way the deletion sheet does — Cancel as the big comfortable target,
-the destructive action as quiet text under it, so the easy press is the safe one.
-A merely **lossy** one, which can be done again, keeps its own action on top.
-
-The arming step is *not* shared. Three seconds of countdown belongs to deleting a
-workspace ([admin-surface.md](admin-surface.md) §Deletion), where a bot is
-released and a practice erased; charging the same toll for re-issuing an invite
-would teach the coach to sit through it. `feedback-invariants.test.ts` holds the
-shape: nothing outside `components/ui` imports `alert-dialog.tsx`.
-
-### Surfaces
-
-**Three, not one** ([#195](https://github.com/apshenichniy/praximo/issues/195)).
-The page, the raised surface (card, popover, sheet) and the recessed fill are
-distinct grounds, and they have to be distinct in *both* schemes: elevation needs
-something to be elevated against. The light ground first shipped with all three
-at pure white, and a bottom sheet opened over a screen simply was not there — it
-read as the page growing some buttons.
-
-On light the page recedes and the raised surfaces keep the white, which is the
-direction light interfaces run in; on dark the page is the darkest and raised
-surfaces lift off it. The steps are the same size in both — page→card 1.14:1
-dark against 1.11:1 light, card→recessed 1.17:1 in both — so a screen designed in
-one scheme keeps its structure in the other.
-
-`src/__tests__/theme-contrast.test.ts` reads the two blocks out of `app.css` and
-asserts the steps, the hairline against both of its grounds, and the text
-parity. None of these are visible in a diff: the miss that prompted this was one
-token copied from the registry.
-
-A **backdrop is not a substitute for a surface.** The drawer has always had one —
-`modal` defaults to `true`, and it paints a scrim with a blur — and the sheet was
-still invisible, because the scrim separates the sheet from the *content* behind
-it, not from the ground it is drawn on. Two more things the sheet needs and now
-has: a border of `--border` rather than of its own fill, and its shadow cast
-**upward**. Every Tailwind `shadow-*` falls downward, which on a sheet pinned to
-the bottom of the screen puts the whole shadow off-screen and leaves the one edge
-anybody sees with nothing under it.
-
-The BotFather splash screen stays dark. It is configured outside this repository
-and Telegram takes one colour there, not a pair.
+Every confirmation arrives from the bottom of the screen through the shared
+confirmation primitive. A destructive confirmation makes Cancel the large,
+comfortable target and the destructive action the quiet action beneath it.
+Merely lossy actions may keep their action primary. Arming behavior remains
+feature-owned: deleting a Workspace may count down; resetting an Invite must not
+inherit that cost.
 
 ## Motion
 
-Decided in #186, after walking the scheduling flow on a phone. The rules are
-here rather than in each component because motion is the one thing that reads as
-*one app* or as several: a new screen that invents its own timings is what makes
-a product feel assembled rather than made.
+`@praximo/ui` owns the motion foundation. #215 starts from clean Maia
+components and audits them before adding movement.
 
-### Tokens
+- Prefer CSS and `data-state` transitions for primitive state changes.
+- Animate named `transform` and `opacity` properties; never
+  `transition-all`.
+- One action gets one animation. High-frequency choices do not receive entrance
+  motion, lists do not stagger, and screens do not mount with decorative motion
+  by default.
+- Add a motion library only when a proven interruptible layout or screen
+  transition needs one.
+- Tune committed durations and easings in UI Lab and on a real device.
 
-Four durations and three curves, in `apps/web/src/styles/app.css`. A number
-chosen at a call site is a number that drifts from the one beside it.
+### Haptics and feedback
 
-| Token | Value | For |
-| --- | --- | --- |
-| `--duration-press` | 120ms | the answer to a press; the colour of the thing just chosen |
-| `--duration-swap` | 180ms | one state replacing another inside a section |
-| `--duration-move` | 250ms | something that travels or changes size on screen |
-| `--duration-screen` | 320ms | one screen replacing another |
+The semantic intent survives the visual reset:
 
-| Curve | Value | For |
-| --- | --- | --- |
-| `--ease-out-strong` | `cubic-bezier(0.23, 1, 0.32, 1)` | entering, leaving |
-| `--ease-in-out-strong` | `cubic-bezier(0.77, 0, 0.175, 1)` | moving while staying |
-| `--ease-drawer` | `cubic-bezier(0.32, 0.72, 0, 1)` | the host's own popup feel |
-
-`ease-in` is never used. It withholds movement exactly when the coach is looking
-hardest, which reads as the app being slow rather than as the animation being
-gentle. The built-in `ease-out` is too weak to read as deliberate at these
-durations — hence the strong variants.
-
-### What may animate
-
-By how often a coach sees it, not by how good it would look:
-
-| Frequency | Allowed |
+| Event | Feedback |
 | --- | --- |
-| Tens of times per booking — a slot, a day, a chip | press `scale(0.97)` and colour, `--duration-press`. No entrances, no travel |
-| Once or twice per booking — the day changed, the month opened | one movement, `--duration-swap`/`--duration-move` |
-| Once per entry — a screen, a list | `--duration-screen`; the screen transition is the entrance |
-| Rarely — booked, refused | say it with a haptic, not with a longer animation |
+| One value in a set replaces another | selection |
+| A control opens or closes a surface | light impact |
+| A mutation succeeds | success notification |
+| A mutation is refused | error notification |
 
-**One action, one animation.** Tapping a day changes the strip *and* the slot
-grid; the grid animates and the strip stays put. Ignoring this is what produced
-#186's original defect — a single tap moving the layout three times.
+The Coach presentation-host adapter maps these semantics to Telegram
+`HapticFeedback`. Browser preview and non-Telegram consumers use the shared
+no-op adapter. One action produces at most one haptic; system events and
+navigation do not tick. Mutation outcomes remain in feature code.
 
-**No staggered lists.** Rows arriving one after another put a second animation on
-top of the screen transition that brought them, which is the same rule again — and
-on a phone it reads as a wave running down the list. It was tried on the client
-picker and removed: that screen is on the way to every booking, so its list is
-something a coach scans, not something introduced to them. A stagger would need a
-list seen once ever, and this app does not have one.
-
-Only `transform` and `opacity`, which skip layout and paint. `transition-all` is
-never written; properties are always named. The exception on the record is the
-month's fold, which animates `height` because `grid-template-rows` does not
-animate in the WebView Telegram runs on iOS — measured by a `ResizeObserver`, and
-documented at the call site.
-
-No springs and no bounce while there is no interruptible gesture in the app: a
-spring earns its keep when a finger can change its mind mid-flight, and pays for
-itself in nothing otherwise. No animated numbers or counters. No skeleton more
-elaborate than a pulse. At most two things moving in a frame.
-
-### Haptics
-
-The host's `HapticFeedback` (Bot API 6.1) through
-`features/mini-app/haptics.ts`, which is a no-op on Desktop and on older
-clients. On a phone this carries more than any curve, and it is the feedback
-that survives a coach turning animations off.
-
-| Event | Call |
-| --- | --- |
-| One value in a set replacing another: kind, duration, day, slot | `selectionHaptic()` |
-| A control that opens or closes something: «Month», «Today» | `impactHaptic("light")` |
-| A surface arriving over the screen: a sheet, a confirmation, the host's picker | `useOpenHaptic(open)`, or `impactHaptic()` beside the call that summons it |
-| The session was booked | `notifyHaptic("success")` |
-| The server refused it | `notifyHaptic("error")` |
-
-Fired on the press, not on the answer — the two exceptions are the outcomes,
-which *are* answers. One haptic per action, never for a system event (a fetch
-resolving, a prefetch arriving, the strip scrolling itself), and never for a tap
-that chose what was already chosen.
-
-### Where the feedback lives
-
-Applying this contract screen by screen is a plan checked by memory, so it is
-applied by *kind of thing* instead — and each kind is found by one command:
-
-| Kind | Found by | Where it is implemented |
-| --- | --- | --- |
-| Anything pressable | `<Button>`, `<button>`, `<Link>` | `ui/button.tsx` for the forty-five buttons; the `pressable-row` utility for full-width rows |
-| One value replacing another | `aria-pressed` | `ui/toggle.tsx` covers both chip sets; hand-rolled chips call `selectionHaptic()` themselves |
-| An action with an outcome | `acceptOnce(`, `useMutation(` | `notifyHaptic()` on both branches, beside the branch |
-| A surface opening over the screen | `Drawer`, `AlertDialog`, `shareMessage` | `useOpenHaptic(open)` inside the surface; the picker's tap says it itself |
-| Navigation | — | view transitions, nothing per screen |
-
-**Navigation does not tick.** A row that opens a screen lights up and says
-nothing: the platform reserves the Taptic Engine for choices, outcomes and
-gestures, and a tick on every tap becomes background — which costs the ticks
-that matter their meaning. This is why the scheduling screen buzzes and the
-lists do not: one is made of choices, the other of journeys.
-
-Rows take their press as a wash of colour rather than the 0.97 a chip takes:
-scaling something the width of the screen reads as the page flexing, and the
-platform's own lists light up. That is what `pressable-row` is.
-
-The wash is **ink, not a colour** ([#196](https://github.com/apshenichniy/praximo/issues/196)):
-`--pressed` is black or white at a low alpha, so it darkens whatever surface it
-is pressed on and reads the same on a card, on the page and inside a sheet. It
-was an opaque `bg-accent/70`, picked when the page was white — and when the page
-receded to make room for elevation (§Surfaces), that value came to rest on the
-page's own colour. A pressed row stopped reading as pressed and started reading
-as a hole cut through the card. An absolute colour cannot express a relative
-state; the contrast test now asserts the press against both its own surface and
-the ground behind it.
-
-The last two rows of that table are invariants, and
-`src/__tests__/feedback-invariants.test.ts` holds them: a file that mutates says
-how it went, a file with `aria-pressed` ticks. A hook may hand its outcome out
-as a value instead — `useInviteShare` does, because only the screen knows what
-«dismissed» means there — and says so in a comment the test reads. Neither check
-can tell a right haptic from a wrong one; that is what the phone is for.
+Shared interactive primitives emit only host-neutral press/open/selection
+feedback. An application wrapper is justified only when its API or composition
+differs, not merely because its host side effect differs.
 
 ### Reduced motion
 
-`prefers-reduced-motion` removes movement, not meaning: opacity and colour stay,
-`transform` and size changes go, and JavaScript paths ask
-`prefersReducedMotion()` from `lib/motion.ts` — the strip's scroll jumps instead
-of gliding. Haptics stay: for a coach who has turned animation off, the tick is
-what is left.
-
-### Libraries
-
-CSS first, because CSS animations run off the main thread and keep their frames
-while the app is fetching and rendering. `@starting-style` for entrances,
-`tw-animate-css` for fades and slides, View Transitions for routes, JavaScript
-only for scroll position and haptics. A motion library is worth its bundle when —
-and not before — the app grows a gesture that can be interrupted mid-flight
-(swipe-to-cancel on a session, drag-to-reschedule); the first candidate then is
-`motion/mini`, on the Web Animations API, not the full package.
+`prefers-reduced-motion` removes transform and size movement while preserving
+state, opacity, focus, and color meaning. JavaScript-driven paths query the
+shared reduced-motion helper. Haptics remain available because they are feedback,
+not visual movement.
 
 ## Typography
 
-Decided in #186, on a phone, for the same reason as §Motion: what was there had
-accumulated rather than been chosen. Eight sizes were crowded into the seven
-pixels between 10 and 17, half of them written as one-off `text-[13px]`s, and the
-smallest of them — the one carrying every field label — sat below the 11pt that
-is the smallest style Apple itself ships.
+`@praximo/ui` owns interface typography. The semantic roles are `display`,
+`page-title`, `section-title`, `card-title`, `body`, `body-small`,
+`label`, and `caption`; `mono` is a family modifier.
 
-### The scale
+Each recipe owns family, size, line height, weight, and tracking. Tone remains
+independent. Shared `Heading` and `Text` primitives keep semantic HTML
+independent from visual role, and shadcn component slots consume the same
+recipes. Callers do not reconstruct recipe typography in `className`.
 
-Six steps, in `apps/web/src/styles/app.css` — and in `apps/client`'s copy of it, written by the same script (#191). The client app's legal pages take every step up one past `md`: the scale is calibrated for a phone webview, and a contract read on a desktop needs the step back. Tailwind's own `--text-*` namespace
-is switched **off**, so this is the only scale there is: `text-sm` and friends do
-not exist here.
-
-| Step | Size | Line | For |
-| --- | --- | --- | --- |
-| `text-caption` | 13px | 18 | labels, counts, state words, descriptions |
-| `text-body` | 15px | 21 | running text, buttons, slots |
-| `text-emphasis` | 17px | 23 | card titles, the line that matters |
-| `text-heading` | 20px | 26 | dialog and section headings |
-| `text-title` | 24px | 30 | screen titles |
-| `text-display` | 30px | 34 | the one number a screen is about |
-
-Seven until [#198](https://github.com/apshenichniy/praximo/issues/198), where the
-bottom two turned out to be one. `caption` at 12 and `footnote` at 13 are not a
-step anybody can see, but they were a decision every call site had to take — the
-same disease #186 diagnosed, eight sizes crowded into the seven pixels between 10
-and 17, left half-treated. The floor is now **13** and `footnote` is retired; the
-bottom of the scale reads 13 → 15 → 17, in real 2px steps.
-
-**Body is 15px, not 14**, which is the single change with the widest reach — it
-is the size of nearly every sentence, button and slot in the app. The floor was
-raised rather than the scale shifted, deliberately: moving 15 is its own decision.
-Worth knowing while reading this — the whole scale sits one step below the
-platform's, where Body is 17 and Footnote 13, and that is the conversation to have
-if 13 still reads small on a phone.
-
-### The face
-
-**Inter**, in the `opsz` build ([#194](https://github.com/apshenichniy/praximo/issues/194)),
-replacing Nunito Sans. Nunito is a rounded, low-contrast face built for warmth,
-and it spends that warmth on the two things this app asks of type most often:
-holding 12px labels and holding secondary greys. It was the light scheme that
-made this visible — the same strings that read on near-black went thin and
-papery on white — but the weakness was there in both.
-
-Inter was drawn for screens at UI sizes and brings the x-height Nunito lacked.
-The `opsz` axis (14–32) is why the optical-size build is imported rather than the
-weight-only one: with `font-optical-sizing: auto`, a caption gets the wide, open
-text cut and a screen title gets the tight display one, with no screen asking.
-It costs about 35 KB more across the two subsets served, once, cached.
-
-The seven steps are **unchanged** by the swap. Inter's larger x-height means the
-floor now has headroom it did not have, so retuning the scale down is available —
-but that is its own decision, taken by looking, not a side effect of changing the
-face.
-
-Running text is **450, not 400, in the light scheme only** — light type on a dark
-ground blooms, so a weight settled in the dark comes out a half step thin the
-moment the ground flips. It sits in Tailwind's `base` layer, so every explicit
-`font-medium` and `font-semibold` still wins, and the places that say
-`font-normal` to mean *de-emphasised* keep saying it.
-
-Font smoothing is deliberately **unset**. `-webkit-font-smoothing` is a macOS-only
-property — a no-op in the iOS client most coaches are in — and where it does
-apply, `antialiased` renders type *thinner*, which is the opposite of what a light
-ground needs.
-
-### Rules
-
-- **Nothing outside the scale.** `src/__tests__/type-scale.test.ts` fails on a
-  retired utility or an arbitrary `text-[…]`, in components as well as screens. A
-  component pulled fresh from the shadcn CLI is the likeliest way one returns,
-  and switching the namespace off means it would otherwise render at the
-  inherited size instead of failing.
-- **Size carries weight, not opacity.** A caption is small enough already; the
-  strip's weekday was `text-[10px]` *and* `opacity-70`, and the free-slot count
-  added `text-muted-foreground/70` on top of `font-normal`. Small text takes the
-  full foreground colour, and emphasis comes from weight.
-- **Tracking belongs to the small end only.** `tracking-widest` earns its place
-  under 12px and makes a word loose above it; uppercase labels take
-  `tracking-wide`.
-- **Touch targets are 44px**, per the platform, regardless of the type inside
-  them: `min-h-11` on anything a thumb chooses — slots, chips, rows.
-- **A value the reader has to transcribe is never a caption.** `caption` is for
-  what the eye passes over — a count, a state word, a timestamp. A URL, a token
-  or a code is read character by character and retyped somewhere else, and a
-  wrong character costs the coach the thing they were doing. The Mini App
-  address was 13px monospace, which is two steps down rather than one: at the
-  same nominal size a monospaced face reads smaller than a proportional one.
-- **The content of a screen outranks the note explaining it.** The same screen
-  set its four numbered steps at 13 and the paragraph interpreting them at 15,
-  which is the hierarchy upside down. A title/description pair is the opposite
-  case and stays as it is — there the small line is genuinely subordinate.
+The old private `--text-*` namespace, `text-body`-style utilities,
+arbitrary interface sizes, and custom `tailwind-merge` extension are retired.
+Inter is the interface face and Geist Mono is the transcription/code/value face.
+UI Lab, not the old scale, is where the new values are tuned in Latin and
+Cyrillic across mobile/desktop widths and both themes.

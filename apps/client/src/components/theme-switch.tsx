@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group.tsx"
+import { ToggleGroup, ToggleGroupItem } from "@praximo/ui/components/toggle-group"
 import type { ChromeCopy } from "@/features/i18n/chrome-copy.ts"
 import { useSystemThemeWhileUnset } from "@/lib/use-system-theme.ts"
 import {
@@ -63,7 +63,7 @@ export function ThemeSwitch({ copy }: { readonly copy: ChromeCopy }) {
           onPressedChange={(pressed) => {
             if (pressed) choose(option)
           }}
-          className="text-caption"
+          className="text-xs"
         >
           {copy.theme[option]}
         </ToggleGroupItem>
