@@ -44,10 +44,7 @@ export const Route = createFileRoute("/admin")({
         staleTime: 0,
       })
     }
-    // The viewer's coach hat travels alongside the view rather than inside its
-    // admin variant: the admin screens read it for #107's contextual action,
-    // and a field they can reach without narrowing keeps that a plain lookup.
-    return { view, coach: result.ok ? result.role.coach : null }
+    return { view }
   },
   component: EntryLayout,
 })

@@ -34,9 +34,15 @@ const render = (view: Exclude<ReturnType<typeof entryView>, { kind: "admin" }>) 
   renderToStaticMarkup(<EntryScreen view={view} onRetry={() => {}} />)
 
 describe("manager Mini App entry dispatch", () => {
-  it("sends an admin to the admin tree, coach hat or not", () => {
+  it("sends an admin to the admin tree without surfacing a coach handoff", () => {
     expect(entryView(ok({ isAdmin: true, coach: null }))).toEqual({ kind: "admin" })
     expect(entryView(ok({ isAdmin: true, coach: accepted }))).toEqual({ kind: "admin" })
+
+    const adminHome = src("routes/admin/index.tsx")
+    const coachList = src("features/admin/components/coach-list.tsx")
+    expect(`${adminHome}\n${coachList}`).not.toMatch(
+      /Open my coach bot|Continue my coach setup|ViewerCoachCard/,
+    )
   })
 
   it("routes every coach state to the coach screen", () => {

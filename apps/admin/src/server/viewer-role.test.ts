@@ -159,14 +159,14 @@ describe("ViewerRole", () => {
     }),
   )
 
-  it.effect("reports both roles for an admin who is also a coach", () =>
+  it.effect("keeps an admin out of the coach handoff even when they also own a workspace", () =>
     Effect.gen(function* () {
       const role = yield* resolve({
         admins: [viewer],
-        coach: Effect.succeed({ state: "active", workspaceId, botUsername: "ada_coach_bot" }),
+        // The lookup must not run: Admin and Coach are separate role surfaces.
+        coach: Effect.die("coach context leaked into the admin entry"),
       })
-      expect(role.isAdmin).toBe(true)
-      expect(role.coach?.state).toBe("active")
+      expect(role).toEqual({ isAdmin: true, coach: null })
     }),
   )
 

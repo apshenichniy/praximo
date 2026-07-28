@@ -1,4 +1,4 @@
-import { ArrowRight01Icon, UserSharingIcon } from "@hugeicons/core-free-icons"
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons"
 import { AddMaleIcon } from "@hugeicons-pro/core-stroke-rounded"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { Link } from "@tanstack/react-router"
@@ -24,13 +24,11 @@ import {
   type CoachStateTone,
   coachRowState,
   coachRowTime,
-  viewerCoachAction,
 } from "@/features/admin/coach-progress.ts"
 import { WorkspaceAvatar } from "@/features/admin/components/workspace-avatar.tsx"
 import { displayName } from "@/features/admin/formatting.ts"
 import { cn } from "@praximo/ui"
 import type { AdminSurface } from "@/server/admin-surface.ts"
-import type { ViewerRole } from "@/server/viewer-role.ts"
 
 export type CoachEntry = AdminSurface.CoachListEntry
 
@@ -150,44 +148,5 @@ export function CoachListEmpty() {
         <Button render={<Link to="/admin/workspaces/new" />}>Invite a coach</Button>
       </EmptyContent>
     </Empty>
-  )
-}
-
-/**
- * The contextual action for an admin who is also a coach (#107). It sits above
- * the list rather than routing anywhere new: the admin's entry flow is
- * unchanged, they simply get their own workspace one tap away.
- */
-export function ViewerCoachCard({
-  viewerCoach,
-  onOpen,
-}: {
-  readonly viewerCoach: ViewerRole.ViewerCoach
-  readonly onOpen: (link: string) => void
-}) {
-  const action = viewerCoachAction(viewerCoach)
-  return (
-    <Card className="gap-0 overflow-hidden py-0">
-      <Item
-        render={<button type="button" onClick={() => onOpen(viewerCoach.link)} />}
-        className="transition-colors duration-100 active:bg-muted hover:bg-muted w-full gap-3.5 rounded-none border-0 px-4 text-left transition-colors"
-      >
-        <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
-          <span className="border-primary/30 text-primary flex size-[38px] items-center justify-center rounded-full border">
-            <HugeiconsIcon icon={UserSharingIcon} size={20} strokeWidth={1.8} />
-          </span>
-        </ItemMedia>
-        <ItemContent className="min-w-0 gap-0.5">
-          <ItemTitle>{action.title}</ItemTitle>
-          <ItemDescription>{action.subtitle}</ItemDescription>
-        </ItemContent>
-        <HugeiconsIcon
-          icon={ArrowRight01Icon}
-          size={20}
-          strokeWidth={2}
-          className="text-muted-foreground/60 shrink-0"
-        />
-      </Item>
-    </Card>
   )
 }

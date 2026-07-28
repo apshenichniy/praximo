@@ -218,8 +218,25 @@ describe("coach Mini App entry", () => {
       />,
     )
     expect(html).toContain("https://coach.praximo.io/?b=9100777")
+    expect(html).toContain(coachCatalog.en.home.mainMiniAppCopy)
     // Hide lives here and only here.
     expect(html).toContain(coachCatalog.en.home.mainMiniAppHide)
+
+    const localizedScreens = await Promise.all(
+      (["uk", "ru"] as const).map(async (language) => ({
+        language,
+        html: await render(
+          <MainMiniAppScreen
+            copy={coachCopy(language)}
+            mainMiniAppUrl="https://coach.praximo.io/?b=9100777"
+            onHide={() => {}}
+          />,
+        ),
+      })),
+    )
+    for (const { language, html: localized } of localizedScreens) {
+      expect(localized).toContain(coachCatalog[language].home.mainMiniAppCopy)
+    }
   })
 
   it("says where the app opens from rather than showing a missing page", async () => {

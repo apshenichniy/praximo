@@ -19,10 +19,14 @@ export function InviteLinkPanel({
   link,
   ariaLabel,
   controller,
+  copyLabel = "Copy link",
+  copiedLabel = "Copied",
 }: {
   readonly link: string
   readonly ariaLabel: string
   readonly controller: CopyLinkController
+  readonly copyLabel?: string
+  readonly copiedLabel?: string
 }) {
   return (
     <InputGroup className="h-12 rounded-2xl">
@@ -37,7 +41,7 @@ export function InviteLinkPanel({
       <InputGroupAddon align="inline-end">
         <InputGroupButton
           size="icon-sm"
-          aria-label={controller.copied ? "Copied" : "Copy link"}
+          aria-label={controller.copied ? copiedLabel : copyLabel}
           onClick={() => void controller.copy()}
         >
           <HugeiconsIcon

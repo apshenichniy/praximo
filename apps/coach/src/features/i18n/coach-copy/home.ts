@@ -27,6 +27,8 @@ export interface HomeCopy {
   readonly mainMiniAppOpen: string
   readonly mainMiniAppTail: string
   readonly mainMiniAppUrlLabel: string
+  readonly mainMiniAppCopy: string
+  readonly mainMiniAppCopied: string
   readonly mainMiniAppHide: string
 
   readonly relinkTitle: string
@@ -51,6 +53,8 @@ const en: HomeCopy = {
   mainMiniAppOpen: "Open",
   mainMiniAppTail: " button next to your bot in the chat list.",
   mainMiniAppUrlLabel: "Your Mini App address",
+  mainMiniAppCopy: "Copy Mini App address",
+  mainMiniAppCopied: "Mini App address copied",
   mainMiniAppHide: "Do not show this again",
 
   relinkTitle: "Your coach bot stopped working",
@@ -74,6 +78,8 @@ const uk: HomeCopy = {
   mainMiniAppOpen: "Відкрити",
   mainMiniAppTail: " біля вашого бота у списку чатів.",
   mainMiniAppUrlLabel: "Адреса вашого Mini App",
+  mainMiniAppCopy: "Скопіювати адресу Mini App",
+  mainMiniAppCopied: "Адресу Mini App скопійовано",
   mainMiniAppHide: "Більше не показувати",
 
   relinkTitle: "Ваш бот перестав працювати",
@@ -98,6 +104,8 @@ const ru: HomeCopy = {
   mainMiniAppOpen: "Открыть",
   mainMiniAppTail: " рядом с вашим ботом в списке чатов.",
   mainMiniAppUrlLabel: "Адрес вашего Mini App",
+  mainMiniAppCopy: "Скопировать адрес Mini App",
+  mainMiniAppCopied: "Адрес Mini App скопирован",
   mainMiniAppHide: "Больше не показывать",
 
   relinkTitle: "Ваш бот перестал работать",

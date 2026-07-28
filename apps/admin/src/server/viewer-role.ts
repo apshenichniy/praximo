@@ -46,11 +46,11 @@ export type ViewerCoach =
 /**
  * What the manager Mini App's entry resolves before it renders anything.
  *
- * The two roles are independent rather than mutually exclusive: an operator
- * dogfooding as a coach is both, and the entry still sends them to `/admin` —
- * the admin surface carries the contextual coach action itself (#107). `coach`
- * is `null` for anyone with no claim and no workspace, which is what the
- * invite-only landing renders from.
+ * The surfaces are deliberately separated: a viewer authenticated as an admin
+ * enters Admin and has no coach handoff there, even if the same Telegram
+ * identity also owns a coaching workspace (#218). `coach` is resolved only for
+ * non-admin viewers reaching the manager entry, where it decides which
+ * onboarding companion screen they receive.
  */
 export interface Role {
   readonly isAdmin: boolean
@@ -112,10 +112,9 @@ export const layer = Layer.effect(
     })
 
     /**
-     * Both halves are resolved for every viewer, admin or not: the admin gate
-     * is a lookup, not a wall, so a coach reaching the same entry gets their own
-     * screen instead of a rejection. Absence of an admin record is an ordinary
-     * answer here — only a failing lookup is an error.
+     * Admin is a complete answer for the Manager Mini App. A coach reaching the
+     * same entry still gets their onboarding companion, but an admin never
+     * receives a cross-role bot pointer through this surface (#218).
      */
     const resolveRole = Effect.fn("ViewerRole.resolveRole")(function* (rawInitData: string) {
       const telegramId = yield* initData
@@ -126,13 +125,16 @@ export const layer = Layer.effect(
       if (Result.isFailure(admin) && admin.failure._tag !== "Domain.AdminNotFound") {
         return yield* new LoadFailed({ operation: "findAdmin" })
       }
+      if (Result.isSuccess(admin)) {
+        return { isAdmin: true, coach: null } satisfies Role
+      }
 
       const coach = yield* workspaces
         .findCoachByTelegramId(telegramId)
         .pipe(Effect.mapError(() => new LoadFailed({ operation: "findCoach" })))
 
       return {
-        isAdmin: Result.isSuccess(admin),
+        isAdmin: false,
         coach: coach === undefined ? null : yield* presentCoach(coach),
       } satisfies Role
     })

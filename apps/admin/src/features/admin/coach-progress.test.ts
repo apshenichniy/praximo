@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { AdminSurface } from "@/server/admin-surface.ts"
-import { coachRowState, coachRowTime, viewerCoachAction } from "./coach-progress.ts"
+import { coachRowState, coachRowTime } from "./coach-progress.ts"
 
 const NOW = Date.parse("2026-07-24T12:00:00.000Z")
 const inHours = (hours: number) => new Date(NOW + hours * 3_600_000).toISOString()
@@ -102,31 +102,5 @@ describe("coachRowTime", () => {
 
     expect(coachRowTime(onboarding("not-invited"))).toBeUndefined()
     expect(coachRowTime(onboarding("accepted"))).toBeUndefined()
-  })
-})
-
-describe("viewerCoachAction", () => {
-  it("offers a resume while onboarding and an open once active", () => {
-    const workspaceId = "ws_mine" as never
-
-    expect(
-      viewerCoachAction({ state: "accepted", workspaceId, link: "https://t.me/bot" }).title,
-    ).toBe("Continue my coach setup")
-    expect(
-      viewerCoachAction({
-        state: "bot-connected",
-        workspaceId,
-        botUsername: "bot",
-        link: "https://t.me/bot",
-      }).title,
-    ).toBe("Continue my coach setup")
-    expect(
-      viewerCoachAction({
-        state: "active",
-        workspaceId,
-        botUsername: "bot",
-        link: "https://t.me/bot",
-      }).title,
-    ).toBe("Open my coach bot")
   })
 })
