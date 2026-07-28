@@ -92,13 +92,14 @@ export const primeDayRange = async (
       .map(async (chunk) => {
         const window = await client.fetchQuery(rangeSchedule(chunk.from, chunk.days))
         for (const day of window) {
-          client.setQueryData<DayScheduleData>(dayScheduleKeys.day(day.date), {
-            busy: day.busy,
-            ...(day.earliestStartMinutes === undefined
-              ? {}
-              : { earliestStartMinutes: day.earliestStartMinutes }),
-            timezone: day.timezone,
-          })
+          // Spread rather than rebuilt field by field. A day filed here has to be
+          // indistinguishable from one the single-day query returns, and the
+          // hand-copied version was not: it dropped `working` (#210), so every
+          // day the strip primed read as "not a working day" while the same day
+          // fetched on its own read correctly. Which of the two won was a race,
+          // which is why the sheet was right about the week only sometimes.
+          const { date: _filedUnder, ...schedule } = day
+          client.setQueryData<DayScheduleData>(dayScheduleKeys.day(day.date), schedule)
         }
       }),
   )

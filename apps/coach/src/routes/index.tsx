@@ -1,5 +1,5 @@
 import { BotIcon, WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
-import type { CoachLanguage } from "@praximo/domain"
+import { type CoachLanguage, DefaultWorkingHours, type WorkingHours } from "@praximo/domain"
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
 import { useCallback, useRef, useState } from "react"
 
@@ -10,6 +10,7 @@ import { HostMainButton } from "@/presentation-host"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { OnboardingFlow } from "@/features/coach/components/onboarding-flow.tsx"
 import { TodayScreen } from "@/features/coach/components/today-screen.tsx"
+import { WorkingHoursStep } from "@/features/coach/components/working-hours-step.tsx"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
 import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
@@ -20,7 +21,7 @@ import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
-import { resendInvite } from "@/server/coach-clients.functions.ts"
+import { resendInvite, saveWorkingHours } from "@/server/coach-clients.functions.ts"
 import { loadToday, type TodayResult } from "@/server/coach-sessions.functions.ts"
 import {
   acceptCoachTerms,
@@ -117,6 +118,8 @@ function CoachEntry() {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const [resending, setResending] = useState<string>()
+  /** Whether first login's optional third step is still on screen (#210). */
+  const [offerHours, setOfferHours] = useState(false)
   const inFlight = useRef(false)
 
   // An authenticated coach has a language of their own; anyone else gets what
@@ -126,6 +129,39 @@ function CoachEntry() {
   const retry = useCallback(() => void router.invalidate(), [router])
 
   useCoachTimezone(entry.ok && entry.entry.kind === "home")
+
+  const skipHours = useCallback(() => setOfferHours(false), [])
+
+  /**
+   * The step's one commit. It fails loudly rather than quietly: a coach who
+   * pressed Save and walked into Today with the default week would go on
+   * believing they had narrowed Sunday while the sheet went on offering it.
+   */
+  const saveHours = useCallback(
+    (hours: WorkingHours) => {
+      acceptOnce(inFlight, async () => {
+        setPending(true)
+        setError(undefined)
+        try {
+          const result = await saveWorkingHours({ data: { hours } })
+          if (result.ok) {
+            notifyHaptic("success")
+            setOfferHours(false)
+            await router.invalidate()
+            return
+          }
+          notifyHaptic("error")
+          setError(copy.availability.saveFailed)
+        } catch {
+          notifyHaptic("error")
+          setError(copy.availability.saveFailed)
+        } finally {
+          setPending(false)
+        }
+      })
+    },
+    [copy, router],
+  )
 
   const accept = useCallback(() => {
     if (entry.ok !== true || entry.entry.kind !== "terms-required") return
@@ -137,6 +173,13 @@ function CoachEntry() {
         const result = await acceptCoachTerms({ data: { version } })
         if (result.ok) {
           notifyHaptic("success")
+          // The optional third step (#210), offered here and only here: this is
+          // the one moment a coach is setting the practice up rather than using
+          // it. It cannot block Today — Skip is one tap and the same control
+          // waits in Availability forever — and it is deliberately not restored
+          // on a later launch, because a step that comes back is a step that
+          // nags.
+          setOfferHours(true)
           await router.invalidate()
           return
         }
@@ -244,11 +287,14 @@ function CoachEntry() {
         entry={entry}
         launchLanguage={launchLanguage}
         today={today}
+        offerWorkingHours={offerHours}
         onAccept={accept}
         onChooseLanguage={chooseLanguage}
         onCreate={startCreation}
         onResend={resend}
         onRetry={retry}
+        onSaveWorkingHours={saveHours}
+        onSkipWorkingHours={skipHours}
         pending={pending}
         resending={resending}
         error={error}
@@ -261,11 +307,14 @@ export function CoachScreen({
   entry,
   launchLanguage,
   today,
+  offerWorkingHours,
   onAccept,
   onChooseLanguage,
   onCreate,
   onResend,
   onRetry,
+  onSaveWorkingHours,
+  onSkipWorkingHours,
   pending,
   resending,
   error,
@@ -273,11 +322,15 @@ export function CoachScreen({
   readonly entry: CoachEntryTransportResult
   readonly launchLanguage: CoachLanguage
   readonly today: TodayResult | undefined
+  /** First login's optional third step, offered once after acceptance (#210). */
+  readonly offerWorkingHours: boolean
   readonly onAccept: () => void
   readonly onChooseLanguage: (language: CoachLanguage) => Promise<boolean>
   readonly onCreate: () => void
   readonly onResend: (clientId: string) => void
   readonly onRetry: () => void
+  readonly onSaveWorkingHours: (hours: WorkingHours) => void
+  readonly onSkipWorkingHours: () => void
   readonly pending: boolean
   readonly resending: string | undefined
   readonly error: string | undefined
@@ -326,6 +379,27 @@ export function CoachScreen({
   }
 
   const copy = coachCopy(entry.entry.language)
+
+  /*
+    The optional step, between acceptance and Today. It stands here rather than
+    on a route of its own for the same reason the two steps before it do: first
+    login is a state of the entry, and a blocking screen with an address is a
+    screen that can be bookmarked past. Unlike them it blocks nothing — Skip is
+    one tap, and it is never shown again.
+  */
+  if (offerWorkingHours) {
+    return (
+      <WorkingHoursStep
+        copy={copy.availability}
+        language={entry.entry.language}
+        initial={today?.ok === true ? today.today.workingHours : DefaultWorkingHours}
+        onSave={onSaveWorkingHours}
+        onSkip={onSkipWorkingHours}
+        pending={pending}
+        error={error}
+      />
+    )
+  }
 
   // Today failing is not the coach's problem to solve on this screen: the
   // dashboard renders as an empty practice would, and the retry lives where

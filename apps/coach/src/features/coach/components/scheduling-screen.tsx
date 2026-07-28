@@ -1,7 +1,10 @@
 import {
   type BusyInterval,
   type CoachLanguage,
-  daySlots,
+  type DayGrid,
+  dayGrid,
+  type DaySlot,
+  type DayWindow,
   defaultDurationForKind,
   freeSlotCounts,
   type PartOfDay,
@@ -13,9 +16,17 @@ import {
 import { localeTag, sessionMoment } from "@praximo/i18n"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+
 import { HostBackButton } from "@/presentation-host"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Calendar } from "@praximo/ui/components/calendar"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@praximo/ui/components/collapsible"
 import { Skeleton } from "@praximo/ui/components/skeleton"
 import { Switch } from "@praximo/ui/components/switch"
 import { HostMainButton } from "@/presentation-host"
@@ -55,6 +66,12 @@ import { Heading, cn } from "@praximo/ui"
 export interface DayScheduleData {
   readonly busy: ReadonlyArray<BusyInterval>
   readonly earliestStartMinutes?: number
+  /**
+   * The coach's own hours for this weekday (#210). Absent means the day is not
+   * worked at all — a different statement from an empty grid, and the screen
+   * words them apart.
+   */
+  readonly working?: DayWindow
   readonly timezone: string
 }
 
@@ -170,7 +187,15 @@ export function SchedulingScreen({
   const [monthHeight, setMonthHeight] = useState(0)
   const monthRef = useRef<HTMLDivElement>(null)
   const [startMinutes, setStartMinutes] = useState<number>()
-  const groupRefs = useRef(new Map<PartOfDay, HTMLDivElement>())
+  /**
+   * Whether the hours outside the coach's own are showing (#210).
+   *
+   * Deliberately not reset when the day changes: a coach hunting for an
+   * exception is rarely hunting it in one day, and making them ask again on
+   * Saturday is the screen forgetting what it was just told. It does reset on
+   * leaving, because the mount is per client.
+   */
+  const [revealed, setRevealed] = useState({ earlier: false, later: false })
   const timeRef = useRef<HTMLDivElement>(null)
   /**
    * How tall the time field was the last time it held a grid. A day change
@@ -307,11 +332,12 @@ export function SchedulingScreen({
     timeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }, [])
 
-  const slots = useMemo(
+  const grid: DayGrid = useMemo(
     () =>
       schedule === undefined
-        ? []
-        : daySlots({
+        ? { working: [], earlier: [], later: [] }
+        : dayGrid({
+            working: schedule.working,
             durationMinutes,
             busy: schedule.busy,
             ...(schedule.earliestStartMinutes === undefined
@@ -321,18 +347,30 @@ export function SchedulingScreen({
     [durationMinutes, schedule],
   )
 
-  const counts = useMemo(() => freeSlotCounts(slots), [slots])
+  const counts = useMemo(() => freeSlotCounts(grid.working), [grid])
   const present = useMemo(
-    () => PartsOfDay.filter((part) => slots.some((slot) => partOfDay(slot.startMinutes) === part)),
-    [slots],
+    () =>
+      PartsOfDay.filter((part) =>
+        grid.working.some((slot) => partOfDay(slot.startMinutes) === part),
+      ),
+    [grid],
   )
+  /** A day nobody works has no grid of its own — only the hours behind the reveal. */
+  const dayOff = schedule !== undefined && schedule.working === undefined
   /**
    * Whether the day has anything at all. A part of day whose every start is
-   * taken keeps its group and its "0 free" anchor — the list must not change
-   * height between days — but a *day* with nothing left is a dead end, and a
-   * dead end gets an exit rather than a wall of unpressable buttons.
+   * taken keeps its group and its count — the list must not change height
+   * between days — but a *day* with nothing left anywhere, working hours or
+   * not, is a dead end, and a dead end gets an exit rather than a wall of
+   * unpressable buttons.
    */
-  const anyFree = useMemo(() => slots.some((slot) => slot.available), [slots])
+  const anyFree = useMemo(
+    () =>
+      grid.working.some((slot) => slot.available) ||
+      grid.earlier.some((slot) => slot.available) ||
+      grid.later.some((slot) => slot.available),
+    [grid],
+  )
 
   /**
    * The height of the grid, measured with it on screen and before the next day
@@ -344,7 +382,7 @@ export function SchedulingScreen({
     if (schedule === undefined) return
     const node = timeRef.current
     if (node !== null) lastTimeHeight.current = node.offsetHeight
-  }, [schedule, slots])
+  }, [schedule, grid])
 
   const dayFormat = useMemo(
     () =>
@@ -388,15 +426,15 @@ export function SchedulingScreen({
     onSubmit({ date, startMinutes, durationMinutes, kind })
   }, [date, durationMinutes, kind, onSubmit, startMinutes])
 
-  /**
-   * A second booking starts where a coach expects it to, not where they left
-   * the first one. The screen is mounted per client — the route keys it on the
-   * one in the URL — so that reset is the mount itself rather than an effect
-   * watching a sheet's `open` flag, which used to have to re-derive every field.
-   */
-  const scrollTo = (part: PartOfDay) => {
-    groupRefs.current.get(part)?.scrollIntoView({ behavior: "smooth", block: "start" })
-  }
+  const pickSlot = useCallback(
+    (minutes: number) => {
+      // The slot is the choice this whole screen exists to take, so it gets the
+      // same tick as every other selection — and none for re-choosing the same.
+      if (minutes !== startMinutes) selectionHaptic()
+      setStartMinutes(minutes)
+    },
+    [startMinutes],
+  )
 
   /**
    * The footnote names the coach's zone as the *client* will read it — `UTC+3`,
@@ -626,82 +664,55 @@ export function SchedulingScreen({
               />
             ) : (
               <>
-                <div className="flex gap-1">
-                  {present.map((part) => (
-                    <button
-                      key={part}
-                      type="button"
-                      onClick={() => scrollTo(part)}
-                      className="border-border text-muted-foreground flex-1 border-b-2 pb-1 text-xs leading-normal font-semibold"
-                    >
-                      {partLabel(copy, part)}
-                      <span className="text-muted-foreground block text-xs leading-normal font-normal tabular-nums">
-                        {counts[part]}
-                        {copy.freeSuffix}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {/*
+                  The hours before the coach's own, as one more group of the day
+                  (#210). A day switched off has no working hours to be early
+                  for, so both ends arrive here as a single reveal that names the
+                  day rather than the hour.
+                */}
+                {dayOff || grid.earlier.length > 0 ? (
+                  <RevealGroup
+                    heading={
+                      dayOff
+                        ? copy.dayOffHeading
+                        : copy.earlierHeading(clock(grid.earlier[0]?.startMinutes ?? 0))
+                    }
+                    slots={grid.earlier}
+                    open={revealed.earlier}
+                    onOpenChange={(open) => setRevealed((was) => ({ ...was, earlier: open }))}
+                    copy={copy}
+                    selected={startMinutes}
+                    onPick={pickSlot}
+                  />
+                ) : null}
 
                 {present.map((part) => (
-                  <div
+                  <SlotGroup
                     key={part}
-                    className="scroll-mt-(--mini-app-safe-top,0px)"
-                    ref={(node) => {
-                      if (node !== null) groupRefs.current.set(part, node)
-                    }}
-                  >
-                    {/*
-                      The page scrolls now, not a drawer body, so the heading
-                      sticks under the host's own controls rather than to the
-                      top of a popup — hence the safe-area offset, and the page
-                      background behind it instead of the drawer's card.
-                    */}
-                    <p className="bg-background text-muted-foreground sticky top-(--mini-app-safe-top,0px) z-10 py-2 text-xs leading-normal font-semibold tracking-wide uppercase">
-                      {partLabel(copy, part)}
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {slots
-                        .filter((slot) => partOfDay(slot.startMinutes) === part)
-                        .map((slot) => (
-                          <button
-                            key={slot.startMinutes}
-                            type="button"
-                            disabled={!slot.available}
-                            aria-pressed={startMinutes === slot.startMinutes}
-                            onClick={() => {
-                              // The slot is the choice this whole screen exists
-                              // to take, so it gets the same tick as every other
-                              // selection — and none for re-choosing the same one.
-                              if (slot.startMinutes !== startMinutes) selectionHaptic()
-                              setStartMinutes(slot.startMinutes)
-                            }}
-                            className={cn(
-                              "flex min-h-11 items-center justify-center rounded-xl border py-2 text-base leading-relaxed font-semibold tabular-nums",
-                              "ease-[var(--ease-out)] transition-[color,background-color,border-color,scale] duration-100",
-                              "enabled:active:scale-[0.97]",
-                              startMinutes === slot.startMinutes
-                                ? "bg-primary text-primary-foreground border-transparent"
-                                : "bg-secondary border-border",
-                              // Taken, not gone: hiding it would reflow a
-                              // three-column grid between days and cost the
-                              // positional memory the layout trades on.
-                              //
-                              // Faded, not dashed (#198). A dashed edge reads as
-                              // a different *kind* of thing — which is why the
-                              // strip's month tail keeps one — and unavailable
-                              // is not a different kind of slot, it is the same
-                              // slot in a state. A state is said by weakening
-                              // the control, not by redrawing its outline.
-                              slot.available ? undefined : "opacity-45",
-                            )}
-                          >
-                            {clock(slot.startMinutes)}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
+                    heading={partLabel(copy, part)}
+                    freeCount={counts[part]}
+                    copy={copy}
+                    slots={grid.working.filter((slot) => partOfDay(slot.startMinutes) === part)}
+                    selected={startMinutes}
+                    onPick={pickSlot}
+                  />
                 ))}
+
+                {!dayOff && grid.later.length > 0 ? (
+                  <RevealGroup
+                    // Named by where the reveal ends rather than where it starts,
+                    // so the two headings bracket the day between them.
+                    heading={copy.laterHeading(
+                      clock((grid.later.at(-1)?.startMinutes ?? 0) + durationMinutes),
+                    )}
+                    slots={grid.later}
+                    open={revealed.later}
+                    onOpenChange={(open) => setRevealed((was) => ({ ...was, later: open }))}
+                    copy={copy}
+                    selected={startMinutes}
+                    onPick={pickSlot}
+                  />
+                ) : null}
               </>
             )}
           </div>
@@ -790,6 +801,191 @@ function Field({
 }
 
 /**
+ * One start, rendered and — when it is taken — refused.
+ *
+ * Taken, not gone: hiding it would reflow a three-column grid between days and
+ * cost the positional memory the layout trades on. Faded, not dashed (#198): a
+ * dashed edge reads as a different *kind* of thing, and unavailable is the same
+ * slot in a state. A state is said by weakening the control, not by redrawing
+ * its outline — which is why an hour outside the coach's own is faded too,
+ * a little less.
+ */
+function SlotButton({
+  slot,
+  selected,
+  outside,
+  onPick,
+}: {
+  readonly slot: DaySlot
+  readonly selected: boolean
+  readonly outside: boolean
+  readonly onPick: (minutes: number) => void
+}) {
+  return (
+    <button
+      type="button"
+      disabled={!slot.available}
+      aria-pressed={selected}
+      onClick={() => onPick(slot.startMinutes)}
+      className={cn(
+        "flex min-h-11 items-center justify-center rounded-xl border py-2 text-base leading-relaxed font-semibold tabular-nums",
+        "ease-[var(--ease-out)] transition-[color,background-color,border-color,scale] duration-100",
+        "enabled:active:scale-[0.97]",
+        selected
+          ? "bg-primary text-primary-foreground border-transparent"
+          : "bg-secondary border-border",
+        slot.available ? (outside ? "opacity-60" : undefined) : "opacity-45",
+      )}
+    >
+      {clock(slot.startMinutes)}
+    </button>
+  )
+}
+
+/**
+ * The sticky heading a group of starts sits under, and — since #210 — the count
+ * that used to live in a row of anchors above the list.
+ *
+ * The count moved here because this heading is already sticky: it follows the
+ * coach down the list instead of scrolling away at the top, and it says how
+ * many are free in the place the free ones are.
+ */
+function GroupHeading({
+  children,
+  trailing,
+}: {
+  readonly children: React.ReactNode
+  readonly trailing?: React.ReactNode
+}) {
+  return (
+    <div className="bg-background sticky top-(--mini-app-safe-top,0px) z-10 flex items-baseline justify-between gap-3 py-2">
+      <span className="text-muted-foreground text-xs leading-normal font-semibold tracking-wide uppercase">
+        {children}
+      </span>
+      {trailing}
+    </div>
+  )
+}
+
+function FreeCount({ count, copy }: { readonly count: number; readonly copy: ClientsCopy }) {
+  return (
+    <span className="text-muted-foreground text-xs leading-normal tabular-nums">
+      {count}
+      {copy.freeSuffix}
+    </span>
+  )
+}
+
+/** One part of the coach's own day: its heading, its count, its starts. */
+function SlotGroup({
+  heading,
+  freeCount,
+  slots,
+  selected,
+  copy,
+  onPick,
+}: {
+  readonly heading: string
+  readonly freeCount: number
+  readonly slots: ReadonlyArray<DaySlot>
+  readonly selected: number | undefined
+  readonly copy: ClientsCopy
+  readonly onPick: (minutes: number) => void
+}) {
+  return (
+    <div>
+      <GroupHeading trailing={<FreeCount count={freeCount} copy={copy} />}>{heading}</GroupHeading>
+      <div className="grid grid-cols-3 gap-2">
+        {slots.map((slot) => (
+          <SlotButton
+            key={slot.startMinutes}
+            slot={slot}
+            outside={false}
+            selected={selected === slot.startMinutes}
+            onPick={onPick}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The hours outside the coach's own, as one more group of the day (#210).
+ *
+ * Drawn as a heading rather than as a rule with a word on it: the anchors used
+ * to own a 2px border and a seam would have put a second horizontal line eight
+ * points under it, two dividers with a caption trapped between. As a heading it
+ * is the device the list already repeats — same size, same stickiness — and the
+ * caret is the whole of what says this one opens.
+ *
+ * It carries its own count, so revealing never moves the numbers on the groups
+ * above: the three familiar figures stay where the coach last read them.
+ */
+function RevealGroup({
+  heading,
+  slots,
+  open,
+  onOpenChange,
+  selected,
+  copy,
+  onPick,
+}: {
+  readonly heading: string
+  readonly slots: ReadonlyArray<DaySlot>
+  readonly open: boolean
+  readonly onOpenChange: (open: boolean) => void
+  readonly selected: number | undefined
+  readonly copy: ClientsCopy
+  readonly onPick: (minutes: number) => void
+}) {
+  const free = slots.filter((slot) => slot.available).length
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={(next) => {
+        impactHaptic()
+        onOpenChange(next)
+      }}
+    >
+      <CollapsibleTrigger
+        render={
+          <button type="button" className="w-full text-left">
+            <GroupHeading trailing={<FreeCount count={free} copy={copy} />}>
+              <span className="flex items-center gap-1.5">
+                <HugeiconsIcon
+                  icon={ArrowRight01Icon}
+                  size={14}
+                  strokeWidth={2}
+                  className={cn(
+                    "ease-[var(--ease-out)] transition-transform duration-150",
+                    open && "rotate-90",
+                  )}
+                />
+                {heading}
+              </span>
+            </GroupHeading>
+          </button>
+        }
+      />
+      <CollapsibleContent className="overflow-hidden">
+        <div className="grid grid-cols-3 gap-2 pt-1 pb-2">
+          {slots.map((slot) => (
+            <SlotButton
+              key={slot.startMinutes}
+              slot={slot}
+              outside
+              selected={selected === slot.startMinutes}
+              onPick={onPick}
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+/**
  * The time field while a day is being read.
  *
  * Shaped like the grid it precedes rather than centred on a spinner: the coach
@@ -800,17 +996,15 @@ function Field({
 function SlotSkeleton() {
   return (
     <>
-      <div className="flex gap-1">
-        {[0, 1, 2].map((column) => (
-          <div key={column} className="border-border flex-1 border-b-2 pb-1">
-            <Skeleton className="h-3 w-14 rounded-md" />
-            <Skeleton className="mt-1 h-2 w-8 rounded-md" />
-          </div>
-        ))}
-      </div>
       <Skeleton className="mt-1 h-2.5 w-16 rounded-md" />
       <div className="grid grid-cols-3 gap-2">
         {Array.from({ length: 9 }, (_, index) => (
+          <Skeleton key={index} className="h-9 rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="mt-3 h-2.5 w-20 rounded-md" />
+      <div className="grid grid-cols-3 gap-2">
+        {Array.from({ length: 6 }, (_, index) => (
           <Skeleton key={index} className="h-9 rounded-xl" />
         ))}
       </div>

@@ -1,4 +1,9 @@
-import { Alert01Icon, ArrowRight01Icon, CheckmarkCircle02Icon } from "@hugeicons/core-free-icons"
+import {
+  Alert01Icon,
+  ArrowRight01Icon,
+  CheckmarkCircle02Icon,
+  Clock01Icon,
+} from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { CoachLanguage } from "@praximo/domain"
 import { Heading, Text, cn } from "@praximo/ui"
@@ -10,6 +15,7 @@ import { buttonVariants } from "@praximo/ui/components/button"
 import { Card } from "@praximo/ui/components/card"
 import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import { sessionClock } from "@/features/coach/session-days.ts"
+import { workingHoursLine } from "@/features/coach/working-hours-line.ts"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { Section, SectionTitle } from "@praximo/ui"
 import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
@@ -143,6 +149,47 @@ export function TodayScreen({
           {copy.today.clients}
         </Link>
       </nav>
+
+      {/*
+        Availability, as a row that states the hours rather than a third button
+        that leads to them (#210).
+
+        A third button does not survive the row: «Доступність» wants 98 points
+        of the 109 three buttons leave, and «Доступность» wants 104 — both clip.
+        More to the point, three equal buttons would claim three equal errands,
+        and this one is opened twice a year while the two above are weekly.
+
+        As a row it earns its 76 points on the days nobody presses it: the
+        dashboard answers «what are my hours» without being opened, which is the
+        question a coach has when the sheet stops offering Saturday.
+      */}
+      <Card className="mt-3 gap-0 overflow-hidden py-0">
+        <Link
+          to="/availability"
+          className="transition-colors duration-100 active:bg-muted flex min-h-14 items-center gap-3 px-5 py-3 text-left"
+        >
+          <HugeiconsIcon
+            icon={Clock01Icon}
+            size={18}
+            strokeWidth={2}
+            className="text-muted-foreground shrink-0"
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-base leading-relaxed font-medium">
+              {copy.availability.title}
+            </span>
+            <span className="text-muted-foreground mt-0.5 block truncate text-xs leading-normal">
+              {workingHoursLine(today.workingHours, copy.availability, language)}
+            </span>
+          </span>
+          <HugeiconsIcon
+            icon={ArrowRight01Icon}
+            size={18}
+            strokeWidth={2}
+            className="text-muted-foreground shrink-0"
+          />
+        </Link>
+      </Card>
 
       {/*
         One row reading as its payoff rather than its mechanism, opening the

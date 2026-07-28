@@ -1,9 +1,15 @@
 import { ClientRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
-import { inviteNeedsAttention, readMemberSettings } from "@praximo/domain"
+import {
+  inviteNeedsAttention,
+  MinutesInDay,
+  readMemberSettings,
+  readWorkingHours,
+  type WorkingHours,
+} from "@praximo/domain"
 import { Clock, Context, Effect, Layer } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS } from "./coach-session.ts"
 import { localParts } from "@/lib/coach-calendar.ts"
-import { instantOf, MinutesInDay, zoneOf } from "./coach-day.ts"
+import { instantOf, zoneOf } from "./coach-day.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
 /**
@@ -65,6 +71,12 @@ export interface TodayView {
   readonly emptyPractice: boolean
   /** Whether the Main Mini App hint still has a job — the same rule as #56's. */
   readonly mainMiniAppHintVisible: boolean
+  /**
+   * The week the coach works (#210), so the dashboard can state it rather than
+   * merely lead to it. A coach wondering why Saturday stopped being offered is
+   * looking at this screen when the thought arrives.
+   */
+  readonly workingHours: WorkingHours
 }
 
 export interface UpcomingSessions {
@@ -233,6 +245,7 @@ export const layer = Layer.effect(
         emptyPractice: roster.length === 0,
         mainMiniAppHintVisible:
           settings.mainMiniAppHintDismissed !== true && !principal.hasMainMiniApp,
+        workingHours: readWorkingHours(settings.workingHours),
       } satisfies TodayView
     })
 

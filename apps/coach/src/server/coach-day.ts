@@ -1,4 +1,9 @@
-import { type BusyInterval, isSupportedTimeZone } from "@praximo/domain"
+import {
+  type BusyInterval,
+  isSupportedTimeZone,
+  type Weekday,
+  weekdayOfIndex,
+} from "@praximo/domain"
 import { DefaultTimeZone } from "@praximo/i18n"
 import { DateTime, Option } from "effect"
 import { localParts } from "@/lib/coach-calendar.ts"
@@ -13,7 +18,17 @@ import type { CoachSession } from "./coach-session.ts"
  * it falls on — which is pure `Intl` and lives in `lib/coach-calendar.ts`.
  */
 
-export const MinutesInDay = 24 * 60
+/**
+ * Which weekday a coach's own calendar date falls on (#210).
+ *
+ * Read at noon UTC rather than midnight: the date is already the coach's local
+ * one, so no zone conversion is wanted here, and a midnight read is the one
+ * instant a daylight-saving shift can push onto the day before.
+ */
+export const weekdayOfDate = (date: string): Weekday | undefined => {
+  const at = new Date(`${date}T12:00:00.000Z`)
+  return Number.isNaN(at.getTime()) ? undefined : weekdayOfIndex(at.getUTCDay())
+}
 
 /**
  * The instant a wall-clock minute-of-day names in the coach's own zone.

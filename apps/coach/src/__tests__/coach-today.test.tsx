@@ -1,3 +1,4 @@
+import { DefaultWorkingHours } from "@praximo/domain"
 import {
   createMemoryHistory,
   createRootRoute,
@@ -81,6 +82,7 @@ const today = (overrides: Partial<CoachSessions.TodayView> = {}): CoachSessions.
   attention: [],
   emptyPractice: false,
   mainMiniAppHintVisible: false,
+  workingHours: DefaultWorkingHours,
   ...overrides,
 })
 

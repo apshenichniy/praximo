@@ -28,10 +28,11 @@ entry points) — the @BotFather steps live in the
 
 ## First login
 
-Before any screen below renders, the coach meets a **blocking two-step onboarding** — a
-state of the entry, deliberately not a route of its own, so there is no URL to bookmark past
-it. Stepping back between the two is the host's own back button, which on this screen would
-otherwise close the app.
+Before any screen below renders, the coach meets **two blocking steps and then one optional
+one** — a state of the entry, deliberately not a route of its own, so there is no URL to
+bookmark past it. Stepping back between the two blocking steps is the host's own back button,
+which on this screen would otherwise close the app. Only the first two can hold a coach up:
+the third is offered after acceptance and is one tap from gone.
 
 **Step 1 — language.** Praximo introduces itself and states, in the first person and in the
 language currently selected, what that selection means: *"I will write to you in **English** —
@@ -58,9 +59,19 @@ acceptance itself is refused until it lands. Authentication mechanics are in
 [client-onboarding-auth.md](client-onboarding-auth.md) §Coach authentication and
 [ADR 0006](../adr/0006-coach-authentication-in-mvp.md).
 
-Acceptance lands on **Today** ([#61](https://github.com/apshenichniy/praximo/issues/61)) —
-deliberately not the manager Mini App's onboarding companion, which lives under a different
-credential and answers a different question. Between #56 and #61 that landing was the client
+**Step 3 — working hours, optional** ([#210](https://github.com/apshenichniy/praximo/issues/210)).
+After acceptance, and only there, the coach is offered the hours they work: one window and
+seven day chips, with **Skip** beside the host's bottom button. It is the one moment a coach
+is setting the practice up rather than using it, and it is the only step of the three that
+blocks nothing — Skip is a single tap, and the same control lives at `/availability` forever.
+Skipping is not a failure state: nothing nags afterwards, and the step is deliberately not
+restored on a later launch. A coach who closes the app on it meets Today next time and finds
+the control where it permanently lives.
+
+Past that step — taken or skipped — first login lands on **Today**
+([#61](https://github.com/apshenichniy/praximo/issues/61)) — deliberately not the manager
+Mini App's onboarding companion, which lives under a different credential and answers a
+different question. Between #56 and #61 that landing was the client
 list, which Today displaces; the list now has a route of its own at `/clients`.
 
 ## Navigation model
@@ -93,6 +104,26 @@ drill-in with a back affordance. Screen inventory:
   set the chat-list button (ADR 0004 §Mini App entry points).
 - **Client route** — one client: header, invitation while unaccepted, upcoming
   sessions, profile, danger zone (#56). It arrives *before* the Today dashboard.
+- **Availability** — route `/availability`
+  ([#210](https://github.com/apshenichniy/praximo/issues/210)): when this coach is
+  reachable. **Working hours** first, because every coach has them and they are already in
+  force; the **calendar connection** second, because it is optional and may never be made.
+  Both are about *time*, which is why they share a screen — grouping them is not the same as
+  shipping them together, and the connection arrives with its own slice.
+  - `/availability/hours` — one shared window and seven day chips. It **commits on change**,
+    with no Save: the host's back control is permanent chrome, and pairing it with a Save
+    button makes "tap back" a way to destroy an edit silently. Every change is one labelled
+    tap, the line at the foot restates the result, and hours narrow the grid rather than the
+    server — so a mis-tap can hide an option but never block a booking.
+  - `/availability/hours/days` — the seven entries as rows, for a week that is not the same
+    every day. A screen rather than a fold, because a picker opened inside seven rows wants
+    more height than the phone has.
+
+  Named for what it holds rather than «Settings»: a settings route would reopen the question
+  §First login has already answered, which is that the onboarding chips are the only language
+  control in MVP. Reached from Today as a row that **states the hours** rather than a third
+  navigation button — three equal buttons would claim three equal errands, and this one is
+  opened twice a year while All sessions and Clients are weekly.
 
 ## Home screen, top to bottom
 
@@ -128,7 +159,13 @@ Ordered by how often each thing is needed:
    says it for the rest, and a third place would undo the point of rule two.
 5. **Bottom navigation**: two quiet buttons — **All sessions** and **Clients**. They are
    navigation, not action.
-6. **Main Mini App hint**, last: one row reading as its payoff — «Add an Open button to your
+6. **Availability**, as one row stating the hours — «Mon–Fri 09:00–19:00»
+   ([#210](https://github.com/apshenichniy/praximo/issues/210)). A row rather than a third
+   button: three equal buttons claim three equal errands, and the labels do not survive
+   Ukrainian or Russian at a third of the row each. It earns its place on the days nobody
+   presses it, by answering «what are my hours» without being opened — which is the question
+   a coach has when the sheet stops offering Saturday.
+7. **Main Mini App hint**, last: one row reading as its payoff — «Add an Open button to your
    chat list · Optional · 4 steps in @BotFather» — opening a screen that carries the steps, the
    per-bot address and **Hide**. Today itself carries no dismiss control: a row a coach can put
    away from the dashboard is a row they put away without reading, and `has_main_web_app`

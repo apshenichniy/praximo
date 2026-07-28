@@ -1,5 +1,6 @@
 import { CoachInitData, CoachOnboardingToken } from "@praximo/auth"
 import { ClientRepo, Database, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
+import type { WorkingHours } from "@praximo/domain"
 import { BotRegistry } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { CoachClients } from "./coach-clients.ts"
@@ -308,5 +309,24 @@ export const hideCoachMainMiniAppHint = async (credential: LaunchCredential): Pr
   const appRuntime = await getRuntime()
   return appRuntime.runPromise(
     Effect.flatMap(CoachClients.Service, (service) => service.hideMainMiniAppHint(credential)),
+  )
+}
+
+export const loadCoachWorkingHours = async (
+  credential: LaunchCredential,
+): Promise<WorkingHours> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.workingHours(credential)),
+  )
+}
+
+export const saveCoachWorkingHours = async (
+  credential: LaunchCredential,
+  input: unknown,
+): Promise<{ readonly saved: boolean }> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) => service.saveWorkingHours(credential, input)),
   )
 }

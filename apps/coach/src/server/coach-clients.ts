@@ -7,12 +7,18 @@ import {
   clientInviteStartParameter,
   type CoachLanguage,
   CreateClientInput,
+  type DayWindow,
   isSchedulableStart,
   isSupportedTimeZone,
+  MinutesInDay,
   nextSlotStart,
+  parseWorkingHours,
   PlannedDurations,
   readMemberSettings,
+  readWorkingHours,
   SessionKind,
+  windowForWeekday,
+  type WorkingHours,
   type WorkspaceId,
 } from "@praximo/domain"
 import { clientCopy } from "@praximo/i18n"
@@ -20,7 +26,7 @@ import { BotRegistry } from "@praximo/telegram"
 import { Clock, Context, Effect, Layer, Schema } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import { localParts, nextDate } from "@/lib/coach-calendar.ts"
-import { busyByDate, instantOf, MinutesInDay, zoneOf } from "./coach-day.ts"
+import { busyByDate, instantOf, weekdayOfDate, zoneOf } from "./coach-day.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
 /**
@@ -113,6 +119,15 @@ export interface DaySchedule {
    * being asked about is today in the coach's zone.
    */
   readonly earliestStartMinutes?: number
+  /**
+   * The coach's own hours for this weekday (#210), absent when they do not work
+   * it at all.
+   *
+   * Resolved here rather than on the screen because the weekday a date falls on
+   * is the coach's zone's business, and that lives on this side — the same
+   * reason `busy` arrives as minutes-of-day rather than as instants.
+   */
+  readonly working?: DayWindow
   readonly timezone: string
 }
 
@@ -261,6 +276,21 @@ export interface Interface {
   readonly hideMainMiniAppHint: (
     credential: LaunchCredential,
   ) => Effect.Effect<void, CoachSession.Unauthenticated | CoachSession.LoadFailed>
+  /** The week the coach works (#210) — the default until they say otherwise. */
+  readonly workingHours: (
+    credential: LaunchCredential,
+  ) => Effect.Effect<WorkingHours, CoachSession.Unauthenticated | CoachSession.LoadFailed>
+  /**
+   * Commits a whole week at once. `false` means the value was not one this
+   * product could have produced and nothing was written — never a silent reset.
+   */
+  readonly saveWorkingHours: (
+    credential: LaunchCredential,
+    input: unknown,
+  ) => Effect.Effect<
+    { readonly saved: boolean },
+    CoachSession.Unauthenticated | CoachSession.LoadFailed
+  >
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/coach/CoachClients") {}
@@ -315,6 +345,18 @@ const identifier = (prefix: string): string =>
 const iso = (value: Date): string => value.toISOString()
 
 const failed = (operation: string) => () => new CoachSession.LoadFailed({ operation })
+
+/**
+ * The hours a coach works on one of their own calendar dates (#210).
+ *
+ * A date whose weekday cannot be read falls back on the shared window rather
+ * than on "not working": a day the sheet cannot classify should offer the
+ * ordinary grid, not an empty one.
+ */
+const workingWindowOn = (hours: WorkingHours, date: string): DayWindow | undefined => {
+  const weekday = weekdayOfDate(date)
+  return weekday === undefined ? hours.window : windowForWeekday(hours, weekday)
+}
 
 export const layer = Layer.effect(
   Service,
@@ -502,6 +544,8 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failed("sessions.between")))
       const now = new Date(yield* Clock.currentTimeMillis)
       const here = localParts(now, timezone)
+      const hours = readWorkingHours(readMemberSettings(principal.settings).workingHours)
+      const working = workingWindowOn(hours, date)
 
       return {
         busy: booked.map((entry) => {
@@ -509,6 +553,7 @@ export const layer = Layer.effect(
           return { startMinutes: start, endMinutes: start + entry.durationMinutes }
         }),
         ...(here.date === date ? { earliestStartMinutes: nextSlotStart(here.minutes) } : {}),
+        ...(working === undefined ? {} : { working }),
         timezone,
       } satisfies DaySchedule
     })
@@ -555,13 +600,18 @@ export const layer = Layer.effect(
 
       const now = new Date(yield* Clock.currentTimeMillis)
       const here = localParts(now, timezone)
+      const hours = readWorkingHours(readMemberSettings(principal.settings).workingHours)
 
-      return dates.map((date) => ({
-        date,
-        busy: busy.get(date) ?? [],
-        ...(here.date === date ? { earliestStartMinutes: nextSlotStart(here.minutes) } : {}),
-        timezone,
-      })) satisfies ReadonlyArray<DatedDaySchedule>
+      return dates.map((date) => {
+        const working = workingWindowOn(hours, date)
+        return {
+          date,
+          busy: busy.get(date) ?? [],
+          ...(here.date === date ? { earliestStartMinutes: nextSlotStart(here.minutes) } : {}),
+          ...(working === undefined ? {} : { working }),
+          timezone,
+        }
+      }) satisfies ReadonlyArray<DatedDaySchedule>
     })
 
     /**
@@ -807,6 +857,42 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failed("member.saveSettings")))
     })
 
+    const workingHours = Effect.fn("CoachClients.workingHours")(function* (
+      credential: LaunchCredential,
+    ) {
+      const principal = yield* session.requireOnboardedCoach(credential, READ_WINDOW_MILLIS)
+      return readWorkingHours(readMemberSettings(principal.settings).workingHours)
+    })
+
+    /**
+     * The whole week, written at once.
+     *
+     * Parsed strictly rather than read tolerantly: a request this server cannot
+     * understand leaves the stored week alone. The alternative — falling back —
+     * would answer a malformed write by resetting a coach's hours to the
+     * default, which is the one outcome nobody asked for.
+     */
+    const saveWorkingHours = Effect.fn("CoachClients.saveWorkingHours")(function* (
+      credential: LaunchCredential,
+      input: unknown,
+    ) {
+      const principal = yield* session.requireOnboardedCoach(credential, WRITE_WINDOW_MILLIS)
+      const hours = parseWorkingHours(input)
+      if (hours === undefined) return { saved: false } as const
+
+      const now = new Date(yield* Clock.currentTimeMillis)
+      yield* members
+        .saveSettings({
+          memberId: principal.memberId,
+          // Merged rather than replaced, like every other write to this blob: a
+          // key from a newer deploy must survive this one saying its piece.
+          settings: { ...readMemberSettings(principal.settings), workingHours: hours },
+          now,
+        })
+        .pipe(Effect.mapError(failed("member.saveSettings")))
+      return { saved: true } as const
+    })
+
     return Service.of({
       home,
       create,
@@ -820,6 +906,8 @@ export const layer = Layer.effect(
       prepareInviteCard,
       saveTimezone,
       hideMainMiniAppHint,
+      workingHours,
+      saveWorkingHours,
     })
   }),
 )
