@@ -143,14 +143,3 @@ export const parseWorkingHours = (value: unknown): WorkingHours | undefined => {
 
 /** Which weekday a `Date.getDay()` index names — 0 is Sunday, as the platform has it. */
 export const weekdayOfIndex = (index: number): Weekday => Weekdays[(index + 6) % 7] ?? "mon"
-
-/** Whether every day of the week still follows the shared window. */
-export const followsWindowEveryDay = (hours: WorkingHours): boolean =>
-  Weekdays.every((weekday) => hours.days[weekday] === "window")
-
-/** The days that carry hours of their own — what the summary line has to admit. */
-export const daysWithOwnHours = (hours: WorkingHours): ReadonlyArray<Weekday> =>
-  Weekdays.filter((weekday) => {
-    const day = hours.days[weekday]
-    return day !== "window" && day !== "off"
-  })

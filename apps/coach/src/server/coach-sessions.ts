@@ -1,6 +1,7 @@
 import { ClientRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
 import {
   inviteNeedsAttention,
+  MinutesInDay,
   readMemberSettings,
   readWorkingHours,
   type WorkingHours,
@@ -8,7 +9,7 @@ import {
 import { Clock, Context, Effect, Layer } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS } from "./coach-session.ts"
 import { localParts } from "@/lib/coach-calendar.ts"
-import { instantOf, MinutesInDay, zoneOf } from "./coach-day.ts"
+import { instantOf, zoneOf } from "./coach-day.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
 /**

@@ -1,9 +1,10 @@
-import { DefaultWorkingHours } from "@praximo/domain"
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
+import { useCallback } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { AvailabilityScreen } from "@/features/coach/components/availability-screen.tsx"
+import { HoursUnavailable } from "@/features/entry/components/hours-unavailable.tsx"
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
@@ -37,9 +38,20 @@ export const Route = createFileRoute("/availability/")({
 function AvailabilityRoute() {
   const { entry, hours, launchLanguage } = Route.useLoaderData()
   const navigate = useNavigate()
+  const router = useRouter()
+  const retry = useCallback(() => void router.invalidate(), [router])
 
   const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
+
+  if (!hours.ok) {
+    return (
+      <MiniAppShell>
+        <HostFullscreen />
+        <HoursUnavailable copy={copy} onRetry={retry} />
+      </MiniAppShell>
+    )
+  }
 
   return (
     <MiniAppShell>
@@ -48,10 +60,7 @@ function AvailabilityRoute() {
         copy={copy.availability}
         common={copy.common}
         language={language}
-        // The default is a real schedule the sheet is already using, so a read
-        // that failed shows the hours every coach starts with rather than a
-        // blank the screen would have to explain.
-        hours={hours.ok ? hours.hours : DefaultWorkingHours}
+        hours={hours.hours}
         onWorkingHours={() => void navigate({ to: "/availability/hours" })}
       />
     </MiniAppShell>

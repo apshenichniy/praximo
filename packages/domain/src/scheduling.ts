@@ -11,8 +11,6 @@ import { type DayWindow, MinutesInDay, SlotStepMinutes } from "./day-window.ts"
  * not take.
  */
 
-export { MinutesInDay, SlotStepMinutes } from "./day-window.ts"
-
 /**
  * The lengths a coach can plan. 90 minutes was considered and dropped: running
  * over is already a *room* behaviour — grace plus extensions inside `ROOM_CAP`

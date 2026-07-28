@@ -1,9 +1,10 @@
-import { DefaultWorkingHours } from "@praximo/domain"
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
+import { useCallback } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { WorkingHoursScreen } from "@/features/coach/components/working-hours-screen.tsx"
+import { HoursUnavailable } from "@/features/entry/components/hours-unavailable.tsx"
 import { useWorkingHoursDraft } from "@/features/coach/use-working-hours.ts"
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
@@ -32,13 +33,27 @@ export const Route = createFileRoute("/availability/hours")({
 function WorkingHoursRoute() {
   const { entry, hours, launchLanguage } = Route.useLoaderData()
   const navigate = useNavigate()
+  const router = useRouter()
+  const retry = useCallback(() => void router.invalidate(), [router])
 
   const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
+  // The screen commits on change, so it may only ever open on a week that was
+  // actually read. Seeding it with the default would arm every control on it
+  // against hours the coach really has.
   const draft = useWorkingHoursDraft(
-    hours.ok ? hours.hours : DefaultWorkingHours,
+    hours.ok ? hours.hours : undefined,
     copy.availability.saveFailed,
   )
+
+  if (!hours.ok || draft === undefined) {
+    return (
+      <MiniAppShell>
+        <HostFullscreen />
+        <HoursUnavailable copy={copy} onRetry={retry} />
+      </MiniAppShell>
+    )
+  }
 
   return (
     <MiniAppShell>

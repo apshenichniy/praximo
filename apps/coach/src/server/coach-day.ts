@@ -18,8 +18,6 @@ import type { CoachSession } from "./coach-session.ts"
  * it falls on — which is pure `Intl` and lives in `lib/coach-calendar.ts`.
  */
 
-export { MinutesInDay } from "@praximo/domain"
-
 /**
  * Which weekday a coach's own calendar date falls on (#210).
  *

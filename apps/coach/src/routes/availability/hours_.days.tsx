@@ -1,9 +1,10 @@
-import { DefaultWorkingHours } from "@praximo/domain"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, useRouter } from "@tanstack/react-router"
+import { useCallback } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { WorkingHoursDaysScreen } from "@/features/coach/components/working-hours-days-screen.tsx"
+import { HoursUnavailable } from "@/features/entry/components/hours-unavailable.tsx"
 import { useWorkingHoursDraft } from "@/features/coach/use-working-hours.ts"
 import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
@@ -37,13 +38,24 @@ export const Route = createFileRoute("/availability/hours_/days")({
 
 function WorkingHoursDaysRoute() {
   const { entry, hours, launchLanguage } = Route.useLoaderData()
+  const router = useRouter()
+  const retry = useCallback(() => void router.invalidate(), [router])
 
   const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
   const draft = useWorkingHoursDraft(
-    hours.ok ? hours.hours : DefaultWorkingHours,
+    hours.ok ? hours.hours : undefined,
     copy.availability.saveFailed,
   )
+
+  if (!hours.ok || draft === undefined) {
+    return (
+      <MiniAppShell>
+        <HostFullscreen />
+        <HoursUnavailable copy={copy} onRetry={retry} />
+      </MiniAppShell>
+    )
+  }
 
   return (
     <MiniAppShell>

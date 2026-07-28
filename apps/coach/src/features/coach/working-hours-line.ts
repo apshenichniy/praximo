@@ -1,11 +1,9 @@
 import type { CoachLanguage, WorkingHours } from "@praximo/domain"
 
+import { clock } from "@/features/coach/clock.ts"
 import { summariseWorkingHours } from "@/features/coach/working-hours-summary.ts"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
 import { weekdayLabel } from "@/features/i18n/weekday-label.ts"
-
-const pad = (value: number): string => String(value).padStart(2, "0")
-const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
 
 /**
  * The coach's week as one line: «Mon–Fri 09:00–19:00 · 1 day set separately».

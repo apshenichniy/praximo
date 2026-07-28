@@ -51,8 +51,6 @@ export {
   DefaultWorkingDayEndMinutes,
   DefaultWorkingDayStartMinutes,
   DefaultWorkingHours,
-  daysWithOwnHours,
-  followsWindowEveryDay,
   parseWorkingHours,
   readWorkingHours,
   type Weekday,

@@ -108,9 +108,7 @@ export function AvailabilityScreen({
             </span>
           </span>
         </div>
-        <p className="text-muted-foreground mt-3 text-xs leading-normal leading-5">
-          {copy.calendarWhy}
-        </p>
+        <p className="text-muted-foreground mt-3 text-xs leading-5">{copy.calendarWhy}</p>
         <button
           type="button"
           className="bg-secondary border-border text-foreground ease-[var(--ease-out)] mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border text-base leading-relaxed font-medium transition-transform duration-100 active:scale-[0.98]"

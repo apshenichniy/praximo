@@ -1,4 +1,5 @@
 import type { CoachLanguage } from "@praximo/domain"
+import { plural } from "@praximo/i18n"
 
 /**
  * Availability (#210): the screen the coach's working hours live on, the screen
@@ -45,8 +46,14 @@ export interface AvailabilityCopy {
   readonly perDayRow: string
   readonly perDayNone: string
   readonly perDaySome: (days: number) => string
-  /** The line at the foot, which restates the result of the last tap. */
-  readonly noteEveryDay: (from: string, to: string) => string
+  /**
+   * The line at the foot, which restates the result of the last tap.
+   *
+   * It does not name the hours: they are the two largest controls on the screen
+   * already, and wrapping them in a sentence would put text on both sides of a
+   * value — the shape §Standing rules keeps for counts alone.
+   */
+  readonly noteEveryDay: string
   readonly noteSomeOff: string
   readonly noteOwnHours: (days: number) => string
   readonly noteNoDays: string
@@ -77,7 +84,11 @@ const en: AvailabilityCopy = {
 
   everyDay: "Every day",
   noWorkingDays: "No working days",
-  ownHours: (days) => (days === 1 ? " · 1 day set separately" : ` · ${days} days set separately`),
+  ownHours: (days) =>
+    plural("en", days, {
+      one: " · {count} day set separately",
+      other: " · {count} days set separately",
+    }),
 
   calendarTitle: "Google Calendar",
   calendarNotConnected: "Not connected",
@@ -95,15 +106,18 @@ const en: AvailabilityCopy = {
   perDayRow: "Set hours per day",
   perDayNone: "For a week that is not the same every day",
   perDaySome: (days) =>
-    days === 1 ? "1 day has its own hours" : `${days} days have their own hours`,
-  noteEveryDay: (from, to) =>
-    `Every day is worked, ${from} to ${to}. Switch off the days you do not.`,
+    plural("en", days, {
+      one: "{count} day has its own hours",
+      other: "{count} days have their own hours",
+    }),
+  noteEveryDay: "Every day is worked. Switch off the days you do not.",
   noteSomeOff:
     "A session already booked on a day you switched off keeps its place. Narrowing the hours says nothing about the past.",
   noteOwnHours: (days) =>
-    days === 1
-      ? "One day keeps its own hours. The window above applies to the rest."
-      : `${days} days keep their own hours. The window above applies to the rest.`,
+    plural("en", days, {
+      one: "{count} day keeps its own hours. The window above applies to the rest.",
+      other: "{count} days keep their own hours. The window above applies to the rest.",
+    }),
   noteNoDays: "Every day is switched off. The sheet will offer nothing until one is back on.",
 
   pickerStart: "Start",
@@ -131,7 +145,13 @@ const uk: AvailabilityCopy = {
 
   everyDay: "Щодня",
   noWorkingDays: "Немає робочих днів",
-  ownHours: (days) => (days === 1 ? " · 1 день окремо" : ` · ${days} дн. окремо`),
+  ownHours: (days) =>
+    plural("uk", days, {
+      one: " · {count} день окремо",
+      few: " · {count} дні окремо",
+      many: " · {count} днів окремо",
+      other: " · {count} дня окремо",
+    }),
 
   calendarTitle: "Google Календар",
   calendarNotConnected: "Не підключено",
@@ -149,15 +169,22 @@ const uk: AvailabilityCopy = {
   perDayRow: "Задати години для кожного дня",
   perDayNone: "Для тижня, який не однаковий щодня",
   perDaySome: (days) =>
-    days === 1 ? "1 день має власні години" : `${days} дн. мають власні години`,
-  noteEveryDay: (from, to) =>
-    `Ви працюєте щодня, з ${from} до ${to}. Вимкніть дні, коли не працюєте.`,
+    plural("uk", days, {
+      one: "{count} день має власні години",
+      few: "{count} дні мають власні години",
+      many: "{count} днів мають власні години",
+      other: "{count} дня мають власні години",
+    }),
+  noteEveryDay: "Ви працюєте щодня. Вимкніть дні, коли не працюєте.",
   noteSomeOff:
     "Сесія, вже записана на вимкнений день, залишається на місці. Звуження годин нічого не каже про минуле.",
   noteOwnHours: (days) =>
-    days === 1
-      ? "Один день має власні години. Вікно вище діє для решти."
-      : `${days} дн. мають власні години. Вікно вище діє для решти.`,
+    plural("uk", days, {
+      one: "{count} день має власні години. Вікно вище діє для решти.",
+      few: "{count} дні мають власні години. Вікно вище діє для решти.",
+      many: "{count} днів мають власні години. Вікно вище діє для решти.",
+      other: "{count} дня мають власні години. Вікно вище діє для решти.",
+    }),
   noteNoDays: "Усі дні вимкнено. Аркуш не пропонуватиме нічого, доки ви не увімкнете хоча б один.",
 
   pickerStart: "Початок",
@@ -185,7 +212,13 @@ const ru: AvailabilityCopy = {
 
   everyDay: "Ежедневно",
   noWorkingDays: "Нет рабочих дней",
-  ownHours: (days) => (days === 1 ? " · 1 день отдельно" : ` · ${days} дн. отдельно`),
+  ownHours: (days) =>
+    plural("ru", days, {
+      one: " · {count} день отдельно",
+      few: " · {count} дня отдельно",
+      many: " · {count} дней отдельно",
+      other: " · {count} дня отдельно",
+    }),
 
   calendarTitle: "Google Календарь",
   calendarNotConnected: "Не подключён",
@@ -202,15 +235,23 @@ const ru: AvailabilityCopy = {
   daysLabel: "Дни, когда вы работаете",
   perDayRow: "Задать часы по дням",
   perDayNone: "Для недели, которая не одинакова каждый день",
-  perDaySome: (days) => (days === 1 ? "1 день со своими часами" : `${days} дн. со своими часами`),
-  noteEveryDay: (from, to) =>
-    `Вы работаете каждый день, с ${from} до ${to}. Выключите дни, когда не работаете.`,
+  perDaySome: (days) =>
+    plural("ru", days, {
+      one: "{count} день со своими часами",
+      few: "{count} дня со своими часами",
+      many: "{count} дней со своими часами",
+      other: "{count} дня со своими часами",
+    }),
+  noteEveryDay: "Вы работаете каждый день. Выключите дни, когда не работаете.",
   noteSomeOff:
     "Сессия, уже назначенная на выключенный день, останется на месте. Сужение часов ничего не говорит о прошлом.",
   noteOwnHours: (days) =>
-    days === 1
-      ? "Один день со своими часами. Окно выше действует для остальных."
-      : `${days} дн. со своими часами. Окно выше действует для остальных.`,
+    plural("ru", days, {
+      one: "{count} день со своими часами. Окно выше действует для остальных.",
+      few: "{count} дня со своими часами. Окно выше действует для остальных.",
+      many: "{count} дней со своими часами. Окно выше действует для остальных.",
+      other: "{count} дня со своими часами. Окно выше действует для остальных.",
+    }),
   noteNoDays: "Все дни выключены. Лист не предложит ничего, пока вы не включите хотя бы один.",
 
   pickerStart: "Начало",

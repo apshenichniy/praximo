@@ -28,10 +28,11 @@ entry points) — the @BotFather steps live in the
 
 ## First login
 
-Before any screen below renders, the coach meets a **blocking two-step onboarding** — a
-state of the entry, deliberately not a route of its own, so there is no URL to bookmark past
-it. Stepping back between the two is the host's own back button, which on this screen would
-otherwise close the app.
+Before any screen below renders, the coach meets **two blocking steps and then one optional
+one** — a state of the entry, deliberately not a route of its own, so there is no URL to
+bookmark past it. Stepping back between the two blocking steps is the host's own back button,
+which on this screen would otherwise close the app. Only the first two can hold a coach up:
+the third is offered after acceptance and is one tap from gone.
 
 **Step 1 — language.** Praximo introduces itself and states, in the first person and in the
 language currently selected, what that selection means: *"I will write to you in **English** —
@@ -67,9 +68,10 @@ Skipping is not a failure state: nothing nags afterwards, and the step is delibe
 restored on a later launch. A coach who closes the app on it meets Today next time and finds
 the control where it permanently lives.
 
-Acceptance lands on **Today** ([#61](https://github.com/apshenichniy/praximo/issues/61)) —
-deliberately not the manager Mini App's onboarding companion, which lives under a different
-credential and answers a different question. Between #56 and #61 that landing was the client
+Past that step — taken or skipped — first login lands on **Today**
+([#61](https://github.com/apshenichniy/praximo/issues/61)) — deliberately not the manager
+Mini App's onboarding companion, which lives under a different credential and answers a
+different question. Between #56 and #61 that landing was the client
 list, which Today displaces; the list now has a route of its own at `/clients`.
 
 ## Navigation model

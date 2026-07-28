@@ -10,6 +10,7 @@ import { Switch } from "@praximo/ui/components/switch"
 import { Heading, cn } from "@praximo/ui"
 import { useState } from "react"
 
+import { clock } from "@/features/coach/clock.ts"
 import { TimeWindowPicker } from "@/features/coach/components/time-window-picker.tsx"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
 import type { CommonCopy } from "@/features/i18n/coach-copy/common.ts"
@@ -28,8 +29,6 @@ import { HostBackButton, selectionHaptic } from "@/presentation-host"
  * It also grows: breaks, two shifts, a holiday are all rows on a list and none
  * of them are chips on a window.
  */
-const pad = (value: number): string => String(value).padStart(2, "0")
-const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
 
 /** What a day is offering right now, whichever way it says it. */
 const hoursOf = (hours: WorkingHours, day: WorkingDay): DayWindow | undefined =>
@@ -104,9 +103,7 @@ export function WorkingHoursDaysScreen({
       <Heading as="h1" role="page-title" className="mt-2">
         {copy.perDayTitle}
       </Heading>
-      <p className="text-muted-foreground mt-2 text-base leading-relaxed leading-6">
-        {copy.perDayLede}
-      </p>
+      <p className="text-muted-foreground mt-2 text-base leading-6">{copy.perDayLede}</p>
 
       <div className="border-border mt-6 overflow-hidden rounded-2xl border">
         {Weekdays.map((weekday, index) => {
@@ -185,7 +182,7 @@ export function WorkingHoursDaysScreen({
       ) : null}
 
       {error === undefined ? null : (
-        <p className="text-destructive animate-in fade-in slide-in-from-bottom-1 mt-3 text-base leading-relaxed leading-5 duration-150">
+        <p className="text-destructive animate-in fade-in slide-in-from-bottom-1 mt-3 text-base leading-5 duration-150">
           {error}
         </p>
       )}

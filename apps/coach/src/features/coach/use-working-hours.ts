@@ -23,17 +23,42 @@ import { saveWorkingHours } from "@/server/coach-clients.functions.ts"
  * back past a change the coach has since made.
  */
 export const useWorkingHoursDraft = (
-  initial: WorkingHours,
+  /**
+   * The week as the server has it, or nothing when it could not be read.
+   *
+   * `undefined` rather than the default, and the hook hands back `undefined` in
+   * turn: a screen that commits on change must not open on a week nobody
+   * confirmed, because the first tap would write it over the real one.
+   */
+  initial: WorkingHours | undefined,
   failedMessage: string,
-): {
-  readonly hours: WorkingHours
-  readonly error: string | undefined
-  readonly commit: (next: WorkingHours) => void
-} => {
+):
+  | {
+      readonly hours: WorkingHours
+      readonly error: string | undefined
+      readonly commit: (next: WorkingHours) => void
+    }
+  | undefined => {
   const [hours, setHours] = useState(initial)
   const [error, setError] = useState<string>()
   const confirmed = useRef(initial)
   const generation = useRef(0)
+  const seeded = useRef(initial)
+
+  /**
+   * Re-seed when the week the loader holds changes under us.
+   *
+   * Everything here commits immediately, so there is never an unsaved edit to
+   * protect: a fresher week from the server is always the better one. Without
+   * this, coming back from the per-day screen would leave the draft holding the
+   * week as it was before those hours were set, and the next tap would commit
+   * the stale one over them.
+   */
+  if (initial !== seeded.current) {
+    seeded.current = initial
+    confirmed.current = initial
+    setHours(initial)
+  }
 
   const commit = useCallback(
     (next: WorkingHours) => {
@@ -48,18 +73,18 @@ export const useWorkingHoursDraft = (
             return
           }
           notifyHaptic("error")
-          setHours(confirmed.current)
+          if (confirmed.current !== undefined) setHours(confirmed.current)
           setError(failedMessage)
         })
         .catch(() => {
           if (mine !== generation.current) return
           notifyHaptic("error")
-          setHours(confirmed.current)
+          if (confirmed.current !== undefined) setHours(confirmed.current)
           setError(failedMessage)
         })
     },
     [failedMessage],
   )
 
-  return { hours, error, commit }
+  return hours === undefined ? undefined : { hours, error, commit }
 }

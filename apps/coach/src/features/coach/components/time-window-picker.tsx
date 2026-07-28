@@ -2,6 +2,7 @@ import { type DayWindow, SlotStepMinutes } from "@praximo/domain"
 import { cn } from "@praximo/ui"
 import { useState } from "react"
 
+import { clock, pad } from "@/features/coach/clock.ts"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
 import { selectionHaptic } from "@/presentation-host"
 
@@ -20,9 +21,6 @@ import { selectionHaptic } from "@/presentation-host"
  */
 const Hours = Array.from({ length: 24 }, (_, hour) => hour)
 const Minutes = [0, 15, 30, 45]
-
-const pad = (value: number): string => String(value).padStart(2, "0")
-const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
 
 export type WindowField = "start" | "end"
 

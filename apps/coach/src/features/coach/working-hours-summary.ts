@@ -1,4 +1,4 @@
-import { type Weekday, Weekdays, type WorkingHours } from "@praximo/domain"
+import { type DayWindow, type Weekday, Weekdays, type WorkingHours } from "@praximo/domain"
 
 /**
  * The one line that says a coach's week back to them (#210).
@@ -17,7 +17,7 @@ export interface WorkingHoursSummary {
   readonly everyDay: boolean
   readonly noDays: boolean
   /** The shared window, as minutes-of-day. */
-  readonly window: { readonly startMinutes: number; readonly endMinutes: number }
+  readonly window: DayWindow
   /** How many days keep hours of their own — what the line has to admit to. */
   readonly ownHours: number
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { MinutesInDay } from "./day-window.ts"
+import { MinutesInDay, SlotStepMinutes } from "./day-window.ts"
 import {
   dayGrid,
   daySlots,
@@ -10,7 +10,6 @@ import {
   PlannedDurations,
   RevealFromMinutes,
   RevealUntilMinutes,
-  SlotStepMinutes,
 } from "./scheduling.ts"
 import { DefaultWorkingDayEndMinutes, DefaultWorkingDayStartMinutes } from "./working-hours.ts"
 

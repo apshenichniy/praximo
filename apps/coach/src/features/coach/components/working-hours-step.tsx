@@ -2,10 +2,10 @@ import {
   type CoachLanguage,
   type DayWindow,
   type Weekday,
-  Weekdays,
+  windowForWeekday,
   type WorkingHours,
 } from "@praximo/domain"
-import { Heading, cn } from "@praximo/ui"
+import { Heading } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { useState } from "react"
 
@@ -13,9 +13,9 @@ import {
   TimeWindowPicker,
   type WindowField,
 } from "@/features/coach/components/time-window-picker.tsx"
+import { WeekChips, WindowRow } from "@/features/coach/components/window-controls.tsx"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
-import { weekdayLabel } from "@/features/i18n/weekday-label.ts"
-import { HostMainButton, selectionHaptic } from "@/presentation-host"
+import { HostMainButton } from "@/presentation-host"
 
 /**
  * First login, the optional third step (#210): the hours, offered once.
@@ -35,8 +35,6 @@ import { HostMainButton, selectionHaptic } from "@/presentation-host"
  * Continue is a real action rather than a commit affordance over a screen that
  * commits on change.
  */
-const pad = (value: number): string => String(value).padStart(2, "0")
-const clock = (minutes: number): string => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`
 
 export function WorkingHoursStep({
   copy,
@@ -60,7 +58,6 @@ export function WorkingHoursStep({
   const [picking, setPicking] = useState<WindowField>()
 
   const toggleDay = (weekday: Weekday) => {
-    selectionHaptic()
     setHours((was) => ({
       ...was,
       days: { ...was.days, [weekday]: was.days[weekday] === "off" ? "window" : "off" },
@@ -77,44 +74,15 @@ export function WorkingHoursStep({
       <Heading as="h1" role="page-title">
         {copy.stepTitle}
       </Heading>
-      <p className="text-muted-foreground mt-3 text-base leading-relaxed leading-6">
-        {copy.stepLede}
-      </p>
+      <p className="text-muted-foreground mt-3 text-base leading-6">{copy.stepLede}</p>
 
-      <div className="mt-8 flex items-center gap-3">
-        <button
-          type="button"
-          aria-expanded={picking === "start"}
-          onClick={() => setPicking((was) => (was === "start" ? undefined : "start"))}
-          className={cn(
-            "flex flex-1 flex-col items-start gap-0.5 rounded-2xl border px-4 py-3 text-left",
-            "ease-[var(--ease-out)] transition-[border-color,scale] duration-100 active:scale-[0.98]",
-            picking === "start" ? "border-primary bg-secondary" : "border-border bg-secondary",
-          )}
-        >
-          <span className="text-muted-foreground text-xs leading-normal">{copy.from}</span>
-          <span className="text-2xl leading-tight font-semibold tabular-nums">
-            {clock(hours.window.startMinutes)}
-          </span>
-        </button>
-        <span aria-hidden className="text-muted-foreground">
-          →
-        </span>
-        <button
-          type="button"
-          aria-expanded={picking === "end"}
-          onClick={() => setPicking((was) => (was === "end" ? undefined : "end"))}
-          className={cn(
-            "flex flex-1 flex-col items-start gap-0.5 rounded-2xl border px-4 py-3 text-left",
-            "ease-[var(--ease-out)] transition-[border-color,scale] duration-100 active:scale-[0.98]",
-            picking === "end" ? "border-primary bg-secondary" : "border-border bg-secondary",
-          )}
-        >
-          <span className="text-muted-foreground text-xs leading-normal">{copy.until}</span>
-          <span className="text-2xl leading-tight font-semibold tabular-nums">
-            {clock(hours.window.endMinutes)}
-          </span>
-        </button>
+      <div className="mt-8">
+        <WindowRow
+          window={hours.window}
+          copy={copy}
+          picking={picking}
+          onPick={(field) => setPicking((was) => (was === field ? undefined : field))}
+        />
       </div>
 
       {picking === undefined ? null : (
@@ -124,31 +92,19 @@ export function WorkingHoursStep({
       <p className="text-muted-foreground mt-8 text-xs leading-normal font-semibold tracking-wide uppercase">
         {copy.daysLabel}
       </p>
-      <div className="mt-3 grid grid-cols-7 gap-1.5">
-        {Weekdays.map((weekday) => {
-          const off = hours.days[weekday] === "off"
-          return (
-            <button
-              key={weekday}
-              type="button"
-              aria-pressed={!off}
-              onClick={() => toggleDay(weekday)}
-              className={cn(
-                "flex min-h-11 items-center justify-center rounded-xl border px-1 text-xs leading-normal font-semibold",
-                "ease-[var(--ease-out)] transition-[color,background-color,border-color,scale] duration-100 active:scale-[0.97]",
-                off
-                  ? "border-border text-muted-foreground bg-transparent"
-                  : "border-border bg-secondary text-foreground",
-              )}
-            >
-              {weekdayLabel(language, weekday)}
-            </button>
-          )
-        })}
-      </div>
+      {/*
+        The same chips the hours screen draws, bar and all: this step is that
+        screen with its escape hatch removed, and two copies of one control are
+        two controls that drift.
+      */}
+      <WeekChips
+        language={language}
+        windowFor={(weekday) => windowForWeekday(hours, weekday)}
+        onToggle={toggleDay}
+      />
 
       {error === undefined ? null : (
-        <p className="text-destructive animate-in fade-in slide-in-from-bottom-1 mt-6 text-base leading-relaxed leading-5 duration-150">
+        <p className="text-destructive animate-in fade-in slide-in-from-bottom-1 mt-6 text-base leading-5 duration-150">
           {error}
         </p>
       )}
