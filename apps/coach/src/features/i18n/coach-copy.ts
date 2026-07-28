@@ -1,5 +1,6 @@
 import { type CoachLanguage, CoachLanguages, DefaultCoachLanguage } from "@praximo/domain"
 import { fillGaps as fillGapsWith, makeCatalogue, MissingTranslation } from "@praximo/i18n"
+import { availability, type AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
 import { clients, type ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 import { common, type CommonCopy } from "@/features/i18n/coach-copy/common.ts"
 import { entry, type EntryCopy } from "@/features/i18n/coach-copy/entry.ts"
@@ -45,6 +46,7 @@ export interface CoachCopy {
   readonly today: TodayCopy
   readonly clients: ClientsCopy
   readonly sessions: SessionsCopy
+  readonly availability: AvailabilityCopy
 }
 
 export { languageNames, MissingTranslation }
@@ -61,6 +63,7 @@ const compose = (locale: CoachLanguage): CoachCopy => ({
   today: today[locale],
   clients: clients[locale],
   sessions: sessions[locale],
+  availability: availability[locale],
 })
 
 /**

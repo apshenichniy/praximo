@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as MainMiniAppRouteImport } from './routes/main-mini-app'
+import { Route as AvailabilityIndexRouteImport } from './routes/availability/index'
+import { Route as AvailabilityHoursRouteImport } from './routes/availability/hours'
 import { Route as ClientsIndexRouteImport } from './routes/clients/index'
 import { Route as ClientsClientIdRouteImport } from './routes/clients/$clientId'
 import { Route as ClientsNewRouteImport } from './routes/clients/new'
@@ -20,6 +22,7 @@ import { Route as LegalTermsRouteImport } from './routes/legal/terms'
 import { Route as SessionsIndexRouteImport } from './routes/sessions/index'
 import { Route as SessionsSessionIdRouteImport } from './routes/sessions/$sessionId'
 import { Route as SessionsNewRouteImport } from './routes/sessions/new'
+import { Route as AvailabilityHoursDaysRouteImport } from './routes/availability/hours_.days'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,6 +37,16 @@ const HealthRoute = HealthRouteImport.update({
 const MainMiniAppRoute = MainMiniAppRouteImport.update({
   id: '/main-mini-app',
   path: '/main-mini-app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AvailabilityIndexRoute = AvailabilityIndexRouteImport.update({
+  id: '/availability/',
+  path: '/availability/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AvailabilityHoursRoute = AvailabilityHoursRouteImport.update({
+  id: '/availability/hours',
+  path: '/availability/hours',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ClientsIndexRoute = ClientsIndexRouteImport.update({
@@ -76,46 +89,60 @@ const SessionsNewRoute = SessionsNewRouteImport.update({
   path: '/sessions/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AvailabilityHoursDaysRoute = AvailabilityHoursDaysRouteImport.update({
+  id: '/availability/hours_/days',
+  path: '/availability/hours/days',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/main-mini-app': typeof MainMiniAppRoute
+  '/availability/hours': typeof AvailabilityHoursRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/new': typeof ClientsNewRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/sessions/new': typeof SessionsNewRoute
+  '/availability/': typeof AvailabilityIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/sessions/': typeof SessionsIndexRoute
+  '/availability/hours/days': typeof AvailabilityHoursDaysRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/main-mini-app': typeof MainMiniAppRoute
+  '/availability/hours': typeof AvailabilityHoursRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/new': typeof ClientsNewRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/sessions/new': typeof SessionsNewRoute
+  '/availability': typeof AvailabilityIndexRoute
   '/clients': typeof ClientsIndexRoute
   '/sessions': typeof SessionsIndexRoute
+  '/availability/hours/days': typeof AvailabilityHoursDaysRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/main-mini-app': typeof MainMiniAppRoute
+  '/availability/hours': typeof AvailabilityHoursRoute
   '/clients/$clientId': typeof ClientsClientIdRoute
   '/clients/new': typeof ClientsNewRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
   '/sessions/new': typeof SessionsNewRoute
+  '/availability/': typeof AvailabilityIndexRoute
   '/clients/': typeof ClientsIndexRoute
   '/sessions/': typeof SessionsIndexRoute
+  '/availability/hours_/days': typeof AvailabilityHoursDaysRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -123,54 +150,66 @@ export interface FileRouteTypes {
     | '/'
     | '/health'
     | '/main-mini-app'
+    | '/availability/hours'
     | '/clients/$clientId'
     | '/clients/new'
     | '/legal/privacy'
     | '/legal/terms'
     | '/sessions/$sessionId'
     | '/sessions/new'
+    | '/availability/'
     | '/clients/'
     | '/sessions/'
+    | '/availability/hours/days'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/health'
     | '/main-mini-app'
+    | '/availability/hours'
     | '/clients/$clientId'
     | '/clients/new'
     | '/legal/privacy'
     | '/legal/terms'
     | '/sessions/$sessionId'
     | '/sessions/new'
+    | '/availability'
     | '/clients'
     | '/sessions'
+    | '/availability/hours/days'
   id:
     | '__root__'
     | '/'
     | '/health'
     | '/main-mini-app'
+    | '/availability/hours'
     | '/clients/$clientId'
     | '/clients/new'
     | '/legal/privacy'
     | '/legal/terms'
     | '/sessions/$sessionId'
     | '/sessions/new'
+    | '/availability/'
     | '/clients/'
     | '/sessions/'
+    | '/availability/hours_/days'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HealthRoute: typeof HealthRoute
   MainMiniAppRoute: typeof MainMiniAppRoute
+  AvailabilityHoursRoute: typeof AvailabilityHoursRoute
   ClientsClientIdRoute: typeof ClientsClientIdRoute
   ClientsNewRoute: typeof ClientsNewRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalTermsRoute: typeof LegalTermsRoute
   SessionsSessionIdRoute: typeof SessionsSessionIdRoute
   SessionsNewRoute: typeof SessionsNewRoute
+  AvailabilityIndexRoute: typeof AvailabilityIndexRoute
   ClientsIndexRoute: typeof ClientsIndexRoute
   SessionsIndexRoute: typeof SessionsIndexRoute
+  AvailabilityHoursDaysRoute: typeof AvailabilityHoursDaysRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -194,6 +233,20 @@ declare module '@tanstack/react-router' {
       path: '/main-mini-app'
       fullPath: '/main-mini-app'
       preLoaderRoute: typeof MainMiniAppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/availability/': {
+      id: '/availability/'
+      path: '/availability'
+      fullPath: '/availability/'
+      preLoaderRoute: typeof AvailabilityIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/availability/hours': {
+      id: '/availability/hours'
+      path: '/availability/hours'
+      fullPath: '/availability/hours'
+      preLoaderRoute: typeof AvailabilityHoursRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/clients/': {
@@ -252,6 +305,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SessionsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/availability/hours_/days': {
+      id: '/availability/hours_/days'
+      path: '/availability/hours/days'
+      fullPath: '/availability/hours/days'
+      preLoaderRoute: typeof AvailabilityHoursDaysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -259,14 +319,17 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HealthRoute: HealthRoute,
   MainMiniAppRoute: MainMiniAppRoute,
+  AvailabilityHoursRoute: AvailabilityHoursRoute,
   ClientsClientIdRoute: ClientsClientIdRoute,
   ClientsNewRoute: ClientsNewRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalTermsRoute: LegalTermsRoute,
   SessionsSessionIdRoute: SessionsSessionIdRoute,
   SessionsNewRoute: SessionsNewRoute,
+  AvailabilityIndexRoute: AvailabilityIndexRoute,
   ClientsIndexRoute: ClientsIndexRoute,
   SessionsIndexRoute: SessionsIndexRoute,
+  AvailabilityHoursDaysRoute: AvailabilityHoursDaysRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

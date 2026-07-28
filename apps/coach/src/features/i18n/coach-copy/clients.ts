@@ -131,12 +131,17 @@ export interface ClientsCopy {
    * end, and there is no window to be outside of.
    */
   readonly dayOffHeading: string
-  /** "No 60-minute slot fits on " · day · " before 22:00." */
   /**
+   * "No slot of this length fits on " · day · "."
+   *
    * The day is set off by punctuation rather than joined by a preposition. The
    * date reads «воскресенье, 26 июля» — nominative, as `Intl` gives it — and
    * Russian and Ukrainian want the accusative after «в»: «в среду», not «в
    * среда». A dash is right for all seven days in all three languages.
+   *
+   * The tail named 22:00 until #210, when the platform stopped having a day
+   * end of its own. What bounds a day now is the coach's own hours, which
+   * differ per weekday — so the sentence states the day and stops.
    */
   readonly emptyDayLead: string
   readonly emptyDayTail: string
@@ -235,7 +240,7 @@ const en: ClientsCopy = {
   laterHeading: (until) => `Later · until ${until}`,
   dayOffHeading: "Not a working day",
   emptyDayLead: "No slot of this length fits on ",
-  emptyDayTail: " before 22:00.",
+  emptyDayTail: ".",
   nextDay: "Try the next day",
   pickTime: "Pick a time",
   scheduleSubmit: "Schedule",
@@ -325,7 +330,7 @@ const uk: ClientsCopy = {
   laterHeading: (until) => `Пізніше · до ${until}`,
   dayOffHeading: "Неробочий день",
   emptyDayLead: "Сесія такої тривалості не вміщається — ",
-  emptyDayTail: ", до 22:00.",
+  emptyDayTail: ".",
   nextDay: "Спробувати наступний день",
   pickTime: "Оберіть час",
   scheduleSubmit: "Запланувати",
@@ -415,7 +420,7 @@ const ru: ClientsCopy = {
   laterHeading: (until) => `Позже · до ${until}`,
   dayOffHeading: "Нерабочий день",
   emptyDayLead: "Сессия такой длительности не помещается — ",
-  emptyDayTail: ", до 22:00.",
+  emptyDayTail: ".",
   nextDay: "Попробовать следующий день",
   pickTime: "Выберите время",
   scheduleSubmit: "Запланировать",

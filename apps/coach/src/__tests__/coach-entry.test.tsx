@@ -1,3 +1,4 @@
+import { DefaultWorkingHours } from "@praximo/domain"
 import {
   createMemoryHistory,
   createRootRoute,
@@ -51,6 +52,7 @@ const emptyPractice = {
     attention: [],
     emptyPractice: true,
     mainMiniAppHintVisible: true,
+    workingHours: DefaultWorkingHours,
   },
 } as const
 
@@ -60,11 +62,14 @@ const screen = (entry: CoachEntryTransportResult, launchLanguage: "en" | "uk" | 
       entry={entry}
       launchLanguage={launchLanguage}
       today={emptyPractice}
+      offerWorkingHours={false}
       onAccept={() => {}}
       onChooseLanguage={async () => true}
       onCreate={() => {}}
       onResend={() => {}}
       onRetry={() => {}}
+      onSaveWorkingHours={() => {}}
+      onSkipWorkingHours={() => {}}
       pending={false}
       resending={undefined}
       error={undefined}

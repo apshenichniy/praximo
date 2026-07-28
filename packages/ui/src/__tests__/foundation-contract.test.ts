@@ -259,7 +259,11 @@ describe("@praximo/ui public foundation", () => {
       expect(source).not.toContain("var(--ease")
     }
 
-    expect(Object.keys(componentSources)).toHaveLength(24)
+    // 25 since #210 added `collapsible`, installed from the live registry and
+    // left as upstream source: the hours the scheduling sheet hides open behind
+    // one, and the trigger it needs is a caller's own markup rather than a
+    // variant added here.
+    expect(Object.keys(componentSources)).toHaveLength(25)
   })
 
   it("enables Tailwind font antialiasing at the shared body boundary", () => {
