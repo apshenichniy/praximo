@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --env-file=../../.env node_modules/vite/bin/vite.js dev --port 3002",
+    "dev": "bun --env-file=../../.env node_modules/vite/bin/vite.js dev --port 3003",
     "build": "vite build",
     "check": "tsc --noEmit && oxlint -c ../../.oxlintrc.json src",
     "test": "vitest run"

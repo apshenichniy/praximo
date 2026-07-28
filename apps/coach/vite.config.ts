@@ -3,6 +3,15 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
+const developmentOpenPath = (): string | false => {
+  const botId = process.env.DEV_COACH_TELEGRAM_BOT_ID?.trim()
+  if (!botId) return false
+  if (!/^\d+$/.test(botId)) {
+    throw new Error("DEV_COACH_TELEGRAM_BOT_ID must be a Telegram bot id")
+  }
+  return `/?b=${botId}`
+}
+
 // A plain TanStack Start config. It intentionally carries no Cloudflare plugin:
 // this app is deployed by Alchemy's `Cloudflare.Website.Vite` (alchemy.run.ts),
 // which injects its own Cloudflare Vite plugin and targets workerd for the
@@ -10,6 +19,9 @@ import { defineConfig } from "vite"
 // keep (Alchemy owns all infra) and would break `vite dev`. Local dev runs the
 // standard TanStack Start node server; `alchemy dev` gives a workerd runtime.
 export default defineConfig({
+  server: {
+    open: developmentOpenPath(),
+  },
   build: {
     rolldownOptions: {
       external: ["cloudflare:workers"],

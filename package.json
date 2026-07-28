@@ -48,6 +48,10 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev --filter=@praximo/admin --filter=@praximo/coach --filter=@praximo/client --filter=@praximo/www",
+    "dev:admin": "bun run --filter @praximo/admin dev",
+    "dev:coach": "bun run --filter @praximo/coach dev",
+    "dev:client": "bun run --filter @praximo/client dev",
+    "dev:www": "bun run --filter @praximo/www dev",
     "ui:dev": "bun run --filter @praximo/ui dev",
     "branding:avatar:set": "bun scripts/set-branding-avatar.ts",
     "check": "turbo check && bun run lint && bun run livekit:ops:check && bun run alchemy:check && bun run scripts:check",
