@@ -18,9 +18,9 @@ export type EntryView =
   | { readonly kind: "unavailable" }
 
 /**
- * Admin wins whenever the viewer is one, even if they are also a coach: the
- * admin surface is the richer screen and carries its own contextual coach
- * action (#107), so a dual-role person keeps a single, unchanged entry.
+ * Admin wins whenever the viewer is one. The Manager and Coach surfaces stay
+ * separate even when one Telegram identity holds both roles; Coach is entered
+ * through that workspace's own bot, never through an Admin shortcut (#218).
  */
 export const entryView = (result: ViewerRoleTransportResult): EntryView => {
   if (!result.ok)

@@ -1,5 +1,5 @@
 import { useSuspenseQuery } from "@tanstack/react-query"
-import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
@@ -11,19 +11,15 @@ import {
   CoachListEmpty,
   CoachRow,
   InviteCoachLink,
-  ViewerCoachCard,
 } from "@/features/admin/components/coach-list.tsx"
 import { Section, SectionTitle } from "@praximo/ui"
 import { adminWorkspaceListQuery } from "@/features/admin/workspace-queries.ts"
-import { openTelegramLink } from "@/presentation-host"
 
 export const Route = createFileRoute("/admin/")({ component: AdminHome })
-const adminRoute = getRouteApi("/admin")
 
 // Admin copy is English-only (admin-surface.md): the admin is the solo operator,
 // so the trilingual machinery that serves coaches never reaches these routes.
 function AdminHome() {
-  const { coach: viewerCoach } = adminRoute.useLoaderData()
   const { data } = useSuspenseQuery(adminWorkspaceListQuery())
   const navigate = useNavigate()
   const openInvite = useCallback(() => void navigate({ to: "/admin/workspaces/new" }), [navigate])
@@ -51,15 +47,6 @@ function AdminHome() {
   return (
     <main className="mx-auto w-full max-w-2xl px-5 pt-14 pb-10">
       <AdminHero />
-
-      {viewerCoach === null ? null : (
-        <div className="mt-10">
-          <ViewerCoachCard
-            viewerCoach={viewerCoach}
-            onOpen={(link) => void openTelegramLink(link)}
-          />
-        </div>
-      )}
 
       {onboarding.length === 0 ? null : (
         <Section className="mt-10" aria-labelledby="onboarding-heading">

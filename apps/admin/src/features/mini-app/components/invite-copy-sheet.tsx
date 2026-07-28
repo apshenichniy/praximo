@@ -45,7 +45,7 @@ export function InviteCopySheet({
       showSwipeHandle
       onOpenChange={(next) => (pending ? undefined : onOpenChange(next))}
     >
-      <DrawerContent className="px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <DrawerContent className="h-[66.6667dvh] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <DrawerHeader className="p-0 pt-2 text-left group-data-[swipe-axis=y]/drawer-popup:text-left">
           <DrawerTitle>Copy invite</DrawerTitle>
           <DrawerDescription>

@@ -4,6 +4,8 @@ import { HostBackButton } from "@/presentation-host"
 import { Heading } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
+import { InviteLinkPanel } from "@/features/mini-app/components/invite-link-panel.tsx"
+import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
 
 /**
  * The optional @BotFather steps, on a screen of their own (#61).
@@ -30,6 +32,7 @@ export function MainMiniAppScreen({
   readonly onHide: () => void
 }) {
   const [hidden, setHidden] = useState(false)
+  const copyAddress = useCopyLink(mainMiniAppUrl)
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
@@ -67,14 +70,19 @@ export function MainMiniAppScreen({
       <p className="text-muted-foreground mt-8 px-1 text-xs leading-normal font-semibold tracking-wide uppercase">
         {copy.home.mainMiniAppUrlLabel}
       </p>
-      {/* A value the reader has to transcribe is never a caption (#198). This is
-          the one thing on the screen that gets read character by character and
-          pasted into another app, and a wrong character produces a Mini App that
-          opens nothing. Monospace also reads smaller than proportional type at
-          the same nominal size, so 13px here was two steps down, not one. */}
-      <p className="border-border bg-card text-foreground mt-2 overflow-x-auto rounded-xl border px-3.5 py-2.5 font-mono text-base leading-relaxed break-all">
-        {mainMiniAppUrl}
-      </p>
+      {/* The address is a read-only field rather than text to transcribe: one
+          wrong character produces a Mini App that opens nothing. The inline
+          control follows the same copy/select fallback as client invitations,
+          while the field remains focusable for manual selection (#218). */}
+      <div className="mt-2">
+        <InviteLinkPanel
+          link={mainMiniAppUrl}
+          ariaLabel={copy.home.mainMiniAppUrlLabel}
+          controller={copyAddress}
+          copyLabel={copy.home.mainMiniAppCopy}
+          copiedLabel={copy.home.mainMiniAppCopied}
+        />
+      </div>
 
       {/* Outline, not ghost (#198). A ghost button has no fill and no edge, and
           its only resting mark is a `hover:` that does not exist on a phone — so

@@ -1,6 +1,5 @@
 import { formatExpiresIn, formatRelativeTime, statusLabel } from "@/features/admin/formatting.ts"
 import type { AdminSurface } from "@/server/admin-surface.ts"
-import type { ViewerRole } from "@/server/viewer-role.ts"
 
 /**
  * How urgently a row wants attention. Warning is something the admin can still
@@ -108,17 +107,3 @@ export const coachRowTime = (coach: AdminSurface.CoachListEntry): string | undef
       return undefined
   }
 }
-
-/** The contextual action an admin who is also a coach gets on their own row. */
-export const viewerCoachAction = (
-  viewerCoach: ViewerRole.ViewerCoach,
-): { readonly title: string; readonly subtitle: string } =>
-  viewerCoach.state === "active"
-    ? { title: "Open my coach bot", subtitle: "Your own workspace lives in your bot" }
-    : {
-        title: "Continue my coach setup",
-        subtitle:
-          viewerCoach.state === "accepted"
-            ? "Pick up where you left off in the manager chat"
-            : "Open your bot to finish activating your workspace",
-      }
