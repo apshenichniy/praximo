@@ -10,6 +10,7 @@ import {
 } from "@praximo/ui/components/drawer"
 import { Spinner } from "@praximo/ui/components/spinner"
 import { Textarea } from "@praximo/ui/components/textarea"
+import { cn } from "@praximo/ui"
 import { useOpenHaptic } from "@/presentation-host"
 
 /**
@@ -45,7 +46,12 @@ export function InviteCopySheet({
       showSwipeHandle
       onOpenChange={(next) => (pending ? undefined : onOpenChange(next))}
     >
-      <DrawerContent className="h-[66.6667dvh] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <DrawerContent
+        className={cn(
+          "px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]",
+          fallbackMessage !== undefined && "h-[66.6667dvh]",
+        )}
+      >
         <DrawerHeader className="p-0 pt-2 text-left group-data-[swipe-axis=y]/drawer-popup:text-left">
           <DrawerTitle>Copy invite</DrawerTitle>
           <DrawerDescription>
@@ -81,12 +87,6 @@ export function InviteCopySheet({
           ) : (
             <>
               <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-hidden">
-                <Alert className="border-transparent">
-                  <AlertDescription>
-                    Automatic copy was blocked by the browser. Tap Copy below, or long-press the
-                    message to copy it manually.
-                  </AlertDescription>
-                </Alert>
                 {error === undefined ? null : (
                   <Alert variant="destructive" className="bg-destructive/10 border-transparent">
                     <AlertDescription className="text-destructive">{error}</AlertDescription>

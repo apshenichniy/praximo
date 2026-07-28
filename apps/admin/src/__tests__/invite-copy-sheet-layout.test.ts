@@ -20,10 +20,11 @@ const readSources = () => Promise.all(sourcePaths.map((sourcePath) => readFile(s
  * retry action stays in the drawer footer.
  */
 describe("invite copy fallback layout", () => {
-  it("opens at two thirds of the viewport in both role surfaces", async () => {
+  it("grows to two thirds only when the long fallback appears in both role surfaces", async () => {
     const sources = await readSources()
     for (const source of sources) {
-      expect(source).toContain('className="h-[66.6667dvh]')
+      expect(source).toContain('fallbackMessage !== undefined && "h-[66.6667dvh]"')
+      expect(source).not.toContain("Automatic copy was blocked")
     }
   })
 
