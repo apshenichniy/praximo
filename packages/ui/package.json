@@ -10,7 +10,7 @@
     "./components/*": "./src/components/ui/*.tsx"
   },
   "scripts": {
-    "dev": "vite --port 3004",
+    "dev": "vite --port 3005",
     "check": "tsc --noEmit && oxlint -c ../../.oxlintrc.json src",
     "test": "vitest run",
     "lab:build": "vite build"

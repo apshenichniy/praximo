@@ -28,10 +28,10 @@ describe("application topology", () => {
   })
 
   it("keeps each app on its local workflow port", () => {
-    expect(packageJson("admin").scripts.dev).toContain("3000")
-    expect(packageJson("coach").scripts.dev).toContain("3001")
-    expect(packageJson("client").scripts.dev).toContain("3002")
-    expect(packageJson("www").scripts.dev).toContain("3003")
+    expect(packageJson("admin").scripts.dev).toContain("3001")
+    expect(packageJson("coach").scripts.dev).toContain("3002")
+    expect(packageJson("client").scripts.dev).toContain("3003")
+    expect(packageJson("www").scripts.dev).toContain("3004")
 
     const root = JSON.parse(read("package.json")) as {
       readonly scripts: Readonly<Record<string, string>>
@@ -40,6 +40,19 @@ describe("application topology", () => {
     expect(root.scripts.dev).toContain("@praximo/coach")
     expect(root.scripts.dev).toContain("@praximo/client")
     expect(root.scripts.dev).toContain("@praximo/www")
+    expect(root.scripts["dev:admin"]).toContain("@praximo/admin")
+    expect(root.scripts["dev:coach"]).toContain("@praximo/coach")
+    expect(root.scripts["dev:client"]).toContain("@praximo/client")
+    expect(root.scripts["dev:www"]).toContain("@praximo/www")
+    expect(JSON.parse(read("packages/ui/package.json")).scripts.dev).toContain("3005")
+  })
+
+  it("opens Coach with the configured Workspace Bot selector", () => {
+    const coachConfig = read("apps/coach/vite.config.ts")
+
+    expect(coachConfig).toContain("DEV_COACH_TELEGRAM_BOT_ID")
+    expect(coachConfig).toContain("open: developmentOpenPath()")
+    expect(read(".env.example")).toContain("DEV_COACH_TELEGRAM_BOT_ID")
   })
 
   it("leaves shared primitives with @praximo/ui", () => {
