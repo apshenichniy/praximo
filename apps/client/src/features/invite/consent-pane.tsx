@@ -76,15 +76,14 @@ export function ConsentPane({
               className="grid grid-cols-[44px_1fr] items-start gap-3.5 p-0 marker:content-none"
             >
               {/*
-                Quiet on light, much less quiet on dark — and the asymmetry is
-                forced rather than chosen. The baseline's `--primary` is *darker*
-                in dark mode than in light (L 0.432 against 0.491), so the 40%
-                that reads as a soft violet on white lands almost on the
-                background on black. The numeral has to carry the list's
-                structure at a glance; below roughly this it stops being a
-                numeral and becomes a smudge.
+                Full strength, and the ink token rather than the fill one.
+                Dimming this was the original mistake: the numeral is the only
+                thing telling five legal sentences apart, so it is structure, not
+                decoration, and it was doing that job at 2.17:1 on dark. Weight
+                is what keeps it quiet — 26px at `font-light` is already a
+                hairline beside 15.5px body text.
               */}
-              <span className="text-primary/40 dark:text-primary/85 pt-0.5 text-[26px] leading-none font-light tracking-[-0.03em] tabular-nums">
+              <span className="text-primary-ink pt-0.5 text-[26px] leading-none font-light tracking-[-0.03em] tabular-nums">
                 {String(index + 1).padStart(2, "0")}
               </span>
               <p className="text-muted-foreground m-0 text-[15.5px] leading-[1.72]">{point}</p>
@@ -93,7 +92,9 @@ export function ConsentPane({
         </ol>
 
         <a
-          className="text-primary w-fit text-[15px] font-medium underline underline-offset-[3px]"
+          // Ink, not fill: this is the one link on a legally operative page, and
+          // `--primary` drawn as a glyph on dark is 2.17:1 (see `--primary-ink`).
+          className="text-primary-ink w-fit text-[15px] font-medium underline underline-offset-[3px]"
           // Root-relative, and the empty origin is the point. The policy lives on
           // *this* Worker, so no origin is needed — and reading one off `window`
           // would mean the server rendered a different `href` from the client,
