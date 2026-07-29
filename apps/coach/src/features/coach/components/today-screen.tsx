@@ -1,8 +1,10 @@
 import {
   Alert01Icon,
   ArrowRight01Icon,
+  Calendar03Icon,
   CheckmarkCircle02Icon,
   Clock01Icon,
+  UserMultipleIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { CoachLanguage } from "@praximo/domain"
@@ -11,7 +13,6 @@ import { Link } from "@tanstack/react-router"
 import { useMemo } from "react"
 
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
-import { buttonVariants } from "@praximo/ui/components/button"
 import { Card } from "@praximo/ui/components/card"
 import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import { sessionClock } from "@/features/coach/session-days.ts"
@@ -31,7 +32,7 @@ import type { CoachSessions } from "@/server/coach-sessions.ts"
  * 3. **today's sessions as cards**, all of them, each tapping through;
  * 4. **needs attention**, hidden when empty and holding only invitations that
  *    have lapsed or are inside their last two days;
- * 5. **bottom navigation** — two quiet buttons, not actions;
+ * 5. **bottom navigation** — three rows in one card, not actions;
  * 6. the **Main Mini App hint**, last, as one row with no heading of its own.
  *
  * Three of mini-app.md's five blocks are deliberately **absent rather than
@@ -139,57 +140,50 @@ export function TodayScreen({
         </>
       )}
 
-      {/* Navigation, not action: the two of them are quiet, and the host's own
-          bottom button is the only thing on this screen that creates anything. */}
-      <nav className="mt-10 flex gap-3">
-        <Link to="/sessions" className={cn(buttonVariants({ variant: "outline" }), "h-10 flex-1")}>
-          {copy.today.allSessions}
-        </Link>
-        <Link to="/clients" className={cn(buttonVariants({ variant: "outline" }), "h-10 flex-1")}>
-          {copy.today.clients}
-        </Link>
-      </nav>
-
       {/*
-        Availability, as a row that states the hours rather than a third button
-        that leads to them (#210).
+        Navigation as three rows in one card, and the availability row is why
+        (#210).
 
-        A third button does not survive the row: «Доступність» wants 98 points
-        of the 109 three buttons leave, and «Доступность» wants 104 — both clip.
-        More to the point, three equal buttons would claim three equal errands,
-        and this one is opened twice a year while the two above are weekly.
+        Two of them were outline buttons standing on the page ground, and that
+        worked only while the page was white. `variant="outline"` is
+        `border-border bg-background` — its fill *is* the page's fill, by
+        definition — so a white button on a white page was carried by its edge
+        alone and nobody noticed the missing surface. Once the light scheme's page
+        receded the same pair became outlined holes in a tinted band, beside cards
+        that had just gained a raise. No colour fixes that: an outline button can
+        never be raised above a ground it is painted from.
 
-        As a row it earns its 76 points on the days nobody presses it: the
-        dashboard answers «what are my hours» without being opened, which is the
-        question a coach has when the sheet stops offering Saturday.
+        A row has no such problem, because the card is what is raised and the row
+        is inside it. #210 had already chosen this shape for availability, and the
+        constraint it named for keeping the other two out was width: a third
+        *button* wants 98 of the 109 points three of them leave. Rows stack. Width
+        stops being the limit, and the reason availability became a row is the
+        reason these two are rows now.
+
+        Ordered by how often a coach opens them — two weekly errands, then the one
+        opened twice a year. The chevron is the other thing a button never said:
+        that this leads somewhere rather than doing something.
       */}
-      <Card className="mt-3 gap-0 overflow-hidden py-0">
-        <Link
-          to="/availability"
-          className="transition-colors duration-100 active:bg-muted flex min-h-14 items-center gap-3 px-5 py-3 text-left"
-        >
-          <HugeiconsIcon
-            icon={Clock01Icon}
-            size={18}
-            strokeWidth={2}
-            className="text-muted-foreground shrink-0"
-          />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-base leading-relaxed font-medium">
-              {copy.availability.title}
-            </span>
-            <span className="text-muted-foreground mt-0.5 block truncate text-xs leading-normal">
-              {workingHoursLine(today.workingHours, copy.availability, language)}
-            </span>
-          </span>
-          <HugeiconsIcon
-            icon={ArrowRight01Icon}
-            size={18}
-            strokeWidth={2}
-            className="text-muted-foreground shrink-0"
-          />
-        </Link>
-      </Card>
+      <nav className="mt-10">
+        <Card className="gap-0 overflow-hidden py-0">
+          <ul className="divide-border divide-y">
+            <li>
+              <NavRow to="/sessions" icon={Calendar03Icon} label={copy.today.allSessions} />
+            </li>
+            <li>
+              <NavRow to="/clients" icon={UserMultipleIcon} label={copy.today.clients} />
+            </li>
+            <li>
+              <NavRow
+                to="/availability"
+                icon={Clock01Icon}
+                label={copy.availability.title}
+                value={workingHoursLine(today.workingHours, copy.availability, language)}
+              />
+            </li>
+          </ul>
+        </Card>
+      </nav>
 
       {/*
         One row reading as its payoff rather than its mechanism, opening the
@@ -291,6 +285,61 @@ function SessionCard({
         </div>
       )}
     </Card>
+  )
+}
+
+/**
+ * One row of the navigation card: a glyph, where it goes, and — where there is
+ * one — what it already says without being opened.
+ *
+ * `value` is #210's argument as a prop rather than as a special case. The
+ * availability row earns its height on the days nobody presses it, because it
+ * answers «what are my hours» in place. Sessions and Clients have nothing to
+ * state yet, so they leave it out rather than invent a number; when one of them
+ * has something true to say — the next session, a count — it says it here.
+ *
+ * The glyphs are the ones each thing already wears elsewhere in the app: a
+ * calendar for sessions, the same mark a session row carries; two figures rather
+ * than a group for clients, because a coach's clients are individuals seen one at
+ * a time and not a team; a clock for the hours, which is what availability is.
+ */
+function NavRow({
+  to,
+  icon,
+  label,
+  value,
+}: {
+  readonly to: "/sessions" | "/clients" | "/availability"
+  readonly icon: typeof Clock01Icon
+  readonly label: string
+  readonly value?: string
+}) {
+  return (
+    <Link
+      to={to}
+      className="transition-colors duration-100 active:bg-muted flex min-h-14 items-center gap-3 px-5 py-3 text-left"
+    >
+      <HugeiconsIcon
+        icon={icon}
+        size={18}
+        strokeWidth={2}
+        className="text-muted-foreground shrink-0"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-base leading-relaxed font-medium">{label}</span>
+        {value === undefined ? null : (
+          <span className="text-muted-foreground mt-0.5 block truncate text-xs leading-normal">
+            {value}
+          </span>
+        )}
+      </span>
+      <HugeiconsIcon
+        icon={ArrowRight01Icon}
+        size={18}
+        strokeWidth={2}
+        className="text-muted-foreground shrink-0"
+      />
+    </Link>
   )
 }
 
