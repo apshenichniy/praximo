@@ -7,7 +7,7 @@ Outline of entities, relationships, and state machines for the MVP spec. Vocabul
 - **Workspace is the tenancy boundary.** Every row that isn't the workspace itself carries a `workspace_id` (directly or through its parent). No cross-workspace identity: the same human coached by two coaches is two independent Clients.
 - **Session lifecycle and processing status are separate dimensions.** The session state machine tracks the human-facing lifecycle; each derived entity (recording, transcripts, artifacts) tracks its own processing status. There is no god-status on Session.
 - **Content lives in object storage (R2), metadata in Postgres.** Track transcripts and the combined Transcript are R2 objects; the database holds references, statuses, and metadata. Utterance-level DB queries are not an MVP need.
-- **Channel-agnostic client model, three kinds in MVP.** `telegram`, `email`, and `manual` (coach-forwarded links) ship in MVP; the kind set stays open. One Invite/acceptance model covers all paths ([#27](https://github.com/apshenichniy/praximo/issues/27)).
+- **Channel-agnostic client model, two kinds in MVP.** `telegram` and `email` ship in MVP; the kind set stays open. Every client is addressable — the `manual` kind was removed in [#57](https://github.com/apshenichniy/praximo/issues/57), because a channel with no address is not a channel but a standing request that a human forward things. Forwarding a link by hand is still supported; it is a *delivery* form, not a channel kind. One Invite/acceptance model covers all paths ([#27](https://github.com/apshenichniy/praximo/issues/27), [#57](https://github.com/apshenichniy/praximo/issues/57)).
 
 ## Entities
 
@@ -49,10 +49,10 @@ A coached person, scoped to one workspace. No account, no credentials.
 
 How a client is reached.
 
-- `client_id`, `kind`: `telegram | email | manual` (MVP) — open set
-- kind-specific address: Telegram user/chat id, or email address; `manual` carries none
+- `client_id`, `kind`: `telegram | email` (MVP) — open set
+- kind-specific address: Telegram user/chat id, or email address — always present, which is the point of the kind set
 - `telegram` carries the profile snapshot captured at acceptance: name, username, avatar (R2 object)
-- exactly one primary channel per client; reminders and join links are delivered to it — for `manual`, they route to the **coach** as a ready-to-forward message ([client-onboarding-auth.md](client-onboarding-auth.md))
+- exactly one primary channel per client; reminders and join links are delivered to it, and there is no branch where they are delivered to somebody else instead ([client-onboarding-auth.md](client-onboarding-auth.md))
 
 ### Invite
 
@@ -60,7 +60,8 @@ The onboarding entry point, uniform across current and future channel kinds.
 
 - `workspace_id`, `client_id`, `token` — single-use, TTL 7 days; re-issuing creates a new Invite and expires the old one, copying the delivery target
 - `status`: `pending → accepted`, or `expired`
-- `delivery`: `{ kind: telegram | email | link, address? }` — how the invite reaches the client: Telegram deep link, an invite email the service sends itself, or a web URL the coach forwards manually
+- `delivery`: `{ kind: telegram | email | link, address?, language }` — how the invite reaches the client: Telegram deep link, an invite email the service sends itself, or a web URL the coach forwards by hand. `language` is the language of the message the coach sends, fixed at creation; `kind` becomes a record of what was handed over, written with `delivered_at` on the first share or copy ([#224](https://github.com/apshenichniy/praximo/issues/224))
+- `delivered_at` — when the invitation was actually handed over; null until then, which is what «Не отправлено» reads from ([#224](https://github.com/apshenichniy/praximo/issues/224))
 - optional `expected_telegram_user_id` — enables recognition on a bare `/start`; the UI that sets it (Telegram user picker) is deferred post-MVP, the field ships so it can be added without migration ([client-onboarding-auth.md](client-onboarding-auth.md))
 - The same token has two forms: the bot deep link and the future web URL
   `me.praximo.io/i/<token>`. Accepting is atomic on either door — it creates the
