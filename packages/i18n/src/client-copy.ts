@@ -12,13 +12,21 @@ import type { SessionMoment } from "./session-time.ts"
  * because #57 renders the same consent text in the `web` Worker, and a consent
  * text with two copies is a consent record nobody can reproduce.
  *
- * Three rules hold across the whole catalogue, and `docs/agents/product-copy.md`
+ * Four rules hold across the whole catalogue, and `docs/agents/product-copy.md`
  * is where they are written down:
  *
  * - the client is addressed by **their coach's assistant**, never by a platform;
  * - no URLs in body text — the privacy policy is an inline button (#164);
  * - no gender-agreeing verb forms about the coach in UK/RU (#16), which is why
- *   nothing here says "she set up" and the confirmations are impersonal.
+ *   nothing here says "she set up" and the confirmations are impersonal;
+ * - the coach's name is interpolated **only in the nominative** (#193, #222).
+ *   `coach` is the label the coach typed into their own client list, not a
+ *   validated first name, so there is nothing safe to decline: where UK/RU want
+ *   an oblique case the sentence says «ваш коуч», and whose bot this is comes
+ *   from the surrounding surface instead — the chat is titled with the coach's
+ *   workspace name and described "Coaching with {coach}", and the invitation is
+ *   pasted by the coach into their own conversation with the client. That is why
+ *   several UK/RU leaves ignore the `coach` they are handed while `en` uses it.
  */
 
 export interface ConfirmationInput {
@@ -28,7 +36,13 @@ export interface ConfirmationInput {
   readonly durationMinutes: number
 }
 
-/** The two names the invitation puts in one sentence, and never separately. */
+/**
+ * The client's name, and the coach's for the locales that can still say it.
+ *
+ * `en` puts both in one sentence; uk and ru drop the coach's to «ваш коуч»,
+ * because the slot wants a genitive (#222). The client's own name stays — that
+ * is #193 Q4 and still open.
+ */
 export interface InvitationInput {
   readonly client: string
   readonly coach: string
@@ -165,24 +179,23 @@ const en: ClientCopy = {
 const uk: ClientCopy = {
   invitation: {
     message: (input) =>
-      `Вітаю, ${input.client}! 👋\n\nЯ помічник ${input.coach}. Щойно все буде налаштовано, час зустрічей і нагадування надходитимуть від мене.\n\nЦе займе близько хвилини: оберете мову, погодитесь з одним пунктом щодо ваших даних — і готово.\n\n⏳ Посилання одноразове й діє 7 днів.`,
+      `Вітаю, ${input.client}! 👋\n\nЯ помічник вашого коуча. Щойно все буде налаштовано, час зустрічей і нагадування надходитимуть від мене.\n\nЦе займе близько хвилини: оберете мову, погодитесь з одним пунктом щодо ваших даних — і готово.\n\n⏳ Посилання одноразове й діє 7 днів.`,
     button: "Налаштувати профіль",
   },
   languageStep: {
     title: "<b>Якою мовою мені писати?</b>",
-    lead: (coach) =>
-      `Я помічник ${coach}. Оберіть мову — нею я й продовжу, зокрема про ваші сесії.`,
+    lead: () => `Я помічник вашого коуча. Оберіть мову — нею я й продовжу, зокрема про ваші сесії.`,
   },
   consent: {
     title: "<b>Одна річ, на яку потрібна ваша згода</b>",
-    lead: (coach) =>
-      `Щоб допомогти ${coach} готуватися до ваших сесій, Praximo записує та аналізує їх. Ось що саме це означає:`,
+    lead: () =>
+      `Щоб допомогти вашому коучу готуватися до ваших сесій, Praximo записує та аналізує їх. Ось що саме це означає:`,
     points: (coach) => [
       "Аудіо ваших сесій записується.",
       `Записи аналізує штучний інтелект. Результати отримує лише ${coach} — більше ніхто їх не бачить.`,
       `Аудіо видаляється через 30 днів після розшифрування. Транскрипти та результати аналізу зберігаються, доки ${coach} їх не видалить.`,
       "Уся обробка відбувається в ЄС, окрім аналізу штучним інтелектом — він виконується у США. Ці запити проходять через Cloudflare AI Gateway, який зберігає їх журнал.",
-      `Ви можете відкликати цю згоду або попросити видалити ваші дані будь-коли — просто скажіть про це ${coach}.`,
+      `Ви можете відкликати цю згоду або попросити видалити ваші дані будь-коли — просто скажіть про це своєму коучу.`,
     ],
     privacyButton: "Політика конфіденційності",
     agreeButton: "Даю згоду",
@@ -200,36 +213,36 @@ const uk: ClientCopy = {
       `<b>Готово — профіль створено.</b>\n\n${coach} напише тут, коли час буде призначено, і я надішлю посилання для підключення.`,
   },
   refusal: {
-    alreadySetUp: (coach) =>
-      `Ви вже підключені до ${coach}. Деталі сесій надходитимуть просто сюди — більше нічого робити не потрібно.`,
-    linkUsed: (coach) => `Це посилання вже використано. Попросіть у ${coach} нове.`,
-    linkExpired: (coach) => `Термін дії посилання минув. Попросіть у ${coach} свіже.`,
+    alreadySetUp: () =>
+      `Ви вже підключені до свого коуча. Деталі сесій надходитимуть просто сюди — більше нічого робити не потрібно.`,
+    linkUsed: () => `Це посилання вже використано. Попросіть у свого коуча нове.`,
+    linkExpired: () => `Термін дії посилання минув. Попросіть у свого коуча свіже.`,
   },
-  stranger: (coach) =>
-    `Це бот-помічник ${coach}. Якщо ви працюєте разом, попросіть посилання-запрошення — увійти можна лише за ним.`,
+  stranger: () =>
+    `Це бот-помічник вашого коуча. Якщо ви працюєте разом, попросіть посилання-запрошення — увійти можна лише за ним.`,
 }
 
 const ru: ClientCopy = {
   invitation: {
     message: (input) =>
-      `Здравствуйте, ${input.client}! 👋\n\nЯ помощник ${input.coach}. Как только всё будет настроено, время встреч и напоминания будут приходить от меня.\n\nЭто займёт около минуты: выберете язык, согласитесь с одним пунктом о ваших данных — и готово.\n\n⏳ Ссылка одноразовая и действует 7 дней.`,
+      `Здравствуйте, ${input.client}! 👋\n\nЯ помощник вашего коуча. Как только всё будет настроено, время встреч и напоминания будут приходить от меня.\n\nЭто займёт около минуты: выберете язык, согласитесь с одним пунктом о ваших данных — и готово.\n\n⏳ Ссылка одноразовая и действует 7 дней.`,
     button: "Настроить профиль",
   },
   languageStep: {
     title: "<b>На каком языке мне писать?</b>",
-    lead: (coach) =>
-      `Я помощник ${coach}. Выберите язык — на нём я и продолжу, в том числе про ваши сессии.`,
+    lead: () =>
+      `Я помощник вашего коуча. Выберите язык — на нём я и продолжу, в том числе про ваши сессии.`,
   },
   consent: {
     title: "<b>Одна вещь, на которую нужно ваше согласие</b>",
-    lead: (coach) =>
-      `Чтобы помочь ${coach} готовиться к вашим сессиям, Praximo записывает и анализирует их. Вот что именно это значит:`,
+    lead: () =>
+      `Чтобы помочь вашему коучу готовиться к вашим сессиям, Praximo записывает и анализирует их. Вот что именно это значит:`,
     points: (coach) => [
       "Аудио ваших сессий записывается.",
       `Записи анализирует искусственный интеллект. Результаты получает только ${coach} — больше их никто не видит.`,
       `Аудио удаляется через 30 дней после расшифровки. Транскрипты и результаты анализа хранятся, пока ${coach} их не удалит.`,
       "Вся обработка происходит в ЕС, кроме анализа искусственным интеллектом — он выполняется в США. Эти запросы проходят через Cloudflare AI Gateway, который ведёт их журнал.",
-      `Вы можете отозвать это согласие или попросить удалить ваши данные в любой момент — просто скажите об этом ${coach}.`,
+      `Вы можете отозвать это согласие или попросить удалить ваши данные в любой момент — просто скажите об этом своему коучу.`,
     ],
     privacyButton: "Политика конфиденциальности",
     agreeButton: "Даю согласие",
@@ -247,13 +260,13 @@ const ru: ClientCopy = {
       `<b>Готово — профиль создан.</b>\n\n${coach} напишет здесь, когда время будет назначено, и я пришлю ссылку для подключения.`,
   },
   refusal: {
-    alreadySetUp: (coach) =>
-      `Вы уже подключены к ${coach}. Детали сессий будут приходить прямо сюда — больше ничего делать не нужно.`,
-    linkUsed: (coach) => `Эта ссылка уже использована. Попросите у ${coach} новую.`,
-    linkExpired: (coach) => `Срок действия ссылки истёк. Попросите у ${coach} свежую.`,
+    alreadySetUp: () =>
+      `Вы уже подключены к своему коучу. Детали сессий будут приходить прямо сюда — больше ничего делать не нужно.`,
+    linkUsed: () => `Эта ссылка уже использована. Попросите у своего коуча новую.`,
+    linkExpired: () => `Срок действия ссылки истёк. Попросите у своего коуча свежую.`,
   },
-  stranger: (coach) =>
-    `Это бот-помощник ${coach}. Если вы работаете вместе, попросите ссылку-приглашение — войти можно только по ней.`,
+  stranger: () =>
+    `Это бот-помощник вашего коуча. Если вы работаете вместе, попросите ссылку-приглашение — войти можно только по ней.`,
 }
 
 /**
