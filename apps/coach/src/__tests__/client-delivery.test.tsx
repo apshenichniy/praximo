@@ -95,16 +95,33 @@ afterEach(() => {
 })
 
 describe("the invitation section", () => {
-  it("opens on Telegram and offers both doors over one token", async () => {
+  /**
+   * The door is read off what the block *says and offers*, not off an address.
+   *
+   * It used to be read off the URL, because a read-only field carried it. That
+   * field is gone: truncated to a phone's width it hid the token — the only part
+   * that differs between two clients — so it verified nothing, and nobody
+   * retypes one by hand. Neither door's URL is rendered anywhere now, which is
+   * why these assert on the sentence, the reminder and the lead action instead.
+   */
+  it("opens on Telegram and offers both doors", async () => {
     const html = await screen(client())
 
     expect(html).toContain(copy.clients.doors.telegram.label)
     expect(html).toContain(copy.clients.doors.link.label)
-    // The default door, its address, its eyebrow and its card.
-    expect(html).toContain(TELEGRAM_URL)
-    expect(html).toContain(copy.clients.doors.telegram.eyebrow)
+    expect(html).toContain(copy.clients.inviteEyebrow)
+    // The default door: its sentence and its card.
+    expect(html).toContain(copy.clients.doors.telegram.leadTail)
     expect(html).toContain(copy.clients.sendCard)
-    expect(html).not.toContain(copy.clients.doors.link.eyebrow)
+    expect(html).not.toContain(copy.clients.doors.link.leadTail)
+  })
+
+  // The token stays behind the copy button. Nothing on the screen prints it.
+  it("shows neither form of the link", async () => {
+    const html = await screen(client())
+
+    expect(html).not.toContain(TELEGRAM_URL)
+    expect(html).not.toContain(WEB_URL)
   })
 
   /**
@@ -117,9 +134,8 @@ describe("the invitation section", () => {
       client({ delivered: { at: "2026-07-27T10:00:00.000Z", kind: "link" } }),
     )
 
-    expect(html).toContain(WEB_URL)
-    expect(html).toContain(copy.clients.doors.link.eyebrow)
-    expect(html).not.toContain(TELEGRAM_URL)
+    expect(html).toContain(copy.clients.doors.link.leadTail)
+    expect(html).not.toContain(copy.clients.doors.telegram.leadTail)
     // No card behind the Link door: it opens a bot this client never appears in.
     expect(html).not.toContain(copy.clients.sendCard)
   })

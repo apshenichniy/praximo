@@ -13,12 +13,6 @@ export interface DoorCopy {
   /** The segment's own chip. */
   readonly label: string
   /**
-   * The eyebrow over the invitation section. It said «Приглашение · Telegram»
-   * unconditionally until there was a second door, at which point it was stating
-   * one thing while the control under it stated another.
-   */
-  readonly eyebrow: string
-  /**
    * name · " opens your bot in Telegram and accepts there. The link works for 7 days."
    *
    * The coach's own summary of what the invitation does, and **only** that
@@ -85,6 +79,15 @@ export interface ClientsCopy {
   readonly nameRequired: string
 
   /**
+   * The eyebrow over the invitation card, and door-independent on purpose.
+   *
+   * It used to name the door — «Приглашение · Telegram» — back when the door
+   * lived inside the card's body and nothing else on screen said which one was
+   * open. Now the segment sits in the card's own header strip, directly beside
+   * this word, so naming the door here says it twice.
+   */
+  readonly inviteEyebrow: string
+  /**
    * One token, two ways to hand it over. Switching shows a different address and
    * writes nothing — both forms are valid from the moment the invitation exists.
    */
@@ -117,6 +120,18 @@ export interface ClientsCopy {
   readonly sendCard: string
   readonly copyInvite: string
   readonly copied: string
+  /**
+   * What a failed clipboard write says, now that there is nothing to fall back
+   * to (#224).
+   *
+   * The invitation card used to carry the link in a read-only field, and
+   * `useCopyLink` answered a refusal by selecting it — silently, leaving the
+   * button unchanged and the badge still reading «Не отправлено». A coach met
+   * with a highlighted field learns nothing. With the field gone the refusal has
+   * to speak, and «try again» is the whole of the advice: nothing was written,
+   * so nothing has to be undone first.
+   */
+  readonly copyFailed: string
   /**
    * The system share sheet, offered on iOS only (#27) — the one host that both
    * advertises `navigator.share` and honours it.
@@ -299,18 +314,17 @@ const en: ClientsCopy = {
   createAction: "Create and invite",
   nameRequired: "A name is needed — it is how you will find them in the list.",
 
+  inviteEyebrow: "Invitation",
   doorLabel: "How to send it",
   doors: {
     telegram: {
       label: "Telegram",
-      eyebrow: "Invitation · Telegram",
-      leadTail: " opens your bot in Telegram and accepts there. The link works for 7 days.",
+      leadTail: " opens your bot in Telegram and accepts there. It works for 7 days.",
       reminder: "Reminders will reach them in Telegram.",
     },
     link: {
       label: "Link",
-      eyebrow: "Invitation · Link",
-      leadTail: " opens the invitation page and accepts there. The link works for 7 days.",
+      leadTail: " opens the invitation page and accepts there. It works for 7 days.",
       reminder: "Reminders will go to the email they leave when they accept.",
     },
   },
@@ -323,6 +337,7 @@ const en: ClientsCopy = {
   sendCard: "Send a card in Telegram",
   copyInvite: "Copy invite",
   copied: "Copied",
+  copyFailed: "Could not copy. Try again.",
   shareAction: "Share",
   linkLabel: "Invitation link",
   reissueLead: "This link is no longer valid. Issue a fresh one to invite them again.",
@@ -425,18 +440,17 @@ const uk: ClientsCopy = {
   createAction: "Створити і запросити",
   nameRequired: "Потрібне ім'я — саме за ним ви знайдете клієнта у списку.",
 
+  inviteEyebrow: "Запрошення",
   doorLabel: "Як надіслати",
   doors: {
     telegram: {
       label: "Telegram",
-      eyebrow: "Запрошення · Telegram",
-      leadTail: " відкриє вашого бота в Telegram і прийме запрошення там. Посилання діє 7 днів.",
+      leadTail: " відкриє вашого бота в Telegram і прийме запрошення там. Воно діє 7 днів.",
       reminder: "Нагадування надходитимуть у Telegram.",
     },
     link: {
       label: "Посилання",
-      eyebrow: "Запрошення · Посилання",
-      leadTail: " відкриє сторінку запрошення і прийме його там. Посилання діє 7 днів.",
+      leadTail: " відкриє сторінку запрошення і прийме його там. Воно діє 7 днів.",
       reminder: "Нагадування надходитимуть на пошту, яку клієнт залишить під час прийняття.",
     },
   },
@@ -449,6 +463,7 @@ const uk: ClientsCopy = {
   sendCard: "Надіслати картку в Telegram",
   copyInvite: "Скопіювати запрошення",
   copied: "Скопійовано",
+  copyFailed: "Не вдалося скопіювати. Спробуйте ще раз.",
   shareAction: "Поділитися",
   linkLabel: "Посилання-запрошення",
   reissueLead: "Це посилання більше не діє. Випустіть нове, щоб запросити ще раз.",
@@ -551,19 +566,17 @@ const ru: ClientsCopy = {
   createAction: "Создать и пригласить",
   nameRequired: "Нужно имя — именно по нему вы найдёте клиента в списке.",
 
+  inviteEyebrow: "Приглашение",
   doorLabel: "Как отправить",
   doors: {
     telegram: {
       label: "Telegram",
-      eyebrow: "Приглашение · Telegram",
-      leadTail:
-        " откроет вашего бота в Telegram и примет приглашение там. Ссылка действует 7 дней.",
+      leadTail: " откроет вашего бота в Telegram и примет приглашение там. Оно действует 7 дней.",
       reminder: "Напоминания будут приходить в Telegram.",
     },
     link: {
       label: "Ссылка",
-      eyebrow: "Приглашение · Ссылка",
-      leadTail: " откроет страницу приглашения и примет его там. Ссылка действует 7 дней.",
+      leadTail: " откроет страницу приглашения и примет его там. Оно действует 7 дней.",
       reminder: "Напоминания будут приходить на почту, которую клиент оставит при принятии.",
     },
   },
@@ -576,6 +589,7 @@ const ru: ClientsCopy = {
   sendCard: "Отправить карточку в Telegram",
   copyInvite: "Скопировать приглашение",
   copied: "Скопировано",
+  copyFailed: "Не удалось скопировать. Попробуйте ещё раз.",
   shareAction: "Поделиться",
   linkLabel: "Ссылка-приглашение",
   reissueLead: "Эта ссылка больше не действует. Выпустите новую, чтобы пригласить ещё раз.",
