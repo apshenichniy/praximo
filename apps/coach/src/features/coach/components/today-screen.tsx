@@ -276,7 +276,22 @@ function SessionCard({
         size="sm"
         className="active:bg-muted rounded-none px-5"
       >
-        <ItemMedia>
+        {/*
+          Centred against both lines, which is where the time was before this row
+          became an `Item` and where it belongs: it is the row's anchor, not a
+          bullet beside its first line.
+
+          `ItemMedia` top-aligns itself whenever the item has a description, and
+          the override has to carry that same variant to land. A plain
+          `self-center` does not: `twMerge` sees no conflict between an unprefixed
+          utility and a prefixed one, so both survive the merge, and Tailwind
+          compiles the variant to `:is(:where(.group/item):has(…) *)` — `:where`
+          keeps it at class specificity, so the tie goes to whichever rule the
+          stylesheet emits later, which is the variant. Prefixed identically the
+          two *are* a conflict, and the primitive's pair drops out of the string
+          before any of that matters.
+        */}
+        <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
           <span className="text-xl leading-tight font-semibold tabular-nums">{time}</span>
         </ItemMedia>
         <ItemContent className="min-w-0">
