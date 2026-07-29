@@ -1,16 +1,9 @@
-import { type CoachLanguage, CoachLanguages } from "@praximo/domain"
-import { ClientLanguageNames } from "@praximo/i18n"
-import { Button } from "@praximo/ui/components/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@praximo/ui/components/dropdown-menu"
+import type { CoachLanguage } from "@praximo/domain"
 import type { ReactNode } from "react"
 
 import { AppearanceMenu } from "@/components/appearance-menu.tsx"
 import { BrandLockup } from "@/components/brand-lockup.tsx"
+import { LanguageMenu } from "@/components/language-menu.tsx"
 import { chromeCopy } from "@/features/i18n/chrome-copy.ts"
 
 /**
@@ -56,44 +49,5 @@ export function InviteShell({
 
       {children}
     </div>
-  )
-}
-
-function LanguageMenu({
-  locale,
-  label,
-  onChange,
-}: {
-  readonly locale: CoachLanguage
-  readonly label: string
-  readonly onChange: (language: CoachLanguage) => void
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" size="sm" className="text-muted-foreground" aria-label={label}>
-            {ClientLanguageNames[locale]}
-            <Caret />
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end">
-        {CoachLanguages.map((language) => (
-          <DropdownMenuItem key={language} onClick={() => onChange(language)}>
-            {ClientLanguageNames[language]}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-/** Says "this opens a list" and nothing else — the label beside it is the name. */
-function Caret() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className="opacity-60">
-      <path d="M2 4l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
   )
 }
