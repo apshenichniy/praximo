@@ -163,15 +163,34 @@ describe("what the state word claims", () => {
 
     expect(html).toContain(copy.clients.stateNotSent)
     expect(html).not.toContain(copy.clients.stateInvited)
+    // Nothing has gone out, so there is no door and no moment to name.
+    expect(html).not.toContain(copy.clients.sentViaLink)
+    expect(html).not.toContain(copy.clients.sentViaTelegram)
   })
 
-  it("says «Приглашён» only once something was actually handed over", async () => {
+  /**
+   * The badge says the standing; the line under it says what produced that
+   * standing — the door and the moment, which is what a coach returning a week
+   * later actually needs. The badge cannot carry either without becoming a
+   * sentence, so it does not try.
+   */
+  it("names the door and the moment once something was handed over", async () => {
     const html = await screen(
       client({ delivered: { at: "2026-07-27T10:00:00.000Z", kind: "link" } }),
     )
 
     expect(html).toContain(copy.clients.stateInvited)
     expect(html).not.toContain(copy.clients.stateNotSent)
+    expect(html).toContain(copy.clients.sentViaLink)
+  })
+
+  it("names the Telegram door on the client's own screen too", async () => {
+    const html = await screen(
+      client({ delivered: { at: "2026-07-27T10:00:00.000Z", kind: "telegram" } }),
+    )
+
+    expect(html).toContain(copy.clients.sentViaTelegram)
+    expect(html).not.toContain(copy.clients.sentViaLink)
   })
 })
 

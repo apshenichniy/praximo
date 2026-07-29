@@ -124,6 +124,11 @@ function ClientRoute() {
    * coach who just changed their mind that "nothing was sent" reads as a failure
    * they have to do something about. An invitation that turned out to be gone
    * re-reads the screen, which is what shows them why.
+   *
+   * A picker that *sent* re-reads it too, since #224: `shareClientInvite` has
+   * just written the delivery down, and a screen still saying «Не отправлено»
+   * about a card the coach watched leave would be the one lie this ticket
+   * exists to remove.
    */
   const share = useCallback(() => {
     const invite = client?.invite
@@ -142,6 +147,8 @@ function ClientRoute() {
         } else if (outcome === "failed") {
           notifyHaptic("error")
           setError(copy.common.failed)
+        } else if (outcome === "shared" || outcome === "fallback") {
+          await router.invalidate()
         }
       })
       .catch(() => {

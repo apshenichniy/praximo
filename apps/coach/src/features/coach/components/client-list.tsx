@@ -5,6 +5,7 @@ import type { ReactNode } from "react"
 
 import { Card } from "@praximo/ui/components/card"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
+import { isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
 import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
 import { cn } from "@praximo/ui"
 import type { CoachClients } from "@/server/coach-clients.ts"
@@ -166,28 +167,15 @@ export function ClientStateLine({
   readonly client: CoachClients.ClientSummary
 }) {
   const format = useTimestampFormat()
-  const notSent = client.state === "invited" && client.delivered === undefined
-  const word =
-    client.state === "accepted"
-      ? copy.stateAccepted
-      : client.state === "expired"
-        ? copy.stateExpired
-        : notSent
-          ? copy.stateNotSent
-          : copy.stateInvited
-  const sentVia =
-    client.delivered?.kind === "link"
-      ? copy.sentViaLink
-      : client.delivered?.kind === "telegram"
-        ? copy.sentViaTelegram
-        : undefined
+  const notSent = isNotSent(client)
+  const door = sentVia(copy, client.delivered?.kind)
   const moment =
     client.state === "accepted" && client.acceptedAt !== undefined
       ? `${copy.acceptedPrefix}${format.relative(client.acceptedAt)}`
       : client.state === "invited"
-        ? client.delivered === undefined || sentVia === undefined
+        ? client.delivered === undefined || door === undefined
           ? `${copy.expiresPrefix}${format.relative(client.inviteExpiresAt)}`
-          : `${format.relative(client.delivered.at)} · ${sentVia}`
+          : `${format.relative(client.delivered.at)} · ${door}`
         : `${copy.invitedPrefix}${format.relative(client.invitedAt)}`
 
   return (
@@ -199,7 +187,7 @@ export function ClientStateLine({
         )}
       >
         <span className="size-1.5 rounded-full bg-current" />
-        {word}
+        {stateWord(copy, client)}
       </span>
       <span className="text-muted-foreground truncate">{moment}</span>
     </span>

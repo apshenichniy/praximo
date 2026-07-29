@@ -88,6 +88,14 @@ _Avoid_: contact, messenger, manual channel (removed in #57)
 A tokenized invitation from coach to client. Accepting it — in the bot or on the Acceptance Page — creates the client's channel and captures their consent.
 _Avoid_: invite link (that's a Join Link)
 
+**Door**:
+One of the two forms the same invite token takes — the bot deep link, or the Acceptance Page URL. Which one to hand over is a delivery-time choice made on the client's screen; both are valid from the moment the invite exists, so choosing between them writes nothing.
+_Avoid_: channel (a Channel is an address we can reach, and exists only after acceptance)
+
+**Delivery**:
+The coach actually handing an invite over, recorded on the invite as the moment plus the door used. Until it happens the client reads «Не отправлено» — the invite exists and nobody has been given it. A copy is the most that can honestly be observed, so that is all the record claims.
+_Avoid_: sent, delivered (as a claim about receipt — nothing here observes receipt)
+
 **Acceptance Page**:
 The web page where a non-Telegram client accepts an invite: one page, with language in the header, a profile (the client's own name plus an email, or Google), and consent as the commit. The bot conversation is its Telegram equivalent.
 _Avoid_: sign-up page, registration (no account is created)

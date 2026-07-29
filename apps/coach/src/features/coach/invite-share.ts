@@ -14,6 +14,12 @@ import { prepareInviteCard, recordInviteDelivery } from "@/server/coach-clients.
  * forwarded text, which is the only role #56 left that form. The link is never
  * duplicated there — it travels as the `url`, and the prose beside it as the
  * `text`.
+ *
+ * Either form that actually reached the picker is written down as a Telegram
+ * delivery (#224). Recorded here rather than at the two call sites because both
+ * are the same event: the client's own screen and the resend on an unaccepted
+ * session (#61) hand the same invitation to the same picker, and a coach who
+ * resent one has delivered it just as much as one who sent it the first time.
  */
 
 /**
@@ -65,8 +71,15 @@ export const shareClientInvite = async (options: {
       // where the invitation lands in the chat picker's input field. A
       // `dismissed` picker sent nothing, and telling a coach who changed their
       // mind otherwise would put a fiction in the list a week later.
+      //
+      // Best-effort, and never allowed to fail the share: by this point the
+      // invitation has left the coach's phone, and a bookkeeping error
+      // surfacing as «не отправлено» would be the screen contradicting
+      // something they just watched happen.
       if (outcome === "shared" || outcome === "fallback") {
-        await recordDelivered(options.clientId)
+        await recordInviteDelivery({
+          data: { clientId: options.clientId, kind: "telegram" },
+        }).catch(() => undefined)
       }
       return outcome
     }
@@ -80,22 +93,6 @@ export const shareClientInvite = async (options: {
   } catch (cause) {
     return cause instanceof CardUnavailable ? "gone" : "failed"
   }
-}
-
-/**
- * Write the Telegram door down, and never let the writing fail the share (#224).
- *
- * By the time this runs the invitation has already left the coach's phone. A
- * bookkeeping error surfacing as «не отправлено» would be the screen contradicting
- * something the coach just watched happen — the next share, or the next launch,
- * corrects the record instead.
- *
- * Recorded here rather than at the two call sites because both are the same
- * event: the client's own screen and the resend on an unaccepted session (#61)
- * hand the same invitation to the same picker.
- */
-const recordDelivered = async (clientId: string): Promise<void> => {
-  await recordInviteDelivery({ data: { clientId, kind: "telegram" } }).catch(() => undefined)
 }
 
 /** The invitation the screen is showing no longer exists, or is no longer open. */

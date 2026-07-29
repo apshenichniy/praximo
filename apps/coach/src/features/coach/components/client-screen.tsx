@@ -23,6 +23,8 @@ import {
 } from "@/features/mini-app/components/detail-card.tsx"
 import { InviteLinkPanel } from "@/features/mini-app/components/invite-link-panel.tsx"
 import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
+import { isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
+import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
 import type { CoachClients } from "@/server/coach-clients.ts"
 
 /**
@@ -121,6 +123,7 @@ export function ClientScreen({
    * the select-text fallback hands the coach a highlighted field and no evidence
    * they did anything with it.
    */
+  const timestamps = useTimestampFormat()
   const recordThisDoor = () => onDelivered(door)
   const copyLink = useCopyLink(invitation?.url, recordThisDoor)
   const copyMessage = useCopyLink(invitation?.message, recordThisDoor)
@@ -147,16 +150,15 @@ export function ClientScreen({
    * created a minute ago, and the warning tone would make every fresh client
    * look like a problem — the colour vocabulary here means *standing*, and this
    * is a to-do.
+   *
+   * The rule itself is shared with the list, which says the same thing as a
+   * coloured word rather than a badge (#198) — two copies of it is how the two
+   * surfaces start disagreeing about the same client.
    */
-  const notSent = client.state === "invited" && client.invite?.delivered === undefined
-  const stateWord =
-    client.state === "accepted"
-      ? copy.clients.stateAccepted
-      : client.state === "expired"
-        ? copy.clients.stateExpired
-        : notSent
-          ? copy.clients.stateNotSent
-          : copy.clients.stateInvited
+  const sent = client.invite?.delivered
+  const standing = { state: client.state, ...(sent === undefined ? {} : { delivered: sent }) }
+  const notSent = isNotSent(standing)
+  const sentDoor = sentVia(copy.clients, sent?.kind)
 
   // Gone, not disabled: once the client is in, the invitation has no job left,
   // and the header already carries the state and the account that accepted.
@@ -176,7 +178,23 @@ export function ClientScreen({
         {client.channel?.telegramUsername === undefined ? null : (
           <Text className="text-muted-foreground">@{client.channel.telegramUsername}</Text>
         )}
-        <StatusBadge tone={notSent ? "muted" : stateTones[client.state]}>{stateWord}</StatusBadge>
+        <StatusBadge tone={notSent ? "muted" : stateTones[client.state]}>
+          {stateWord(copy.clients, standing)}
+        </StatusBadge>
+        {/*
+          The badge says the standing; this says what produced it (#224) — which
+          door the invitation went out through, and when. A coach returning a
+          week later needs both: the door is what the client is holding *and*
+          where their reminders will go, and the moment is how long ago they were
+          asked. The badge cannot carry either without becoming a sentence.
+        */}
+        {sent === undefined || sentDoor === undefined ? null : (
+          <Text role="caption" className="text-muted-foreground">
+            {sentDoor}
+            {" · "}
+            {timestamps.relative(sent.at)}
+          </Text>
+        )}
       </header>
 
       {error === undefined ? null : <Text className="text-destructive mt-6">{error}</Text>}

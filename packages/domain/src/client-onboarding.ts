@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { CoachOnboardingInviteCodeAlphabet } from "./coach-onboarding.ts"
+import { bareOrigin } from "./origin.ts"
 import { CoachLanguage } from "./workspace-create.ts"
 
 export const ClientId = Schema.NonEmptyString.pipe(Schema.brand("ClientId"))
@@ -117,19 +118,12 @@ export const ClientInviteWebPath = "/i/"
  * shape. The coach's Mini App builds this from `CLIENT_APP_URL`, which is the
  * origin the stack actually deployed rather than a hostname somebody typed.
  *
- * Built by hand rather than through `URL`, exactly as `legalUrl` is and for the
- * same reason: this package is typechecked with no DOM (ADR 0002), and there is
- * nothing to encode — the path is a constant and the token is twelve symbols
- * from a readable alphabet.
- *
- * Dropping the origin's own query and fragment matters more here than it does
- * for a legal page: this link is forwarded to a client, and a parameter the
- * origin happened to carry would ride into somebody else's chat.
+ * The origin is scrubbed by `bareOrigin`, which the legal texts share: this link
+ * is forwarded to a client, and a parameter the origin happened to carry would
+ * ride into somebody else's chat.
  */
-export const clientInviteUrl = (origin: string, token: string): string => {
-  const bare = origin.split(/[?#]/)[0] ?? ""
-  return `${bare.replace(/\/+$/, "")}${ClientInviteWebPath}${token}`
-}
+export const clientInviteUrl = (origin: string, token: string): string =>
+  `${bareOrigin(origin)}${ClientInviteWebPath}${token}`
 
 /**
  * Which door an invitation was actually handed over through (#224).

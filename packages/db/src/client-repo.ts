@@ -1,4 +1,4 @@
-import type { CoachLanguage } from "@praximo/domain"
+import type { ClientInviteDeliveryKind, CoachLanguage } from "@praximo/domain"
 import { and, asc, eq, gte, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database, QueryFailed } from "./client.ts"
@@ -115,8 +115,15 @@ export interface ReissuedInvite {
 export interface RecordDeliveryInput {
   readonly workspaceId: string
   readonly clientId: string
-  /** `telegram | email | link` — the door, narrowed by the caller. */
-  readonly kind: string
+  /**
+   * The door, as the domain's own closed set.
+   *
+   * Narrow on the way *in* and wide on the way out (`InviteDeliveryRow.kind` is
+   * a plain `string`), which is not an inconsistency: what this writes is
+   * decided by code we control, and what `find` reads back is whatever is in the
+   * column — including a value written by a deploy this one predates.
+   */
+  readonly kind: ClientInviteDeliveryKind
   readonly now: Date
 }
 

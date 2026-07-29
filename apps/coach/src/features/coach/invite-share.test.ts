@@ -182,6 +182,33 @@ describe("recording what actually went out", () => {
   })
 
   /**
+   * The record has to land *before* the outcome reaches the caller, because the
+   * caller re-reads the screen on it. Resolving the share first would let the
+   * re-read race the write and redraw «Не отправлено» over a card the coach just
+   * watched leave.
+   */
+  it("finishes writing before it reports the outcome", async () => {
+    prepareInviteCard.mockResolvedValue(card(30 * 60_000))
+    sharePreparedMessage.mockImplementation(async (options: ShareInviteOptions) => {
+      await options.prepare()
+      return "shared"
+    })
+    let settled = false
+    recordInviteDelivery.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            settled = true
+            resolve({ ok: true })
+          }, 10)
+        }),
+    )
+
+    expect(await shareClientInvite(invite)).toBe("shared")
+    expect(settled).toBe(true)
+  })
+
+  /**
    * Bookkeeping must never read as a failed share: by the time this is written
    * the invitation has already left the coach's phone.
    */

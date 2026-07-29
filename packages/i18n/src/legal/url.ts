@@ -1,4 +1,4 @@
-import type { CoachLanguage } from "@praximo/domain"
+import { bareOrigin, type CoachLanguage } from "@praximo/domain"
 
 import { LEGAL_PATHS } from "./document.ts"
 
@@ -22,15 +22,13 @@ export type LegalDocumentName = keyof typeof LEGAL_PATHS
  * percent-encode and nothing that can throw. What is left is what the callers
  * actually need — drop whatever the origin carried, and join once.
  *
- * Dropping the origin's own query and fragment is deliberate. These are public
- * pages, and the bot builds this from a URL that may carry `?b=<botId>`: a
- * consent button that forwarded it would say something about who was sent it.
+ * That dropping is `bareOrigin`, shared with the invitation's web door (#224):
+ * both build a forwarded link onto a configured host, and the bot builds this
+ * one from a URL that may carry `?b=<botId>` — a consent button that forwarded
+ * it would say something about who was sent it.
  */
 export const legalUrl = (
   origin: string,
   document: LegalDocumentName,
   language: CoachLanguage,
-): string => {
-  const bare = origin.split(/[?#]/)[0] ?? ""
-  return `${bare.replace(/\/+$/, "")}${LEGAL_PATHS[document]}?lang=${language}`
-}
+): string => `${bareOrigin(origin)}${LEGAL_PATHS[document]}?lang=${language}`
