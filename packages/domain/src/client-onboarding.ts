@@ -138,3 +138,19 @@ export const clientInviteUrl = (origin: string, token: string): string =>
  */
 export const ClientInviteDeliveryKind = Schema.Literals(["telegram", "email", "link"])
 export type ClientInviteDeliveryKind = typeof ClientInviteDeliveryKind.Type
+
+/**
+ * The kinds a coach hands over **by hand** — the two forms of the token that a
+ * screen can offer as a choice (CONTEXT.md §Door).
+ *
+ * A strict subset of the kinds above, and the line between them is who does the
+ * sending: `email` is the *service* delivering an invitation on its own (#58),
+ * which is not a button a coach presses and so never a position on the segment.
+ * Naming the subset is what keeps that distinction from being re-derived, by
+ * hand and slightly differently, at each screen that draws the choice.
+ */
+export const ClientInviteDoor = Schema.Literals(["telegram", "link"])
+export type ClientInviteDoor = typeof ClientInviteDoor.Type
+
+export const isClientInviteDoor = (value: string | undefined): value is ClientInviteDoor =>
+  ClientInviteDoor.literals.some((literal) => literal === value)

@@ -1,7 +1,12 @@
 import { CalendarAdd01Icon } from "@hugeicons-pro/core-stroke-rounded"
 import { Calendar03Icon, FlagIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
-import type { ClientInviteDeliveryKind, CoachLanguage } from "@praximo/domain"
+import {
+  type ClientInviteDoor,
+  type CoachLanguage,
+  ClientInviteDoor as InviteDoors,
+  isClientInviteDoor,
+} from "@praximo/domain"
 import { localeTag } from "@praximo/i18n"
 import { useMemo, useState } from "react"
 
@@ -44,14 +49,27 @@ const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
 }
 
 /**
- * The two doors this screen offers (#224). `email` exists in the model for the
- * service-sent invitation (#58) and has no control here yet — it becomes the
- * third position of this segment when it lands.
+ * What each door *offers*, as data rather than as a branch per control (#224).
+ *
+ * The words live in the copy catalogue keyed the same way; this is the other
+ * half — the two places where the doors differ in behaviour rather than in
+ * wording, and both differences have one reason each:
+ *
+ * - **No card behind the Link door.** A bot-authored card opens a chat with a
+ *   bot this client will never appear in, which is the whole reason they are
+ *   being handed a web URL instead. Copy takes over as the primary action, which
+ *   is also the canonical fallback everywhere (#19).
+ * - **The share sheet only where the link travels by hand.** A Telegram
+ *   invitation already has a native picker behind Send a card; offering the
+ *   system sheet beside it would be two ways to open two pickers.
  */
-type Door = Extract<ClientInviteDeliveryKind, "telegram" | "link">
-
-const isDoor = (value: string | undefined): value is Door =>
-  value === "telegram" || value === "link"
+const doorOffers: Record<
+  ClientInviteDoor,
+  { readonly card: boolean; readonly shareSheet: boolean }
+> = {
+  telegram: { card: true, shareSheet: false },
+  link: { card: false, shareSheet: true },
+}
 
 const initials = (name: string): string =>
   name
@@ -82,7 +100,7 @@ export function ClientScreen({
   /** The system share sheet, offered on iOS only — see `isIosHost`. */
   readonly onShareSheet: (message: string) => void
   /** A delivery that actually happened: a resolved clipboard write, here. */
-  readonly onDelivered: (kind: Door) => void
+  readonly onDelivered: (kind: ClientInviteDoor) => void
   readonly onResetInvite: () => void
   readonly onDelete: () => void
   readonly pending: boolean
@@ -101,10 +119,14 @@ export function ClientScreen({
    * link last week and comes back to a screen defaulting to Telegram would be
    * reading a state word about one door beside a control set for the other.
    */
-  const [door, setDoor] = useState<Door>(() =>
-    isDoor(client.invite?.delivered?.kind) ? client.invite.delivered.kind : "telegram",
+  const [door, setDoor] = useState<ClientInviteDoor>(() =>
+    isClientInviteDoor(client.invite?.delivered?.kind) ? client.invite.delivered.kind : "telegram",
   )
   const invitation = client.invite === undefined ? undefined : client.invite[door]
+  // Everything that differs between the doors, looked up once: the words from
+  // the catalogue, the two behaviours from the table above.
+  const words = copy.clients.doors[door]
+  const offers = doorOffers[door]
 
   /**
    * Two controllers over one invitation, deliberately.
@@ -205,9 +227,7 @@ export function ClientScreen({
             role="caption"
             className="text-muted-foreground px-1 font-semibold tracking-wide uppercase"
           >
-            {door === "link"
-              ? copy.clients.invitationEyebrowLink
-              : copy.clients.invitationEyebrowTelegram}
+            {words.eyebrow}
           </Text>
           <Text className="text-muted-foreground mt-2 px-1">
             {client.state === "expired" ? (
@@ -215,9 +235,7 @@ export function ClientScreen({
             ) : (
               <>
                 <span className="text-foreground">{client.name}</span>
-                {door === "link"
-                  ? copy.clients.invitationLeadTailLink
-                  : copy.clients.invitationLeadTail}
+                {words.leadTail}
               </>
             )}
           </Text>
@@ -252,15 +270,14 @@ export function ClientScreen({
                 onValueChange={(next) => {
                   // A chip tapped while already on reports an empty selection;
                   // the door stays put rather than becoming undefined.
-                  if (isDoor(next[0])) setDoor(next[0])
+                  if (isClientInviteDoor(next[0])) setDoor(next[0])
                 }}
               >
-                <ToggleGroupItem value="telegram" className="flex-1" disabled={pending}>
-                  {copy.clients.doorTelegram}
-                </ToggleGroupItem>
-                <ToggleGroupItem value="link" className="flex-1" disabled={pending}>
-                  {copy.clients.doorLink}
-                </ToggleGroupItem>
+                {InviteDoors.literals.map((value) => (
+                  <ToggleGroupItem key={value} value={value} className="flex-1" disabled={pending}>
+                    {copy.clients.doors[value].label}
+                  </ToggleGroupItem>
+                ))}
               </ToggleGroup>
 
               <div className="mt-4">
@@ -272,33 +289,28 @@ export function ClientScreen({
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
-                {/*
-                  **No card on the Link door.** A bot-authored card opens a chat
-                  with a bot this client will never appear in — the whole reason
-                  they are being handed a web URL. Copy is the primary action
-                  there, which is also the canonical fallback everywhere (#19).
-                */}
-                {door === "telegram" ? (
+                {offers.card ? (
                   <Button className="w-full" onClick={onShare} disabled={pending}>
                     {copy.clients.sendCard}
                   </Button>
                 ) : null}
+                {/* Copy leads wherever there is no card above it to lead. */}
                 <Button
                   className="w-full"
-                  variant={door === "telegram" ? "outline" : "default"}
+                  variant={offers.card ? "outline" : "default"}
                   onClick={() => void copyMessage.copy()}
                   disabled={pending}
                 >
                   {copyMessage.copied ? copy.clients.copied : copy.clients.copyInvite}
                 </Button>
                 {/*
-                  The system share sheet, on iOS and nowhere else (#27) — gated
-                  on the host platform rather than on `navigator.share`, which
-                  three of the four Telegram clients get wrong in three different
-                  ways. Read at render, not in an effect: this route is
-                  client-only, and the host script in `<head>` ran long before it.
+                  The iOS gate is the *host platform*, never `navigator.share`,
+                  which three of the four Telegram clients get wrong in three
+                  different ways (#27). Read at render rather than in an effect:
+                  this route is client-only, and the host script in `<head>` ran
+                  long before it.
                 */}
-                {door === "link" && isIosHost() ? (
+                {offers.shareSheet && isIosHost() ? (
                   <Button
                     variant="outline"
                     className="w-full"
@@ -317,7 +329,7 @@ export function ClientScreen({
                 for the life of the relationship.
               */}
               <Text role="caption" className="text-muted-foreground mt-3 px-1">
-                {door === "link" ? copy.clients.reminderLink : copy.clients.reminderTelegram}
+                {words.reminder}
               </Text>
             </>
           )}

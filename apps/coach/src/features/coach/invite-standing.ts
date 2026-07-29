@@ -1,3 +1,5 @@
+import { isClientInviteDoor } from "@praximo/domain"
+
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 
 /**
@@ -42,6 +44,10 @@ export const stateWord = (copy: ClientsCopy, client: InviteStanding): string =>
  * Which door it went out through, or `undefined` for a kind this deploy has no
  * word for — the same refusal `coach-clients.ts` makes on the way out, because a
  * raw identifier in the middle of a sentence is worse than a quieter row.
+ *
+ * `email` reaches here as a kind and leaves as `undefined` on purpose: the
+ * service-sent invitation is #58's, and until it has copy of its own a row about
+ * one should say less rather than guess.
  */
 export const sentVia = (copy: ClientsCopy, kind: string | undefined): string | undefined =>
-  kind === "link" ? copy.sentViaLink : kind === "telegram" ? copy.sentViaTelegram : undefined
+  isClientInviteDoor(kind) ? copy.doors[kind].sentVia : undefined

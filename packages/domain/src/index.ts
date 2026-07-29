@@ -4,6 +4,7 @@ export { TelegramId } from "./telegram-id.ts"
 export {
   ClientId,
   ClientInviteDeliveryKind,
+  ClientInviteDoor,
   ClientInviteId,
   ClientInviteStartPrefix,
   ClientInviteStatus,
@@ -19,6 +20,7 @@ export {
   CreateClientInput,
   InviteAttentionWindowMillis,
   inviteNeedsAttention,
+  isClientInviteDoor,
   parseClientInviteStartParameter,
 } from "./client-onboarding.ts"
 export {

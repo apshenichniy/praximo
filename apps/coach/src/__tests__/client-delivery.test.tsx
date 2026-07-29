@@ -97,13 +97,13 @@ describe("the invitation section", () => {
   it("opens on Telegram and offers both doors over one token", async () => {
     const html = await screen(client())
 
-    expect(html).toContain(copy.clients.doorTelegram)
-    expect(html).toContain(copy.clients.doorLink)
+    expect(html).toContain(copy.clients.doors.telegram.label)
+    expect(html).toContain(copy.clients.doors.link.label)
     // The default door, its address, its eyebrow and its card.
     expect(html).toContain(TELEGRAM_URL)
-    expect(html).toContain(copy.clients.invitationEyebrowTelegram)
+    expect(html).toContain(copy.clients.doors.telegram.eyebrow)
     expect(html).toContain(copy.clients.sendCard)
-    expect(html).not.toContain(copy.clients.invitationEyebrowLink)
+    expect(html).not.toContain(copy.clients.doors.link.eyebrow)
   })
 
   /**
@@ -117,17 +117,17 @@ describe("the invitation section", () => {
     )
 
     expect(html).toContain(WEB_URL)
-    expect(html).toContain(copy.clients.invitationEyebrowLink)
+    expect(html).toContain(copy.clients.doors.link.eyebrow)
     expect(html).not.toContain(TELEGRAM_URL)
     // No card behind the Link door: it opens a bot this client never appears in.
     expect(html).not.toContain(copy.clients.sendCard)
   })
 
   it("names where reminders will go for the door on screen", async () => {
-    expect(await screen(client())).toContain(copy.clients.reminderTelegram)
+    expect(await screen(client())).toContain(copy.clients.doors.telegram.reminder)
     expect(
       await screen(client({ delivered: { at: "2026-07-27T10:00:00.000Z", kind: "link" } })),
-    ).toContain(copy.clients.reminderLink)
+    ).toContain(copy.clients.doors.link.reminder)
   })
 
   /**
@@ -152,7 +152,7 @@ describe("the invitation section", () => {
   // Gone once the client is in: there is no message left to send them.
   it("says nothing about an invitation to a client who accepted", async () => {
     const html = await screen({ ...client(), state: "accepted" })
-    expect(html).not.toContain(copy.clients.doorLink)
+    expect(html).not.toContain(copy.clients.doors.link.label)
     expect(html).not.toContain(TELEGRAM_URL)
   })
 })
@@ -164,8 +164,8 @@ describe("what the state word claims", () => {
     expect(html).toContain(copy.clients.stateNotSent)
     expect(html).not.toContain(copy.clients.stateInvited)
     // Nothing has gone out, so there is no door and no moment to name.
-    expect(html).not.toContain(copy.clients.sentViaLink)
-    expect(html).not.toContain(copy.clients.sentViaTelegram)
+    expect(html).not.toContain(copy.clients.doors.link.sentVia)
+    expect(html).not.toContain(copy.clients.doors.telegram.sentVia)
   })
 
   /**
@@ -181,7 +181,7 @@ describe("what the state word claims", () => {
 
     expect(html).toContain(copy.clients.stateInvited)
     expect(html).not.toContain(copy.clients.stateNotSent)
-    expect(html).toContain(copy.clients.sentViaLink)
+    expect(html).toContain(copy.clients.doors.link.sentVia)
   })
 
   it("names the Telegram door on the client's own screen too", async () => {
@@ -189,8 +189,8 @@ describe("what the state word claims", () => {
       client({ delivered: { at: "2026-07-27T10:00:00.000Z", kind: "telegram" } }),
     )
 
-    expect(html).toContain(copy.clients.sentViaTelegram)
-    expect(html).not.toContain(copy.clients.sentViaLink)
+    expect(html).toContain(copy.clients.doors.telegram.sentVia)
+    expect(html).not.toContain(copy.clients.doors.link.sentVia)
   })
 })
 
@@ -230,8 +230,8 @@ describe("the clients list", () => {
     ])
 
     expect(html).toContain(copy.clients.stateInvited)
-    expect(html).toContain(copy.clients.sentViaLink)
-    expect(html).not.toContain(copy.clients.sentViaTelegram)
+    expect(html).toContain(copy.clients.doors.link.sentVia)
+    expect(html).not.toContain(copy.clients.doors.telegram.sentVia)
   })
 
   it("names the Telegram door in the same shape", async () => {
@@ -239,6 +239,6 @@ describe("the clients list", () => {
       summary({ delivered: { at: "2026-07-27T09:00:00.000Z", kind: "telegram" } }),
     ])
 
-    expect(html).toContain(copy.clients.sentViaTelegram)
+    expect(html).toContain(copy.clients.doors.telegram.sentVia)
   })
 })
