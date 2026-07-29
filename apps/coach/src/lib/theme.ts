@@ -40,14 +40,16 @@ export interface SchemeColor {
  * The native splash screen is configured in BotFather rather than here —
  * Telegram takes one colour there, not a pair, so it cannot follow the scheme.
  */
-export const APP_SURFACE_COLOR: SchemeColor = { dark: "#18181b", light: "#ffffff" }
+export const APP_SURFACE_COLOR: SchemeColor = { dark: "#18181b", light: "#fafafa" }
 
 /**
  * The page's own ground, in hex, for the pre-oklch fallback in critical CSS.
  * The light one is not white: the page recedes so that cards and sheets have
- * something to be raised against (#195) — `styles/app.css` §`:root`.
+ * something to be raised against (#195) — the first `:root` block of
+ * `@praximo/ui`'s `styles.css`, where `--background` is
+ * `oklch(0.985 0 0)` — zinc-50. `#fafafa` is that value in sRGB.
  */
-export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#18181b", light: "#ffffff" }
+export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#18181b", light: "#fafafa" }
 
 /** Running text on that ground, for the same fallback. */
 export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#fafafa", light: "#18181b" }

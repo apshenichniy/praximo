@@ -56,6 +56,47 @@ export default Alchemy.Stack(
     const defaultCoachBotAvatarR2Key = Config.string("DEFAULT_COACH_BOT_AVATAR_R2_KEY")
     const telegramEnv = Config.string("TELEGRAM_ENV").pipe(Config.withDefault("production"))
 
+    /**
+     * The sending subdomain for every product email (#58).
+     *
+     * **Declared only on the canonical stage, and used by all of them.** A
+     * sending subdomain is an account-level singleton: `mail.praximo.io` can be
+     * onboarded exactly once, so two stages declaring it would both claim the
+     * same object — and tearing down a personal stage would delete the sender
+     * out from under the canonical one. Onboarding it provisions DKIM, SPF and
+     * the `cf-bounce` return path automatically, the zone being on Cloudflare
+     * DNS.
+     *
+     * The zone id is *supplied*, not created: public `praximo.io` is not a
+     * resource in this stack and adopting it here to read one field would put
+     * the product's DNS under this program's lifecycle.
+     *
+     * Personal stages still send — the `send_email` binding below is
+     * Worker-local and creates nothing, so it points at the subdomain this stage
+     * onboarded. Consequence worth stating: a **deployed** personal stage can
+     * email a real person. Local `vite dev` cannot; it has no binding at all,
+     * and `EmailChannel`'s unwired layer refuses the send rather than pretending.
+     */
+    if (canonical) {
+      yield* Cloudflare.Email.SendingSubdomain("MailSubdomain", {
+        zoneId: yield* Config.string("CLOUDFLARE_ZONE_ID"),
+        name: "mail.praximo.io",
+      })
+    }
+
+    /**
+     * The `send_email` binding, with the sender pinned.
+     *
+     * `allowedSenderAddresses` is the enforcement behind `EmailChannel`'s
+     * `SenderAddress` constant: a second `from` anywhere in the code does not
+     * quietly send from somewhere else, it fails at Cloudflare with
+     * `E_SENDER_NOT_VERIFIED` — which the channel maps to its own typed error.
+     * Recipients are deliberately unrestricted; the clients are real people.
+     */
+    const emailSender = yield* Cloudflare.Email.SendEmail("EMAIL", {
+      allowedSenderAddresses: ["no-reply@mail.praximo.io"],
+    })
+
     const project = yield* Neon.Project("Db", {
       region: "aws-eu-central-1",
       pgVersion: 17,
@@ -157,6 +198,11 @@ export default Alchemy.Stack(
         MANAGER_BOT_USERNAME: managerBotUsername,
         TELEGRAM_ENV: telegramEnv,
         CLIENT_APP_URL: clientAppUrl,
+        // The invitation email is sent from the coach's own tap (#58), so the
+        // binding lives on the Worker that serves that screen. `CLIENT_APP_URL`
+        // above is what the email's link and its brand image are both built
+        // from — one origin, already deployed rather than typed.
+        EMAIL: emailSender,
       },
     })
 

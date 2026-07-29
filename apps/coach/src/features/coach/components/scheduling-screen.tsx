@@ -36,7 +36,7 @@ import { calendarLocale } from "@/features/i18n/calendar-locale.ts"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
 import { impactHaptic, selectionHaptic } from "@/presentation-host"
-import { Heading, cn } from "@praximo/ui"
+import { ChoiceChip, Heading, cn } from "@praximo/ui"
 
 /**
  * The scheduling screen (#56 §Scheduling): **date, first session, duration,
@@ -609,25 +609,19 @@ export function SchedulingScreen({
         <Field label={copy.durationLabel}>
           <div className="flex gap-2">
             {PlannedDurations.map((minutes) => (
-              <button
+              // `tabular-nums` is this row's own: the numbers must not shuffle
+              // width as the selection moves between them. Everything else —
+              // including "a control at rest is a fill *and* an edge" (#198) —
+              // now lives in the chip.
+              <ChoiceChip
                 key={minutes}
-                type="button"
-                aria-pressed={durationMinutes === minutes}
+                className="flex-1 tabular-nums"
+                selected={durationMinutes === minutes}
                 onClick={() => chooseDuration(minutes)}
-                className={cn(
-                  "flex min-h-11 flex-1 items-center justify-center rounded-full border py-2 text-base leading-relaxed font-semibold tabular-nums",
-                  "ease-[var(--ease-out)] transition-[color,background-color,border-color,scale] duration-100 active:scale-[0.97]",
-                  durationMinutes === minutes
-                    ? "bg-primary text-primary-foreground border-transparent"
-                    : // A control at rest is a fill *and* an edge (#198). This used
-                      // to be `border-border` on nothing, which put the whole
-                      // affordance on a hairline 1.22:1 from the page.
-                      "bg-secondary border-border text-foreground",
-                )}
               >
                 {minutes}
                 {copy.durationSuffix}
-              </button>
+              </ChoiceChip>
             ))}
           </div>
         </Field>

@@ -1,14 +1,10 @@
 import { type CoachLanguage, CoachLanguages } from "@praximo/domain"
 
-import { Heading, PraximoMark, Text } from "@praximo/ui"
+import { ChoiceChip, Heading, PraximoMark, Text } from "@praximo/ui"
 import { HostMainButton } from "@/presentation-host"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
-import { ToggleGroup, ToggleGroupItem } from "@praximo/ui/components/toggle-group"
 import { OnboardingProgress } from "@/features/coach/components/onboarding-progress.tsx"
 import { type CoachCopy, languageNames } from "@/features/i18n/coach-copy.ts"
-
-const isCoachLanguage = (value: string | undefined): value is CoachLanguage =>
-  CoachLanguages.some((language) => language === value)
 
 /**
  * First login, step one: Praximo introduces itself and says — in the first
@@ -58,29 +54,25 @@ export function LanguageStep({
         {copy.language.writesTail}
       </Text>
 
-      <ToggleGroup
-        aria-label={copy.language.chipsLabel}
-        className="mt-6 flex-wrap"
-        value={[language]}
-        onValueChange={(next) => {
-          const selected = next[0]
-          // A chip tapped while already on reports an empty selection; the
-          // language stays put rather than becoming undefined.
-          if (isCoachLanguage(selected)) onChange(selected)
-        }}
-      >
+      {/*
+        The same chips as everywhere else a coach picks one of a few things
+        (#58). They were a `ToggleGroup` until then, which answered the question
+        with a pale `bg-muted` fill — the weakest statement of "this one is
+        chosen" in the app, on the screen where the choice is the whole point.
+      */}
+      <div role="group" aria-label={copy.language.chipsLabel} className="mt-6 flex flex-wrap gap-2">
         {CoachLanguages.map((value) => (
-          <ToggleGroupItem
+          <ChoiceChip
             key={value}
-            value={value}
-            size="lg"
+            className="px-5"
+            selected={language === value}
             disabled={pending}
-            className="rounded-full px-5"
+            onClick={() => onChange(value)}
           >
             {languageNames[value]}
-          </ToggleGroupItem>
+          </ChoiceChip>
         ))}
-      </ToggleGroup>
+      </div>
 
       {error === undefined ? null : (
         <div role="alert">

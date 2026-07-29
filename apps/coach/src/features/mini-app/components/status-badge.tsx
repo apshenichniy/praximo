@@ -23,11 +23,33 @@ import { cn } from "@praximo/ui"
  */
 export type StatusTone = "success" | "warning" | "info" | "destructive" | "muted"
 
+/**
+ * Every tone but `muted` is one of the four status families in the Praximo
+ * extension layer, and `destructive` is drawn from `error` for that reason.
+ *
+ * It used to read `bg-destructive-surface`, which is not a class. `@theme
+ * inline` maps `--color-destructive` and nothing beside it — the baseline
+ * shadcn token is a single colour, while `success`, `warning`, `error` and
+ * `info` each carry a `-surface` and a `-border` because they were added *for*
+ * this: a tinted pill that states a standing. So Tailwind generated nothing and
+ * the badge rendered red text on no fill, alone among the five.
+ *
+ * `error` rather than a new `--destructive-surface`, because inventing one would
+ * duplicate a family that already exists and is already tuned for both themes.
+ * The ink shifts by a hair in doing so — `--destructive` is `oklch(0.577 0.245
+ * 27.325)` in light against `--error`'s `oklch(0.569 0.204 23.849)` — and that
+ * is the correct direction: a badge says what something *is*, not what a tap
+ * would do, and shadcn's `destructive` is the vocabulary of the second.
+ *
+ * The tone keeps its name. It is the word callers already reach for, and
+ * renaming it would move a union through both apps for a gain the comment makes
+ * anyway.
+ */
 const toneClass: Record<StatusTone, string> = {
   success: "bg-success-surface text-success",
   warning: "bg-warning-surface text-warning",
   info: "bg-info-surface text-info",
-  destructive: "bg-destructive-surface text-destructive",
+  destructive: "bg-error-surface text-error",
   muted: "bg-muted text-muted-foreground",
 }
 

@@ -24,6 +24,16 @@ export interface InviteLookup {
   readonly expiresAt: Date
   /** The language the invitation was written in — the pre-selection, not a choice. */
   readonly inviteLanguage: CoachLanguage
+  /**
+   * The address the invitation was emailed to, when it was (#58).
+   *
+   * A pre-selection like the language above, and for the same reason: the client
+   * is looking at a page they reached *from* this address, so asking them to
+   * type it again is asking them to copy something out of the message that
+   * brought them. It is a suggestion and never a commitment — the channel is
+   * created from whatever they submit.
+   */
+  readonly inviteAddress?: string
   /** What the client is told they are joining: their coach's practice. */
   readonly coachName: string
   /**
@@ -183,7 +193,10 @@ export const layer = Layer.effect(
     const toLookup = (record: Record<string, unknown> | undefined): InviteLookup | undefined => {
       if (record === undefined) return undefined
 
-      const delivery = record.delivery as { readonly language?: string } | null
+      const delivery = record.delivery as {
+        readonly language?: string
+        readonly address?: string
+      } | null
       const sessionAt = readDate(record.session_at)
 
       return {
@@ -194,6 +207,9 @@ export const layer = Layer.effect(
         status: record.status as InviteLookup["status"],
         expiresAt: readDate(record.expires_at) ?? new Date(0),
         inviteLanguage: readLanguage(delivery?.language) ?? "en",
+        ...(typeof delivery?.address === "string" && delivery.address.length > 0
+          ? { inviteAddress: delivery.address }
+          : {}),
         coachName: String(record.coach_name),
         ...(record.accepted_by === null || record.accepted_by === undefined
           ? {}

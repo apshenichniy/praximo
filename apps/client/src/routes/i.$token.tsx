@@ -154,6 +154,7 @@ function AcceptanceRoute() {
       coachName={outcome.coachName}
       {...(outcome.session === undefined ? {} : { session: outcome.session })}
       {...(outcome.coachTimezone === undefined ? {} : { coachTimezone: outcome.coachTimezone })}
+      {...(outcome.suggestedEmail === undefined ? {} : { suggestedEmail: outcome.suggestedEmail })}
       submitting={submitting}
       {...(error === undefined ? {} : { error })}
       onSubmit={submit}

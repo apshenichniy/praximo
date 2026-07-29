@@ -90,11 +90,12 @@ _Avoid_: invite link (that's a Join Link)
 
 **Door**:
 One of the two forms the same invite token takes — the bot deep link, or the Acceptance Page URL. Which one to hand over is a delivery-time choice made on the client's screen; both are valid from the moment the invite exists, so choosing between them writes nothing.
+_Note_: **email is not a third door.** It is the Acceptance Page URL's second transport — the same door, sent by the service instead of pasted by the coach (#58) — which is why it is an action under that door and never a position on the segment. A door is a form of the token; how it travelled is a separate question.
 _Avoid_: channel (a Channel is an address we can reach, and exists only after acceptance)
 
 **Delivery**:
-The coach actually handing an invite over, recorded on the invite as the moment plus the door used. Until it happens the client reads «Не отправлено» — the invite exists and nobody has been given it. A copy is the most that can honestly be observed, so that is all the record claims.
-_Avoid_: sent, delivered (as a claim about receipt — nothing here observes receipt)
+An invite actually leaving — the coach handing it over, or the service emailing it — recorded on the invite as the moment, the route used, and for an email the address it went to. Until it happens the client reads «Не отправлено»: the invite exists and nobody has been given it. A copy is the most that can honestly be observed of a coach's own send, so that is all the record claims; an email says a message was accepted for delivery, which is more than a copy and still not receipt.
+_Avoid_: sent, delivered (as a claim about receipt — nothing here observes receipt, and a hard bounce is invisible in MVP)
 
 **Acceptance Page**:
 The web page where a non-Telegram client accepts an invite: one page, with language in the header, a profile (the client's own name plus an email, or Google), and consent as the commit. The bot conversation is its Telegram equivalent.

@@ -47,6 +47,7 @@ export function AcceptancePage({
   coachName,
   session,
   coachTimezone,
+  suggestedEmail,
   submitting,
   error,
   onSubmit,
@@ -55,6 +56,21 @@ export function AcceptancePage({
   readonly coachName: string
   readonly session?: SessionSummary
   readonly coachTimezone?: string
+  /**
+   * The address the invitation was emailed to, when it was (#58).
+   *
+   * **The name is not pre-filled and this is** — the two are not the same
+   * question. What the coach typed as a name is *their* private label in *their*
+   * list («Анна через Марину»), and showing it back would leak it; the address
+   * is one this client has already been reached at, and asking them to retype it
+   * is asking them to copy it out of the message that brought them here.
+   *
+   * Editable, always. It is the only address in the product with evidence behind
+   * it — mail demonstrably arrived there — so a client who changes it trades a
+   * working address for an unverified one; the echo on the result screen is what
+   * gives them the chance to notice.
+   */
+  readonly suggestedEmail?: string
   readonly submitting: boolean
   readonly error?: string
   readonly onSubmit: (state: AcceptanceFormState) => void
@@ -64,7 +80,7 @@ export function AcceptancePage({
   const nameId = useId()
   const emailId = useId()
   const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(suggestedEmail ?? "")
   const { unlocked, sentinelRef } = useConsentGate()
 
   /**

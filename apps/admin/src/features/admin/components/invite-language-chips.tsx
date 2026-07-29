@@ -1,11 +1,8 @@
 import type { CoachLanguage } from "@praximo/domain"
 
 import { Label } from "@praximo/ui/components/label"
-import { ToggleGroup, ToggleGroupItem } from "@praximo/ui/components/toggle-group"
+import { ChoiceChip } from "@praximo/ui"
 import { languageOptions } from "@/features/admin/formatting.ts"
-
-const isCoachLanguage = (value: string | undefined): value is CoachLanguage =>
-  languageOptions.some((option) => option.value === value)
 
 /**
  * The invite-language chips. One control on the "Invite a coach" screen, above
@@ -36,28 +33,23 @@ export function InviteLanguageChips({
           `Label` does not move when labels do. The coach’s own new-client
           screen already uses it for the same name-plus-chips shape. */}
       <Label>Coach&rsquo;s language</Label>
-      <ToggleGroup
-        aria-label="Invite language"
-        className="mt-2"
-        value={[value]}
-        onValueChange={(next) => {
-          const selected = next[0]
-          // A chip tapped while already on reports an empty selection; the
-          // language stays put rather than becoming undefined.
-          if (isCoachLanguage(selected)) onChange(selected)
-        }}
-      >
+      {/* The same chips the coach's own screens use (#58). This was a
+          `ToggleGroup`, whose selected state is a pale `bg-muted` — the weakest
+          way the app has of saying "this one", and the two surfaces asked the
+          identical question in two different visual languages. */}
+      <div role="group" aria-label="Invite language" className="mt-2 flex flex-wrap gap-2">
         {languageOptions.map((option) => (
-          <ToggleGroupItem
+          <ChoiceChip
             key={option.value}
-            value={option.value}
+            className="px-4"
+            selected={value === option.value}
             disabled={disabled}
-            className="rounded-full px-4"
+            onClick={() => onChange(option.value)}
           >
             {option.label}
-          </ToggleGroupItem>
+          </ChoiceChip>
         ))}
-      </ToggleGroup>
+      </div>
       <p className="text-muted-foreground mt-2 text-xs leading-normal leading-4">
         The invite and the whole bot setup are written in this language. Your coach can change it
         when they first sign in.

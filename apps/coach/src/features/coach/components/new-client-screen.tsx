@@ -2,7 +2,6 @@ import { type CoachLanguage, CoachLanguages, ClientNameMaxLength } from "@praxim
 import { useState } from "react"
 
 import { HostBackButton } from "@/presentation-host"
-import { selectionHaptic } from "@/presentation-host"
 import { HostMainButton } from "@/presentation-host"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Input } from "@praximo/ui/components/input"
@@ -10,7 +9,7 @@ import { Label } from "@praximo/ui/components/label"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
-import { Heading, cn } from "@praximo/ui"
+import { ChoiceChip, Heading } from "@praximo/ui"
 
 /**
  * New client (#56 §New client) — one screen, one commit.
@@ -70,24 +69,18 @@ export function NewClientScreen({
         <Label>{copy.clients.languageLabel}</Label>
         <div className="flex gap-2">
           {CoachLanguages.map((option) => (
-            <button
+            // The haptic is the chip's own now: `ChoiceChip` emits `selection`
+            // through the shared feedback adapter, and only when the tap
+            // actually changes the answer — which is what the guard here used
+            // to do by hand.
+            <ChoiceChip
               key={option}
-              type="button"
-              aria-pressed={inviteLanguage === option}
-              onClick={() => {
-                if (inviteLanguage !== option) selectionHaptic()
-                setInviteLanguage(option)
-              }}
-              className={cn(
-                "flex min-h-11 flex-1 items-center justify-center rounded-full border text-base leading-relaxed font-semibold",
-                "ease-[var(--ease-out)] transition-[color,background-color,border-color,scale] duration-100 active:scale-[0.97]",
-                inviteLanguage === option
-                  ? "bg-primary text-primary-foreground border-transparent"
-                  : "bg-secondary border-border text-foreground",
-              )}
+              className="flex-1"
+              selected={inviteLanguage === option}
+              onClick={() => setInviteLanguage(option)}
             >
               {languageNames[option]}
-            </button>
+            </ChoiceChip>
           ))}
         </div>
         {/*

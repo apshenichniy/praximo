@@ -1,4 +1,5 @@
 export { Admin, AdminId, AdminNotFound } from "./admin.ts"
+export { EmailAddressMaxLength, readEmailAddress } from "./email-address.ts"
 export { bareOrigin } from "./origin.ts"
 export { TelegramId } from "./telegram-id.ts"
 export {
@@ -15,11 +16,13 @@ export {
   ClientInviteWebPath,
   ClientName,
   ClientNameMaxLength,
+  clientBrandMarkUrl,
   clientInviteStartParameter,
   clientInviteUrl,
   CreateClientInput,
   InviteAttentionWindowMillis,
   inviteNeedsAttention,
+  isClientInviteDeliveryKind,
   isClientInviteDoor,
   parseClientInviteStartParameter,
 } from "./client-onboarding.ts"

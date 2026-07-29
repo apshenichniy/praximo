@@ -1,8 +1,10 @@
 import {
   Alert01Icon,
   ArrowRight01Icon,
+  Calendar03Icon,
   CheckmarkCircle02Icon,
   Clock01Icon,
+  UserMultipleIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { CoachLanguage } from "@praximo/domain"
@@ -11,8 +13,15 @@ import { Link } from "@tanstack/react-router"
 import { useMemo } from "react"
 
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
-import { buttonVariants } from "@praximo/ui/components/button"
 import { Card } from "@praximo/ui/components/card"
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@praximo/ui/components/item"
 import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import { sessionClock } from "@/features/coach/session-days.ts"
 import { workingHoursLine } from "@/features/coach/working-hours-line.ts"
@@ -31,7 +40,7 @@ import type { CoachSessions } from "@/server/coach-sessions.ts"
  * 3. **today's sessions as cards**, all of them, each tapping through;
  * 4. **needs attention**, hidden when empty and holding only invitations that
  *    have lapsed or are inside their last two days;
- * 5. **bottom navigation** — two quiet buttons, not actions;
+ * 5. **bottom navigation** — three rows in one card, not actions;
  * 6. the **Main Mini App hint**, last, as one row with no heading of its own.
  *
  * Three of mini-app.md's five blocks are deliberately **absent rather than
@@ -102,7 +111,7 @@ export function TodayScreen({
       </header>
 
       {error === undefined ? null : (
-        <p className="text-destructive mt-6 text-base leading-relaxed leading-5">{error}</p>
+        <p className="text-destructive mt-6 text-base leading-5">{error}</p>
       )}
 
       {today.emptyPractice ? (
@@ -139,57 +148,60 @@ export function TodayScreen({
         </>
       )}
 
-      {/* Navigation, not action: the two of them are quiet, and the host's own
-          bottom button is the only thing on this screen that creates anything. */}
-      <nav className="mt-10 flex gap-3">
-        <Link to="/sessions" className={cn(buttonVariants({ variant: "outline" }), "h-10 flex-1")}>
-          {copy.today.allSessions}
-        </Link>
-        <Link to="/clients" className={cn(buttonVariants({ variant: "outline" }), "h-10 flex-1")}>
-          {copy.today.clients}
-        </Link>
-      </nav>
-
       {/*
-        Availability, as a row that states the hours rather than a third button
-        that leads to them (#210).
+        Navigation as three rows in one card, and the availability row is why
+        (#210).
 
-        A third button does not survive the row: «Доступність» wants 98 points
-        of the 109 three buttons leave, and «Доступность» wants 104 — both clip.
-        More to the point, three equal buttons would claim three equal errands,
-        and this one is opened twice a year while the two above are weekly.
+        Two of them were outline buttons standing on the page ground, and that
+        worked only while the page was white. `variant="outline"` is
+        `border-border bg-background` — its fill *is* the page's fill, by
+        definition — so a white button on a white page was carried by its edge
+        alone and nobody noticed the missing surface. Once the light scheme's page
+        receded the same pair became outlined holes in a tinted band, beside cards
+        that had just gained a raise. No colour fixes that: an outline button can
+        never be raised above a ground it is painted from.
 
-        As a row it earns its 76 points on the days nobody presses it: the
-        dashboard answers «what are my hours» without being opened, which is the
-        question a coach has when the sheet stops offering Saturday.
+        A row has no such problem, because the card is what is raised and the row
+        is inside it. #210 had already chosen this shape for availability, and the
+        constraint it named for keeping the other two out was width: a third
+        *button* wants 98 of the 109 points three of them leave. Rows stack. Width
+        stops being the limit, and the reason availability became a row is the
+        reason these two are rows now.
+
+        Ordered by how often a coach opens them — two weekly errands, then the one
+        opened twice a year. The chevron is the other thing a button never said:
+        that this leads somewhere rather than doing something.
       */}
-      <Card className="mt-3 gap-0 overflow-hidden py-0">
-        <Link
-          to="/availability"
-          className="transition-colors duration-100 active:bg-muted flex min-h-14 items-center gap-3 px-5 py-3 text-left"
-        >
-          <HugeiconsIcon
-            icon={Clock01Icon}
-            size={18}
-            strokeWidth={2}
-            className="text-muted-foreground shrink-0"
-          />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-base leading-relaxed font-medium">
-              {copy.availability.title}
-            </span>
-            <span className="text-muted-foreground mt-0.5 block truncate text-xs leading-normal">
-              {workingHoursLine(today.workingHours, copy.availability, language)}
-            </span>
-          </span>
-          <HugeiconsIcon
-            icon={ArrowRight01Icon}
-            size={18}
-            strokeWidth={2}
-            className="text-muted-foreground shrink-0"
-          />
-        </Link>
-      </Card>
+      <nav className="mt-10">
+        <Card className="gap-0 overflow-hidden py-0">
+          <ul className="divide-border divide-y">
+            <li>
+              <NavRow
+                to="/sessions"
+                icon={Calendar03Icon}
+                label={copy.today.allSessions}
+                value={copy.today.allSessionsHint}
+              />
+            </li>
+            <li>
+              <NavRow
+                to="/clients"
+                icon={UserMultipleIcon}
+                label={copy.today.clients}
+                value={copy.today.clientsHint}
+              />
+            </li>
+            <li>
+              <NavRow
+                to="/availability"
+                icon={Clock01Icon}
+                label={copy.availability.title}
+                value={workingHoursLine(today.workingHours, copy.availability, language)}
+              />
+            </li>
+          </ul>
+        </Card>
+      </nav>
 
       {/*
         One row reading as its payoff rather than its mechanism, opening the
@@ -248,24 +260,52 @@ function SessionCard({
 }) {
   return (
     <Card className="gap-0 overflow-hidden py-0">
-      <Link
-        to="/sessions/$sessionId"
-        params={{ sessionId: session.id }}
-        className="transition-colors duration-100 active:bg-muted flex items-center gap-4 px-5 py-4 text-left"
+      {/*
+        `size="sm"` rather than the `xs` the navigation rows use: this is the
+        screen's subject and a session gets more room than a way out of it.
+
+        The time keeps its own type — `text-xl` tabular-nums — and rides the media
+        slot, which is what that slot is for: the thing you identify the row by
+        before you read it. What changes underneath it is only the second line,
+        from `text-xs` to `ItemDescription`'s `text-sm`, and `SessionKindLine`
+        takes that through its own `className` the way `session-screen` already
+        does. The size is the slot's to decide, not the line's.
+      */}
+      <Item
+        render={<Link to="/sessions/$sessionId" params={{ sessionId: session.id }} />}
+        size="sm"
+        className="active:bg-muted rounded-none px-5"
       >
-        <span className="text-xl leading-tight font-semibold tabular-nums">{time}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-base leading-relaxed font-medium">
-            {session.clientName}
-          </span>
-          <SessionKindLine
-            copy={copy.clients}
-            kind={session.kind}
-            durationMinutes={session.durationMinutes}
-            className="mt-0.5"
-          />
-        </span>
-      </Link>
+        {/*
+          Centred against both lines, which is where the time was before this row
+          became an `Item` and where it belongs: it is the row's anchor, not a
+          bullet beside its first line.
+
+          `ItemMedia` top-aligns itself whenever the item has a description, and
+          the override has to carry that same variant to land. A plain
+          `self-center` does not: `twMerge` sees no conflict between an unprefixed
+          utility and a prefixed one, so both survive the merge, and Tailwind
+          compiles the variant to `:is(:where(.group/item):has(…) *)` — `:where`
+          keeps it at class specificity, so the tie goes to whichever rule the
+          stylesheet emits later, which is the variant. Prefixed identically the
+          two *are* a conflict, and the primitive's pair drops out of the string
+          before any of that matters.
+        */}
+        <ItemMedia className="group-has-data-[slot=item-description]/item:translate-y-0 group-has-data-[slot=item-description]/item:self-center">
+          <span className="text-xl leading-tight font-semibold tabular-nums">{time}</span>
+        </ItemMedia>
+        <ItemContent className="min-w-0">
+          <ItemTitle>{session.clientName}</ItemTitle>
+          <ItemDescription>
+            <SessionKindLine
+              copy={copy.clients}
+              kind={session.kind}
+              durationMinutes={session.durationMinutes}
+              className="text-sm leading-normal"
+            />
+          </ItemDescription>
+        </ItemContent>
+      </Item>
 
       {/*
         Amber, not red. Red belongs to the bot being down — the one thing here a
@@ -274,7 +314,7 @@ function SessionCard({
       */}
       {session.clientAccepted ? null : (
         <div className="border-border/60 border-t bg-warning/10 px-5 py-3">
-          <p className="text-xs leading-normal leading-5 text-warning">
+          <p className="text-xs leading-5 text-warning">
             {copy.today.unacceptedLead}
             <span className="font-semibold">{session.clientName}</span>
             {copy.today.unacceptedTail}
@@ -295,9 +335,82 @@ function SessionCard({
 }
 
 /**
+ * One row of the navigation card, composed from `Item` rather than hand-rolled.
+ *
+ * `variant="default"` and `size="xs"`: no fill, a transparent border and the
+ * tightest padding the primitive offers, because the fill and the edge belong to
+ * the card around all three. A row that carried its own would be a box in a box.
+ *
+ * Every row has a second line, so the three are one height. Availability states
+ * its hours — #210's argument, and the shape the other two are aimed at: a row
+ * that answers its own question without being opened. Sessions and Clients say
+ * what is behind them instead, because `TodayView` carries neither a client count
+ * nor a session total, and a number invented here would be worse than a true
+ * sentence. When the view carries them, they go in this same slot.
+ *
+ * Glyphs are the marks each thing already wears: a calendar for sessions, the
+ * same one a session row carries; two figures rather than a group for clients,
+ * because a coach's clients are individuals seen one at a time and not a team; a
+ * clock for the hours, which is what availability is.
+ *
+ * `active:bg-muted` is the caller's, not the primitive's: `Item` ships
+ * `[a]:hover:bg-muted`, and hover is not an event a phone has.
+ */
+function NavRow({
+  to,
+  icon,
+  label,
+  value,
+}: {
+  readonly to: "/sessions" | "/clients" | "/availability"
+  readonly icon: typeof Clock01Icon
+  readonly label: string
+  readonly value: string
+}) {
+  return (
+    <Item
+      render={<Link to={to} />}
+      size="xs"
+      className="active:bg-muted min-h-14 rounded-none px-5"
+    >
+      <ItemMedia>
+        <HugeiconsIcon
+          icon={icon}
+          size={18}
+          strokeWidth={2}
+          className="text-muted-foreground shrink-0"
+        />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>{label}</ItemTitle>
+        <ItemDescription>{value}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <HugeiconsIcon
+          icon={ArrowRight01Icon}
+          size={18}
+          strokeWidth={2}
+          className="text-muted-foreground shrink-0"
+        />
+      </ItemActions>
+    </Item>
+  )
+}
+
+/**
  * An invitation about to lapse, or one that already has — the only two things
  * this section carries. Each row deep-links to the client it is about, which is
  * where every control over that invitation lives.
+ *
+ * The same `Item` at the same `size="xs"` as the navigation rows below, because it
+ * is the same shape in the same kind of card: one glyph, a name, a line about it,
+ * and a chevron. Sharing the size is what keeps the two cards on one rhythm.
+ *
+ * The amber belongs to the *sentence*, not to the slot, which is why it is a span
+ * inside `ItemDescription` rather than a class on it. `ItemDescription` owns
+ * `text-muted-foreground`, and the contract in `docs/agents/ui-development.md`
+ * does not let a caller repaint a primitive — but what goes *in* a slot styles
+ * itself. Please do not tidy this into `className="text-warning"`.
  */
 function AttentionRow({
   copy,
@@ -308,34 +421,38 @@ function AttentionRow({
 }) {
   const format = useTimestampFormat()
   return (
-    <Link
-      to="/clients/$clientId"
-      params={{ clientId: item.clientId }}
-      className="transition-colors duration-100 active:bg-muted flex min-h-14 items-center gap-3 px-5 py-3 text-left"
+    <Item
+      render={<Link to="/clients/$clientId" params={{ clientId: item.clientId }} />}
+      size="xs"
+      className="active:bg-muted min-h-14 rounded-none px-5"
     >
-      <HugeiconsIcon
-        icon={Alert01Icon}
-        size={18}
-        strokeWidth={2}
-        className="shrink-0 text-warning"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-base leading-relaxed font-medium">
-          {item.clientName}
-        </span>
-        <span className="mt-0.5 block truncate text-xs leading-normal text-warning">
-          {item.expired
-            ? copy.today.attentionExpired
-            : `${copy.today.attentionExpiringPrefix}${format.relative(item.expiresAt)}`}
-        </span>
-      </span>
-      <HugeiconsIcon
-        icon={ArrowRight01Icon}
-        size={18}
-        strokeWidth={2}
-        className="text-muted-foreground shrink-0"
-      />
-    </Link>
+      <ItemMedia>
+        <HugeiconsIcon
+          icon={Alert01Icon}
+          size={18}
+          strokeWidth={2}
+          className="shrink-0 text-warning"
+        />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>{item.clientName}</ItemTitle>
+        <ItemDescription>
+          <span className="text-warning">
+            {item.expired
+              ? copy.today.attentionExpired
+              : `${copy.today.attentionExpiringPrefix}${format.relative(item.expiresAt)}`}
+          </span>
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <HugeiconsIcon
+          icon={ArrowRight01Icon}
+          size={18}
+          strokeWidth={2}
+          className="text-muted-foreground shrink-0"
+        />
+      </ItemActions>
+    </Item>
   )
 }
 

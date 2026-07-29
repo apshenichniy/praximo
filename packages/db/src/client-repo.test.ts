@@ -265,6 +265,77 @@ describe.skipIf(skipWithoutDatabase)("ClientRepo (dev Neon branch)", () => {
   )
 
   /**
+   * The service-sent invitation writes down *where* it went (#58).
+   *
+   * The address is merged in beside the kind and the language, never over them:
+   * `language` is what #57's Acceptance Page reads to pre-select the language
+   * the consent is granted in, and a replace here would drop it silently.
+   */
+  it.effect("records the address an invitation was emailed to", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const { client } = yield* Database.Service
+      const fixture = yield* workspaceFixture()
+      const clientId = yield* create(fixture, "mailed")
+
+      yield* repo.recordDelivery({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        kind: "email",
+        address: "anna@example.com",
+        now: NOW,
+      })
+
+      const invites = yield* Effect.promise(() =>
+        client.select().from(schema.invite).where(eq(schema.invite.clientId, clientId)),
+      )
+      expect(invites[0]?.delivery).toEqual({
+        kind: "email",
+        language: "uk",
+        address: "anna@example.com",
+      })
+
+      const detail = yield* repo.find(fixture.workspaceId, clientId, NOW)
+      expect(detail?.invite?.delivered).toEqual({ at: NOW, kind: "email" })
+      expect(detail?.invite?.address).toBe("anna@example.com")
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /**
+   * A hand-copied link after an email must not erase the address.
+   *
+   * The two facts answer different questions — which door the coach last used,
+   * and what address we have on file for them — and the second is what
+   * pre-fills the sheet the next time they send.
+   */
+  it.effect("keeps the address when a later delivery goes out through another door", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const fixture = yield* workspaceFixture()
+      const clientId = yield* create(fixture, "thenlink")
+      const later = new Date("2026-07-27T09:00:00.000Z")
+
+      yield* repo.recordDelivery({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        kind: "email",
+        address: "anna@example.com",
+        now: NOW,
+      })
+      yield* repo.recordDelivery({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        kind: "link",
+        now: later,
+      })
+
+      const detail = yield* repo.find(fixture.workspaceId, clientId, later)
+      expect(detail?.invite?.delivered).toEqual({ at: later, kind: "link" })
+      expect(detail?.invite?.address).toBe("anna@example.com")
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /**
    * The last delivery wins, and both columns move together.
    *
    * A pair that could disagree would let the screen say «отправлено ссылкой»
@@ -351,6 +422,72 @@ describe.skipIf(skipWithoutDatabase)("ClientRepo (dev Neon branch)", () => {
 
       expect(
         (yield* repo.find(fixture.workspaceId, clientId, later))?.invite?.delivered,
+      ).toBeUndefined()
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /**
+   * …but the address rides across the reissue (#58, and the spec's own «re-issue
+   * copies the delivery target»).
+   *
+   * The delivery does not, and must not: the fresh link has been sent nowhere.
+   * Carrying the address is what saves the coach retyping something they have
+   * already given us; carrying the *kind* would be the screen claiming a send
+   * that never happened.
+   */
+  it.effect("carries the address into a reissued invitation but not the delivery", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const fixture = yield* workspaceFixture()
+      const clientId = yield* create(fixture, "carried")
+      const later = new Date("2026-07-27T09:00:00.000Z")
+
+      yield* repo.recordDelivery({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        kind: "email",
+        address: "anna@example.com",
+        now: NOW,
+      })
+      yield* repo.reissueInvite({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        inviteId: `inv_carry_${fixture.suffix}`,
+        token: `CARRY${fixture.suffix.slice(0, 7).toUpperCase()}`,
+        inviteLanguage: "uk",
+        now: later,
+        expiresAt: EXPIRES_AT,
+      })
+
+      const detail = yield* repo.find(fixture.workspaceId, clientId, later)
+      expect(detail?.invite?.address).toBe("anna@example.com")
+      expect(detail?.invite?.delivered).toBeUndefined()
+      // The language is the reissue's own, and the kind is back to the creation
+      // default — nothing about the new link claims to have travelled.
+      expect(detail?.invite?.language).toBe("uk")
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /** A client who never got an email reissues into an invitation with no address. */
+  it.effect("reissues without an address when there was never one", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const fixture = yield* workspaceFixture()
+      const clientId = yield* create(fixture, "noaddr")
+      const later = new Date("2026-07-27T09:00:00.000Z")
+
+      yield* repo.reissueInvite({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        inviteId: `inv_fresh_${fixture.suffix}`,
+        token: `NOADDR${fixture.suffix.slice(0, 6).toUpperCase()}`,
+        inviteLanguage: "uk",
+        now: later,
+        expiresAt: EXPIRES_AT,
+      })
+
+      expect(
+        (yield* repo.find(fixture.workspaceId, clientId, later))?.invite?.address,
       ).toBeUndefined()
     }).pipe(Effect.provide(appLayer)),
   )

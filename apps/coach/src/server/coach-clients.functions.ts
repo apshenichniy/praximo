@@ -19,6 +19,7 @@ import {
   saveCoachTimezone,
   saveCoachWorkingHours,
   scheduleCoachSession,
+  sendCoachInviteEmail,
 } from "./runtime.server.ts"
 
 /**
@@ -301,6 +302,46 @@ export const recordInviteDelivery = createServerFn({ method: "POST" })
       return { ok: outcome.recorded }
     } catch {
       return { ok: false }
+    }
+  })
+
+export type SendInviteEmailResult =
+  | { readonly ok: true; readonly outcome: CoachClients.SendInviteEmailOutcome }
+  | { readonly ok: false; readonly error: CoachClientsTransportError }
+
+/**
+ * The invitation, sent by the service (#58).
+ *
+ * **Not** best-effort like `recordInviteDelivery` beside it, and for the opposite
+ * reason: nothing has happened yet when this is called, the coach is waiting for
+ * the answer, and the whole point of sending synchronously is that they are told
+ * which of the three outcomes they got. A swallowed failure here would leave a
+ * client with no invitation and a coach who believes otherwise.
+ *
+ * The address crosses as a plain string and is validated on the far side against
+ * the domain's own reader — the sheet checks it too, but a check on the screen is
+ * a courtesy to the typist, never the fence.
+ */
+export const sendInviteEmail = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator((input: unknown): { readonly clientId: string; readonly address: string } => {
+    const record = (input ?? {}) as Record<string, unknown>
+    return {
+      clientId: typeof record.clientId === "string" ? record.clientId : "",
+      address: typeof record.address === "string" ? record.address : "",
+    }
+  })
+  .handler(async ({ context, data }): Promise<SendInviteEmailResult> => {
+    if (context.credential.initData.length === 0) {
+      return { ok: false, error: "unauthenticated" }
+    }
+    try {
+      return {
+        ok: true,
+        outcome: await sendCoachInviteEmail(context.credential, data.clientId, data.address),
+      }
+    } catch (error) {
+      return { ok: false, error: transportError(error) }
     }
   })
 

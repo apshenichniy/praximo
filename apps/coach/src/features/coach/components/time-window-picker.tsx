@@ -1,10 +1,11 @@
 import { type DayWindow, SlotStepMinutes } from "@praximo/domain"
-import { cn } from "@praximo/ui"
+import { ChoiceChip, cn } from "@praximo/ui"
 import { useState } from "react"
+
+import { selectionHaptic } from "@/presentation-host"
 
 import { clock, pad } from "@/features/coach/clock.ts"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
-import { selectionHaptic } from "@/presentation-host"
 
 /**
  * The one control that sets an interval, shared by the shared window and by a
@@ -52,8 +53,10 @@ export function TimeWindowPicker({
    * on close. `end` never falls to or below `start`, and `start` never reaches
    * `end` — one step apart is the smallest thing the grid can express.
    */
+  // No haptic here: `ChoiceChip` emits `selection` itself, and only when the tap
+  // actually moves the value — re-tapping the hour you are already on used to
+  // buzz about a no-op.
   const set = (part: "hour" | "minute", value: number) => {
-    selectionHaptic()
     setDraft((was) => {
       const at = field === "start" ? was.startMinutes : was.endMinutes
       const next = part === "hour" ? value * 60 + (at % 60) : Math.floor(at / 60) * 60 + value
@@ -127,7 +130,15 @@ function FieldButton({
     <button
       type="button"
       aria-pressed={active}
-      onClick={onSelect}
+      // Its own tick, which it never had. The file used to satisfy the
+      // set-selection invariant by accident — `selectionHaptic` lived in the
+      // key grid next door — and moving that into `ChoiceChip` (#58) is what
+      // made the gap visible: switching which end you are editing is a
+      // selection, and it was the one control here that said nothing.
+      onClick={() => {
+        if (!active) selectionHaptic()
+        onSelect()
+      }}
       className={cn(
         "flex flex-1 flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left",
         "ease-[var(--ease-out)] transition-[color,background-color,border-color] duration-100",
@@ -150,19 +161,10 @@ function Key({
   readonly onSelect: () => void
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      className={cn(
-        "flex min-h-10 items-center justify-center rounded-lg border text-sm leading-normal font-semibold tabular-nums",
-        "ease-[var(--ease-out)] transition-[color,background-color,border-color,scale] duration-100 active:scale-[0.96]",
-        selected
-          ? "bg-primary text-primary-foreground border-transparent"
-          : "bg-secondary border-border",
-      )}
-    >
+    // The same chip as the duration row, one size down: a slot grid puts many
+    // per line, so the target tightens and the corner softens.
+    <ChoiceChip size="sm" className="tabular-nums" selected={selected} onClick={onSelect}>
       {label}
-    </button>
+    </ChoiceChip>
   )
 }
