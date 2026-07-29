@@ -14,6 +14,7 @@ import {
 
 const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8")
+const typeset = readFileSync(new URL("../typeset.css", import.meta.url), "utf8")
 const componentSources = Object.fromEntries(
   readdirSync(new URL("../components/ui/", import.meta.url))
     .filter((file) => file.endsWith(".tsx"))
@@ -107,6 +108,27 @@ function variablesFor(selector: ":root" | ".dark"): Readonly<Record<string, stri
         return [name, value.trim()]
       }),
     ),
+  )
+}
+
+/** Every declaration of one flat rule, keyed by property. */
+function declarationsFor(css: string, selector: string): Readonly<Record<string, string>> {
+  const block = new RegExp(
+    `(?:^|\\n)${selector.replace(".", String.raw`\.`)}\\s*\\{([^}]*)\\}`,
+  ).exec(css)
+  if (block === null) {
+    throw new Error(`Missing rule ${selector}`)
+  }
+
+  return Object.fromEntries(
+    [...(block[1] ?? "").matchAll(/([\w-]+):\s*([^;]+);/g)].map((match) => {
+      const property = match[1]
+      const value = match[2]
+      if (property === undefined || value === undefined) {
+        throw new Error(`Malformed declaration in ${selector}`)
+      }
+      return [property, value.trim()]
+    }),
   )
 }
 
@@ -268,5 +290,101 @@ describe("@praximo/ui public foundation", () => {
 
   it("enables Tailwind font antialiasing at the shared body boundary", () => {
     expect(styles).toMatch(/body\s*{\s*@apply bg-background text-foreground antialiased;/s)
+  })
+
+  it("publishes the prose layer as its own stylesheet, imported after Tailwind", () => {
+    expect(packageJson.exports?.["./typeset.css"]).toBe("./src/typeset.css")
+    expect(styles.indexOf('@import "./typeset.css"')).toBeGreaterThan(
+      styles.indexOf('@import "tailwindcss"'),
+    )
+    expect(typeset).toContain("shadcn/typeset")
+  })
+
+  /**
+   * The line #223 draws. Prose flow and interface roles are separate layers,
+   * and neither is allowed to start deciding for the other: the stylesheet
+   * carries no type scale of its own, and the presets carry nothing but the
+   * three numbers it leaves open.
+   */
+  it("keeps the prose layer a mechanism rather than a second type scale", () => {
+    for (const property of [
+      "--typeset-font-body",
+      "--typeset-font-heading",
+      "--typeset-font-mono",
+      "--typeset-size",
+      "--typeset-leading",
+      "--typeset-flow",
+    ]) {
+      expect(typeset, `${property} in the prose stylesheet`).toContain(`${property}:`)
+    }
+
+    // No absolute type scale: every size the stylesheet sets is relative to the
+    // one number a preset chooses, so it cannot fork the interface scale.
+    for (const [, value] of typeset.matchAll(/font-size:\s*([^;]+);/g)) {
+      expect(value, "absolute font-size in the prose stylesheet").toMatch(
+        /^(?:inherit|[\d.]+em|calc\(var\(--typeset-size\)[^)]*\)|var\(--typeset-size\))$/,
+      )
+    }
+
+    // Nor any vocabulary of its own. Everything it styles is an element or a
+    // structural marker; the class names it knows are its own.
+    const ownClasses = new Set([
+      "typeset",
+      "typeset-scroll",
+      "not-typeset",
+      "contains-task-list",
+      "task-list-item",
+      "footnotes",
+    ])
+    const typesetRules = typeset.replaceAll(/\/\*[\s\S]*?\*\//g, "")
+    for (const [, className] of typesetRules.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)) {
+      expect(ownClasses, `class .${className} in the prose stylesheet`).toContain(className)
+    }
+
+    expect(typeset).not.toContain("typographyRecipe")
+    expect(typeset).not.toContain("@apply")
+    expect(typeset).not.toMatch(/--text-[a-z]/)
+  })
+
+  it("chooses the three numbers per preset and repoints the fonts at the product faces", () => {
+    const presets = {
+      ".typeset-document": { size: "15px", leading: "1.75", flow: "1.25em" },
+      ".typeset-pane": { size: "14px", leading: "1.6", flow: "1em" },
+    }
+
+    for (const [selector, numbers] of Object.entries(presets)) {
+      const declarations = declarationsFor(styles, selector)
+
+      // Nothing but the six variables: a preset that reached for a colour or a
+      // font-size would be forking the interface scale by another route.
+      expect(new Set(Object.keys(declarations)), `${selector} declarations`).toEqual(
+        new Set([
+          "--typeset-font-body",
+          "--typeset-font-heading",
+          "--typeset-font-mono",
+          "--typeset-size",
+          "--typeset-leading",
+          "--typeset-flow",
+        ]),
+      )
+
+      // Inter Variable and Geist Mono by way of the shared theme, not the
+      // Geist the Typeset builder emits by default.
+      expect(declarations["--typeset-font-body"]).toBe("var(--font-sans)")
+      expect(declarations["--typeset-font-heading"]).toBe("var(--font-heading)")
+      expect(declarations["--typeset-font-mono"]).toBe("var(--font-mono)")
+      expect(declarations["--typeset-size"]).toBe(numbers.size)
+      expect(declarations["--typeset-leading"]).toBe(numbers.leading)
+      expect(declarations["--typeset-flow"]).toBe(numbers.flow)
+    }
+
+    // The whole chain, not just its first link: a preset points at a theme
+    // variable, the variable names a face, and the face is actually loaded.
+    // Where it resolves is checked in the browser; that it can is checked here.
+    expect(styles).toMatch(/--font-sans:\s*"Inter Variable"/)
+    expect(styles).toMatch(/--font-mono:\s*"Geist Mono Variable"/)
+    expect(styles).toMatch(/--font-heading:\s*var\(--font-sans\)/)
+    expect(styles).toContain('@import "@fontsource-variable/inter"')
+    expect(styles).toContain('@import "@fontsource-variable/geist-mono"')
   })
 })

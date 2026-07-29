@@ -76,4 +76,23 @@ describe("UI Lab contract", () => {
       expect(lab).toContain(evidence)
     }
   })
+
+  /**
+   * The prose layer is chosen here, against the languages that put it under the
+   * most pressure, and shown beside the interface roles so the boundary between
+   * the two is something a reader can see rather than take on trust.
+   */
+  it("presents both prose presets against Ukrainian and Russian text", () => {
+    for (const evidence of [
+      "typeset typeset-document",
+      "typeset typeset-pane",
+      "typeset-scroll",
+      "Українська",
+      "Русский",
+      "Boundary",
+      "typographyRecipe body",
+    ]) {
+      expect(lab).toContain(evidence)
+    }
+  })
 })

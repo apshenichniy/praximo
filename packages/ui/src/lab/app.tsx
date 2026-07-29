@@ -670,6 +670,246 @@ function StatusEditor({
   )
 }
 
+type ProseLocale = "en" | "uk" | "ru"
+type TypesetPreset = "typeset-document" | "typeset-pane"
+
+/**
+ * Prose about the lab, in the three languages the product ships. Deliberately
+ * not the legal texts: those are versioned by content digest and live in
+ * `@praximo/i18n`, and a near-copy here would be a second, drifting version of
+ * text that has to mean exactly one thing.
+ *
+ * What it borrows from them is the shape — a heading, a lead, an emphasised
+ * clause, a list, a table wider than the measure — and the pressure. Ukrainian
+ * and Russian run 15–20% longer than English, and seeing that is the reason to
+ * choose flow and leading here rather than at a desk.
+ */
+const proseSamples: Record<
+  ProseLocale,
+  {
+    readonly label: string
+    readonly heading: string
+    readonly lead: string
+    readonly emphasis: string
+    readonly body: string
+    readonly items: readonly [string, string, string]
+    readonly tableHead: readonly [string, string]
+    readonly tableRows: ReadonlyArray<readonly [string, string]>
+    readonly caption: string
+  }
+> = {
+  en: {
+    label: "English",
+    heading: "Choosing the rhythm of a reading column",
+    lead: "A prose block is not an interface. It is read from top to bottom, one paragraph at a time, and what makes that easy is the space between the blocks rather than the size of any one of them.",
+    emphasis: "Three numbers decide it",
+    body: "size, leading, and flow. Everything else in the stylesheet is expressed against them, so a preset can be read in one line and changed in one place.",
+    items: [
+      "Size sets the base. Every heading, caption, and code span below is a multiple of it, so nothing has to be retuned when it moves.",
+      "Leading is the space inside a paragraph. A long line needs more of it; a narrow column can take less without feeling cramped.",
+      "Flow is the space between blocks. It has to beat the leading clearly, or a paragraph break stops reading as a break at all.",
+    ],
+    tableHead: ["Preset", "Where the pressure comes from"],
+    tableRows: [
+      ["typeset-document", "A full page, read once, at whatever width the browser gives it"],
+      [
+        "typeset-pane",
+        "A fixed-height pane that has to be scrolled to the end before anything happens",
+      ],
+    ],
+    caption:
+      "Judge all of it in both themes. Dark text on light and light text on dark do not carry the same apparent leading.",
+  },
+  uk: {
+    label: "Українська",
+    heading: "Як обирається ритм читальної колонки",
+    lead: "Блок тексту — це не інтерфейс. Його читають згори вниз, абзац за абзацом, і легким це робить радше відстань між блоками, ніж розмір будь-якого з них.",
+    emphasis: "Це вирішують три числа",
+    body: "розмір, інтерліньяж і потік. Усе інше в таблиці стилів виражене через них, тож пресет можна прочитати одним рядком і змінити в одному місці.",
+    items: [
+      "Розмір задає основу. Кожен заголовок, підпис і фрагмент коду нижче є його кратним, тож ніщо не доводиться переналаштовувати, коли він змінюється.",
+      "Інтерліньяж — це відстань усередині абзацу. Довгому рядку його потрібно більше; вузька колонка обійдеться меншим і не здаватиметься тісною.",
+      "Потік — це відстань між блоками. Він має помітно переважати інтерліньяж, інакше межа абзацу перестає читатися як межа.",
+    ],
+    tableHead: ["Пресет", "Звідки береться навантаження"],
+    tableRows: [
+      ["typeset-document", "Ціла сторінка, яку читають один раз, на будь-якій ширині вікна"],
+      [
+        "typeset-pane",
+        "Панель фіксованої висоти, яку треба прогорнути до кінця, перш ніж щось відбудеться",
+      ],
+    ],
+    caption:
+      "Оцінюйте це в обох темах. Темний текст на світлому та світлий на темному не дають однакового відчуття інтерліньяжу.",
+  },
+  ru: {
+    label: "Русский",
+    heading: "Как выбирается ритм читательской колонки",
+    lead: "Блок текста — это не интерфейс. Его читают сверху вниз, абзац за абзацем, и лёгким это делает скорее расстояние между блоками, чем размер любого из них.",
+    emphasis: "Это решают три числа",
+    body: "размер, интерлиньяж и поток. Всё остальное в таблице стилей выражено через них, поэтому пресет читается одной строкой и меняется в одном месте.",
+    items: [
+      "Размер задаёт основу. Каждый заголовок, подпись и фрагмент кода ниже кратны ему, поэтому ничего не приходится перенастраивать, когда он меняется.",
+      "Интерлиньяж — это расстояние внутри абзаца. Длинной строке его нужно больше; узкая колонка обойдётся меньшим и не покажется тесной.",
+      "Поток — это расстояние между блоками. Он должен заметно превышать интерлиньяж, иначе граница абзаца перестаёт читаться как граница.",
+    ],
+    tableHead: ["Пресет", "Откуда берётся нагрузка"],
+    tableRows: [
+      ["typeset-document", "Целая страница, которую читают один раз, при любой ширине окна"],
+      [
+        "typeset-pane",
+        "Панель фиксированной высоты, которую надо прокрутить до конца, прежде чем что-то произойдёт",
+      ],
+    ],
+    caption:
+      "Оценивайте это в обеих темах. Тёмный текст на светлом и светлый на тёмном дают разное ощущение интерлиньяжа.",
+  },
+}
+
+const typesetPresets: Record<
+  TypesetPreset,
+  { readonly title: string; readonly description: string; readonly values: string }
+> = {
+  "typeset-document": {
+    title: "typeset-document",
+    description: "Long-form reading column: legal texts today, rendered artifacts next.",
+    values: "15px · 1.75 · 1.25em",
+  },
+  "typeset-pane": {
+    title: "typeset-pane",
+    description: "Denser rhythm for prose inside a height-constrained pane.",
+    values: "14px · 1.6 · 1em",
+  },
+}
+
+function ProseSample({ locale }: { readonly locale: ProseLocale }) {
+  const sample = proseSamples[locale]
+
+  return (
+    <>
+      <h2>{sample.heading}</h2>
+      <p>{sample.lead}</p>
+      <p>
+        <strong>{sample.emphasis}</strong> — {sample.body}
+      </p>
+      <ul>
+        {sample.items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+      <div className="typeset-scroll">
+        <table>
+          <thead>
+            <tr>
+              {sample.tableHead.map((cell) => (
+                <th key={cell}>{cell}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sample.tableRows.map(([processor, purpose]) => (
+              <tr key={processor}>
+                <td>
+                  <code>{processor}</code>
+                </td>
+                <td>{purpose}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p>{sample.caption}</p>
+    </>
+  )
+}
+
+/**
+ * The prose layer, shown next to the interface roles above so the boundary is
+ * visible rather than asserted. Nothing here is editable: `.typeset` is static
+ * CSS in the package, and this section exists to choose and then justify the
+ * three numbers each preset opens.
+ */
+function TypesetGallery() {
+  const [locale, setLocale] = useState<ProseLocale>("uk")
+
+  return (
+    <div className="space-y-6">
+      <ToggleGroup
+        variant="outline"
+        value={[locale]}
+        onValueChange={(value) => {
+          const next = value[0]
+          if (next === "en" || next === "uk" || next === "ru") setLocale(next)
+        }}
+        aria-label="Prose language"
+      >
+        {(["en", "uk", "ru"] as const).map((value) => (
+          <ToggleGroupItem key={value} value={value} aria-label={proseSamples[value].label}>
+            {proseSamples[value].label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{typesetPresets["typeset-document"].title}</CardTitle>
+            <CardDescription>{typesetPresets["typeset-document"].description}</CardDescription>
+            <Text role="caption" mono className="text-muted-foreground">
+              {typesetPresets["typeset-document"].values}
+            </Text>
+          </CardHeader>
+          <CardContent>
+            <div lang={locale} className="typeset typeset-document text-muted-foreground">
+              <ProseSample locale={locale} />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>{typesetPresets["typeset-pane"].title}</CardTitle>
+            <CardDescription>{typesetPresets["typeset-pane"].description}</CardDescription>
+            <Text role="caption" mono className="text-muted-foreground">
+              {typesetPresets["typeset-pane"].values}
+            </Text>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-80 rounded-xl border p-4">
+              <div lang={locale} className="typeset typeset-pane text-muted-foreground">
+                <ProseSample locale={locale} />
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Boundary</CardTitle>
+          <CardDescription>
+            Interface roles style chrome; the prose block styles what is inside it. The two labels
+            below sit side by side on purpose — the difference in size and leading is the decision,
+            not an accident.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Badge variant="outline">typographyRecipe body</Badge>
+            <Text lang={locale}>{proseSamples[locale].lead}</Text>
+          </div>
+          <div className="space-y-1">
+            <Badge variant="outline">.typeset typeset-document</Badge>
+            <div lang={locale} className="typeset typeset-document">
+              <p>{proseSamples[locale].lead}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function TypographyGallery() {
   const sampleByRole: Record<InterfaceTypographyRole, string> = {
     display: "48 active clients",
@@ -1054,6 +1294,13 @@ export function UiLab() {
             description="All semantic roles, localized samples, wrapping, truncation, and tabular data."
           >
             <TypographyGallery />
+          </Section>
+
+          <Section
+            title="Typeset"
+            description="Block flow inside prose. Both presets against Ukrainian and Russian text, which run 15–20% longer than the English they are translated from."
+          >
+            <TypesetGallery />
           </Section>
 
           <Section

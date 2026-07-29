@@ -18,6 +18,7 @@ components.
 The standard shadcn semantic theme values in the first `:root` and `.dark`
 blocks of `packages/ui/src/styles.css` belong to the same baseline. Praximo
 tokens and behavior live in the explicitly marked additive extension layer.
+`packages/ui/src/typeset.css` is generated baseline too — see Prose below.
 
 ## Baseline rule
 
@@ -64,6 +65,45 @@ Semantic interface typography is intentionally deferred after the #215 reset.
 The current `Heading`, `Text`, and `typographyRecipe` exports are transitional
 compatibility scaffolding, not an accepted hierarchy. Do not inject them into
 shadcn primitives or treat their current roles and values as design decisions.
+
+## Prose
+
+`packages/ui/src/typeset.css` is the second shared stylesheet. It owns block flow
+inside prose — the spacing between paragraphs, lists, headings and tables — and
+`styles.css` imports it after Tailwind, so every application already has it.
+
+Use it for long-form content: a legal text, a consent pane, a rendered artifact.
+Wrap the content in `.typeset` plus one preset and then write plain elements.
+
+```tsx
+<div className="typeset typeset-document text-muted-foreground">
+  <p>…</p>
+  <h2>…</h2>
+  <div className="typeset-scroll">
+    <table>…</table>
+  </div>
+</div>
+```
+
+Rules:
+
+- Do not hand-space blocks inside a prose block. No `mt-*`, no `space-y-*`, no
+  list `pl-*`. That spacing is `--typeset-flow`, and a contract test holds it.
+- Do not apply `typographyRecipe`, `Heading`, or `Text` inside a prose block.
+  Interface roles are for chrome; keep the page title and its metadata outside
+  the block and let the prose own its own headings.
+- Colour and layout utilities on the container are fine — `text-muted-foreground`
+  for a muted reading column, a max width, a top margin.
+- `typeset-scroll` wraps anything wider than the measure so it scrolls at its
+  natural width instead of compressing.
+- `typeset.css` is generated source. Do not hand-edit it. Regenerate it from the
+  [builder](https://ui.shadcn.com/docs/typeset) if it has to change.
+- The presets — `.typeset-document` and `.typeset-pane` — live in the Praximo
+  extension layer of `styles.css` and set nothing but the six `--typeset-*`
+  variables. Adding a third one is a design decision made in UI Lab against
+  Ukrainian and Russian text in both themes, not a convenience.
+
+`apps/client/src/features/legal/components/legal-page.tsx` is the worked example.
 
 ## Registry workflow
 

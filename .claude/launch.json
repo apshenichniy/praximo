@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "ui-lab",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "ui:dev"],
+      "port": 3005
+    },
+    {
       "name": "coach",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["run", "dev:coach"],

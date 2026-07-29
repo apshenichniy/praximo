@@ -6,6 +6,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router"
 import { coachTermsFor, PRIVACY_VERSION, privacyPolicyFor, TERMS_VERSION } from "@praximo/i18n"
+import { interfaceTypographyRoles, typographyRecipe } from "@praximo/ui"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
@@ -67,14 +68,45 @@ describe("legal pages", () => {
     expect(russian).toContain('lang="ru"')
   })
 
-  it("keeps legal typography on the shared semantic recipes", async () => {
+  it("keeps the page header on the shared semantic recipes", async () => {
     const html = await render(
       <LegalPage document={coachTermsFor("en")} version={TERMS_VERSION} locale="en" />,
     )
 
+    // Title and version are interface chrome and stay on the recipes.
     expect(html).toContain("text-3xl")
-    expect(html).toContain("text-base")
     expect(html).toContain("text-xs")
     expect(html).not.toMatch(/\bmd:text-/)
+  })
+
+  /**
+   * The boundary #223 draws, held from the consuming side: the document is a
+   * reading column, so nothing inside it carries an interface type role and
+   * nothing inside it hand-spaces its own blocks.
+   */
+  it("renders the document through the prose layer and nothing else", async () => {
+    const html = await render(
+      <LegalPage document={privacyPolicyFor("en")} version={PRIVACY_VERSION} locale="en" />,
+    )
+
+    // Everything below the prose container's own opening tag. The container
+    // carries the layout margin that separates chrome from prose; what the
+    // boundary is about is what happens inside it.
+    expect(html).toContain("typeset typeset-document")
+    const prose = html.slice(html.indexOf(">", html.indexOf("typeset typeset-document")))
+    expect(prose).toContain("typeset-scroll")
+
+    // No interface type role reaches inside the prose block — asked of the
+    // recipe itself rather than of a list somebody has to remember to extend.
+    for (const role of interfaceTypographyRoles) {
+      for (const className of typographyRecipe({ role }).split(" ")) {
+        expect(prose, `${role}'s ${className} inside the prose block`).not.toContain(className)
+      }
+    }
+
+    // Neither does hand-spacing: the flow between blocks is the stylesheet's.
+    expect(prose).not.toMatch(/\bm[tby]-\d/)
+    expect(prose).not.toMatch(/\bspace-y-\d/)
+    expect(prose).not.toMatch(/\bp[lr]-\d/)
   })
 })

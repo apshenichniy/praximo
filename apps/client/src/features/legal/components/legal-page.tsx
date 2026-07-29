@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import type { ReactNode } from "react"
-import { Heading, Text, cn, typographyRecipe } from "@praximo/ui"
+import { Heading, Text } from "@praximo/ui"
 
 import {
   type LegalBlock,
@@ -19,16 +19,20 @@ import {
  * terms screen, a client will read the policy from the consent page, and
  * neither is signed in at that moment.
  *
- * Long-form content uses the same shared semantic roles as every other surface.
- * The readable measure changes at the layout boundary; type sizes stay owned by
- * the Maia recipes so this page cannot silently fork the interface scale.
+ * Two type layers meet here, and the boundary between them is the point (#223).
+ * The page header is interface chrome and keeps the shared semantic roles. The
+ * document itself is a reading column: `.typeset` owns the flow between its
+ * blocks, so nothing below hand-spaces itself, and a heading inside the running
+ * text takes its rhythm from the prose rather than from an interface role.
  */
 function Inline({ value }: { readonly value: LegalInline }) {
   if (typeof value === "string") return value
   if ("emphasis" in value) return <strong className="text-foreground">{value.emphasis}</strong>
   if ("link" in value) {
     return (
-      <Link to={value.to} className="text-primary underline underline-offset-4">
+      // Colour only. The underline and its offset come from the prose layer, so
+      // a link reads the same here as in any other block it ends up inside.
+      <Link to={value.to} className="text-primary">
         {value.link}
       </Link>
     )
@@ -37,13 +41,10 @@ function Inline({ value }: { readonly value: LegalInline }) {
   // silently blank contract clause is worse than one that says it is unfinished.
   return (
     // The edge, not only the fill: a marker that says a clause is unfinished
-    // has to read as a marked region on either shared theme.
-    <mark
-      className={cn(
-        typographyRecipe({ role: "caption" }),
-        "bg-primary/10 text-primary border-primary/30 rounded border px-1 py-0.5 whitespace-nowrap",
-      )}
-    >
+    // has to read as a marked region on either shared theme. Typeset styles
+    // `mark` as a highlight; the border and the primary tint are what make this
+    // one read as a note to us instead.
+    <mark className="bg-primary/10 text-primary border-primary/30 rounded border px-1 py-0.5 whitespace-nowrap">
       [{legalPlaceholders[value.placeholder]}]
     </mark>
   )
@@ -54,41 +55,35 @@ const inlines = (content: ReadonlyArray<LegalInline>): ReactNode =>
 
 function Block({ block }: { readonly block: LegalBlock }) {
   if (block.kind === "paragraph") {
-    return <Text className="text-muted-foreground mt-3">{inlines(block.content)}</Text>
+    return <p>{inlines(block.content)}</p>
   }
   if (block.kind === "list") {
     return (
-      <ul
-        className={cn(
-          typographyRecipe({ role: "body" }),
-          "text-muted-foreground mt-3 list-disc space-y-2 pl-5",
-        )}
-      >
+      <ul>
         {block.items.map((item, index) => (
           <li key={index}>{inlines(item)}</li>
         ))}
       </ul>
     )
   }
+  // A processor table is wider than the reading measure in every language.
+  // `typeset-scroll` lets it scroll at its natural width instead of squeezing
+  // Ukrainian and Russian cells into two-character columns.
   return (
-    <div className="mt-4 overflow-x-auto">
-      <table
-        className={cn(typographyRecipe({ role: "caption" }), "w-full border-collapse text-left")}
-      >
+    <div className="typeset-scroll">
+      <table>
         <thead>
           <tr className="text-foreground">
             {block.head.map((cell) => (
-              <th key={cell} className="border-border border-b px-2 py-2 font-medium">
-                {cell}
-              </th>
+              <th key={cell}>{cell}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="text-muted-foreground">
+        <tbody>
           {block.rows.map((row, index) => (
             <tr key={index}>
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="border-border/50 border-b px-2 py-2 align-top">
+                <td key={cellIndex}>
                   <Inline value={cell} />
                 </td>
               ))}
@@ -121,19 +116,19 @@ export function LegalPage({
       <Text mono role="caption" className="text-muted-foreground mt-2">
         {version}
       </Text>
-      {document.intro.map((block, index) => (
-        <Block key={index} block={block} />
-      ))}
-      {document.sections.map((section) => (
-        <section key={section.heading} className="mt-8">
-          <Heading as="h2" role="section-title">
-            {section.heading}
-          </Heading>
-          {section.blocks.map((block, index) => (
-            <Block key={index} block={block} />
-          ))}
-        </section>
-      ))}
+      <div className="typeset typeset-document text-muted-foreground mt-6">
+        {document.intro.map((block, index) => (
+          <Block key={index} block={block} />
+        ))}
+        {document.sections.map((section) => (
+          <section key={section.heading}>
+            <h2>{section.heading}</h2>
+            {section.blocks.map((block, index) => (
+              <Block key={index} block={block} />
+            ))}
+          </section>
+        ))}
+      </div>
     </main>
   )
 }
