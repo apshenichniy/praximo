@@ -102,7 +102,7 @@ export function TodayScreen({
       </header>
 
       {error === undefined ? null : (
-        <p className="text-destructive mt-6 text-base leading-relaxed leading-5">{error}</p>
+        <p className="text-destructive mt-6 text-base leading-5">{error}</p>
       )}
 
       {today.emptyPractice ? (
