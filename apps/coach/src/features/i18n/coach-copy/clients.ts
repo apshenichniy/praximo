@@ -24,16 +24,6 @@ export interface DoorCopy {
    * that genuinely differs between them.
    */
   readonly leadTail: string
-  /**
-   * Where reminders will go, said under the buttons because the door is also the
-   * reminder channel: a Telegram client is reminded in that chat, a link client
-   * at the address they leave on the acceptance page.
-   *
-   * The consequence, not the mechanism — a coach choosing a door is choosing
-   * where this person will be reached for the life of the relationship, and
-   * nothing else on the screen says so.
-   */
-  readonly reminder: string
 }
 
 /**
@@ -320,12 +310,10 @@ const en: ClientsCopy = {
     telegram: {
       label: "Telegram",
       leadTail: " opens your bot in Telegram and accepts there. It works for 7 days.",
-      reminder: "Reminders will reach them in Telegram.",
     },
     link: {
       label: "Link",
       leadTail: " opens the invitation page and accepts there. It works for 7 days.",
-      reminder: "Reminders will go to the email they leave when they accept.",
     },
   },
   sentVia: {
@@ -446,12 +434,10 @@ const uk: ClientsCopy = {
     telegram: {
       label: "Telegram",
       leadTail: " відкриє вашого бота в Telegram і прийме запрошення там. Воно діє 7 днів.",
-      reminder: "Нагадування надходитимуть у Telegram.",
     },
     link: {
       label: "Посилання",
       leadTail: " відкриє сторінку запрошення і прийме його там. Воно діє 7 днів.",
-      reminder: "Нагадування надходитимуть на пошту, яку клієнт залишить під час прийняття.",
     },
   },
   sentVia: {
@@ -572,12 +558,10 @@ const ru: ClientsCopy = {
     telegram: {
       label: "Telegram",
       leadTail: " откроет вашего бота в Telegram и примет приглашение там. Оно действует 7 дней.",
-      reminder: "Напоминания будут приходить в Telegram.",
     },
     link: {
       label: "Ссылка",
       leadTail: " откроет страницу приглашения и примет его там. Оно действует 7 дней.",
-      reminder: "Напоминания будут приходить на почту, которую клиент оставит при принятии.",
     },
   },
   sentVia: {

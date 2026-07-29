@@ -102,7 +102,7 @@ describe("the invitation section", () => {
    * field is gone: truncated to a phone's width it hid the token — the only part
    * that differs between two clients — so it verified nothing, and nobody
    * retypes one by hand. Neither door's URL is rendered anywhere now, which is
-   * why these assert on the sentence, the reminder and the lead action instead.
+   * why these assert on the sentence and the lead action instead.
    */
   it("opens on Telegram and offers both doors", async () => {
     const html = await screen(client())
@@ -138,13 +138,6 @@ describe("the invitation section", () => {
     expect(html).not.toContain(copy.clients.doors.telegram.leadTail)
     // No card behind the Link door: it opens a bot this client never appears in.
     expect(html).not.toContain(copy.clients.sendCard)
-  })
-
-  it("names where reminders will go for the door on screen", async () => {
-    expect(await screen(client())).toContain(copy.clients.doors.telegram.reminder)
-    expect(
-      await screen(client({ delivered: { at: "2026-07-27T10:00:00.000Z", kind: "link" } })),
-    ).toContain(copy.clients.doors.link.reminder)
   })
 
   /**

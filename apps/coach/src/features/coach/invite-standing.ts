@@ -60,8 +60,8 @@ export const sentVia = (copy: ClientsCopy, kind: string | undefined): string | u
  *
  * Not the identity it looks like, and that is the whole reason it exists:
  * **`email` opens the Link door.** What the service put in that message was the
- * web URL, so the Acceptance Page is what the client is holding, the Link door
- * is where the resend lives, and the reminder line under it is the true one.
+ * web URL, so the Acceptance Page is what the client is holding and the Link
+ * door is where the resend lives — as the door's own lead action, since #58.
  * Falling back to Telegram — which is what a plain «is this a door?» check does,
  * since `email` is not one — would sit a Telegram control set under «отправлено
  * письмом», exactly the drift #224 opened this default to prevent.

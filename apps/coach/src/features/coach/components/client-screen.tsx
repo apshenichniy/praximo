@@ -455,16 +455,6 @@ export function ClientScreen({
                       </Button>
                     ) : null}
                   </div>
-
-                  {/*
-                    The door is also the reminder channel, and that outlives the
-                    sending: this line is the only place on the screen that says a
-                    coach picking a door is picking where this person gets reached
-                    for the life of the relationship.
-                  */}
-                  <Text role="caption" className="text-muted-foreground">
-                    {words.reminder}
-                  </Text>
                 </>
               )}
             </div>
