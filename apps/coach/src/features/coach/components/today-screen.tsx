@@ -260,24 +260,37 @@ function SessionCard({
 }) {
   return (
     <Card className="gap-0 overflow-hidden py-0">
-      <Link
-        to="/sessions/$sessionId"
-        params={{ sessionId: session.id }}
-        className="transition-colors duration-100 active:bg-muted flex items-center gap-4 px-5 py-4 text-left"
+      {/*
+        `size="sm"` rather than the `xs` the navigation rows use: this is the
+        screen's subject and a session gets more room than a way out of it.
+
+        The time keeps its own type — `text-xl` tabular-nums — and rides the media
+        slot, which is what that slot is for: the thing you identify the row by
+        before you read it. What changes underneath it is only the second line,
+        from `text-xs` to `ItemDescription`'s `text-sm`, and `SessionKindLine`
+        takes that through its own `className` the way `session-screen` already
+        does. The size is the slot's to decide, not the line's.
+      */}
+      <Item
+        render={<Link to="/sessions/$sessionId" params={{ sessionId: session.id }} />}
+        size="sm"
+        className="active:bg-muted rounded-none px-5"
       >
-        <span className="text-xl leading-tight font-semibold tabular-nums">{time}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-base leading-relaxed font-medium">
-            {session.clientName}
-          </span>
-          <SessionKindLine
-            copy={copy.clients}
-            kind={session.kind}
-            durationMinutes={session.durationMinutes}
-            className="mt-0.5"
-          />
-        </span>
-      </Link>
+        <ItemMedia>
+          <span className="text-xl leading-tight font-semibold tabular-nums">{time}</span>
+        </ItemMedia>
+        <ItemContent className="min-w-0">
+          <ItemTitle>{session.clientName}</ItemTitle>
+          <ItemDescription>
+            <SessionKindLine
+              copy={copy.clients}
+              kind={session.kind}
+              durationMinutes={session.durationMinutes}
+              className="text-sm leading-normal"
+            />
+          </ItemDescription>
+        </ItemContent>
+      </Item>
 
       {/*
         Amber, not red. Red belongs to the bot being down — the one thing here a
@@ -373,6 +386,16 @@ function NavRow({
  * An invitation about to lapse, or one that already has — the only two things
  * this section carries. Each row deep-links to the client it is about, which is
  * where every control over that invitation lives.
+ *
+ * The same `Item` at the same `size="xs"` as the navigation rows below, because it
+ * is the same shape in the same kind of card: one glyph, a name, a line about it,
+ * and a chevron. Sharing the size is what keeps the two cards on one rhythm.
+ *
+ * The amber belongs to the *sentence*, not to the slot, which is why it is a span
+ * inside `ItemDescription` rather than a class on it. `ItemDescription` owns
+ * `text-muted-foreground`, and the contract in `docs/agents/ui-development.md`
+ * does not let a caller repaint a primitive — but what goes *in* a slot styles
+ * itself. Please do not tidy this into `className="text-warning"`.
  */
 function AttentionRow({
   copy,
@@ -383,34 +406,38 @@ function AttentionRow({
 }) {
   const format = useTimestampFormat()
   return (
-    <Link
-      to="/clients/$clientId"
-      params={{ clientId: item.clientId }}
-      className="transition-colors duration-100 active:bg-muted flex min-h-14 items-center gap-3 px-5 py-3 text-left"
+    <Item
+      render={<Link to="/clients/$clientId" params={{ clientId: item.clientId }} />}
+      size="xs"
+      className="active:bg-muted min-h-14 rounded-none px-5"
     >
-      <HugeiconsIcon
-        icon={Alert01Icon}
-        size={18}
-        strokeWidth={2}
-        className="shrink-0 text-warning"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-base leading-relaxed font-medium">
-          {item.clientName}
-        </span>
-        <span className="mt-0.5 block truncate text-xs leading-normal text-warning">
-          {item.expired
-            ? copy.today.attentionExpired
-            : `${copy.today.attentionExpiringPrefix}${format.relative(item.expiresAt)}`}
-        </span>
-      </span>
-      <HugeiconsIcon
-        icon={ArrowRight01Icon}
-        size={18}
-        strokeWidth={2}
-        className="text-muted-foreground shrink-0"
-      />
-    </Link>
+      <ItemMedia>
+        <HugeiconsIcon
+          icon={Alert01Icon}
+          size={18}
+          strokeWidth={2}
+          className="shrink-0 text-warning"
+        />
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemTitle>{item.clientName}</ItemTitle>
+        <ItemDescription>
+          <span className="text-warning">
+            {item.expired
+              ? copy.today.attentionExpired
+              : `${copy.today.attentionExpiringPrefix}${format.relative(item.expiresAt)}`}
+          </span>
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <HugeiconsIcon
+          icon={ArrowRight01Icon}
+          size={18}
+          strokeWidth={2}
+          className="text-muted-foreground shrink-0"
+        />
+      </ItemActions>
+    </Item>
   )
 }
 
