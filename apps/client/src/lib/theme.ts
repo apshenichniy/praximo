@@ -64,6 +64,18 @@ export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#18181b", light: "#fff
 export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#fafafa", light: "#18181b" }
 
 /**
+ * Marks the one `<link rel="icon">` whose `href` follows the scheme. That
+ * element carries both castings as `data-light` / `data-dark`.
+ *
+ * The URLs travel on the element rather than through this module because Vite
+ * hashes them at build time: the element is where they are already known, and
+ * threading the pair into a `<head>` script and a runtime function separately is
+ * two places to get the same pair wrong. Declared above `THEME_BOOTSTRAP`
+ * because that string interpolates it.
+ */
+export const FAVICON_SELECTOR = "link[data-praximo-favicon]"
+
+/**
  * The scheme, decided before the first paint.
  *
  * A blocking script in `<head>`, ahead of the body, which is why it is a string
@@ -96,6 +108,12 @@ export const THEME_BOOTSTRAP = `!function () {
       scheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
     }
     document.documentElement.classList.toggle("${DARK_SCHEME_CLASS}", scheme === "dark")
+    // The icon settles here too, for the same reason the class does: a tab that
+    // showed the pale-ground mark and swapped it after hydration is a flicker in
+    // the one piece of chrome the reader is not even looking at.
+    var icon = document.querySelector("${FAVICON_SELECTOR}")
+    var href = icon && icon.getAttribute("data-" + scheme)
+    if (href) icon.setAttribute("href", href)
   } catch (error) {
     // Leave the document as it was rendered — :root is the light scheme.
   }
@@ -151,14 +169,25 @@ export const resolveColorScheme = (preference: ThemePreference): ColorScheme =>
   preference === "system" ? preferredColorScheme() : preference
 
 /**
- * Put a scheme on the document: the class every token hangs off, and the
- * `theme-color` meta the browser paints its own chrome with.
+ * Put a scheme on the document: the class every token hangs off, the
+ * `theme-color` meta the browser paints its own chrome with, and the favicon.
+ *
+ * **The favicon has to be written here rather than left to the `<link media>`
+ * attribute**, and the reason is the whole shape of this module. A media query
+ * on an icon link follows `prefers-color-scheme` — the *browser's* answer — but
+ * this app lets the reader overrule that answer, and stores their choice. A
+ * reader on a light system who picks Dark got a dark page under the icon cast
+ * for pale ground, which is the one place the two could disagree and did.
  */
 export const applyColorScheme = (scheme: ColorScheme): void => {
   document.documentElement.classList.toggle(DARK_SCHEME_CLASS, scheme === "dark")
 
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
   if (meta) meta.content = APP_SURFACE_COLOR[scheme]
+
+  const icon = document.querySelector<HTMLLinkElement>(FAVICON_SELECTOR)
+  const href = icon?.dataset[scheme]
+  if (icon && href) icon.href = href
 }
 
 /**

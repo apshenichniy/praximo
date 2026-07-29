@@ -1,15 +1,18 @@
 import type { FeedbackAdapter, FeedbackEvent } from "@praximo/ui"
 
 import {
+  isIosHost,
   loadTelegramWebApp,
   openExternalLink,
   openTelegramLink,
   readTelegramInitData,
   revealTelegramWebApp,
   shareInviteMessage,
+  shareViaSystem,
   TELEGRAM_WEBAPP_SRC,
   type ShareInviteOptions,
   type ShareInviteOutcome,
+  type SystemShareOutcome,
 } from "./telegram/bridge.ts"
 import { impactHaptic, notifyHaptic, selectionHaptic, useOpenHaptic } from "./telegram/haptics.ts"
 
@@ -19,14 +22,16 @@ export { HostMainButton } from "./telegram/telegram-main-button.tsx"
 export { HostTheme } from "./telegram/telegram-theme.tsx"
 export {
   impactHaptic,
+  isIosHost,
   notifyHaptic,
   openExternalLink,
   openTelegramLink,
   selectionHaptic,
+  shareViaSystem,
   TELEGRAM_WEBAPP_SRC,
   useOpenHaptic,
 }
-export type { ShareInviteOutcome }
+export type { ShareInviteOutcome, SystemShareOutcome }
 
 export async function readPresentationInitData(): Promise<string | undefined> {
   const webApp = await loadTelegramWebApp()

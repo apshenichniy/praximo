@@ -1,5 +1,5 @@
 import { sharePreparedMessage, type ShareInviteOutcome } from "@/presentation-host"
-import { prepareInviteCard } from "@/server/coach-clients.functions.ts"
+import { prepareInviteCard, recordInviteDelivery } from "@/server/coach-clients.functions.ts"
 
 /**
  * Hand the client's invitation to Telegram's own chat picker (#179).
@@ -14,6 +14,12 @@ import { prepareInviteCard } from "@/server/coach-clients.functions.ts"
  * forwarded text, which is the only role #56 left that form. The link is never
  * duplicated there — it travels as the `url`, and the prose beside it as the
  * `text`.
+ *
+ * Either form that actually reached the picker is written down as a Telegram
+ * delivery (#224). Recorded here rather than at the two call sites because both
+ * are the same event: the client's own screen and the resend on an unaccepted
+ * session (#61) hand the same invitation to the same picker, and a coach who
+ * resent one has delivered it just as much as one who sent it the first time.
  */
 
 /**
@@ -60,7 +66,23 @@ export const shareClientInvite = async (options: {
       link: options.link,
       message,
     })
-    if (outcome !== "no-host") return outcome
+    if (outcome !== "no-host") {
+      // `shared` is the picker's own callback; `fallback` is the sub-8.0 form,
+      // where the invitation lands in the chat picker's input field. A
+      // `dismissed` picker sent nothing, and telling a coach who changed their
+      // mind otherwise would put a fiction in the list a week later.
+      //
+      // Best-effort, and never allowed to fail the share: by this point the
+      // invitation has left the coach's phone, and a bookkeeping error
+      // surfacing as «не отправлено» would be the screen contradicting
+      // something they just watched happen.
+      if (outcome === "shared" || outcome === "fallback") {
+        await recordInviteDelivery({
+          data: { clientId: options.clientId, kind: "telegram" },
+        }).catch(() => undefined)
+      }
+      return outcome
+    }
     globalThis.open?.(
       `https://t.me/share/url?url=${encodeURIComponent(
         options.link,

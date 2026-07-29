@@ -1,4 +1,54 @@
-import type { CoachLanguage } from "@praximo/domain"
+import type { ClientInviteDoor, CoachLanguage } from "@praximo/domain"
+
+/**
+ * Everything one door of an invitation is called (#224).
+ *
+ * Keyed by the door rather than spelled out as `…Telegram` / `…Link` pairs: the
+ * screen switches all four of these together, and as separate keys that was four
+ * ternaries on the same value, each of them a place to add the third door and
+ * forget one. A record makes the segment's job a lookup, and adding #58's email
+ * position a single entry that will not compile until every field is written.
+ */
+export interface DoorCopy {
+  /** The segment's own chip. */
+  readonly label: string
+  /**
+   * The eyebrow over the invitation section. It said «Приглашение · Telegram»
+   * unconditionally until there was a second door, at which point it was stating
+   * one thing while the control under it stated another.
+   */
+  readonly eyebrow: string
+  /**
+   * name · " opens your bot in Telegram and accepts there. The link works for 7 days."
+   *
+   * The coach's own summary of what the invitation does, and **only** that
+   * (#181). What the client actually receives lives in the client catalogue in
+   * `@praximo/i18n`, is written to them rather than about them, and is rendered
+   * in the language the coach chose for that client.
+   *
+   * One per door, because what the client does with the link is the one thing
+   * that genuinely differs between them.
+   */
+  readonly leadTail: string
+  /**
+   * Where reminders will go, said under the buttons because the door is also the
+   * reminder channel: a Telegram client is reminded in that chat, a link client
+   * at the address they leave on the acceptance page.
+   *
+   * The consequence, not the mechanism — a coach choosing a door is choosing
+   * where this person will be reached for the life of the relationship, and
+   * nothing else on the screen says so.
+   */
+  readonly reminder: string
+  /**
+   * Which door it went out through, said after the moment it went:
+   * «Приглашён · 2 дня назад · отправлено ссылкой».
+   *
+   * The door and not only the time, because a coach coming back a week later
+   * needs to know what the client is holding.
+   */
+  readonly sentVia: string
+}
 
 /**
  * The client screens (#56): the list the coach lands on, the client they
@@ -17,6 +67,15 @@ export interface ClientsCopy {
   readonly stateInvited: string
   readonly stateExpired: string
   readonly stateAccepted: string
+  /**
+   * The state a client sits in between being created and being invited (#224).
+   *
+   * Before this the list said «Приглашён» about somebody whose link was still on
+   * the coach's screen, while the seven-day window — which starts at creation —
+   * was already running. Not an alarm: it is the ordinary next step, and the
+   * badge wears the muted tone rather than the amber one.
+   */
+  readonly stateNotSent: string
   /** "invited " · "2 days ago" — the relative moment comes from the formatter. */
   readonly invitedPrefix: string
   readonly expiresPrefix: string
@@ -33,19 +92,20 @@ export interface ClientsCopy {
   readonly createAction: string
   readonly nameRequired: string
 
-  readonly invitationEyebrow: string
   /**
-   * name · " opens your bot in Telegram and accepts there. The link works for 7 days."
-   *
-   * The coach's own summary of what the invitation does, and **only** that
-   * (#181). What the client actually receives lives in the client catalogue in
-   * `@praximo/i18n`, is written to them rather than about them, and is rendered
-   * in the language the coach chose for that client.
+   * One token, two ways to hand it over. Switching shows a different address and
+   * writes nothing — both forms are valid from the moment the invitation exists.
    */
-  readonly invitationLeadTail: string
+  readonly doorLabel: string
+  readonly doors: Record<ClientInviteDoor, DoorCopy>
   readonly sendCard: string
   readonly copyInvite: string
   readonly copied: string
+  /**
+   * The system share sheet, offered on iOS only (#27) — the one host that both
+   * advertises `navigator.share` and honours it.
+   */
+  readonly shareAction: string
   readonly linkLabel: string
   readonly reissueLead: string
   /**
@@ -176,6 +236,7 @@ const en: ClientsCopy = {
   stateInvited: "Invited",
   stateExpired: "Link expired",
   stateAccepted: "Active",
+  stateNotSent: "Not sent",
   invitedPrefix: "invited ",
   expiresPrefix: "expires ",
   acceptedPrefix: "joined ",
@@ -190,11 +251,27 @@ const en: ClientsCopy = {
   createAction: "Create and invite",
   nameRequired: "A name is needed — it is how you will find them in the list.",
 
-  invitationEyebrow: "Invitation · Telegram",
-  invitationLeadTail: " opens your bot in Telegram and accepts there. The link works for 7 days.",
+  doorLabel: "How to send it",
+  doors: {
+    telegram: {
+      label: "Telegram",
+      eyebrow: "Invitation · Telegram",
+      leadTail: " opens your bot in Telegram and accepts there. The link works for 7 days.",
+      reminder: "Reminders will reach them in Telegram.",
+      sentVia: "sent in Telegram",
+    },
+    link: {
+      label: "Link",
+      eyebrow: "Invitation · Link",
+      leadTail: " opens the invitation page and accepts there. The link works for 7 days.",
+      reminder: "Reminders will go to the email they leave when they accept.",
+      sentVia: "sent as a link",
+    },
+  },
   sendCard: "Send a card in Telegram",
   copyInvite: "Copy invite",
   copied: "Copied",
+  shareAction: "Share",
   linkLabel: "Invitation link",
   reissueLead: "This link is no longer valid. Issue a fresh one to invite them again.",
   reissueAction: "Issue a fresh link",
@@ -266,6 +343,7 @@ const uk: ClientsCopy = {
   stateInvited: "Запрошено",
   stateExpired: "Посилання прострочене",
   stateAccepted: "Активний",
+  stateNotSent: "Не надіслано",
   invitedPrefix: "запрошено ",
   expiresPrefix: "спливає ",
   acceptedPrefix: "приєднався ",
@@ -280,12 +358,27 @@ const uk: ClientsCopy = {
   createAction: "Створити і запросити",
   nameRequired: "Потрібне ім'я — саме за ним ви знайдете клієнта у списку.",
 
-  invitationEyebrow: "Запрошення · Telegram",
-  invitationLeadTail:
-    " відкриє вашого бота в Telegram і прийме запрошення там. Посилання діє 7 днів.",
+  doorLabel: "Як надіслати",
+  doors: {
+    telegram: {
+      label: "Telegram",
+      eyebrow: "Запрошення · Telegram",
+      leadTail: " відкриє вашого бота в Telegram і прийме запрошення там. Посилання діє 7 днів.",
+      reminder: "Нагадування надходитимуть у Telegram.",
+      sentVia: "надіслано в Telegram",
+    },
+    link: {
+      label: "Посилання",
+      eyebrow: "Запрошення · Посилання",
+      leadTail: " відкриє сторінку запрошення і прийме його там. Посилання діє 7 днів.",
+      reminder: "Нагадування надходитимуть на пошту, яку клієнт залишить під час прийняття.",
+      sentVia: "надіслано посиланням",
+    },
+  },
   sendCard: "Надіслати картку в Telegram",
   copyInvite: "Скопіювати запрошення",
   copied: "Скопійовано",
+  shareAction: "Поділитися",
   linkLabel: "Посилання-запрошення",
   reissueLead: "Це посилання більше не діє. Випустіть нове, щоб запросити ще раз.",
   reissueAction: "Випустити нове посилання",
@@ -357,6 +450,7 @@ const ru: ClientsCopy = {
   stateInvited: "Приглашён",
   stateExpired: "Ссылка истекла",
   stateAccepted: "Активен",
+  stateNotSent: "Не отправлено",
   invitedPrefix: "приглашён ",
   expiresPrefix: "истекает ",
   acceptedPrefix: "присоединился ",
@@ -371,12 +465,28 @@ const ru: ClientsCopy = {
   createAction: "Создать и пригласить",
   nameRequired: "Нужно имя — именно по нему вы найдёте клиента в списке.",
 
-  invitationEyebrow: "Приглашение · Telegram",
-  invitationLeadTail:
-    " откроет вашего бота в Telegram и примет приглашение там. Ссылка действует 7 дней.",
+  doorLabel: "Как отправить",
+  doors: {
+    telegram: {
+      label: "Telegram",
+      eyebrow: "Приглашение · Telegram",
+      leadTail:
+        " откроет вашего бота в Telegram и примет приглашение там. Ссылка действует 7 дней.",
+      reminder: "Напоминания будут приходить в Telegram.",
+      sentVia: "отправлено в Telegram",
+    },
+    link: {
+      label: "Ссылка",
+      eyebrow: "Приглашение · Ссылка",
+      leadTail: " откроет страницу приглашения и примет его там. Ссылка действует 7 дней.",
+      reminder: "Напоминания будут приходить на почту, которую клиент оставит при принятии.",
+      sentVia: "отправлено ссылкой",
+    },
+  },
   sendCard: "Отправить карточку в Telegram",
   copyInvite: "Скопировать приглашение",
   copied: "Скопировано",
+  shareAction: "Поделиться",
   linkLabel: "Ссылка-приглашение",
   reissueLead: "Эта ссылка больше не действует. Выпустите новую, чтобы пригласить ещё раз.",
   reissueAction: "Выпустить новую ссылку",

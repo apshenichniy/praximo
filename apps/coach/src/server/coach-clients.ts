@@ -1,10 +1,12 @@
 import { ClientRepo, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
 import {
   type BusyInterval,
+  ClientInviteDeliveryKind,
   ClientInviteTokenAlphabet,
   ClientInviteTokenLength,
   ClientInviteTtlMillis,
   clientInviteStartParameter,
+  clientInviteUrl,
   type CoachLanguage,
   CreateClientInput,
   type DayWindow,
@@ -23,7 +25,7 @@ import {
 } from "@praximo/domain"
 import { clientCopy } from "@praximo/i18n"
 import { BotRegistry } from "@praximo/telegram"
-import { Clock, Context, Effect, Layer, Schema } from "effect"
+import { Clock, Config, Context, Effect, Layer, Schema } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import { localParts, nextDate } from "@/lib/coach-calendar.ts"
 import { busyByDate, instantOf, weekdayOfDate, zoneOf } from "./coach-day.ts"
@@ -44,6 +46,19 @@ import type { LaunchCredential } from "./launch-credential.ts"
  * that is the second fence rather than the first.
  */
 
+/**
+ * What the coach actually handed over, and when (#224).
+ *
+ * Absent until the first successful share or copy, which is what the list and
+ * the client's own screen read to say «Не отправлено» rather than «Приглашён»
+ * about a link still sitting on the coach's screen.
+ */
+export interface InviteDelivery {
+  /** ISO string, because this crosses a server-function boundary. */
+  readonly at: string
+  readonly kind: ClientInviteDeliveryKind
+}
+
 export interface ClientSummary {
   readonly id: string
   readonly name: string
@@ -52,6 +67,7 @@ export interface ClientSummary {
   readonly invitedAt: string
   readonly inviteExpiresAt: string
   readonly acceptedAt?: string
+  readonly delivered?: InviteDelivery
 }
 
 export interface CoachClientsHome {
@@ -63,6 +79,26 @@ export interface CoachClientsHome {
    * `member.settings`.
    */
   readonly mainMiniAppHintVisible: boolean
+}
+
+/**
+ * One way to hand an invitation over: the address, and the sentence it travels
+ * in.
+ *
+ * The message is written to the client in the invitation's own language, with
+ * the link on the end (#181). Assembled here rather than on each screen because
+ * there are several ways to send it — the bot-authored card, the
+ * `t.me/share/url` fallback, a paste into WhatsApp — and one invitation may not
+ * say several different things. The card is the exception that proves it: it
+ * drops this string's last line because its link is a button, and it builds that
+ * from the same copy rather than from a second sentence.
+ *
+ * Each door ends its message with **its own** URL, which is the whole reason
+ * this is a pair rather than one string beside two links.
+ */
+export interface InviteDoor {
+  readonly url: string
+  readonly message: string
 }
 
 export interface ClientSessionSummary {
@@ -83,20 +119,17 @@ export interface ClientDetail {
     readonly status: "pending" | "accepted" | "expired"
     readonly expiresAt: string
     readonly language: CoachLanguage
-    /** The whole door, assembled here so no screen has to know its shape. */
-    readonly url: string
     /**
-     * The forwardable message, written to the client in the invitation's own
-     * language, with the link on the end (#181).
-     *
-     * Assembled here rather than on each screen because there are three ways to
-     * send it — the bot-authored card, the `t.me/share/url` fallback, and a
-     * paste into WhatsApp — and one invitation may not say three different
-     * things. The card is the exception that proves it: it drops this string's
-     * last line because its link is a button, and it builds that from the same
-     * copy rather than from a second sentence.
+     * One token, two doors (#224) — the Telegram deep link and the web URL of
+     * the Acceptance Page, both assembled here so no screen has to know either
+     * shape, and both valid from the moment the invitation exists. The segment
+     * on the client's screen chooses which one is shown; it mutates nothing,
+     * because there is nothing to mutate.
      */
-    readonly message: string
+    readonly telegram: InviteDoor
+    readonly link: InviteDoor
+    /** Absent until the coach actually handed one of them over. */
+    readonly delivered?: InviteDelivery
   }
   readonly channel?: {
     readonly kind: string
@@ -186,6 +219,12 @@ export interface PreparedInviteCard {
  * `reissued` is reported rather than assumed, so the screen can say a fresh link
  * was minted — a coach who resends a dead invitation has just invalidated
  * whatever the client was holding, even though it no longer worked.
+ *
+ * **The Telegram door, and only that one**, unlike the client's own screen since
+ * #224. This answers one action — the card on an unaccepted session (#61), which
+ * goes out through Telegram's picker — and a second URL here would be a door
+ * with no control behind it. Choosing between the two is what the client's
+ * screen is for.
  */
 export type ResendOutcome =
   | {
@@ -268,6 +307,23 @@ export interface Interface {
     PreparedInviteCard | undefined,
     CoachSession.Unauthenticated | CoachSession.LoadFailed | CardPreparationFailed
   >
+  /**
+   * Write down that the coach handed this invitation over (#224).
+   *
+   * `{ recorded: false }` is every reason there was nothing to write: a kind
+   * this product does not deliver through, a client of another workspace, an
+   * invitation already accepted. The browser reports a delivery; it never
+   * decides one, and it is not told which of those it hit — the screen re-reads
+   * itself either way.
+   */
+  readonly recordDelivery: (
+    credential: LaunchCredential,
+    clientId: string,
+    kind: unknown,
+  ) => Effect.Effect<
+    { readonly recorded: boolean },
+    CoachSession.Unauthenticated | CoachSession.LoadFailed
+  >
   /** Written silently on launch, with no UI and no answer worth waiting for. */
   readonly saveTimezone: (
     credential: LaunchCredential,
@@ -344,6 +400,26 @@ const identifier = (prefix: string): string =>
 
 const iso = (value: Date): string => value.toISOString()
 
+const isDeliveryKind = (value: string): value is ClientInviteDeliveryKind =>
+  ClientInviteDeliveryKind.literals.some((literal) => literal === value)
+
+/**
+ * The delivery record on its way to a screen (#224), as the optional field it
+ * lands in.
+ *
+ * The kind is narrowed rather than passed through: the column is an open `text`
+ * and a value this deploy has no word for is not a door the screen can name.
+ * Dropping the record then reads as «Не отправлено», which is the honest answer
+ * to "we cannot tell what happened" — the alternative is a row saying
+ * «отправлено» followed by a raw identifier.
+ */
+const delivered = (
+  record: { readonly at: Date; readonly kind: string } | undefined,
+): { readonly delivered?: InviteDelivery } =>
+  record === undefined || !isDeliveryKind(record.kind)
+    ? {}
+    : { delivered: { at: iso(record.at), kind: record.kind } }
+
 const failed = (operation: string) => () => new CoachSession.LoadFailed({ operation })
 
 /**
@@ -367,6 +443,11 @@ export const layer = Layer.effect(
     const members = yield* MemberRepo.Service
     const registry = yield* BotRegistry.Service
     const workspaces = yield* WorkspaceRepo.Service
+    // Read once, at layer construction, exactly as `CoachSurface` reads it for
+    // the legal texts: the client app's origin is a deployment fact rather than
+    // a per-call one, and a stage that cannot address its own Acceptance Page
+    // should fail where that is visible rather than on a coach's screen.
+    const clientOrigin = yield* Config.string("CLIENT_APP_URL")
 
     /**
      * How the client is told who this is. The workspace label is the coach's
@@ -402,6 +483,7 @@ export const layer = Layer.effect(
           invitedAt: iso(row.invitedAt),
           inviteExpiresAt: iso(row.inviteExpiresAt),
           ...(row.acceptedAt === undefined ? {} : { acceptedAt: iso(row.acceptedAt) }),
+          ...delivered(row.delivered),
         })),
         // Two ways off the screen, and neither is a button that can be lied to:
         // Telegram's own `has_main_web_app`, refreshed by the daily sweep, and
@@ -422,14 +504,34 @@ export const layer = Layer.effect(
       if (row === undefined) return undefined
 
       const invite = row.invite
-      const url =
-        invite === undefined
-          ? undefined
-          : `https://t.me/${principal.botUsername}?start=${clientInviteStartParameter(invite.token)}`
       // The one place a name-bearing sentence is assembled for this screen, and
       // skipped entirely for a client who has already accepted — there is no
       // message left to send them.
       const coach = invite === undefined ? "" : yield* coachName(principal.workspaceId)
+      /**
+       * Both doors of the one token (#224), built together so neither can drift.
+       *
+       * The body is the same sentence either way — it says who is writing and
+       * why, not which app to open — and only the link on the end differs. The
+       * paste channel has no button, so the link travels in the body;
+       * `shareInviteMessage` strips that last line back off for the
+       * `t.me/share/url` form, where it is the `url` parameter.
+       */
+      const doors =
+        invite === undefined
+          ? undefined
+          : (() => {
+              const body = invitationBody(invite.language, row.name, coach)
+              const door = (url: string) => ({ url, message: `${body}\n\n${url}` })
+              return {
+                telegram: door(
+                  `https://t.me/${principal.botUsername}?start=${clientInviteStartParameter(
+                    invite.token,
+                  )}`,
+                ),
+                link: door(clientInviteUrl(clientOrigin, invite.token)),
+              }
+            })()
 
       return {
         id: row.id,
@@ -437,7 +539,7 @@ export const layer = Layer.effect(
         state: row.state,
         ...(row.language === undefined ? {} : { language: row.language }),
         createdAt: iso(row.createdAt),
-        ...(invite === undefined || url === undefined
+        ...(invite === undefined || doors === undefined
           ? {}
           : {
               invite: {
@@ -445,11 +547,9 @@ export const layer = Layer.effect(
                 status: invite.status,
                 expiresAt: iso(invite.expiresAt),
                 language: invite.language,
-                url,
-                // The paste channel has no button, so the link travels in the
-                // body. `shareInviteMessage` strips this last line back off for
-                // the `t.me/share/url` form, where it is the `url` parameter.
-                message: `${invitationBody(invite.language, row.name, coach)}\n\n${url}`,
+                telegram: doors.telegram,
+                link: doors.link,
+                ...delivered(invite.delivered),
               },
             }),
         ...(row.channel === undefined
@@ -755,8 +855,8 @@ export const layer = Layer.effect(
         return {
           resent: true,
           reissued: false,
-          url: existing.invite.url,
-          message: existing.invite.message,
+          url: existing.invite.telegram.url,
+          message: existing.invite.telegram.message,
         } as const
       }
 
@@ -775,8 +875,8 @@ export const layer = Layer.effect(
       return {
         resent: true,
         reissued: true,
-        url: fresh.invite.url,
-        message: fresh.invite.message,
+        url: fresh.invite.telegram.url,
+        message: fresh.invite.telegram.message,
       } as const
     })
 
@@ -826,6 +926,42 @@ export const layer = Layer.effect(
         preparedMessageId: prepared.id,
         expiresAt: iso(prepared.expiresAt),
       } satisfies PreparedInviteCard
+    })
+
+    /**
+     * The delivery, written down (#224).
+     *
+     * Reported by the browser because only the browser knows what happened —
+     * whether the picker actually sent, whether the clipboard write resolved —
+     * and decided nowhere else: the invitation is resolved from the coach's own
+     * workspace, so the only thing the tap gets to name is which client it was
+     * looking at and which door it used.
+     *
+     * A kind this product does not deliver through is refused without a write
+     * rather than stored. `delivery.kind` is read by the screen to name the door
+     * in a sentence, and a value nothing has a word for would surface as a raw
+     * identifier in the middle of one.
+     */
+    const recordDelivery = Effect.fn("CoachClients.recordDelivery")(function* (
+      credential: LaunchCredential,
+      clientId: string,
+      kind: unknown,
+    ) {
+      const decoded = yield* Schema.decodeUnknownEffect(ClientInviteDeliveryKind)(kind).pipe(
+        Effect.orElseSucceed(() => undefined),
+      )
+      if (decoded === undefined) return { recorded: false } as const
+
+      const principal = yield* session.requireOnboardedCoach(credential, WRITE_WINDOW_MILLIS)
+      const now = new Date(yield* Clock.currentTimeMillis)
+      return yield* clients
+        .recordDelivery({
+          workspaceId: principal.workspaceId,
+          clientId,
+          kind: decoded,
+          now,
+        })
+        .pipe(Effect.mapError(failed("clients.recordDelivery")))
     })
 
     const saveTimezone = Effect.fn("CoachClients.saveTimezone")(function* (
@@ -904,6 +1040,7 @@ export const layer = Layer.effect(
       resetInvite,
       resendInvite,
       prepareInviteCard,
+      recordDelivery,
       saveTimezone,
       hideMainMiniAppHint,
       workingHours,

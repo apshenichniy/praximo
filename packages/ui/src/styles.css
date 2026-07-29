@@ -52,6 +52,7 @@
   --color-info-foreground: var(--info-foreground);
   --color-info-surface: var(--info-surface);
   --color-info-border: var(--info-border);
+  --color-primary-ink: var(--primary-ink);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -128,6 +129,23 @@
   --info-foreground: oklch(1 0 0);
   --info-surface: oklch(0.96852 0.014848 260.73);
   --info-border: oklch(0.789593 0.082309 262.281);
+  /*
+   * The brand violet as **ink** — a glyph on the page, rather than a fill with
+   * `--primary-foreground` laid over it.
+   *
+   * The two cannot be one token, and the button is the proof. In dark mode its
+   * label sits on `--primary` at 8.35:1 and reads perfectly, while `--primary`
+   * itself sits on the page at **2.17:1** — the same 2.17 that makes a numeral
+   * or a link drawn *in* that colour almost invisible. A large solid rectangle
+   * survives that ratio because area carries it; a 26px hairline numeral does
+   * not. Which of the pair is the mark is the whole difference.
+   *
+   * Light needs no divergence: `--primary` on white is already 7.29:1, so this
+   * restates it rather than inventing a second violet nobody asked for. Dark
+   * lightens to 8.27:1 and lands on the same L/C profile the other extension
+   * inks use there — `--info` is 0.7255 / 0.142, this is 0.74 / 0.14.
+   */
+  --primary-ink: oklch(0.491 0.27 292.581);
 }
 
 .dark {
@@ -147,6 +165,7 @@
   --info-foreground: oklch(0.201659 0.050721 258.426);
   --info-surface: oklch(0.276339 0.05785 257.985);
   --info-border: oklch(0.533769 0.115953 257.537);
+  --primary-ink: oklch(0.74 0.14 292.7);
 }
 
 /*

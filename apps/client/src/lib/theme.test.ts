@@ -17,10 +17,47 @@ import {
 // the string itself is evaluated here against fake globals. Anything less would
 // only be inspecting it.
 
-const fakeDocument = (classes: Iterable<string> = [], meta: { content: string } | null = null) => {
+/** What the one scheme-following `<link rel="icon">` looks like to these functions. */
+interface FakeIcon {
+  href: string
+  readonly dataset: { readonly light: string; readonly dark: string }
+  getAttribute: (name: string) => string | null
+  setAttribute: (name: string, value: string) => void
+}
+
+const fakeIcon = (): FakeIcon => {
+  const icon: FakeIcon = {
+    href: "/light.ico",
+    dataset: { light: "/light.ico", dark: "/dark.ico" },
+    getAttribute: (name) =>
+      name === "data-light"
+        ? icon.dataset.light
+        : name === "data-dark"
+          ? icon.dataset.dark
+          : name === "href"
+            ? icon.href
+            : null,
+    setAttribute: (name, value) => {
+      if (name === "href") icon.href = value
+    },
+  }
+  return icon
+}
+
+/**
+ * `querySelector` answers *per selector* rather than returning one stub for
+ * everything: `applyColorScheme` asks for two different elements now, and a fake
+ * that hands the same object to both would let a mix-up pass.
+ */
+const fakeDocument = (
+  classes: Iterable<string> = [],
+  meta: { content: string } | null = null,
+  icon: FakeIcon | null = null,
+) => {
   const set = new Set(classes)
   return {
     classes: set,
+    icon,
     documentElement: {
       classList: {
         toggle: (token: string, force?: boolean) => {
@@ -31,7 +68,7 @@ const fakeDocument = (classes: Iterable<string> = [], meta: { content: string } 
         contains: (token: string) => set.has(token),
       },
     },
-    querySelector: () => meta,
+    querySelector: (selector: string) => (selector.startsWith("link") ? icon : meta),
   }
 }
 
@@ -183,8 +220,12 @@ describe("applyColorScheme", () => {
     globalThis.document = originalDocument
   })
 
-  const withDocument = (classes: Iterable<string>, meta: { content: string } | null) => {
-    const document = fakeDocument(classes, meta)
+  const withDocument = (
+    classes: Iterable<string>,
+    meta: { content: string } | null,
+    icon: FakeIcon | null = null,
+  ) => {
+    const document = fakeDocument(classes, meta, icon)
     // @ts-expect-error — the fake carries only what these two functions touch.
     globalThis.document = document
     return document
@@ -207,6 +248,33 @@ describe("applyColorScheme", () => {
 
   it("still sets the scheme on a document with no theme-color meta", () => {
     const document = withDocument([], null)
+
+    applyColorScheme("dark")
+
+    expect(document.classes.has("dark")).toBe(true)
+  })
+
+  /**
+   * The favicon follows the *reader's* scheme, not the browser's.
+   *
+   * This is the whole reason it is written here rather than left to a `media`
+   * attribute on the link: a reader on a light system who chooses Dark got a
+   * dark page wearing the icon cast for pale ground, and the media query had no
+   * way to know they had chosen anything.
+   */
+  it("recasts the favicon for the scheme", () => {
+    const icon = fakeIcon()
+    withDocument([], { content: "" }, icon)
+
+    applyColorScheme("dark")
+    expect(icon.href).toBe("/dark.ico")
+
+    applyColorScheme("light")
+    expect(icon.href).toBe("/light.ico")
+  })
+
+  it("still sets the scheme on a document with no favicon link", () => {
+    const document = withDocument([], { content: "" }, null)
 
     applyColorScheme("dark")
 

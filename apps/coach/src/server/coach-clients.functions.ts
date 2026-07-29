@@ -12,6 +12,7 @@ import {
   loadCoachRangeSchedule,
   loadCoachWorkingHours,
   prepareCoachInviteCard,
+  recordCoachInviteDelivery,
   removeCoachClient,
   resendCoachClientInvite,
   resetCoachClientInvite,
@@ -268,6 +269,38 @@ export const prepareInviteCard = createServerFn({ method: "POST" })
       if (isTagged(error, "CoachClients.CardPreparationFailed"))
         return { ok: false, error: "failed" }
       return { ok: false, error: transportError(error) }
+    }
+  })
+
+/**
+ * The delivery, reported once it has actually happened (#224).
+ *
+ * Best-effort by design, like the admin section's equivalent: by the time this
+ * is called the invitation has already left, so a failure here must never reach
+ * the coach as a failed send. It answers `{ ok }` and nothing else — which of
+ * the refusals it hit is not a distinction the screen can act on, and the screen
+ * re-reads itself either way.
+ *
+ * The kind crosses as a plain string and is decoded on the far side against the
+ * domain's own set: the segment offers two doors, so anything else is a broken
+ * client rather than a coach.
+ */
+export const recordInviteDelivery = createServerFn({ method: "POST" })
+  .middleware([launchCredential])
+  .validator((input: unknown): { readonly clientId: string; readonly kind: string } => {
+    const record = (input ?? {}) as Record<string, unknown>
+    return {
+      clientId: typeof record.clientId === "string" ? record.clientId : "",
+      kind: typeof record.kind === "string" ? record.kind : "",
+    }
+  })
+  .handler(async ({ context, data }): Promise<{ readonly ok: boolean }> => {
+    if (context.credential.initData.length === 0) return { ok: false }
+    try {
+      const outcome = await recordCoachInviteDelivery(context.credential, data.clientId, data.kind)
+      return { ok: outcome.recorded }
+    } catch {
+      return { ok: false }
     }
   })
 

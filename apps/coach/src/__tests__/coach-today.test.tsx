@@ -509,6 +509,11 @@ describe("clients list and the picker", () => {
       state: "invited" as const,
       invitedAt: "2026-07-25T09:00:00.000Z",
       inviteExpiresAt: "2026-08-01T09:00:00.000Z",
+      // Sent, and not accepted yet — which is what «Приглашён» means since #224.
+      // Without a delivery this row reads «Не отправлено», and that case has its
+      // own suite (`client-delivery.test.tsx`); here the point is that somebody
+      // who has not accepted is still offered by the picker.
+      delivered: { at: "2026-07-25T09:05:00.000Z", kind: "telegram" as const },
     },
   ]
 

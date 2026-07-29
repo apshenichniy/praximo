@@ -46,12 +46,28 @@ export const Route = createRootRoute({
       { title: "Praximo" },
     ],
     links: [
-      { rel: "icon", href: faviconDark, sizes: "any" },
+      /*
+       * **One icon link, rewritten rather than two selected by media.**
+       *
+       * A `media` attribute on an icon link answers to `prefers-color-scheme` —
+       * the browser's own preference — and this app lets the reader overrule
+       * that and remembers the answer. The pair therefore desynchronised in
+       * exactly the case the control exists for: a reader on a light system who
+       * chooses Dark got a dark page wearing the icon cast for pale ground.
+       *
+       * Both castings ride on the element as data attributes; the bootstrap in
+       * `<head>` picks one before the first paint and `applyColorScheme` moves
+       * it afterwards. The `href` here is the light one because that is what
+       * `:root` carries with no class — the same default, for the same reason,
+       * as `theme-color` above.
+       */
       {
         rel: "icon",
         href: faviconLight,
         sizes: "any",
-        media: "(prefers-color-scheme: light)",
+        "data-praximo-favicon": "",
+        "data-light": faviconLight,
+        "data-dark": faviconDark,
       },
       { rel: "stylesheet", href: appCss },
     ],

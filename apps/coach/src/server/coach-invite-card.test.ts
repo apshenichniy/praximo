@@ -4,7 +4,7 @@ import { ClientRepo, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
 import { WorkspaceId } from "@praximo/domain"
 import { clientCopy } from "@praximo/i18n"
 import { BotRegistry } from "@praximo/telegram"
-import { Effect, Layer } from "effect"
+import { ConfigProvider, Effect, Layer } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { launchFor, TEST_PUBLIC_KEY } from "@/__tests__/coach-launch.ts"
 import { CoachClients } from "./coach-clients.ts"
@@ -29,6 +29,8 @@ const COACH_NAME = "Olena"
 const AUTH_DATE = Date.parse("2026-07-26T12:00:00.000Z")
 const NOW = AUTH_DATE + 60_000
 const TOKEN = "ABCDEFGH2345"
+/** The other door of the same token (#224), where the Acceptance Page lives. */
+const CLIENT_APP_URL = "https://me.praximo.io"
 
 /**
  * The coach reads their own app in Ukrainian and picked English for this client
@@ -104,6 +106,13 @@ const run = <A, E>(
       ),
       deleteUnaccepted: unused,
       reissueInvite: unused,
+      // Fenced by the same pair the read is, because the real statement is: the
+      // workspace comes from the launch and the client id from the tap.
+      recordDelivery: Effect.fn("ClientRepo.Test.recordDelivery")((input) =>
+        Effect.succeed({
+          recorded: input.workspaceId === WORKSPACE && input.clientId === row?.id,
+        }),
+      ),
     }),
   )
   const sessions = Layer.succeed(
@@ -138,6 +147,10 @@ const run = <A, E>(
               CoachSession.layer.pipe(
                 Layer.provide(Layer.mergeAll(CoachInitData.testLayer(TEST_PUBLIC_KEY), members)),
               ),
+              // The second door is built from the client app's own origin
+              // (#224), read from configuration the way the deployed Worker
+              // reads it rather than assembled from a literal on a screen.
+              ConfigProvider.layer(ConfigProvider.fromUnknown({ CLIENT_APP_URL })),
             ),
           ),
         ),
@@ -209,7 +222,84 @@ describe("preparing the invitation card", () => {
         yield* service.prepareInviteCard(launch, "cl_anna")
 
         const [minted] = yield* Effect.flatMap(BotRegistry.TestService, (stub) => stub.prepared())
-        expect(detail?.invite?.message).toBe(`${minted?.card.text}\n\n${detail?.invite?.url}`)
+        expect(detail?.invite?.telegram.message).toBe(
+          `${minted?.card.text}\n\n${detail?.invite?.telegram.url}`,
+        )
+      }),
+    ),
+  )
+
+  /**
+   * Two doors over one token (#224), and the sentence is the same through both.
+   *
+   * The body says who is writing and why — it names no app — so the only thing
+   * that differs is the link on the end. A screen that had to switch copy as
+   * well as address would be two invitations wearing one token.
+   */
+  it.effect("hands the screen both forms of the one token", () =>
+    run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachClients.Service
+        const detail = yield* service.detail(yield* Effect.promise(() => credential()), "cl_anna")
+
+        expect(detail?.invite?.telegram.url).toBe(`https://t.me/${BOT_USERNAME}?start=inv_${TOKEN}`)
+        expect(detail?.invite?.link.url).toBe(`${CLIENT_APP_URL}/i/${TOKEN}`)
+        // One sentence, two endings: each message carries its own door's link.
+        const body = clientCopy("en").invitation.message({ client: "Anna", coach: COACH_NAME })
+        expect(detail?.invite?.link.message).toBe(`${body}\n\n${CLIENT_APP_URL}/i/${TOKEN}`)
+        expect(detail?.invite?.telegram.message).toBe(
+          `${body}\n\nhttps://t.me/${BOT_USERNAME}?start=inv_${TOKEN}`,
+        )
+        // Nothing handed over yet — the state word says «Не отправлено».
+        expect(detail?.invite?.delivered).toBeUndefined()
+      }),
+    ),
+  )
+
+  /**
+   * The write the browser reports and never decides (#224).
+   *
+   * A client of another workspace is refused by the repository, exactly as the
+   * card is: the tap names a client, and the workspace comes from the launch.
+   */
+  it.effect("records a delivery only for a client this coach owns", () =>
+    run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachClients.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        expect(yield* service.recordDelivery(launch, "cl_anna", "link")).toEqual({ recorded: true })
+        expect(yield* service.recordDelivery(launch, "cl_someone_else", "link")).toEqual({
+          recorded: false,
+        })
+      }),
+    ),
+  )
+
+  /**
+   * A door this deploy has no word for is refused *before* the write.
+   *
+   * `delivery.kind` is read back to name the door in a sentence on two screens;
+   * storing an unrecognised one would surface as a raw identifier in the middle
+   * of it. Refusing costs nothing — the browser only ever sends the two the
+   * segment offers.
+   */
+  it.effect("refuses a kind this product does not deliver through", () =>
+    run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachClients.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        expect(yield* service.recordDelivery(launch, "cl_anna", "manual")).toEqual({
+          recorded: false,
+        })
+        expect(yield* service.recordDelivery(launch, "cl_anna", 7)).toEqual({ recorded: false })
       }),
     ),
   )

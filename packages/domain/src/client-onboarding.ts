@@ -1,5 +1,6 @@
 import { Schema } from "effect"
 import { CoachOnboardingInviteCodeAlphabet } from "./coach-onboarding.ts"
+import { bareOrigin } from "./origin.ts"
 import { CoachLanguage } from "./workspace-create.ts"
 
 export const ClientId = Schema.NonEmptyString.pipe(Schema.brand("ClientId"))
@@ -100,3 +101,56 @@ export const parseClientInviteStartParameter = (parameter: string): string | und
   const token = parameter.slice(ClientInviteStartPrefix.length)
   return ClientInviteTokenPattern.test(token) ? token : undefined
 }
+
+/**
+ * The token's other door: the Acceptance Page's own path (#57).
+ *
+ * `/i/` rather than `/invite/` because the coach pastes this link by hand into
+ * other messengers, where every character is one the client may have to read
+ * back to them.
+ */
+export const ClientInviteWebPath = "/i/"
+
+/**
+ * The web form of an invitation, beside the deep-link form above (#224).
+ *
+ * Both forms of one token live here together so no screen has to know either
+ * shape. The coach's Mini App builds this from `CLIENT_APP_URL`, which is the
+ * origin the stack actually deployed rather than a hostname somebody typed.
+ *
+ * The origin is scrubbed by `bareOrigin`, which the legal texts share: this link
+ * is forwarded to a client, and a parameter the origin happened to carry would
+ * ride into somebody else's chat.
+ */
+export const clientInviteUrl = (origin: string, token: string): string =>
+  `${bareOrigin(origin)}${ClientInviteWebPath}${token}`
+
+/**
+ * Which door an invitation was actually handed over through (#224).
+ *
+ * The spec's own set. `telegram` is what an invitation is created with, `link`
+ * is the hand-forwarded web URL, and `email` is the service-sent invitation
+ * (#58) — modelled here rather than added later so the column this lands in has
+ * one vocabulary rather than a growing pile of string literals.
+ *
+ * This is *not* `channel.kind`: a channel is an address we can reach and exists
+ * only after acceptance. This is how the invitation travelled.
+ */
+export const ClientInviteDeliveryKind = Schema.Literals(["telegram", "email", "link"])
+export type ClientInviteDeliveryKind = typeof ClientInviteDeliveryKind.Type
+
+/**
+ * The kinds a coach hands over **by hand** — the two forms of the token that a
+ * screen can offer as a choice (CONTEXT.md §Door).
+ *
+ * A strict subset of the kinds above, and the line between them is who does the
+ * sending: `email` is the *service* delivering an invitation on its own (#58),
+ * which is not a button a coach presses and so never a position on the segment.
+ * Naming the subset is what keeps that distinction from being re-derived, by
+ * hand and slightly differently, at each screen that draws the choice.
+ */
+export const ClientInviteDoor = Schema.Literals(["telegram", "link"])
+export type ClientInviteDoor = typeof ClientInviteDoor.Type
+
+export const isClientInviteDoor = (value: string | undefined): value is ClientInviteDoor =>
+  ClientInviteDoor.literals.some((literal) => literal === value)

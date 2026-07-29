@@ -503,8 +503,20 @@ export const invite = pgTable(
     // Single-use, TTL 7 days; re-issuing creates a new invite and expires the old.
     token: text("token").notNull().unique(),
     status: inviteStatusEnum("status").notNull().default("pending"),
-    // { kind: telegram | email | link, address? } — how the invite reaches the client.
+    // { kind: telegram | email | link, address?, language } — how the invite
+    // reaches the client. `language` is set at creation and never moves: #57's
+    // Acceptance Page reads it to pre-select the language the consent is granted
+    // in. `kind` starts as `telegram` and becomes a *record* of the door the
+    // coach actually used, written with `delivered_at` below (#224).
     delivery: jsonb("delivery").notNull(),
+    // When the coach first handed this invitation over, and null until they did.
+    //
+    // Nothing observed delivery before #224: the list said «Приглашён» about a
+    // client whose link was still sitting on the coach's screen, while the
+    // seven-day window — which starts at *creation*, deliberately — was already
+    // running. Copying is not proof of sending; it is the most that can honestly
+    // be observed, and the state word says only that much.
+    deliveredAt: timestamp("delivered_at", { withTimezone: true, mode: "date" }),
     // Enables recognition on a bare /start; the picker that sets it is deferred (#27).
     expectedTelegramUserId: text("expected_telegram_user_id"),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),

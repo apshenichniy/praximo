@@ -231,9 +231,15 @@ function Greeting({
         <b className="text-[19px] leading-[1.25] font-[620] tracking-[-0.022em] sm:text-xl">
           {copy.greeting.invites(coachName)}
         </b>
-        <p className="text-muted-foreground max-w-[33ch] text-[13.5px] leading-[1.6]">
-          {copy.greeting.lead}
-        </p>
+        {/*
+          No measure cap of its own. A `max-w` here set the lead's width from the
+          text rather than from the column, so the greeting, the session plate
+          and the fields below them each ended at a different place — three
+          ragged right edges in a column whose whole hierarchy is air and
+          alignment. The column is the measure; on the two-column layout it is
+          392px, which is a good one.
+        */}
+        <p className="text-muted-foreground text-[13.5px] leading-[1.6]">{copy.greeting.lead}</p>
       </div>
       {session === undefined ? null : (
         <SessionItem
@@ -278,7 +284,10 @@ function SessionItem({
   )
 
   return (
-    <Item variant="muted" size="sm" className="w-auto max-w-full">
+    // Full width, like the fields under it. `w-auto` sized the plate from its
+    // own longest line, which put its right edge somewhere between the greeting
+    // and the inputs and made the column look accidentally ragged.
+    <Item variant="muted" size="sm" className="w-full">
       <ItemMedia variant="icon">
         {/* A plain calendar, not a tick: the meeting is booked, but the client
             has not confirmed anything — they are still reading the page. */}

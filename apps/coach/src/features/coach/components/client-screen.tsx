@@ -1,14 +1,20 @@
 import { CalendarAdd01Icon } from "@hugeicons-pro/core-stroke-rounded"
 import { Calendar03Icon, FlagIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
-import type { CoachLanguage } from "@praximo/domain"
+import {
+  type ClientInviteDoor,
+  type CoachLanguage,
+  ClientInviteDoor as InviteDoors,
+  isClientInviteDoor,
+} from "@praximo/domain"
 import { localeTag } from "@praximo/i18n"
 import { useMemo, useState } from "react"
 
-import { HostBackButton } from "@/presentation-host"
+import { HostBackButton, isIosHost } from "@/presentation-host"
 import { Heading, Section, SectionTitle, Text } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
+import { ToggleGroup, ToggleGroupItem } from "@praximo/ui/components/toggle-group"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"
 import { ConfirmSheet } from "@/features/mini-app/components/confirm-sheet.tsx"
@@ -22,6 +28,8 @@ import {
 } from "@/features/mini-app/components/detail-card.tsx"
 import { InviteLinkPanel } from "@/features/mini-app/components/invite-link-panel.tsx"
 import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
+import { isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
+import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
 import type { CoachClients } from "@/server/coach-clients.ts"
 
 /**
@@ -40,6 +48,29 @@ const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
   accepted: "success",
 }
 
+/**
+ * What each door *offers*, as data rather than as a branch per control (#224).
+ *
+ * The words live in the copy catalogue keyed the same way; this is the other
+ * half — the two places where the doors differ in behaviour rather than in
+ * wording, and both differences have one reason each:
+ *
+ * - **No card behind the Link door.** A bot-authored card opens a chat with a
+ *   bot this client will never appear in, which is the whole reason they are
+ *   being handed a web URL instead. Copy takes over as the primary action, which
+ *   is also the canonical fallback everywhere (#19).
+ * - **The share sheet only where the link travels by hand.** A Telegram
+ *   invitation already has a native picker behind Send a card; offering the
+ *   system sheet beside it would be two ways to open two pickers.
+ */
+const doorOffers: Record<
+  ClientInviteDoor,
+  { readonly card: boolean; readonly shareSheet: boolean }
+> = {
+  telegram: { card: true, shareSheet: false },
+  link: { card: false, shareSheet: true },
+}
+
 const initials = (name: string): string =>
   name
     .split(/\s+/)
@@ -54,6 +85,8 @@ export function ClientScreen({
   client,
   onSchedule,
   onShare,
+  onShareSheet,
+  onDelivered,
   onResetInvite,
   onDelete,
   pending,
@@ -64,6 +97,10 @@ export function ClientScreen({
   readonly client: CoachClients.ClientDetail
   readonly onSchedule: () => void
   readonly onShare: () => void
+  /** The system share sheet, offered on iOS only — see `isIosHost`. */
+  readonly onShareSheet: (message: string) => void
+  /** A delivery that actually happened: a resolved clipboard write, here. */
+  readonly onDelivered: (kind: ClientInviteDoor) => void
   readonly onResetInvite: () => void
   readonly onDelete: () => void
   readonly pending: boolean
@@ -71,6 +108,26 @@ export function ClientScreen({
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  /**
+   * Which door the coach is looking at (#224).
+   *
+   * **Local state, and it stays local**: both forms of the token are valid from
+   * the moment the invitation exists, so switching shows a different address and
+   * writes nothing — there is nothing to write.
+   *
+   * It opens on the door already recorded, when there is one. A coach who sent a
+   * link last week and comes back to a screen defaulting to Telegram would be
+   * reading a state word about one door beside a control set for the other.
+   */
+  const [door, setDoor] = useState<ClientInviteDoor>(() =>
+    isClientInviteDoor(client.invite?.delivered?.kind) ? client.invite.delivered.kind : "telegram",
+  )
+  const invitation = client.invite === undefined ? undefined : client.invite[door]
+  // Everything that differs between the doors, looked up once: the words from
+  // the catalogue, the two behaviours from the table above.
+  const words = copy.clients.doors[door]
+  const offers = doorOffers[door]
+
   /**
    * Two controllers over one invitation, deliberately.
    *
@@ -83,9 +140,15 @@ export function ClientScreen({
    * the language the coach chose for them, and the screen around it is written
    * to the coach in theirs — two readers, two languages, and the server is where
    * the one meant for the client is put together.
+   *
+   * Both count as a delivery, and only once the clipboard write resolves (#224):
+   * the select-text fallback hands the coach a highlighted field and no evidence
+   * they did anything with it.
    */
-  const copyLink = useCopyLink(client.invite?.url)
-  const copyMessage = useCopyLink(client.invite?.message)
+  const timestamps = useTimestampFormat()
+  const recordThisDoor = () => onDelivered(door)
+  const copyLink = useCopyLink(invitation?.url, recordThisDoor)
+  const copyMessage = useCopyLink(invitation?.message, recordThisDoor)
 
   const sessionFormat = useMemo(
     () =>
@@ -101,12 +164,23 @@ export function ClientScreen({
     [client.timezone, language],
   )
 
-  const stateWord =
-    client.state === "accepted"
-      ? copy.clients.stateAccepted
-      : client.state === "expired"
-        ? copy.clients.stateExpired
-        : copy.clients.stateInvited
+  /**
+   * The state, and since #224 the honest version of it: an invitation nobody has
+   * handed over is not «Приглашён».
+   *
+   * Muted rather than amber. Not-sent is the ordinary next step on a client
+   * created a minute ago, and the warning tone would make every fresh client
+   * look like a problem — the colour vocabulary here means *standing*, and this
+   * is a to-do.
+   *
+   * The rule itself is shared with the list, which says the same thing as a
+   * coloured word rather than a badge (#198) — two copies of it is how the two
+   * surfaces start disagreeing about the same client.
+   */
+  const sent = client.invite?.delivered
+  const standing = { state: client.state, ...(sent === undefined ? {} : { delivered: sent }) }
+  const notSent = isNotSent(standing)
+  const sentDoor = sentVia(copy.clients, sent?.kind)
 
   // Gone, not disabled: once the client is in, the invitation has no job left,
   // and the header already carries the state and the account that accepted.
@@ -126,18 +200,34 @@ export function ClientScreen({
         {client.channel?.telegramUsername === undefined ? null : (
           <Text className="text-muted-foreground">@{client.channel.telegramUsername}</Text>
         )}
-        <StatusBadge tone={stateTones[client.state]}>{stateWord}</StatusBadge>
+        <StatusBadge tone={notSent ? "muted" : stateTones[client.state]}>
+          {stateWord(copy.clients, standing)}
+        </StatusBadge>
+        {/*
+          The badge says the standing; this says what produced it (#224) — which
+          door the invitation went out through, and when. A coach returning a
+          week later needs both: the door is what the client is holding *and*
+          where their reminders will go, and the moment is how long ago they were
+          asked. The badge cannot carry either without becoming a sentence.
+        */}
+        {sent === undefined || sentDoor === undefined ? null : (
+          <Text role="caption" className="text-muted-foreground">
+            {sentDoor}
+            {" · "}
+            {timestamps.relative(sent.at)}
+          </Text>
+        )}
       </header>
 
       {error === undefined ? null : <Text className="text-destructive mt-6">{error}</Text>}
 
-      {!showInvitation || client.invite === undefined ? null : (
+      {!showInvitation || client.invite === undefined || invitation === undefined ? null : (
         <Section>
           <Text
             role="caption"
             className="text-muted-foreground px-1 font-semibold tracking-wide uppercase"
           >
-            {copy.clients.invitationEyebrow}
+            {words.eyebrow}
           </Text>
           <Text className="text-muted-foreground mt-2 px-1">
             {client.state === "expired" ? (
@@ -145,7 +235,7 @@ export function ClientScreen({
             ) : (
               <>
                 <span className="text-foreground">{client.name}</span>
-                {copy.clients.invitationLeadTail}
+                {words.leadTail}
               </>
             )}
           </Text>
@@ -166,27 +256,81 @@ export function ClientScreen({
             </Button>
           ) : (
             <>
+              {/*
+                One token, two doors (#224). The choice belongs here rather than
+                on the create screen because this is where the coach finds out
+                whether this person is even on Telegram — and it belongs to the
+                *moment*, not to the record: switching writes nothing, because
+                both forms have been valid since the invitation existed.
+              */}
+              <ToggleGroup
+                aria-label={copy.clients.doorLabel}
+                className="mt-4 w-full"
+                value={[door]}
+                onValueChange={(next) => {
+                  // A chip tapped while already on reports an empty selection;
+                  // the door stays put rather than becoming undefined.
+                  if (isClientInviteDoor(next[0])) setDoor(next[0])
+                }}
+              >
+                {InviteDoors.literals.map((value) => (
+                  <ToggleGroupItem key={value} value={value} className="flex-1" disabled={pending}>
+                    {copy.clients.doors[value].label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+
               <div className="mt-4">
                 <InviteLinkPanel
-                  link={client.invite.url}
+                  link={invitation.url}
                   ariaLabel={copy.clients.linkLabel}
                   controller={copyLink}
                 />
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
-                <Button className="w-full" onClick={onShare} disabled={pending}>
-                  {copy.clients.sendCard}
-                </Button>
+                {offers.card ? (
+                  <Button className="w-full" onClick={onShare} disabled={pending}>
+                    {copy.clients.sendCard}
+                  </Button>
+                ) : null}
+                {/* Copy leads wherever there is no card above it to lead. */}
                 <Button
-                  variant="outline"
                   className="w-full"
+                  variant={offers.card ? "outline" : "default"}
                   onClick={() => void copyMessage.copy()}
                   disabled={pending}
                 >
                   {copyMessage.copied ? copy.clients.copied : copy.clients.copyInvite}
                 </Button>
+                {/*
+                  The iOS gate is the *host platform*, never `navigator.share`,
+                  which three of the four Telegram clients get wrong in three
+                  different ways (#27). Read at render rather than in an effect:
+                  this route is client-only, and the host script in `<head>` ran
+                  long before it.
+                */}
+                {offers.shareSheet && isIosHost() ? (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => onShareSheet(invitation.message)}
+                    disabled={pending}
+                  >
+                    {copy.clients.shareAction}
+                  </Button>
+                ) : null}
               </div>
+
+              {/*
+                The door is also the reminder channel, and that outlives the
+                sending: this line is the only place on the screen that says a
+                coach picking a door is picking where this person gets reached
+                for the life of the relationship.
+              */}
+              <Text role="caption" className="text-muted-foreground mt-3 px-1">
+                {words.reminder}
+              </Text>
             </>
           )}
         </Section>

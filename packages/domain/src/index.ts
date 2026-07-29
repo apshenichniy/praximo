@@ -1,7 +1,10 @@
 export { Admin, AdminId, AdminNotFound } from "./admin.ts"
+export { bareOrigin } from "./origin.ts"
 export { TelegramId } from "./telegram-id.ts"
 export {
   ClientId,
+  ClientInviteDeliveryKind,
+  ClientInviteDoor,
   ClientInviteId,
   ClientInviteStartPrefix,
   ClientInviteStatus,
@@ -9,12 +12,15 @@ export {
   ClientInviteTokenLength,
   ClientInviteTokenPattern,
   ClientInviteTtlMillis,
+  ClientInviteWebPath,
   ClientName,
   ClientNameMaxLength,
   clientInviteStartParameter,
+  clientInviteUrl,
   CreateClientInput,
   InviteAttentionWindowMillis,
   inviteNeedsAttention,
+  isClientInviteDoor,
   parseClientInviteStartParameter,
 } from "./client-onboarding.ts"
 export {

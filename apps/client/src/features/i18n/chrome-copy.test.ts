@@ -38,7 +38,7 @@ describe("chrome copy", () => {
   })
 
   /**
-   * The three options are the switch's whole vocabulary, and `ThemeSwitch` reads
+   * The three options are the switch's whole vocabulary, and `AppearanceMenu` reads
    * them by the same keys the preference is stored under. A rename on either
    * side would otherwise render an empty chip.
    */

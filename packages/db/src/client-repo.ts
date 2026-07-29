@@ -1,4 +1,4 @@
-import type { CoachLanguage } from "@praximo/domain"
+import type { ClientInviteDeliveryKind, CoachLanguage } from "@praximo/domain"
 import { and, asc, eq, gte, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database, QueryFailed } from "./client.ts"
@@ -19,6 +19,18 @@ import * as schema from "./schema.ts"
 /** What a client's invitation is *at read time*, which is not always its column. */
 export type ClientState = "invited" | "expired" | "accepted"
 
+/**
+ * What was actually handed over, and when (#224).
+ *
+ * Absent until the coach's first successful share or copy. The pair travels
+ * together because before that first send `delivery.kind` is a creation default
+ * rather than a record, and a door without a moment says nothing.
+ */
+export interface InviteDeliveryRow {
+  readonly at: Date
+  readonly kind: string
+}
+
 export interface ClientListRow {
   readonly id: string
   readonly name: string
@@ -27,6 +39,7 @@ export interface ClientListRow {
   readonly inviteExpiresAt: Date
   /** When somebody actually walked through the door. */
   readonly acceptedAt?: Date
+  readonly delivered?: InviteDeliveryRow
 }
 
 export interface ClientInviteRow {
@@ -36,6 +49,7 @@ export interface ClientInviteRow {
   readonly expiresAt: Date
   /** The language the invitation was *written* in — never the client's own. */
   readonly language: CoachLanguage
+  readonly delivered?: InviteDeliveryRow
 }
 
 export interface ClientChannelRow {
@@ -98,6 +112,21 @@ export interface ReissuedInvite {
   readonly expiresAt: Date
 }
 
+export interface RecordDeliveryInput {
+  readonly workspaceId: string
+  readonly clientId: string
+  /**
+   * The door, as the domain's own closed set.
+   *
+   * Narrow on the way *in* and wide on the way out (`InviteDeliveryRow.kind` is
+   * a plain `string`), which is not an inconsistency: what this writes is
+   * decided by code we control, and what `find` reads back is whatever is in the
+   * column — including a value written by a deploy this one predates.
+   */
+  readonly kind: ClientInviteDeliveryKind
+  readonly now: Date
+}
+
 export interface Interface {
   readonly createWithInvite: (input: CreateWithInviteInput) => Effect.Effect<void, QueryFailed>
   readonly list: (
@@ -116,6 +145,17 @@ export interface Interface {
   readonly reissueInvite: (
     input: ReissueInviteInput,
   ) => Effect.Effect<ReissuedInvite | undefined, QueryFailed>
+  /**
+   * Write down that the coach handed this invitation over, and through which
+   * door (#224).
+   *
+   * `{ recorded: false }` for a client of another workspace, a client that does
+   * not exist, and an invitation that is no longer open — a screen that has gone
+   * stale must not restamp an invitation the client already used.
+   */
+  readonly recordDelivery: (
+    input: RecordDeliveryInput,
+  ) => Effect.Effect<{ readonly recorded: boolean }, QueryFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/db/ClientRepo") {}
@@ -136,6 +176,22 @@ const clientState = (
   if (status === "expired") return "expired"
   if (expiresAt !== undefined && expiresAt.getTime() <= now.getTime()) return "expired"
   return "invited"
+}
+
+/**
+ * The delivery record, read as the pair it is (#224).
+ *
+ * `delivery.kind` alone is not one: every invitation is created with `telegram`
+ * in that key, and reading it before `delivered_at` exists would report a door
+ * nobody has walked through yet. The moment is what makes the door a fact.
+ */
+const deliveryOf = (
+  deliveredAt: unknown,
+  delivery: { readonly kind?: string } | null,
+): InviteDeliveryRow | undefined => {
+  const at = readDate(deliveredAt)
+  if (at === undefined || delivery?.kind === undefined) return undefined
+  return { at, kind: delivery.kind }
 }
 
 export const layer = Layer.effect(
@@ -192,12 +248,14 @@ export const layer = Layer.effect(
               "c"."id" as "id",
               "c"."name" as "name",
               "i"."status" as "invite_status",
+              "i"."delivery" as "delivery",
+              ${isoColumn('"i"."delivered_at"')} as "delivered_at",
               ${isoColumn('"i"."expires_at"')} as "expires_at",
               ${isoColumn('"i"."created_at"')} as "invited_at",
               ${isoColumn('"ch"."created_at"')} as "accepted_at"
             from "client" as "c"
             left join lateral (
-              select "status", "expires_at", "created_at"
+              select "status", "delivery", "delivered_at", "expires_at", "created_at"
               from "invite"
               where "invite"."client_id" = "c"."id"
               order by "invite"."created_at" desc
@@ -215,6 +273,10 @@ export const layer = Layer.effect(
         const record = row as Record<string, unknown>
         const acceptedAt = readDate(record.accepted_at)
         const expiresAt = readDate(record.expires_at) ?? now
+        const delivered = deliveryOf(
+          record.delivered_at,
+          record.delivery as { readonly kind?: string } | null,
+        )
         return {
           id: String(record.id),
           name: String(record.name),
@@ -226,6 +288,7 @@ export const layer = Layer.effect(
           invitedAt: readDate(record.invited_at) ?? now,
           inviteExpiresAt: expiresAt,
           ...(acceptedAt === undefined ? {} : { acceptedAt }),
+          ...(delivered === undefined ? {} : { delivered }),
         } satisfies ClientListRow
       })
     })
@@ -256,6 +319,7 @@ export const layer = Layer.effect(
               "i"."token" as "token",
               "i"."status" as "invite_status",
               "i"."delivery" as "delivery",
+              ${isoColumn('"i"."delivered_at"')} as "delivered_at",
               ${isoColumn('"i"."expires_at"')} as "expires_at",
               "ch"."kind" as "channel_kind",
               "ch"."address" as "channel_address",
@@ -267,7 +331,7 @@ export const layer = Layer.effect(
               ) as "has_sessions"
             from "client" as "c"
             left join lateral (
-              select "id", "token", "status", "delivery", "expires_at"
+              select "id", "token", "status", "delivery", "delivered_at", "expires_at"
               from "invite"
               where "invite"."client_id" = "c"."id"
               order by "invite"."created_at" desc
@@ -318,7 +382,11 @@ export const layer = Layer.effect(
       const expiresAt = readDate(record.expires_at)
       const clientLanguage = readLanguage(record.language)
       const consentGrantedAt = readDate(record.consent_granted_at)
-      const delivery = record.delivery as { readonly language?: string } | null
+      const delivery = record.delivery as {
+        readonly language?: string
+        readonly kind?: string
+      } | null
+      const delivered = deliveryOf(record.delivered_at, delivery)
       const snapshot = record.snapshot as {
         readonly name?: string
         readonly username?: string
@@ -339,6 +407,7 @@ export const layer = Layer.effect(
                 status: inviteStatus ?? "pending",
                 expiresAt,
                 language: readLanguage(delivery?.language) ?? "en",
+                ...(delivered === undefined ? {} : { delivered }),
               },
             }),
         ...(record.channel_kind === null || record.channel_kind === undefined
@@ -450,7 +519,60 @@ export const layer = Layer.effect(
       } satisfies ReissuedInvite
     })
 
-    return Service.of({ createWithInvite, list, find, deleteUnaccepted, reissueInvite })
+    /**
+     * Delivery, written down instead of assumed (#224).
+     *
+     * **The kind is merged into `delivery`, never assigned over it.** That
+     * object also holds `language` — the language the invitation was written
+     * in, which #57's Acceptance Page reads to pre-select the language the
+     * consent is granted in. A replace here would drop it, and nothing on either
+     * screen would say so until a client met a page in the wrong language.
+     *
+     * **The last delivery wins**, and both facts move together: a moment that
+     * could belong to one door while the kind named another would let the state
+     * word say «отправлено ссылкой» about a Telegram send.
+     *
+     * Scoped by `workspace_id` on the invitation itself, and to the latest
+     * *pending* one. A reissue therefore starts the record again at nothing,
+     * which is correct — the link the client holds is dead and the new one has
+     * not been sent — and an invitation already accepted is not restamped by a
+     * screen that has gone stale.
+     */
+    const recordDelivery = Effect.fn("ClientRepo.recordDelivery")(function* (
+      input: RecordDeliveryInput,
+    ) {
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          client.execute(sql`
+            update "invite"
+            set
+              "delivered_at" = ${input.now},
+              "delivery" = "delivery" || ${JSON.stringify({ kind: input.kind })}::jsonb
+            where "invite"."id" = (
+              select "id"
+              from "invite"
+              where
+                "invite"."client_id" = ${input.clientId}
+                and "invite"."workspace_id" = ${input.workspaceId}
+                and "invite"."status" = 'pending'
+              order by "invite"."created_at" desc
+              limit 1
+            )
+            returning "id"
+          `),
+        catch: (cause) => new QueryFailed({ operation: "client.recordDelivery", cause }),
+      })
+      return { recorded: result.rows.length > 0 }
+    })
+
+    return Service.of({
+      createWithInvite,
+      list,
+      find,
+      deleteUnaccepted,
+      reissueInvite,
+      recordDelivery,
+    })
   }),
 )
 

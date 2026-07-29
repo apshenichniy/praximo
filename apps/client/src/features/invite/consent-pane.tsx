@@ -75,7 +75,15 @@ export function ConsentPane({
               key={point}
               className="grid grid-cols-[44px_1fr] items-start gap-3.5 p-0 marker:content-none"
             >
-              <span className="text-primary/40 pt-0.5 text-[26px] leading-none font-light tracking-[-0.03em] tabular-nums">
+              {/*
+                Full strength, and the ink token rather than the fill one.
+                Dimming this was the original mistake: the numeral is the only
+                thing telling five legal sentences apart, so it is structure, not
+                decoration, and it was doing that job at 2.17:1 on dark. Weight
+                is what keeps it quiet — 26px at `font-light` is already a
+                hairline beside 15.5px body text.
+              */}
+              <span className="text-primary-ink pt-0.5 text-[26px] leading-none font-light tracking-[-0.03em] tabular-nums">
                 {String(index + 1).padStart(2, "0")}
               </span>
               <p className="text-muted-foreground m-0 text-[15.5px] leading-[1.72]">{point}</p>
@@ -84,7 +92,9 @@ export function ConsentPane({
         </ol>
 
         <a
-          className="text-primary w-fit text-[15px] font-medium underline underline-offset-[3px]"
+          // Ink, not fill: this is the one link on a legally operative page, and
+          // `--primary` drawn as a glyph on dark is 2.17:1 (see `--primary-ink`).
+          className="text-primary-ink w-fit text-[15px] font-medium underline underline-offset-[3px]"
           // Root-relative, and the empty origin is the point. The policy lives on
           // *this* Worker, so no origin is needed — and reading one off `window`
           // would mean the server rendered a different `href` from the client,
@@ -114,15 +124,18 @@ export function ConsentPane({
  * recognisably the mark, only quieter. Nothing is drawn here that is not already
  * the brand — which is also why there is no stock illustration to defend.
  *
- * 7% on light and 6% on dark, and the asymmetry is not a rounding error: the
- * dark master is the brighter of the two castings, so equal opacity would make
- * it louder on the ground where there is less contrast to spare.
+ * 7% on light and 13% on dark. The asymmetry once ran the other way, on the
+ * reasoning that the dark master is the brighter casting and equal opacity would
+ * make it louder — which was true of the artwork and false of the result. A wash
+ * is read as the *difference* from the ground it sits on, and there is far less
+ * of that difference to spend on near-black than on white: 6% left the mark
+ * effectively absent on dark, which is not quiet, it is missing.
  */
 function MarkWash() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 top-[5%] opacity-[0.07] dark:opacity-[0.06]"
+      className="pointer-events-none absolute inset-x-0 top-[5%] opacity-[0.07] dark:opacity-[0.13]"
     >
       <PraximoMark size="fluid" guidePointOpacity={0.45} />
     </span>
