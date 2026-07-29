@@ -1,4 +1,5 @@
 export { Heading, type HeadingProps } from "./components/heading.tsx"
+export { ChoiceChip, type ChoiceChipProps } from "./components/choice-chip.tsx"
 export { FeedbackButton, type FeedbackButtonProps } from "./components/feedback-button.tsx"
 export { PraximoMark } from "./components/praximo-mark.tsx"
 export { FeedbackProvider, useFeedback } from "./components/feedback-provider.tsx"

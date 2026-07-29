@@ -1,20 +1,25 @@
-import { CalendarAdd01Icon } from "@hugeicons-pro/core-stroke-rounded"
+import { CalendarAdd01Icon, Link02Icon, TelegramIcon } from "@hugeicons-pro/core-stroke-rounded"
 import { Calendar03Icon, FlagIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   type ClientInviteDoor,
   type CoachLanguage,
   ClientInviteDoor as InviteDoors,
-  isClientInviteDoor,
 } from "@praximo/domain"
 import { localeTag } from "@praximo/i18n"
 import { useMemo, useState } from "react"
 
 import { HostBackButton, isIosHost } from "@/presentation-host"
-import { Heading, Section, SectionTitle, Text } from "@praximo/ui"
+import { ChoiceChip, Heading, Section, SectionTitle, Text } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
-import { ToggleGroup, ToggleGroupItem } from "@praximo/ui/components/toggle-group"
+import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@praximo/ui/components/item"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"
 import { InviteEmailSheet } from "@/features/coach/components/invite-email-sheet.tsx"
@@ -67,13 +72,22 @@ const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
  *   third position on the segment: an email is not a form of the token a coach
  *   hands over, it is us sending the *web* URL for them. Telegram's door already
  *   has a transport and no use for an address.
+ * - **An icon each**, which is presentation rather than behaviour but varies with
+ *   the door exactly as the rest of this table does. It sits on the invitation
+ *   card's header beside an eyebrow that already reads «Приглашение · Telegram»,
+ *   so the glyph confirms the word rather than replacing it.
  */
 const doorOffers: Record<
   ClientInviteDoor,
-  { readonly card: boolean; readonly shareSheet: boolean; readonly email: boolean }
+  {
+    readonly card: boolean
+    readonly shareSheet: boolean
+    readonly email: boolean
+    readonly icon: typeof TelegramIcon
+  }
 > = {
-  telegram: { card: true, shareSheet: false, email: false },
-  link: { card: false, shareSheet: true, email: true },
+  telegram: { card: true, shareSheet: false, email: false, icon: TelegramIcon },
+  link: { card: false, shareSheet: true, email: true, icon: Link02Icon },
 }
 
 const initials = (name: string): string =>
@@ -263,24 +277,47 @@ export function ClientScreen({
 
       {!showInvitation || client.invite === undefined || invitation === undefined ? null : (
         <Section>
-          <Text
-            role="caption"
-            className="text-muted-foreground px-1 font-semibold tracking-wide uppercase"
-          >
-            {words.eyebrow}
-          </Text>
-          <Text className="text-muted-foreground mt-2 px-1">
-            {client.state === "expired" ? (
-              copy.clients.reissueLead
-            ) : (
-              <>
-                <span className="text-foreground">{client.name}</span>
-                {words.leadTail}
-              </>
-            )}
-          </Text>
-
           {/*
+            One card rather than loose elements on the page ground.
+
+            The eyebrow, the sentence and the controls under them are one
+            subject — this invitation and how to hand it over — and until they
+            were wrapped they were three things floating between the header and
+            Sessions, reading as page furniture rather than as a panel.
+
+            `muted` and not `outline`: the screen's other two cards (Sessions,
+            Profile) are ringed, and a third ring here would make the busiest
+            block compete with them. A tint groups without adding a line.
+
+            `flex-wrap` is the primitive's own, so the media and the eyebrow ride
+            the first row and the `basis-full` block below drops onto its own.
+          */}
+          <Item variant="muted" className="mt-4">
+            <ItemMedia variant="icon">
+              <HugeiconsIcon icon={offers.icon} className="text-muted-foreground" strokeWidth={2} />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                {words.eyebrow}
+              </ItemTitle>
+              {/*
+                The clamp is lifted deliberately. `ItemDescription` truncates at
+                two lines, and this sentence runs to three in uk and ru — a
+                silently cut explanation of what the coach is about to send.
+              */}
+              <ItemDescription className="line-clamp-none text-base leading-relaxed">
+                {client.state === "expired" ? (
+                  copy.clients.reissueLead
+                ) : (
+                  <>
+                    <span className="text-foreground">{client.name}</span>
+                    {words.leadTail}
+                  </>
+                )}
+              </ItemDescription>
+            </ItemContent>
+            <div className="basis-full">
+              {/*
             An expired invitation offers **one** control, and it is recovery
             (#61): the link on file opens nothing, so showing it beside «Send a
             card» would be a dead end wearing the shape of an action. #56 named
@@ -290,117 +327,110 @@ export function ClientScreen({
             Amber rather than the danger zone's red: there is nothing live left
             to destroy, and Reset's framing would be a lie about what this does.
           */}
-          {client.state === "expired" ? (
-            <Button className="mt-4 w-full" onClick={onResetInvite} disabled={pending}>
-              {copy.clients.reissueAction}
-            </Button>
-          ) : (
-            <>
-              {/*
+              {client.state === "expired" ? (
+                <Button className="mt-4 w-full" onClick={onResetInvite} disabled={pending}>
+                  {copy.clients.reissueAction}
+                </Button>
+              ) : (
+                <>
+                  {/*
                 One token, two doors (#224). The choice belongs here rather than
                 on the create screen because this is where the coach finds out
                 whether this person is even on Telegram — and it belongs to the
                 *moment*, not to the record: switching writes nothing, because
                 both forms have been valid since the invitation existed.
               */}
-              <ToggleGroup
-                aria-label={copy.clients.doorLabel}
-                className="mt-4 w-full"
-                value={[door]}
-                onValueChange={(next) => {
-                  // A chip tapped while already on reports an empty selection;
-                  // the door stays put rather than becoming undefined.
-                  if (isClientInviteDoor(next[0])) setDoor(next[0])
-                }}
-              >
-                {InviteDoors.literals.map((value) => (
-                  // `rounded-full px-5` is what both other `ToggleGroup` call
-                  // sites pass — the onboarding language step and the Admin
-                  // section's invite chips. Without it this segment inherited
-                  // the primitive's bare `rounded-4xl px-3` and read as two
-                  // words on a pale smudge rather than as a control.
-                  <ToggleGroupItem
-                    key={value}
-                    value={value}
-                    className="flex-1 rounded-full px-5"
-                    disabled={pending}
+                  <div
+                    role="group"
+                    aria-label={copy.clients.doorLabel}
+                    className="mt-4 flex w-full gap-2"
                   >
-                    {copy.clients.doors[value].label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
+                    {InviteDoors.literals.map((value) => (
+                      <ChoiceChip
+                        key={value}
+                        className="flex-1"
+                        selected={door === value}
+                        disabled={pending}
+                        onClick={() => setDoor(value)}
+                      >
+                        {copy.clients.doors[value].label}
+                      </ChoiceChip>
+                    ))}
+                  </div>
 
-              <div className="mt-4">
-                <InviteLinkPanel
-                  link={invitation.url}
-                  ariaLabel={copy.clients.linkLabel}
-                  controller={copyLink}
-                />
-              </div>
+                  <div className="mt-4">
+                    <InviteLinkPanel
+                      link={invitation.url}
+                      ariaLabel={copy.clients.linkLabel}
+                      controller={copyLink}
+                    />
+                  </div>
 
-              <div className="mt-4 flex flex-col gap-2">
-                {offers.card ? (
-                  <Button className="w-full" onClick={onShare} disabled={pending}>
-                    {copy.clients.sendCard}
-                  </Button>
-                ) : null}
-                {/* Copy leads wherever there is no card above it to lead. */}
-                <Button
-                  className="w-full"
-                  variant={offers.card ? "outline" : "default"}
-                  onClick={() => void copyMessage.copy()}
-                  disabled={pending}
-                >
-                  {copyMessage.copied ? copy.clients.copied : copy.clients.copyInvite}
-                </Button>
-                {/*
+                  <div className="mt-4 flex flex-col gap-2">
+                    {offers.card ? (
+                      <Button className="w-full" onClick={onShare} disabled={pending}>
+                        {copy.clients.sendCard}
+                      </Button>
+                    ) : null}
+                    {/* Copy leads wherever there is no card above it to lead. */}
+                    <Button
+                      className="w-full"
+                      variant={offers.card ? "outline" : "default"}
+                      onClick={() => void copyMessage.copy()}
+                      disabled={pending}
+                    >
+                      {copyMessage.copied ? copy.clients.copied : copy.clients.copyInvite}
+                    </Button>
+                    {/*
                   The iOS gate is the *host platform*, never `navigator.share`,
                   which three of the four Telegram clients get wrong in three
                   different ways (#27). Read at render rather than in an effect:
                   this route is client-only, and the host script in `<head>` ran
                   long before it.
                 */}
-                {offers.shareSheet && isIosHost() ? (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => onShareSheet(invitation.message)}
-                    disabled={pending}
-                  >
-                    {copy.clients.shareAction}
-                  </Button>
-                ) : null}
-                {/*
+                    {offers.shareSheet && isIosHost() ? (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => onShareSheet(invitation.message)}
+                        disabled={pending}
+                      >
+                        {copy.clients.shareAction}
+                      </Button>
+                    ) : null}
+                    {/*
                   The one control on this screen that asks the service to do the
                   sending (#58). It reads «ещё раз» once an address is on file,
                   because by then a coach pressing it is answering «не дошло»
                   rather than sending for the first time.
                 */}
-                {offers.email ? (
-                  <Button
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => setEmailSheet(true)}
-                    disabled={pending}
-                  >
-                    {client.invite.address === undefined
-                      ? copy.clients.sendEmail
-                      : copy.clients.sendEmailAgain}
-                  </Button>
-                ) : null}
-              </div>
+                    {offers.email ? (
+                      <Button
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => setEmailSheet(true)}
+                        disabled={pending}
+                      >
+                        {client.invite.address === undefined
+                          ? copy.clients.sendEmail
+                          : copy.clients.sendEmailAgain}
+                      </Button>
+                    ) : null}
+                  </div>
 
-              {/*
+                  {/*
                 The door is also the reminder channel, and that outlives the
                 sending: this line is the only place on the screen that says a
                 coach picking a door is picking where this person gets reached
                 for the life of the relationship.
               */}
-              <Text role="caption" className="text-muted-foreground mt-3 px-1">
-                {words.reminder}
-              </Text>
-            </>
-          )}
+                  <Text role="caption" className="text-muted-foreground mt-3">
+                    {words.reminder}
+                  </Text>
+                </>
+              )}
+            </div>
+          </Item>
         </Section>
       )}
 
