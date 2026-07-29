@@ -49,12 +49,19 @@ describe("feedback invariants", () => {
    * cases with.
    */
   it("uses the shared selection controls", async () => {
-    const themeSwitch = (await files()).find(({ path: file }) =>
-      file.endsWith("components/theme-switch.tsx"),
+    const appearance = (await files()).find(({ path: file }) =>
+      file.endsWith("components/appearance-menu.tsx"),
     )?.source
 
-    expect(themeSwitch).toContain("@praximo/ui/components/toggle-group")
-    expect(themeSwitch).toContain("pressed={preference === option}")
+    // A menu, since the control moved into the frame of both shells and its
+    // trigger became an icon. The invariant is unchanged and is why this is a
+    // *radio* group: three answers, one always on, and the one that is on
+    // carries the primitive's own indicator. Plain items would be three
+    // commands with no state, which is the invisible-selection failure this
+    // case exists to catch.
+    expect(appearance).toContain("@praximo/ui/components/dropdown-menu")
+    expect(appearance).toContain("DropdownMenuRadioItem")
+    expect(appearance).toContain("value={preference}")
   })
 
   /**

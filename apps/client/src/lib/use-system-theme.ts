@@ -6,7 +6,7 @@ import { applyColorScheme, type ThemePreference, watchPreferredColorScheme } fro
  * Follow the browser's scheme for as long as the reader has not overruled it.
  *
  * Two components need this and need it for different moments — `ClientTheme` for
- * the page nobody touches, `ThemeSwitch` for the reader who switches *to* system
+ * the page nobody touches, `AppearanceMenu` for the reader who switches *to* system
  * and expects it to start following at once rather than on the next load — so
  * the rule lives here rather than in a comment saying "keep these two in step".
  *

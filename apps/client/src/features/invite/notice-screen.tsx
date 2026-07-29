@@ -53,7 +53,13 @@ export function ConfirmationScreen({
        * which would make acceptance two-legged and destroy the atomicity the
        * design is built on. A typo is catchable while the client is still here.
        */}
-      <span className="bg-primary/10 text-primary inline-flex items-center gap-2 rounded-full px-3 py-[5px] text-[12.5px] font-medium">
+      {/*
+        The tint is a ground and stays `--primary`; the address inside it takes
+        the ink. This is the one string on the page the client is meant to
+        *proofread*, and at 12.5px on a plate that is nearly the page ground on
+        dark, the fill casting's 2.17:1 is not a contrast a typo survives.
+      */}
+      <span className="bg-primary/10 text-primary-ink inline-flex items-center gap-2 rounded-full px-3 py-[5px] text-[12.5px] font-medium">
         {copy.done.remindersTo(email)}
       </span>
       <p className="text-muted-foreground text-xs leading-[1.45]">{copy.done.wrongAddress}</p>

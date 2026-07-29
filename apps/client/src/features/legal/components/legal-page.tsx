@@ -32,7 +32,10 @@ function Inline({ value }: { readonly value: LegalInline }) {
     return (
       // Colour only. The underline and its offset come from the prose layer, so
       // a link reads the same here as in any other block it ends up inside.
-      <Link to={value.to} className="text-primary">
+      //
+      // The ink casting, not the fill: `--primary` drawn as a glyph is 2.17:1 on
+      // the dark ground, and this is a cross-reference inside a contract.
+      <Link to={value.to} className="text-primary-ink">
         {value.link}
       </Link>
     )
@@ -44,7 +47,12 @@ function Inline({ value }: { readonly value: LegalInline }) {
     // has to read as a marked region on either shared theme. Typeset styles
     // `mark` as a highlight; the border and the primary tint are what make this
     // one read as a note to us instead.
-    <mark className="bg-primary/10 text-primary border-primary/30 rounded border px-1 py-0.5 whitespace-nowrap">
+    //
+    // The tint stays `--primary` — it is a ground, which is what that token is
+    // for — while the text and the edge take the ink. At 10% over near-black the
+    // plate is barely distinguishable from the page, so the glyph inside it is
+    // effectively on the page ground and needs the page ground's contrast.
+    <mark className="bg-primary/10 text-primary-ink border-primary-ink/40 rounded border px-1 py-0.5 whitespace-nowrap">
       [{legalPlaceholders[value.placeholder]}]
     </mark>
   )

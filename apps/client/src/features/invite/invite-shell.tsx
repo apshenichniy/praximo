@@ -1,6 +1,5 @@
 import { type CoachLanguage, CoachLanguages } from "@praximo/domain"
 import { ClientLanguageNames } from "@praximo/i18n"
-import { PraximoMark } from "@praximo/ui"
 import { Button } from "@praximo/ui/components/button"
 import {
   DropdownMenu,
@@ -9,17 +8,10 @@ import {
   DropdownMenuTrigger,
 } from "@praximo/ui/components/dropdown-menu"
 import type { ReactNode } from "react"
-import { useEffect, useState } from "react"
 
+import { AppearanceMenu } from "@/components/appearance-menu.tsx"
+import { BrandLockup } from "@/components/brand-lockup.tsx"
 import { chromeCopy } from "@/features/i18n/chrome-copy.ts"
-import { useSystemThemeWhileUnset } from "@/lib/use-system-theme.ts"
-import {
-  applyColorScheme,
-  readThemePreference,
-  resolveColorScheme,
-  type ThemePreference,
-  writeThemePreference,
-} from "@/lib/theme.ts"
 
 /**
  * The Acceptance Page's frame (#57) — and deliberately not `ClientShell`.
@@ -55,13 +47,10 @@ export function InviteShell({
   return (
     <div className="bg-background text-foreground font-sans flex min-h-svh flex-col">
       <header className="flex shrink-0 items-center justify-between gap-3.5 px-5 py-4 sm:px-11">
-        <span className="flex items-center gap-2.5">
-          <PraximoMark size={28} />
-          <b className="text-base font-[620] tracking-[-0.02em]">Praximo</b>
-        </span>
+        <BrandLockup />
         <span className="flex items-center gap-0.5">
           <LanguageMenu locale={locale} label={copy.language} onChange={onLanguageChange} />
-          <AppearanceMenu locale={locale} />
+          <AppearanceMenu copy={copy} />
         </span>
       </header>
 
@@ -93,63 +82,6 @@ function LanguageMenu({
         {CoachLanguages.map((language) => (
           <DropdownMenuItem key={language} onClick={() => onChange(language)}>
             {ClientLanguageNames[language]}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-const APPEARANCE_ORDER = ["system", "light", "dark"] as const
-
-/**
- * The same three answers `ThemeSwitch` offers, as a menu instead of a row of
- * chips — the header has room for a button, not for three.
- *
- * Rendered only after mount and `null` before it, for the reason the footer's
- * version documents: the preference lives in `localStorage`, so the server
- * cannot know which of the three is on, and a server-rendered control would show
- * the wrong one for a frame and then correct itself in front of the reader. The
- * *scheme* does not wait for this — the blocking script in `<head>` has already
- * settled it — only the indicator does.
- */
-function AppearanceMenu({ locale }: { readonly locale: CoachLanguage }) {
-  const copy = chromeCopy(locale)
-  const [preference, setPreference] = useState<ThemePreference>()
-
-  useEffect(() => {
-    setPreference(readThemePreference())
-  }, [])
-
-  useSystemThemeWhileUnset(preference)
-
-  if (preference === undefined) return null
-
-  const choose = (next: ThemePreference) => {
-    setPreference(next)
-    writeThemePreference(next)
-    applyColorScheme(resolveColorScheme(next))
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground"
-            aria-label={copy.theme.label}
-          >
-            {copy.theme[preference]}
-            <Caret />
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end">
-        {APPEARANCE_ORDER.map((option) => (
-          <DropdownMenuItem key={option} onClick={() => choose(option)}>
-            {copy.theme[option]}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
