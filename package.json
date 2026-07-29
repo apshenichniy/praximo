@@ -72,6 +72,7 @@
     "db:generate": "bun run --filter @praximo/db generate",
     "db:demo": "bun scripts/db-demo.ts",
     "db:reset": "bun scripts/db-reset.ts",
+    "db:test": "turbo test --filter=@praximo/db",
     "deploy": "bun scripts/deploy.ts",
     "manager-bot:canary": "bun scripts/manager-bot-canary.ts",
     "manager-bot:set-webhook": "bun scripts/configure-manager-webhook.ts",
@@ -88,6 +89,7 @@
     "livekit:status": "bash deploy/livekit/status.sh && bash deploy/livekit/ops.sh verify",
     "livekit:test": "vitest run deploy/livekit/cleanup.test.ts deploy/livekit/ops.test.ts deploy/livekit/control-plane.test.ts",
     "test": "turbo test && bun run livekit:test && bun run scripts:test",
+    "test:no-db": "turbo test --filter=!@praximo/db && bun run livekit:test && bun run scripts:test",
     "format": "oxfmt apps packages deploy/livekit/*.ts scripts/*.ts alchemy.run.ts",
     "format:check": "oxfmt --check apps packages deploy/livekit/*.ts scripts/*.ts alchemy.run.ts"
   },

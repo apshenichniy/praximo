@@ -9,9 +9,17 @@
  *   package's tests skipped on every PR and the job went green, so nothing the
  *   repository layer guarantees was actually being checked.
  *
- * CI provisions an ephemeral Neon branch per run (`scripts/ci-neon-branch.ts`)
- * and exports its URI, so reaching the throw below means that provisioning
- * broke — never that the suites are legitimately unrunnable.
+ * These suites run in one place only: CI's `database` job, which provisions an
+ * ephemeral Neon branch (`scripts/ci-neon-branch.ts`) and exports its URI. So
+ * reaching the throw below means that provisioning broke — never that the suites
+ * are legitimately unrunnable.
+ *
+ * That job is conditional (a schema-only Neon branch is an independent root
+ * branch, and one per pull-request commit exhausted the project's storage), but
+ * the condition lives in the workflow, not here: `bun run test:no-db` leaves this
+ * package out of the run entirely rather than letting it skip. The rule below
+ * stays absolute — under `CI`, a suite that reaches this file without a database
+ * is a failure.
  *
  * This is test support, not a config seam: ADR 0002 keeps packages from reading
  * the environment, and the seam the *runtime* resolves `DATABASE_URL` through is
