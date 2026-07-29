@@ -47,16 +47,39 @@ describe("client consent", () => {
 
   /**
    * Pinned, because the version *is* the record: an edit that moves it has to be
-   * a deliberate one somebody wrote down, not a digest that quietly drifted. `en`
-   * is here for the opposite reason — #222 reworded uk and ru only, and this line
-   * is what says so.
+   * a deliberate one somebody wrote down, not a digest that quietly drifted.
+   *
+   * Moved twice now. #222 reworded uk and ru; #57 took the `<b>` out of
+   * `consent.title`, which is inside the versioned text, so that one moved all
+   * three — including `en`, which #222 had left alone.
    */
   it("records the version each language carries today", () => {
     expect(clientConsentVersions()).toEqual({
-      en: "2026-08-01+en+a18cc3d",
-      uk: "2026-08-01+uk+cac35e5",
-      ru: "2026-08-01+ru+892dcfa",
+      en: "2026-08-01+en+8325d38",
+      uk: "2026-08-01+uk+d0eafe0",
+      ru: "2026-08-01+ru+d68f379",
     })
+  })
+
+  /**
+   * The reason the versions above moved, kept as a rule rather than a one-off.
+   * Two surfaces render this block now and only the bot speaks HTML, so markup
+   * in the catalogue is a literal `<b>` on the web page's consent screen — on
+   * the one screen in the product where a stray tag is least affordable.
+   */
+  it("keeps markup out of the shared consent block", () => {
+    for (const locale of CoachLanguages) {
+      const consent = clientCopy(locale).consent
+      const rendered = [
+        consent.title,
+        consent.lead(COACH),
+        ...consent.points(COACH),
+        consent.privacyButton,
+        consent.agreeButton,
+        consent.footer,
+      ].join("\n")
+      expect(rendered).not.toMatch(/<\/?[a-z]/i)
+    }
   })
 })
 

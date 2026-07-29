@@ -72,6 +72,13 @@ export interface ClientCopy {
     readonly lead: (coach: string) => string
   }
   readonly consent: {
+    /**
+     * Plain text, unlike `languageStep.title` beside it — since #57 this block is
+     * rendered by two surfaces, and only one of them speaks HTML. The bot wraps
+     * it in `<b>` at its own call site; the web page makes it a heading. A
+     * catalogue that ships markup would put a literal `<b>` on the consent screen
+     * of the surface that does not parse it.
+     */
     readonly title: string
     readonly lead: (coach: string) => string
     /** The five required elements, in the order privacy-retention.md fixes. */
@@ -141,7 +148,7 @@ const en: ClientCopy = {
       `I am ${coach}'s assistant. Pick a language and I will carry on in it — including everything about your sessions.`,
   },
   consent: {
-    title: "<b>One thing to agree to</b>",
+    title: "One thing to agree to",
     lead: (coach) =>
       `To help ${coach} prepare for your sessions, Praximo records and analyses them. Here is exactly what that means:`,
     points: (coach) => [
@@ -187,7 +194,7 @@ const uk: ClientCopy = {
     lead: () => `Я помічник вашого коуча. Оберіть мову — нею я й продовжу, зокрема про ваші сесії.`,
   },
   consent: {
-    title: "<b>Одна річ, на яку потрібна ваша згода</b>",
+    title: "Одна річ, на яку потрібна ваша згода",
     lead: () =>
       `Щоб допомогти вашому коучу готуватися до ваших сесій, Praximo записує та аналізує їх. Ось що саме це означає:`,
     points: (coach) => [
@@ -234,7 +241,7 @@ const ru: ClientCopy = {
       `Я помощник вашего коуча. Выберите язык — на нём я и продолжу, в том числе про ваши сессии.`,
   },
   consent: {
-    title: "<b>Одна вещь, на которую нужно ваше согласие</b>",
+    title: "Одна вещь, на которую нужно ваше согласие",
     lead: () =>
       `Чтобы помочь вашему коучу готовиться к вашим сессиям, Praximo записывает и анализирует их. Вот что именно это значит:`,
     points: (coach) => [

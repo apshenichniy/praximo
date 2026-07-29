@@ -134,6 +134,12 @@ export const languageStep = (input: {
  * Never a URL in body text (#164) — and here it matters more than usual: a link
  * wrapped across four lines of a phone, inside the one message that asks for a
  * legal agreement, is the most alarming thing the product could show.
+ *
+ * The `<b>` around the title is applied **here** rather than carried by the
+ * catalogue (#57). The same block is now rendered by the web Acceptance Page,
+ * which makes the title a heading; markup in the shared catalogue would put a
+ * literal `<b>` on the screen of whichever surface does not parse HTML. Telegram
+ * is the one that does, so Telegram is where the tag belongs.
  */
 export const consentStep = (input: {
   readonly token: string
@@ -149,7 +155,7 @@ export const consentStep = (input: {
 
   return {
     text: [
-      copy.consent.title,
+      `<b>${copy.consent.title}</b>`,
       copy.consent.lead(input.coachName),
       points,
       copy.consent.footer,

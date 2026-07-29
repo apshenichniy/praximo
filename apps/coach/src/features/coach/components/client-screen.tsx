@@ -258,8 +258,16 @@ export function ClientScreen({
           <DetailRow label={copy.clients.profileChannel}>
             {client.channel === undefined ? (
               <PlaceholderValue>{copy.clients.pendingChannel}</PlaceholderValue>
-            ) : (
+            ) : // Two doors since #57, so the row has to read the kind rather than
+            // assume the only one that existed when it was written. Anything
+            // else is named literally — `channel.kind` is an open set, and a
+            // label invented for a kind nobody has added yet would be a guess.
+            client.channel.kind === "telegram" ? (
               copy.clients.channelTelegram
+            ) : client.channel.kind === "email" ? (
+              copy.clients.channelEmail
+            ) : (
+              client.channel.kind
             )}
           </DetailRow>
           <DetailRow label={copy.clients.profileLanguage}>

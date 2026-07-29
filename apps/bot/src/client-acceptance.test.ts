@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ClientAcceptanceRepo } from "@praximo/db"
 import { CoachLanguages } from "@praximo/domain"
-import { clientConsentText, clientConsentVersion } from "@praximo/i18n"
+import { clientConsentText, clientConsentVersion, clientCopy } from "@praximo/i18n"
 import { Effect, Layer, Ref } from "effect"
 import {
   AcceptCallbackPrefix,
@@ -52,6 +52,11 @@ const repoLayer = (found: ClientAcceptanceRepo.InviteLookup | undefined, accepts
         ClientAcceptanceRepo.Service,
         ClientAcceptanceRepo.Service.of({
           findByToken: (_token, botId) => Effect.succeed(botId === BOT_ID ? found : undefined),
+          // The web door's pair dies here rather than being stubbed politely: the
+          // bot has no business reaching for it, and a fake that answered would
+          // let that mistake pass a test.
+          findByWebToken: unsupported,
+          acceptFromWeb: unsupported,
           findBotOwner: unsupported,
           findAcceptedClient: unsupported,
           accept: (input) =>
@@ -130,6 +135,11 @@ describe("the consent step", () => {
    * so the message assembled here has to *be* that document with a name in it —
    * two renderings of one legally operative text is a consent record nobody can
    * reproduce. Rendered with the literal `{coach}` so the comparison is exact.
+   *
+   * Compared with the tags taken back off since #57: the bot now supplies its own
+   * `<b>` around the title, because the catalogue stopped shipping markup when
+   * the web page began rendering the same block as a heading. Emphasis is the
+   * transport's; the words are the document's, and it is the words this guards.
    */
   it("shows the same text the version it records is derived from", () => {
     for (const language of CoachLanguages) {
@@ -140,7 +150,10 @@ describe("the consent step", () => {
         privacyUrl: `https://me.praximo.io/legal/privacy?lang=${language}`,
       })
 
-      expect(message.text).toBe(clientConsentText(language, "{coach}"))
+      expect(message.text.replaceAll(/<\/?b>/g, "")).toBe(clientConsentText(language, "{coach}"))
+      // The emphasis itself is still asserted, so "strip the tags" cannot become
+      // "the bot quietly stopped emphasising anything".
+      expect(message.text).toContain(`<b>${clientCopy(language).consent.title}</b>`)
     }
   })
 

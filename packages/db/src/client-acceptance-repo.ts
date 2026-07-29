@@ -57,6 +57,34 @@ export interface AcceptInput {
   readonly now: Date
 }
 
+/**
+ * The web door's half (#57), and deliberately not `AcceptInput` with optional
+ * fields: the two doors demand different identities, and a type is the only
+ * thing that can keep the Telegram path from accepting without a Telegram one.
+ */
+export interface AcceptFromWebInput {
+  readonly inviteId: string
+  readonly workspaceId: string
+  readonly clientId: string
+  /**
+   * The name the client typed about **themselves**, which is not `client.name`.
+   * That column keeps what the coach filed them under — «Анна через Марину» is
+   * the coach's private label, and writing the client's own name over it would
+   * quietly rename a row in somebody else's list.
+   */
+  readonly clientName: string
+  /** Their address, and the reason the channel exists at all. */
+  readonly email: string
+  /** Present only when they came through Google (#59); no token is ever stored. */
+  readonly googleSub?: string
+  /** The language the consent was *read* in, which on the web is the one shown. */
+  readonly language: CoachLanguage
+  readonly consentTextVersion: string
+  readonly channelId: string
+  readonly consentId: string
+  readonly now: Date
+}
+
 /** What the coach is told when somebody walks in without them in the room. */
 export interface AcceptedClient {
   readonly id: string
@@ -80,12 +108,17 @@ export interface Interface {
     token: string,
     telegramBotId: string,
   ) => Effect.Effect<InviteLookup | undefined, QueryFailed>
+  /** The same lookup for the web page, which has no bot id to scope by (#57). */
+  readonly findByWebToken: (token: string) => Effect.Effect<InviteLookup | undefined, QueryFailed>
   readonly findBotOwner: (telegramBotId: string) => Effect.Effect<BotOwner | undefined, QueryFailed>
   readonly findAcceptedClient: (
     clientId: string,
   ) => Effect.Effect<AcceptedClient | undefined, QueryFailed>
   readonly accept: (
     input: AcceptInput,
+  ) => Effect.Effect<{ readonly accepted: boolean }, QueryFailed>
+  readonly acceptFromWeb: (
+    input: AcceptFromWebInput,
   ) => Effect.Effect<{ readonly accepted: boolean }, QueryFailed>
 }
 
@@ -99,67 +132,55 @@ export const layer = Layer.effect(
     const { client } = yield* Database.Service
 
     /**
-     * A token resolves **only inside the workspace of the bot it was presented
-     * to**, which is why the bot id is a join condition rather than a check
-     * afterwards. A code from another coach's workspace produces no row, and the
-     * bot answers that exactly as it answers a stranger's bare `/start` —
-     * disclosing neither that the code exists nor whose it is.
+     * The invitation as both doors need to read it. The only thing that differs
+     * between them is `scope` — see the two callers.
      *
      * Expiry is not decided here. The row carries `expires_at` and the caller
-     * compares it against its own clock, so this stays a pure read and the three
-     * refusals are composed in one place.
+     * compares it against its own clock, so this stays a pure read and the
+     * refusals are composed in one place per surface.
      */
-    const findByToken = Effect.fn("ClientAcceptanceRepo.findByToken")(function* (
-      token: string,
-      telegramBotId: string,
-    ) {
-      const rows = yield* Effect.tryPromise({
-        try: () =>
-          client.execute(sql`
-            select
-              "i"."id" as "invite_id",
-              "i"."status" as "status",
-              "i"."delivery" as "delivery",
-              ${isoColumn('"i"."expires_at"')} as "expires_at",
-              "c"."id" as "client_id",
-              "c"."name" as "client_name",
-              "w"."id" as "workspace_id",
-              "w"."name" as "coach_name",
-              "m"."timezone" as "coach_timezone",
-              "ch"."address" as "accepted_by",
-              ${isoColumn('"s"."scheduled_at"')} as "session_at",
-              "s"."duration_minutes" as "session_duration",
-              "s"."kind" as "session_kind"
-            from "invite" as "i"
-            join "client" as "c" on "c"."id" = "i"."client_id"
-            join "workspace" as "w" on "w"."id" = "i"."workspace_id"
-            join "bot" as "b"
-              on "b"."workspace_id" = "i"."workspace_id"
-              and "b"."telegram_bot_id" = ${telegramBotId}
-            left join "member" as "m"
-              on "m"."workspace_id" = "i"."workspace_id" and "m"."role" = 'owner'
-            left join "channel" as "ch"
-              on "ch"."client_id" = "c"."id" and "ch"."is_primary"
-            left join lateral (
-              select "scheduled_at", "duration_minutes", "kind"
-              from "session"
-              where
-                "session"."client_id" = "c"."id"
-                and "session"."state" = 'scheduled'
-                -- The *next* session, not the earliest one on record: a client
-                -- accepting late must not be told about a meeting that has
-                -- already been and gone.
-                and "session"."scheduled_at" >= now()
-              order by "session"."scheduled_at" asc
-              limit 1
-            ) as "s" on true
-            where "i"."token" = ${token}
-            limit 1
-          `),
-        catch: (cause) => new QueryFailed({ operation: "clientAcceptance.findByToken", cause }),
-      })
+    const lookupRow = (token: string, scope: ReturnType<typeof sql>) =>
+      client.execute(sql`
+        select
+          "i"."id" as "invite_id",
+          "i"."status" as "status",
+          "i"."delivery" as "delivery",
+          ${isoColumn('"i"."expires_at"')} as "expires_at",
+          "c"."id" as "client_id",
+          "c"."name" as "client_name",
+          "w"."id" as "workspace_id",
+          "w"."name" as "coach_name",
+          "m"."timezone" as "coach_timezone",
+          "ch"."address" as "accepted_by",
+          ${isoColumn('"s"."scheduled_at"')} as "session_at",
+          "s"."duration_minutes" as "session_duration",
+          "s"."kind" as "session_kind"
+        from "invite" as "i"
+        join "client" as "c" on "c"."id" = "i"."client_id"
+        join "workspace" as "w" on "w"."id" = "i"."workspace_id"
+        ${scope}
+        left join "member" as "m"
+          on "m"."workspace_id" = "i"."workspace_id" and "m"."role" = 'owner'
+        left join "channel" as "ch"
+          on "ch"."client_id" = "c"."id" and "ch"."is_primary"
+        left join lateral (
+          select "scheduled_at", "duration_minutes", "kind"
+          from "session"
+          where
+            "session"."client_id" = "c"."id"
+            and "session"."state" = 'scheduled'
+            -- The *next* session, not the earliest one on record: a client
+            -- accepting late must not be told about a meeting that has
+            -- already been and gone.
+            and "session"."scheduled_at" >= now()
+          order by "session"."scheduled_at" asc
+          limit 1
+        ) as "s" on true
+        where "i"."token" = ${token}
+        limit 1
+      `)
 
-      const record = rows.rows[0] as Record<string, unknown> | undefined
+    const toLookup = (record: Record<string, unknown> | undefined): InviteLookup | undefined => {
       if (record === undefined) return undefined
 
       const delivery = record.delivery as { readonly language?: string } | null
@@ -190,6 +211,56 @@ export const layer = Layer.effect(
               },
             }),
       } satisfies InviteLookup
+    }
+
+    /**
+     * A token resolves **only inside the workspace of the bot it was presented
+     * to**, which is why the bot id is a join condition rather than a check
+     * afterwards. A code from another coach's workspace produces no row, and the
+     * bot answers that exactly as it answers a stranger's bare `/start` —
+     * disclosing neither that the code exists nor whose it is.
+     */
+    const findByToken = Effect.fn("ClientAcceptanceRepo.findByToken")(function* (
+      token: string,
+      telegramBotId: string,
+    ) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          lookupRow(
+            token,
+            sql`join "bot" as "b"
+              on "b"."workspace_id" = "i"."workspace_id"
+              and "b"."telegram_bot_id" = ${telegramBotId}`,
+          ),
+        catch: (cause) => new QueryFailed({ operation: "clientAcceptance.findByToken", cause }),
+      })
+
+      return toLookup(rows.rows[0] as Record<string, unknown> | undefined)
+    })
+
+    /**
+     * The same read for the web page (#57), with no scoping join and none
+     * available: the web has no bot id, and asking for one would mean inventing a
+     * relationship that the URL does not carry.
+     *
+     * Nothing is lost by dropping it. `invite.token` is globally `unique`, so the
+     * token *is* the scope — where the bot needs the join to stop a code from one
+     * coach's workspace resolving inside another's, a bare token can only ever
+     * resolve to the workspace that issued it.
+     *
+     * A workspace with no bot row still resolves, and that is deliberate: a
+     * client who is not on Telegram may belong to a coach whose bot is not
+     * connected yet, and the link they were handed has to open regardless.
+     */
+    const findByWebToken = Effect.fn("ClientAcceptanceRepo.findByWebToken")(function* (
+      token: string,
+    ) {
+      const rows = yield* Effect.tryPromise({
+        try: () => lookupRow(token, sql``),
+        catch: (cause) => new QueryFailed({ operation: "clientAcceptance.findByWebToken", cause }),
+      })
+
+      return toLookup(rows.rows[0] as Record<string, unknown> | undefined)
     })
 
     /**
@@ -236,7 +307,7 @@ export const layer = Layer.effect(
             ),
             "channel_created" as (
               insert into "channel" (
-                "id", "client_id", "kind", "address", "is_primary", "telegram_snapshot",
+                "id", "client_id", "kind", "address", "is_primary", "snapshot",
                 "created_at", "updated_at"
               )
               select
@@ -284,6 +355,108 @@ export const layer = Layer.effect(
             select "client_id" from "claimed"
           `),
         catch: (cause) => new QueryFailed({ operation: "clientAcceptance.accept", cause }),
+      })
+
+      return { accepted: result.rows.length > 0 }
+    })
+
+    /**
+     * The web page's commit (#57), and the same statement in a different key.
+     *
+     * Everything structural is deliberately identical to `accept` above: one
+     * conditional update on `status = 'pending'` as the gate, every other write
+     * selecting from it, so a losing double tap produces exactly nothing. That is
+     * also why the two doors cannot both spend one invitation — whichever gets
+     * there first leaves no `pending` row for the other.
+     *
+     * What differs is what the client brought: an address instead of a Telegram
+     * id, so `kind` is `email` and the grant records `email` as the channel it
+     * was given through. `client.name` is **not** written — the coach's private
+     * label stays theirs, and the name the client typed goes into the snapshot,
+     * exactly where the Telegram path puts the one it captured. `google_sub` is
+     * set only when Google supplied one; `coalesce` keeps a later manual
+     * acceptance from blanking a subject an earlier import recorded.
+     */
+    const acceptFromWeb = Effect.fn("ClientAcceptanceRepo.acceptFromWeb")(function* (
+      input: AcceptFromWebInput,
+    ) {
+      const kind = CoachNotification.Kind.ClientAccepted
+      const workspaceId = sql`"coach"."workspace_id"`
+      const clientId = sql`"coach"."client_id"`
+      const snapshot = JSON.stringify({ name: input.clientName })
+
+      const result = yield* Effect.tryPromise({
+        try: () =>
+          client.execute(sql`
+            with "claimed" as (
+              update "invite"
+              set "status" = 'accepted'
+              where
+                "id" = ${input.inviteId}
+                and "workspace_id" = ${input.workspaceId}
+                and "status" = 'pending'
+              returning "id", "client_id", "workspace_id"
+            ),
+            "client_profile" as (
+              update "client"
+              set
+                "language" = ${input.language},
+                "google_sub" = coalesce(${input.googleSub ?? null}, "client"."google_sub"),
+                "updated_at" = ${input.now}
+              from "claimed"
+              where "client"."id" = "claimed"."client_id"
+              returning "client"."id"
+            ),
+            "channel_created" as (
+              insert into "channel" (
+                "id", "client_id", "kind", "address", "is_primary", "snapshot",
+                "created_at", "updated_at"
+              )
+              select
+                ${input.channelId}, "claimed"."client_id", 'email', ${input.email},
+                true, ${snapshot}::jsonb, ${input.now}, ${input.now}
+              from "claimed"
+              returning "id"
+            ),
+            "consent_created" as (
+              insert into "consent_grant" (
+                "id", "client_id", "scope", "revoked", "text_version", "channel_kind", "granted_at"
+              )
+              select
+                ${input.consentId}, "claimed"."client_id", 'recording_and_processing', false,
+                ${input.consentTextVersion}, 'email', ${input.now}
+              from "claimed"
+              returning "id"
+            ),
+            "coach" as (
+              select
+                "m"."telegram_user_id" as "recipient",
+                "claimed"."workspace_id" as "workspace_id",
+                "claimed"."client_id" as "client_id"
+              from "claimed"
+              join "member" as "m" on "m"."workspace_id" = "claimed"."workspace_id"
+              where "m"."role" = 'owner' and "m"."telegram_user_id" is not null
+            ),
+            "queued_notification" as (
+              insert into "coach_bot_notification" (
+                "id", "workspace_id", "kind", "dedupe_key", "recipient_telegram_id",
+                "recipient_role", "status", "attempt_count", "available_at",
+                "created_at", "updated_at"
+              )
+              select
+                ${CoachNotification.id(kind, workspaceId, clientId)},
+                "coach"."workspace_id",
+                ${kind},
+                ${CoachNotification.dedupeKey(kind, workspaceId, clientId)},
+                "coach"."recipient",
+                ${CoachNotification.Role.Coach},
+                'pending', 0, ${input.now}, ${input.now}, ${input.now}
+              from "coach"
+              on conflict ("dedupe_key") do nothing
+            )
+            select "client_id" from "claimed"
+          `),
+        catch: (cause) => new QueryFailed({ operation: "clientAcceptance.acceptFromWeb", cause }),
       })
 
       return { accepted: result.rows.length > 0 }
@@ -341,7 +514,7 @@ export const layer = Layer.effect(
               "c"."id" as "id",
               "c"."name" as "name",
               "c"."language" as "language",
-              "ch"."telegram_snapshot" as "snapshot",
+              "ch"."snapshot" as "snapshot",
               ${isoColumn('"s"."scheduled_at"')} as "session_at"
             from "client" as "c"
             left join "channel" as "ch"
@@ -379,7 +552,14 @@ export const layer = Layer.effect(
       } satisfies AcceptedClient
     })
 
-    return Service.of({ findByToken, findBotOwner, findAcceptedClient, accept })
+    return Service.of({
+      findByToken,
+      findByWebToken,
+      findBotOwner,
+      findAcceptedClient,
+      accept,
+      acceptFromWeb,
+    })
   }),
 )
 

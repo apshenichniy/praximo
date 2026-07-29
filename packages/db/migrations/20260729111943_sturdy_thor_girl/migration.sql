@@ -1,0 +1,1 @@
+ALTER TABLE "channel" RENAME COLUMN "telegram_snapshot" TO "snapshot";
