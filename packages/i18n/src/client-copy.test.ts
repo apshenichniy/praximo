@@ -1,14 +1,17 @@
 import { describe, expect, it } from "@effect/vitest"
-import { CoachLanguages } from "@praximo/domain"
+import { type CoachLanguage, CoachLanguages } from "@praximo/domain"
 import {
   clientConsentText,
   clientConsentVersion,
+  clientConsentVersions,
   clientCopy,
   ClientLanguageNames,
 } from "./client-copy.ts"
 import { sessionMoment } from "./session-time.ts"
 
 const COACH = "Ada Coaching"
+/** The two that inflect, and so the two every rule about case is about. */
+const Inflected = ["uk", "ru"] as const
 const MOMENT = sessionMoment("en", new Date("2026-08-03T07:00:00.000Z"), "Europe/Kyiv")
 
 describe("client consent", () => {
@@ -41,12 +44,77 @@ describe("client consent", () => {
     // No URL in body text — the policy is a button (#164).
     expect(text).not.toContain("http")
   })
+
+  /**
+   * Pinned, because the version *is* the record: an edit that moves it has to be
+   * a deliberate one somebody wrote down, not a digest that quietly drifted. `en`
+   * is here for the opposite reason — #222 reworded uk and ru only, and this line
+   * is what says so.
+   */
+  it("records the version each language carries today", () => {
+    expect(clientConsentVersions()).toEqual({
+      en: "2026-08-01+en+a18cc3d",
+      uk: "2026-08-01+uk+cac35e5",
+      ru: "2026-08-01+ru+892dcfa",
+    })
+  })
 })
 
 describe("client copy", () => {
+  /** Every uk/ru sentence the coach's name left behind still says whose bot this is. */
+  const obliqueSlots = (locale: CoachLanguage): ReadonlyArray<string | undefined> => {
+    const copy = clientCopy(locale)
+    return [
+      copy.languageStep.lead(COACH),
+      copy.invitation.message({ client: "Maria", coach: COACH }),
+      copy.stranger(COACH),
+      copy.consent.lead(COACH),
+      copy.consent.points(COACH)[4],
+      copy.refusal.alreadySetUp(COACH),
+      copy.refusal.linkUsed(COACH),
+      copy.refusal.linkExpired(COACH),
+    ]
+  }
+
   it("speaks as the coach's assistant rather than as a platform", () => {
+    expect(clientCopy("en").stranger(COACH)).toContain(COACH)
+    for (const locale of Inflected) {
+      expect(clientCopy(locale).stranger(COACH)).toContain("коуч")
+    }
+  })
+
+  /**
+   * The name is an operator-entered label in the nominative, so uk and ru cannot
+   * put it in a slot that wants genitive or dative (#193 Q1–Q2). The running
+   * text says «ваш коуч» instead, and whose bot this is comes from the
+   * surrounding surface — a chat titled with the coach's workspace name, or the
+   * coach's own conversation, where they pasted the invitation themselves.
+   */
+  it("keeps the coach's name out of the slots that would need an oblique case", () => {
+    for (const locale of Inflected) {
+      for (const line of obliqueSlots(locale)) {
+        expect(line).not.toContain(COACH)
+        expect(line).toMatch(/коуч/)
+      }
+    }
+  })
+
+  // The rule is about case, not about the name: English inflects nothing, so the
+  // same eight slots still carry it.
+  it("leaves the English catalogue naming the coach throughout", () => {
+    for (const line of obliqueSlots("en")) {
+      expect(line).toContain(COACH)
+    }
+  })
+
+  // The other half of the rule: where the nominative *is* grammatical, the name
+  // stays, and these three slots are why the consent text still names the coach.
+  it("still names the coach wherever the nominative is grammatical", () => {
     for (const locale of CoachLanguages) {
-      expect(clientCopy(locale).stranger(COACH)).toContain(COACH)
+      const copy = clientCopy(locale)
+      expect(copy.consent.points(COACH)[1]).toContain(COACH)
+      expect(copy.consent.points(COACH)[2]).toContain(COACH)
+      expect(copy.confirmation.withoutSession(COACH)).toContain(COACH)
     }
   })
 
@@ -76,7 +144,7 @@ describe("client copy", () => {
 
   it("keeps gendered verb forms out of what it says about the coach", () => {
     const gendered = /\b(створила|створив|призначила|призначив|написала|написал|создала|создал)\b/
-    for (const locale of ["uk", "ru"] as const) {
+    for (const locale of Inflected) {
       const copy = clientCopy(locale)
       expect(copy.confirmation.withoutSession(COACH)).not.toMatch(gendered)
       expect(
@@ -87,6 +155,10 @@ describe("client copy", () => {
           durationMinutes: 30,
         }),
       ).not.toMatch(gendered)
+      // «коуч» is grammatically masculine and takes no agreement from the
+      // speaker, which is exactly why #222 could substitute it — so the sentences
+      // it moved into must not reintroduce agreement through a past tense (#16).
+      for (const line of obliqueSlots(locale)) expect(line).not.toMatch(gendered)
     }
   })
 

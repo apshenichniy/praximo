@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ClientAcceptanceRepo } from "@praximo/db"
-import { clientConsentVersion } from "@praximo/i18n"
+import { CoachLanguages } from "@praximo/domain"
+import { clientConsentText, clientConsentVersion } from "@praximo/i18n"
 import { Effect, Layer, Ref } from "effect"
 import {
   AcceptCallbackPrefix,
@@ -96,7 +97,14 @@ describe("the language step", () => {
     expect(message.buttons).toHaveLength(3)
     expect(message.buttons[0]?.text).toContain("Русский")
     expect(message.buttons[0]?.text.startsWith("•")).toBe(true)
-    expect(message.text).toContain("Ada Coaching")
+    // ru wants a genitive here, so the lead says «ваш коуч» and the name stays in
+    // the chat's own header — this is the coach's bot (#222). `en` inflects
+    // nothing and still says it outright.
+    expect(message.text).toContain("вашего коуча")
+    expect(message.text).not.toContain("Ada Coaching")
+    expect(
+      languageStep({ token: TOKEN, coachName: "Ada Coaching", suggested: "en" }).text,
+    ).toContain("Ada Coaching")
   })
 })
 
@@ -115,6 +123,25 @@ describe("the consent step", () => {
     expect(message.text).not.toContain("http")
     expect(message.buttons[0]?.url).toContain("/legal/privacy?lang=ru")
     expect(message.buttons[1]?.callbackData).toBe(`${AcceptCallbackPrefix}${TOKEN}:ru`)
+  })
+
+  /**
+   * The recorded version is a digest of `clientConsentText(locale, "{coach}")`,
+   * so the message assembled here has to *be* that document with a name in it —
+   * two renderings of one legally operative text is a consent record nobody can
+   * reproduce. Rendered with the literal `{coach}` so the comparison is exact.
+   */
+  it("shows the same text the version it records is derived from", () => {
+    for (const language of CoachLanguages) {
+      const message = consentStep({
+        token: TOKEN,
+        coachName: "{coach}",
+        language,
+        privacyUrl: `https://me.praximo.io/legal/privacy?lang=${language}`,
+      })
+
+      expect(message.text).toBe(clientConsentText(language, "{coach}"))
+    }
   })
 
   /**

@@ -20,6 +20,12 @@ Three voices, one per reader. Getting the reader wrong is the single most expens
 
 **No gender-agreeing verb forms** in UK/RU copy about a person whose gender the system does not know — which is every person in it ([#16](https://github.com/apshenichniy/praximo/issues/16), [privacy-copy.md](../spec/privacy-copy.md) §Conventions). Write `{coach} напише тут`, never `{coach} написала`. Future tense and impersonal constructions are gender-neutral in both languages and are usually the way out: `профиль создан`, not `создала профиль`.
 
+**A person's name is interpolated only in the nominative**, and only into a slot where the nominative is grammatical. When a sentence needs an oblique case, use a common noun («ваш коуч») and put the name in the surrounding interface instead. **Never build a declension table for an operator-entered string** ([#193](https://github.com/apshenichniy/praximo/issues/193), [#222](https://github.com/apshenichniy/praximo/issues/222)).
+
+What makes declension unsafe is *whose string it is*: `client.name` and the coach's own name are labels an operator typed into their own list — «Анна через Марину», a surname-first entry, a non-Slavic name — and a case table applied to an arbitrary string produces confident nonsense. The name is not lost by dropping it from the sentence: the bot chat is titled with the coach's workspace name and described "Coaching with {coach}", and the invitation is pasted by the coach into their own conversation with the client — the reader already knows whose bot this is. A **surface that means to carry the name owes it explicitly**; the Acceptance Page's frame is [#57](https://github.com/apshenichniy/praximo/issues/57)'s to specify, and until it does, no copy should assume it. Secondary benefit: «коуч» takes no gender agreement, so the rule above stops being a trap in every new sentence. `en` is unaffected — it inflects nothing, and still names the coach in the same slots.
+
+Where the client is the sentence's subject, the reflexive is the idiomatic form and is used instead: «Попросите у **своего** коуча», not «у вашего коуча». Same common noun, same rule.
+
 **Split a sentence that wraps a value, rather than templating it.** Word order differs between these three languages, and a placeholder in the middle of a string is a translation waiting to read backwards. A *count* is the exception: it is the same token everywhere, and splitting it from the noun it agrees with makes the plural form unreachable — `plural()` exists for exactly that.
 
 **Client-facing names for things are plain words, not the coach's terms.** The intake is «первая встреча» to a client and `Intake` to their coach. Deliberately **not** «знакомство»: that is what the industry calls the *chemistry* session, which this product does not run ([#1](https://github.com/apshenichniy/praximo/issues/1) §Out of scope), and spending the word on the intake would guarantee the confusion the distinction exists to prevent.
@@ -33,5 +39,6 @@ Three voices, one per reader. Getting the reader wrong is the single most expens
 1. Which of the three readers is this for? Write it in their catalogue, in their voice.
 2. Does it name an action? Then it is a button, not a link in prose.
 3. Does it say something about a person? Then it cannot agree with their gender.
-4. Does it wrap a value? Split it — unless the value is a count.
-5. Is it legally operative? Then it is versioned from its own content, and the version has to answer "which text did they agree to", not "which release was this".
+4. Does it interpolate a person's name? Then the slot has to take the nominative — otherwise write «ваш коуч» and let the frame carry the name.
+5. Does it wrap a value? Split it — unless the value is a count.
+6. Is it legally operative? Then it is versioned from its own content, and the version has to answer "which text did they agree to", not "which release was this".
