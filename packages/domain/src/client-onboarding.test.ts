@@ -2,12 +2,15 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect, Schema } from "effect"
 import { CoachOnboardingInviteCodeAlphabet } from "./coach-onboarding.ts"
 import {
+  ClientInviteDeliveryKind,
   ClientInviteStartPrefix,
   ClientInviteTokenAlphabet,
   ClientInviteTokenLength,
   ClientInviteTokenPattern,
   ClientInviteTtlMillis,
+  ClientInviteWebPath,
   clientInviteStartParameter,
+  clientInviteUrl,
   CreateClientInput,
   InviteAttentionWindowMillis,
   inviteNeedsAttention,
@@ -84,6 +87,56 @@ describe("start parameter", () => {
     expect(parseClientInviteStartParameter("inv_23456789ABC")).toBeUndefined()
     expect(parseClientInviteStartParameter("inv_23456789ABC0")).toBeUndefined()
   })
+})
+
+/**
+ * The token's second door (#224): the same twelve symbols in a web URL the coach
+ * pastes by hand, built here rather than on either screen that shows it.
+ */
+describe("web invitation URL", () => {
+  it("joins the client app's origin with the invitation path", () => {
+    expect(clientInviteUrl("https://me.praximo.io", "23456789ABCD")).toBe(
+      "https://me.praximo.io/i/23456789ABCD",
+    )
+    expect(ClientInviteWebPath).toBe("/i/")
+  })
+
+  it("tolerates the trailing slashes a configured origin arrives with", () => {
+    expect(clientInviteUrl("https://me.praximo.io/", "23456789ABCD")).toBe(
+      "https://me.praximo.io/i/23456789ABCD",
+    )
+    expect(clientInviteUrl("https://me.praximo.io///", "23456789ABCD")).toBe(
+      "https://me.praximo.io/i/23456789ABCD",
+    )
+  })
+
+  /**
+   * The same scrubbing `legalUrl` does, for a stronger reason: this link is
+   * forwarded to a client, and a query the origin happened to carry would ride
+   * into somebody else's chat.
+   */
+  it("drops whatever query or fragment the origin carried", () => {
+    expect(clientInviteUrl("https://me.praximo.io?b=42", "23456789ABCD")).toBe(
+      "https://me.praximo.io/i/23456789ABCD",
+    )
+    expect(clientInviteUrl("https://me.praximo.io/#top", "23456789ABCD")).toBe(
+      "https://me.praximo.io/i/23456789ABCD",
+    )
+  })
+})
+
+const decodeKind = Schema.decodeUnknownEffect(ClientInviteDeliveryKind)
+
+describe("ClientInviteDeliveryKind", () => {
+  it.effect("accepts the spec's three doors and nothing else", () =>
+    Effect.gen(function* () {
+      expect(yield* decodeKind("telegram")).toBe("telegram")
+      expect(yield* decodeKind("link")).toBe("link")
+      // #58's, and modelled here so the column it lands in has one vocabulary.
+      expect(yield* decodeKind("email")).toBe("email")
+      expect((yield* Effect.result(decodeKind("manual")))._tag).toBe("Failure")
+    }),
+  )
 })
 
 const decode = Schema.decodeUnknownEffect(CreateClientInput)

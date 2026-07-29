@@ -12,11 +12,16 @@ import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
-import { impactHaptic, notifyHaptic } from "@/presentation-host"
+import { impactHaptic, notifyHaptic, shareViaSystem } from "@/presentation-host"
 import { acceptOnce } from "@/routes/index.tsx"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
 import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
-import { deleteClient, getClient, resetInvite } from "@/server/coach-clients.functions.ts"
+import {
+  deleteClient,
+  getClient,
+  recordInviteDelivery,
+  resetInvite,
+} from "@/server/coach-clients.functions.ts"
 import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
@@ -127,8 +132,8 @@ function ClientRoute() {
     impactHaptic()
     void shareClientInvite({
       clientId: client.id,
-      link: invite.url,
-      message: invite.message,
+      link: invite.telegram.url,
+      message: invite.telegram.message,
     })
       .then(async (outcome) => {
         if (outcome === "gone") {
@@ -144,6 +149,46 @@ function ClientRoute() {
         setError(copy.common.failed)
       })
   }, [client, copy, router])
+
+  /**
+   * The delivery, written down once it has actually happened (#224).
+   *
+   * Best-effort and silent: by the time this runs the invitation has left the
+   * coach's phone, and a bookkeeping failure surfacing as an error would be the
+   * screen contradicting something they just watched. The re-read is what turns
+   * «Не отправлено» into «отправлено ссылкой», so it follows the write rather
+   * than racing it.
+   *
+   * The Telegram door does not come through here — `shareClientInvite` records
+   * it where it learns the picker's answer, so the resend on the Today screen
+   * counts as the same event.
+   */
+  const delivered = useCallback(
+    (kind: "telegram" | "link") => {
+      if (client === undefined) return
+      void recordInviteDelivery({ data: { clientId: client.id, kind } })
+        .then(() => router.invalidate())
+        .catch(() => undefined)
+    },
+    [client, router],
+  )
+
+  /**
+   * The system share sheet, on iOS only — the screen decides whether to offer
+   * it; this only has to tell a completed share from a cancelled one.
+   *
+   * A dismissed sheet is silent, exactly as a dismissed Telegram picker is: the
+   * invitation is untouched and the coach simply changed their mind.
+   */
+  const shareSheet = useCallback(
+    (message: string) => {
+      impactHaptic()
+      void shareViaSystem(message).then((outcome) => {
+        if (outcome === "shared") delivered("link")
+      })
+    },
+    [delivered],
+  )
 
   if (client === undefined) {
     return (
@@ -177,6 +222,8 @@ function ClientRoute() {
             })
           }}
           onShare={share}
+          onShareSheet={shareSheet}
+          onDelivered={delivered}
           onResetInvite={reset}
           onDelete={remove}
           pending={pending}

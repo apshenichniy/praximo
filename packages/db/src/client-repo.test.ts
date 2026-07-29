@@ -226,6 +226,184 @@ describe.skipIf(skipWithoutDatabase)("ClientRepo (dev Neon branch)", () => {
     }).pipe(Effect.provide(appLayer)),
   )
 
+  /**
+   * Delivery becomes a record rather than a guess (#224).
+   *
+   * The three things this statement has to get right at once: the moment lands,
+   * the door lands beside it, and `delivery.language` survives — #57's
+   * Acceptance Page reads that key to pre-select the language the consent is
+   * granted in, and a merge written as a replace would silently break it.
+   */
+  it.effect("records the moment and the door an invitation was handed over", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const { client } = yield* Database.Service
+      const fixture = yield* workspaceFixture()
+      const clientId = yield* create(fixture, "handed")
+
+      const before = yield* repo.find(fixture.workspaceId, clientId, NOW)
+      expect(before?.invite?.delivered).toBeUndefined()
+
+      expect(
+        yield* repo.recordDelivery({
+          workspaceId: fixture.workspaceId,
+          clientId,
+          kind: "link",
+          now: NOW,
+        }),
+      ).toEqual({ recorded: true })
+
+      const invites = yield* Effect.promise(() =>
+        client.select().from(schema.invite).where(eq(schema.invite.clientId, clientId)),
+      )
+      expect(invites[0]?.deliveredAt).toEqual(NOW)
+      expect(invites[0]?.delivery).toEqual({ kind: "link", language: "uk" })
+
+      const after = yield* repo.find(fixture.workspaceId, clientId, NOW)
+      expect(after?.invite?.delivered).toEqual({ at: NOW, kind: "link" })
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /**
+   * The last delivery wins, and both columns move together.
+   *
+   * A pair that could disagree would let the screen say «отправлено ссылкой»
+   * about a moment that was a Telegram send — the one thing the state word must
+   * not do.
+   */
+  it.effect("moves the moment and the door together on a second delivery", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const fixture = yield* workspaceFixture()
+      const clientId = yield* create(fixture, "twice")
+      const later = new Date("2026-07-27T09:00:00.000Z")
+
+      yield* repo.recordDelivery({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        kind: "telegram",
+        now: NOW,
+      })
+      yield* repo.recordDelivery({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        kind: "link",
+        now: later,
+      })
+
+      const detail = yield* repo.find(fixture.workspaceId, clientId, later)
+      expect(detail?.invite?.delivered).toEqual({ at: later, kind: "link" })
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  // Tenancy again, on a write this time: a client id from another workspace is
+  // not a client, and nothing is stamped.
+  it.effect("records nothing for a client of another workspace", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const one = yield* workspaceFixture()
+      const other = yield* workspaceFixture()
+      const clientId = yield* create(one, "fenced")
+
+      expect(
+        yield* repo.recordDelivery({
+          workspaceId: other.workspaceId,
+          clientId,
+          kind: "link",
+          now: NOW,
+        }),
+      ).toEqual({ recorded: false })
+      expect((yield* repo.find(one.workspaceId, clientId, NOW))?.invite?.delivered).toBeUndefined()
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /**
+   * A reissue mints a fresh invitation, so the record starts again at nothing —
+   * which is exactly right: the link the client is holding is dead, and the new
+   * one has not been sent.
+   */
+  it.effect("leaves a reissued invitation undelivered", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const fixture = yield* workspaceFixture()
+      const clientId = yield* create(fixture, "again")
+
+      // A day later, because a reissue is a second deliberate gesture: the read
+      // below picks the newest invitation, and two rows minted in the same
+      // millisecond would leave which one that is up to Postgres.
+      const later = new Date("2026-07-27T09:00:00.000Z")
+
+      yield* repo.recordDelivery({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        kind: "telegram",
+        now: NOW,
+      })
+      yield* repo.reissueInvite({
+        workspaceId: fixture.workspaceId,
+        clientId,
+        inviteId: `inv_next_${fixture.suffix}`,
+        token: `NEXT${fixture.suffix.slice(0, 8).toUpperCase()}`,
+        inviteLanguage: "uk",
+        now: later,
+        expiresAt: EXPIRES_AT,
+      })
+
+      expect(
+        (yield* repo.find(fixture.workspaceId, clientId, later))?.invite?.delivered,
+      ).toBeUndefined()
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  // Nothing left to hand over: the client walked through the door already, so
+  // the invitation they used is not restamped by a stale screen.
+  it.effect("records nothing once the invitation has been accepted", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const { client } = yield* Database.Service
+      const fixture = yield* workspaceFixture()
+      const clientId = yield* create(fixture, "inalready")
+
+      yield* Effect.promise(() =>
+        client
+          .update(schema.invite)
+          .set({ status: "accepted" })
+          .where(eq(schema.invite.clientId, clientId)),
+      )
+
+      expect(
+        yield* repo.recordDelivery({
+          workspaceId: fixture.workspaceId,
+          clientId,
+          kind: "link",
+          now: NOW,
+        }),
+      ).toEqual({ recorded: false })
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  // The list says the state word, and since #224 it needs the same two facts the
+  // client's own screen does.
+  it.effect("carries the delivery record into the list", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const fixture = yield* workspaceFixture()
+      const sent = yield* create(fixture, "sent")
+      const unsent = yield* create(fixture, "unsent")
+
+      yield* repo.recordDelivery({
+        workspaceId: fixture.workspaceId,
+        clientId: sent,
+        kind: "link",
+        now: NOW,
+      })
+
+      const rows = yield* repo.list(fixture.workspaceId, NOW)
+      expect(rows.find((row) => row.id === sent)?.delivered).toEqual({ at: NOW, kind: "link" })
+      expect(rows.find((row) => row.id === unsent)?.delivered).toBeUndefined()
+    }).pipe(Effect.provide(appLayer)),
+  )
+
   // The mirror case the ticket keeps apart: an invitation already accepted is
   // not reissued at all. The client is in; a fresh link would only confuse them.
   it.effect("refuses to reissue once the client has accepted", () =>

@@ -100,3 +100,47 @@ export const parseClientInviteStartParameter = (parameter: string): string | und
   const token = parameter.slice(ClientInviteStartPrefix.length)
   return ClientInviteTokenPattern.test(token) ? token : undefined
 }
+
+/**
+ * The token's other door: the Acceptance Page's own path (#57).
+ *
+ * `/i/` rather than `/invite/` because the coach pastes this link by hand into
+ * other messengers, where every character is one the client may have to read
+ * back to them.
+ */
+export const ClientInviteWebPath = "/i/"
+
+/**
+ * The web form of an invitation, beside the deep-link form above (#224).
+ *
+ * Both forms of one token live here together so no screen has to know either
+ * shape. The coach's Mini App builds this from `CLIENT_APP_URL`, which is the
+ * origin the stack actually deployed rather than a hostname somebody typed.
+ *
+ * Built by hand rather than through `URL`, exactly as `legalUrl` is and for the
+ * same reason: this package is typechecked with no DOM (ADR 0002), and there is
+ * nothing to encode — the path is a constant and the token is twelve symbols
+ * from a readable alphabet.
+ *
+ * Dropping the origin's own query and fragment matters more here than it does
+ * for a legal page: this link is forwarded to a client, and a parameter the
+ * origin happened to carry would ride into somebody else's chat.
+ */
+export const clientInviteUrl = (origin: string, token: string): string => {
+  const bare = origin.split(/[?#]/)[0] ?? ""
+  return `${bare.replace(/\/+$/, "")}${ClientInviteWebPath}${token}`
+}
+
+/**
+ * Which door an invitation was actually handed over through (#224).
+ *
+ * The spec's own set. `telegram` is what an invitation is created with, `link`
+ * is the hand-forwarded web URL, and `email` is the service-sent invitation
+ * (#58) — modelled here rather than added later so the column this lands in has
+ * one vocabulary rather than a growing pile of string literals.
+ *
+ * This is *not* `channel.kind`: a channel is an address we can reach and exists
+ * only after acceptance. This is how the invitation travelled.
+ */
+export const ClientInviteDeliveryKind = Schema.Literals(["telegram", "email", "link"])
+export type ClientInviteDeliveryKind = typeof ClientInviteDeliveryKind.Type

@@ -427,3 +427,49 @@ export const shareInviteMessage = async (
     webApp.shareMessage(preparedMessageId, (sent) => resolve(sent ? "shared" : "dismissed"))
   })
 }
+
+/** The host client running us — `ios`, `android`, `tdesktop`, `weba`, `macos`… */
+export const IOS_PLATFORM = "ios"
+
+/**
+ * Which client the Mini App is running inside, or `undefined` outside one.
+ *
+ * Read straight off the global rather than through `loadTelegramWebApp`, for the
+ * reason `openExternalLink` gives: this decides what a screen *renders*, and an
+ * answer that arrives a promise later has already drawn the wrong thing. By the
+ * time any screen paints, the host script `__root.tsx` puts in `<head>` has run.
+ */
+export const hostPlatform = (): string | undefined =>
+  typeof window === "undefined" ? undefined : window.Telegram?.WebApp?.platform
+
+/**
+ * Whether the system share sheet is worth offering (#27, #224).
+ *
+ * **Gated on the platform, deliberately, and not on `navigator.share`.** Feature
+ * detection is wrong on three of the four hosts: Android's WebView has no
+ * `navigator.share` at all, both Telegram Web clients expose it and then refuse
+ * by Permissions Policy, and Desktop's WebView2 resolves and does nothing. Only
+ * iOS both advertises the API and honours it, so iOS is what this asks about.
+ */
+export const isIosHost = (): boolean => hostPlatform() === IOS_PLATFORM
+
+export type SystemShareOutcome = "shared" | "dismissed" | "unsupported"
+
+/**
+ * Hand text to the operating system's own share sheet.
+ *
+ * A cancelled sheet rejects with `AbortError`, which is a coach changing their
+ * mind rather than a failure — the caller tells the two apart because only one
+ * of them is a delivery worth recording (#224).
+ */
+export const shareViaSystem = async (text: string): Promise<SystemShareOutcome> => {
+  if (typeof navigator === "undefined" || typeof navigator.share !== "function") {
+    return "unsupported"
+  }
+  try {
+    await navigator.share({ text })
+    return "shared"
+  } catch (cause) {
+    return cause instanceof Error && cause.name === "AbortError" ? "dismissed" : "unsupported"
+  }
+}

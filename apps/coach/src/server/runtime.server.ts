@@ -295,6 +295,19 @@ export const prepareCoachInviteCard = async (
   )
 }
 
+export const recordCoachInviteDelivery = async (
+  credential: LaunchCredential,
+  clientId: string,
+  kind: unknown,
+): Promise<{ readonly recorded: boolean }> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) =>
+      service.recordDelivery(credential, clientId, kind),
+    ),
+  )
+}
+
 export const saveCoachTimezone = async (
   credential: LaunchCredential,
   timezone: string,

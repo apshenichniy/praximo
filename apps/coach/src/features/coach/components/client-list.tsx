@@ -145,6 +145,18 @@ function ClientRow({
  *
  * Colour carries the state and nothing else — session *kind* is a word with a
  * glyph and no colour of its own, so the two vocabularies never compete.
+ *
+ * Since #224 an invited client reads in one of two ways. Before the coach has
+ * handed anything over the row says «Не отправлено» in the muted tone — the
+ * ordinary next step on a client created a minute ago, not an alarm. After it,
+ * the row names the moment it went **and the door it went through**: a coach
+ * coming back a week later needs to know what this person is holding, and the
+ * door is also where their reminders will go.
+ *
+ * The expiry moves aside for that pair rather than joining it. Three facts do
+ * not fit one truncating line on a phone, and the invitations whose window is
+ * closing are already Today's needs-attention section (#61) — where they are
+ * something to act on rather than a countdown to read.
  */
 export function ClientStateLine({
   copy,
@@ -154,22 +166,38 @@ export function ClientStateLine({
   readonly client: CoachClients.ClientSummary
 }) {
   const format = useTimestampFormat()
+  const notSent = client.state === "invited" && client.delivered === undefined
   const word =
     client.state === "accepted"
       ? copy.stateAccepted
       : client.state === "expired"
         ? copy.stateExpired
-        : copy.stateInvited
+        : notSent
+          ? copy.stateNotSent
+          : copy.stateInvited
+  const sentVia =
+    client.delivered?.kind === "link"
+      ? copy.sentViaLink
+      : client.delivered?.kind === "telegram"
+        ? copy.sentViaTelegram
+        : undefined
   const moment =
     client.state === "accepted" && client.acceptedAt !== undefined
       ? `${copy.acceptedPrefix}${format.relative(client.acceptedAt)}`
       : client.state === "invited"
-        ? `${copy.expiresPrefix}${format.relative(client.inviteExpiresAt)}`
+        ? client.delivered === undefined || sentVia === undefined
+          ? `${copy.expiresPrefix}${format.relative(client.inviteExpiresAt)}`
+          : `${format.relative(client.delivered.at)} · ${sentVia}`
         : `${copy.invitedPrefix}${format.relative(client.invitedAt)}`
 
   return (
     <span className="mt-0.5 flex items-center gap-2 text-xs leading-normal">
-      <span className={cn("flex items-center gap-1.5 font-medium", stateStyles[client.state])}>
+      <span
+        className={cn(
+          "flex items-center gap-1.5 font-medium",
+          notSent ? "text-muted-foreground" : stateStyles[client.state],
+        )}
+      >
         <span className="size-1.5 rounded-full bg-current" />
         {word}
       </span>

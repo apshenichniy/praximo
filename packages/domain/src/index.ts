@@ -2,6 +2,7 @@ export { Admin, AdminId, AdminNotFound } from "./admin.ts"
 export { TelegramId } from "./telegram-id.ts"
 export {
   ClientId,
+  ClientInviteDeliveryKind,
   ClientInviteId,
   ClientInviteStartPrefix,
   ClientInviteStatus,
@@ -9,9 +10,11 @@ export {
   ClientInviteTokenLength,
   ClientInviteTokenPattern,
   ClientInviteTtlMillis,
+  ClientInviteWebPath,
   ClientName,
   ClientNameMaxLength,
   clientInviteStartParameter,
+  clientInviteUrl,
   CreateClientInput,
   InviteAttentionWindowMillis,
   inviteNeedsAttention,

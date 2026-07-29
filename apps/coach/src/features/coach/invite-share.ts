@@ -1,5 +1,5 @@
 import { sharePreparedMessage, type ShareInviteOutcome } from "@/presentation-host"
-import { prepareInviteCard } from "@/server/coach-clients.functions.ts"
+import { prepareInviteCard, recordInviteDelivery } from "@/server/coach-clients.functions.ts"
 
 /**
  * Hand the client's invitation to Telegram's own chat picker (#179).
@@ -60,7 +60,16 @@ export const shareClientInvite = async (options: {
       link: options.link,
       message,
     })
-    if (outcome !== "no-host") return outcome
+    if (outcome !== "no-host") {
+      // `shared` is the picker's own callback; `fallback` is the sub-8.0 form,
+      // where the invitation lands in the chat picker's input field. A
+      // `dismissed` picker sent nothing, and telling a coach who changed their
+      // mind otherwise would put a fiction in the list a week later.
+      if (outcome === "shared" || outcome === "fallback") {
+        await recordDelivered(options.clientId)
+      }
+      return outcome
+    }
     globalThis.open?.(
       `https://t.me/share/url?url=${encodeURIComponent(
         options.link,
@@ -71,6 +80,22 @@ export const shareClientInvite = async (options: {
   } catch (cause) {
     return cause instanceof CardUnavailable ? "gone" : "failed"
   }
+}
+
+/**
+ * Write the Telegram door down, and never let the writing fail the share (#224).
+ *
+ * By the time this runs the invitation has already left the coach's phone. A
+ * bookkeeping error surfacing as «не отправлено» would be the screen contradicting
+ * something the coach just watched happen — the next share, or the next launch,
+ * corrects the record instead.
+ *
+ * Recorded here rather than at the two call sites because both are the same
+ * event: the client's own screen and the resend on an unaccepted session (#61)
+ * hand the same invitation to the same picker.
+ */
+const recordDelivered = async (clientId: string): Promise<void> => {
+  await recordInviteDelivery({ data: { clientId, kind: "telegram" } }).catch(() => undefined)
 }
 
 /** The invitation the screen is showing no longer exists, or is no longer open. */

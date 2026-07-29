@@ -1,14 +1,15 @@
 import { CalendarAdd01Icon } from "@hugeicons-pro/core-stroke-rounded"
 import { Calendar03Icon, FlagIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
-import type { CoachLanguage } from "@praximo/domain"
+import type { ClientInviteDeliveryKind, CoachLanguage } from "@praximo/domain"
 import { localeTag } from "@praximo/i18n"
 import { useMemo, useState } from "react"
 
-import { HostBackButton } from "@/presentation-host"
+import { HostBackButton, isIosHost } from "@/presentation-host"
 import { Heading, Section, SectionTitle, Text } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
+import { ToggleGroup, ToggleGroupItem } from "@praximo/ui/components/toggle-group"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"
 import { ConfirmSheet } from "@/features/mini-app/components/confirm-sheet.tsx"
@@ -40,6 +41,16 @@ const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
   accepted: "success",
 }
 
+/**
+ * The two doors this screen offers (#224). `email` exists in the model for the
+ * service-sent invitation (#58) and has no control here yet — it becomes the
+ * third position of this segment when it lands.
+ */
+type Door = Extract<ClientInviteDeliveryKind, "telegram" | "link">
+
+const isDoor = (value: string | undefined): value is Door =>
+  value === "telegram" || value === "link"
+
 const initials = (name: string): string =>
   name
     .split(/\s+/)
@@ -54,6 +65,8 @@ export function ClientScreen({
   client,
   onSchedule,
   onShare,
+  onShareSheet,
+  onDelivered,
   onResetInvite,
   onDelete,
   pending,
@@ -64,6 +77,10 @@ export function ClientScreen({
   readonly client: CoachClients.ClientDetail
   readonly onSchedule: () => void
   readonly onShare: () => void
+  /** The system share sheet, offered on iOS only — see `isIosHost`. */
+  readonly onShareSheet: (message: string) => void
+  /** A delivery that actually happened: a resolved clipboard write, here. */
+  readonly onDelivered: (kind: Door) => void
   readonly onResetInvite: () => void
   readonly onDelete: () => void
   readonly pending: boolean
@@ -71,6 +88,22 @@ export function ClientScreen({
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  /**
+   * Which door the coach is looking at (#224).
+   *
+   * **Local state, and it stays local**: both forms of the token are valid from
+   * the moment the invitation exists, so switching shows a different address and
+   * writes nothing — there is nothing to write.
+   *
+   * It opens on the door already recorded, when there is one. A coach who sent a
+   * link last week and comes back to a screen defaulting to Telegram would be
+   * reading a state word about one door beside a control set for the other.
+   */
+  const [door, setDoor] = useState<Door>(() =>
+    isDoor(client.invite?.delivered?.kind) ? client.invite.delivered.kind : "telegram",
+  )
+  const invitation = client.invite === undefined ? undefined : client.invite[door]
+
   /**
    * Two controllers over one invitation, deliberately.
    *
@@ -83,9 +116,14 @@ export function ClientScreen({
    * the language the coach chose for them, and the screen around it is written
    * to the coach in theirs — two readers, two languages, and the server is where
    * the one meant for the client is put together.
+   *
+   * Both count as a delivery, and only once the clipboard write resolves (#224):
+   * the select-text fallback hands the coach a highlighted field and no evidence
+   * they did anything with it.
    */
-  const copyLink = useCopyLink(client.invite?.url)
-  const copyMessage = useCopyLink(client.invite?.message)
+  const recordThisDoor = () => onDelivered(door)
+  const copyLink = useCopyLink(invitation?.url, recordThisDoor)
+  const copyMessage = useCopyLink(invitation?.message, recordThisDoor)
 
   const sessionFormat = useMemo(
     () =>
@@ -101,12 +139,24 @@ export function ClientScreen({
     [client.timezone, language],
   )
 
+  /**
+   * The state, and since #224 the honest version of it: an invitation nobody has
+   * handed over is not «Приглашён».
+   *
+   * Muted rather than amber. Not-sent is the ordinary next step on a client
+   * created a minute ago, and the warning tone would make every fresh client
+   * look like a problem — the colour vocabulary here means *standing*, and this
+   * is a to-do.
+   */
+  const notSent = client.state === "invited" && client.invite?.delivered === undefined
   const stateWord =
     client.state === "accepted"
       ? copy.clients.stateAccepted
       : client.state === "expired"
         ? copy.clients.stateExpired
-        : copy.clients.stateInvited
+        : notSent
+          ? copy.clients.stateNotSent
+          : copy.clients.stateInvited
 
   // Gone, not disabled: once the client is in, the invitation has no job left,
   // and the header already carries the state and the account that accepted.
@@ -126,18 +176,20 @@ export function ClientScreen({
         {client.channel?.telegramUsername === undefined ? null : (
           <Text className="text-muted-foreground">@{client.channel.telegramUsername}</Text>
         )}
-        <StatusBadge tone={stateTones[client.state]}>{stateWord}</StatusBadge>
+        <StatusBadge tone={notSent ? "muted" : stateTones[client.state]}>{stateWord}</StatusBadge>
       </header>
 
       {error === undefined ? null : <Text className="text-destructive mt-6">{error}</Text>}
 
-      {!showInvitation || client.invite === undefined ? null : (
+      {!showInvitation || client.invite === undefined || invitation === undefined ? null : (
         <Section>
           <Text
             role="caption"
             className="text-muted-foreground px-1 font-semibold tracking-wide uppercase"
           >
-            {copy.clients.invitationEyebrow}
+            {door === "link"
+              ? copy.clients.invitationEyebrowLink
+              : copy.clients.invitationEyebrowTelegram}
           </Text>
           <Text className="text-muted-foreground mt-2 px-1">
             {client.state === "expired" ? (
@@ -145,7 +197,9 @@ export function ClientScreen({
             ) : (
               <>
                 <span className="text-foreground">{client.name}</span>
-                {copy.clients.invitationLeadTail}
+                {door === "link"
+                  ? copy.clients.invitationLeadTailLink
+                  : copy.clients.invitationLeadTail}
               </>
             )}
           </Text>
@@ -166,27 +220,87 @@ export function ClientScreen({
             </Button>
           ) : (
             <>
+              {/*
+                One token, two doors (#224). The choice belongs here rather than
+                on the create screen because this is where the coach finds out
+                whether this person is even on Telegram — and it belongs to the
+                *moment*, not to the record: switching writes nothing, because
+                both forms have been valid since the invitation existed.
+              */}
+              <ToggleGroup
+                aria-label={copy.clients.doorLabel}
+                className="mt-4 w-full"
+                value={[door]}
+                onValueChange={(next) => {
+                  // A chip tapped while already on reports an empty selection;
+                  // the door stays put rather than becoming undefined.
+                  if (isDoor(next[0])) setDoor(next[0])
+                }}
+              >
+                <ToggleGroupItem value="telegram" className="flex-1" disabled={pending}>
+                  {copy.clients.doorTelegram}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="link" className="flex-1" disabled={pending}>
+                  {copy.clients.doorLink}
+                </ToggleGroupItem>
+              </ToggleGroup>
+
               <div className="mt-4">
                 <InviteLinkPanel
-                  link={client.invite.url}
+                  link={invitation.url}
                   ariaLabel={copy.clients.linkLabel}
                   controller={copyLink}
                 />
               </div>
 
               <div className="mt-4 flex flex-col gap-2">
-                <Button className="w-full" onClick={onShare} disabled={pending}>
-                  {copy.clients.sendCard}
-                </Button>
+                {/*
+                  **No card on the Link door.** A bot-authored card opens a chat
+                  with a bot this client will never appear in — the whole reason
+                  they are being handed a web URL. Copy is the primary action
+                  there, which is also the canonical fallback everywhere (#19).
+                */}
+                {door === "telegram" ? (
+                  <Button className="w-full" onClick={onShare} disabled={pending}>
+                    {copy.clients.sendCard}
+                  </Button>
+                ) : null}
                 <Button
-                  variant="outline"
                   className="w-full"
+                  variant={door === "telegram" ? "outline" : "default"}
                   onClick={() => void copyMessage.copy()}
                   disabled={pending}
                 >
                   {copyMessage.copied ? copy.clients.copied : copy.clients.copyInvite}
                 </Button>
+                {/*
+                  The system share sheet, on iOS and nowhere else (#27) — gated
+                  on the host platform rather than on `navigator.share`, which
+                  three of the four Telegram clients get wrong in three different
+                  ways. Read at render, not in an effect: this route is
+                  client-only, and the host script in `<head>` ran long before it.
+                */}
+                {door === "link" && isIosHost() ? (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => onShareSheet(invitation.message)}
+                    disabled={pending}
+                  >
+                    {copy.clients.shareAction}
+                  </Button>
+                ) : null}
               </div>
+
+              {/*
+                The door is also the reminder channel, and that outlives the
+                sending: this line is the only place on the screen that says a
+                coach picking a door is picking where this person gets reached
+                for the life of the relationship.
+              */}
+              <Text role="caption" className="text-muted-foreground mt-3 px-1">
+                {door === "link" ? copy.clients.reminderLink : copy.clients.reminderTelegram}
+              </Text>
             </>
           )}
         </Section>
