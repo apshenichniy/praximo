@@ -75,7 +75,16 @@ export function ConsentPane({
               key={point}
               className="grid grid-cols-[44px_1fr] items-start gap-3.5 p-0 marker:content-none"
             >
-              <span className="text-primary/40 pt-0.5 text-[26px] leading-none font-light tracking-[-0.03em] tabular-nums">
+              {/*
+                Quiet on light, much less quiet on dark — and the asymmetry is
+                forced rather than chosen. The baseline's `--primary` is *darker*
+                in dark mode than in light (L 0.432 against 0.491), so the 40%
+                that reads as a soft violet on white lands almost on the
+                background on black. The numeral has to carry the list's
+                structure at a glance; below roughly this it stops being a
+                numeral and becomes a smudge.
+              */}
+              <span className="text-primary/40 dark:text-primary/85 pt-0.5 text-[26px] leading-none font-light tracking-[-0.03em] tabular-nums">
                 {String(index + 1).padStart(2, "0")}
               </span>
               <p className="text-muted-foreground m-0 text-[15.5px] leading-[1.72]">{point}</p>
@@ -114,15 +123,18 @@ export function ConsentPane({
  * recognisably the mark, only quieter. Nothing is drawn here that is not already
  * the brand — which is also why there is no stock illustration to defend.
  *
- * 7% on light and 6% on dark, and the asymmetry is not a rounding error: the
- * dark master is the brighter of the two castings, so equal opacity would make
- * it louder on the ground where there is less contrast to spare.
+ * 7% on light and 13% on dark. The asymmetry once ran the other way, on the
+ * reasoning that the dark master is the brighter casting and equal opacity would
+ * make it louder — which was true of the artwork and false of the result. A wash
+ * is read as the *difference* from the ground it sits on, and there is far less
+ * of that difference to spend on near-black than on white: 6% left the mark
+ * effectively absent on dark, which is not quiet, it is missing.
  */
 function MarkWash() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 top-[5%] opacity-[0.07] dark:opacity-[0.06]"
+      className="pointer-events-none absolute inset-x-0 top-[5%] opacity-[0.07] dark:opacity-[0.13]"
     >
       <PraximoMark size="fluid" guidePointOpacity={0.45} />
     </span>
