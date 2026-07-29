@@ -414,9 +414,10 @@ describe("sending the invitation by email", () => {
         const service = yield* CoachClients.Service
         const launch = yield* Effect.promise(() => credential())
 
+        // The answer carries nothing back: what the coach sees is the re-read,
+        // and the trimmed address below is what actually got written.
         expect(yield* service.sendInviteEmail(launch, "cl_anna", ` ${ADDRESS} `)).toEqual({
           sent: true,
-          address: ADDRESS,
         })
 
         const sent = yield* Effect.flatMap(EmailChannel.TestService, (test) => test.sent())

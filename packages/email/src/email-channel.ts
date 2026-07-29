@@ -31,7 +31,13 @@ import { InviteEmail } from "./invite-email.tsx"
  */
 export interface SendBinding {
   readonly send: (message: {
-    readonly from: string
+    /**
+     * The structured form, never a hand-built `"Name <addr>"` string: the
+     * display name is an operator-entered proper noun that may carry Cyrillic,
+     * commas or quotes, and RFC 2047 encoding it correctly is the binding's job
+     * rather than this package's.
+     */
+    readonly from: { readonly email: string; readonly name?: string }
     readonly to: string
     readonly subject: string
     readonly html: string
@@ -155,7 +161,14 @@ export const layer = (binding: SendBinding): Layer.Layer<Service> =>
         return yield* Effect.tryPromise({
           try: () =>
             binding.send({
-              from: SenderAddress,
+              // The coach's name in the inbox, not the platform's (#58). The
+              // strongest signal in the whole message, and spending it on a brand
+              // the client has never heard of would introduce them to Praximo
+              // instead of to their coach's assistant — the same principle that
+              // makes the invitation card bot-authored (#179). Cloudflare
+              // validates the *address* against `allowedSenderAddresses`, so the
+              // display name costs nothing at the boundary.
+              from: { email: SenderAddress, name: input.coachName },
               to: input.to,
               subject: copy.subject(input.coachName),
               html,

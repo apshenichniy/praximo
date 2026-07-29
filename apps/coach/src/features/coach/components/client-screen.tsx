@@ -121,6 +121,20 @@ export function ClientScreen({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [emailSheet, setEmailSheet] = useState(false)
   /**
+   * The address the last attempt was made with, kept because nothing was written
+   * (#58).
+   *
+   * The whole design is that a failed send persists nothing — which is what makes
+   * a retry safe, and also what means the server has no memory of what the coach
+   * typed. Without this, «Адрес не принят. Проверьте его и попробуйте ещё раз»
+   * would send them back to a field holding the *old* address, or none at all,
+   * and the one thing they need to see is the typo they are being asked to fix.
+   *
+   * Cleared by nothing: a success re-reads the screen, and `invite.address` then
+   * holds the same string this does.
+   */
+  const [lastAttempt, setLastAttempt] = useState<string>()
+  /**
    * Which door the coach is looking at (#224).
    *
    * **Local state, and it stays local**: both forms of the token are valid from
@@ -549,11 +563,14 @@ export function ClientScreen({
         copy={copy.clients}
         open={emailSheet}
         onOpenChange={setEmailSheet}
-        // Pre-filled from the address on file, which survives a reissue (#58) —
-        // a resend after «не дошло» should not cost the coach a retype.
-        suggested={client.invite?.address}
+        // The last attempt wins over the address on file: after a refusal the
+        // field must still hold the address the error is about. Otherwise it is
+        // the one on file, which survives a reissue (#58) — a resend after «не
+        // дошло» should not cost the coach a retype.
+        suggested={lastAttempt ?? client.invite?.address}
         pending={pending}
         onSend={(address) => {
+          setLastAttempt(address)
           setEmailSheet(false)
           onSendEmail(address)
         }}

@@ -150,14 +150,14 @@ export interface ClientsCopy {
     readonly invalid: string
   }
   /**
-   * The three answers, and no fourth, because there is no fourth thing a coach
-   * could do about it.
+   * The two refusals, and **no success line**: a successful send re-reads the
+   * screen, and «отправлено письмом · на a@b.com» under the badge says it better
+   * and more durably than a toast could.
    *
    * `unavailable` covers throttling, an outage and a misconfigured sender alike:
    * they differ in the log and not in what the coach does next, and telling
    * somebody to fix an address that was fine is worse than telling them to wait.
    */
-  readonly emailSent: string
   readonly emailInvalid: string
   readonly emailUnavailable: string
   /** The invitation moved on under the screen — it re-reads itself. */
@@ -332,13 +332,13 @@ const en: ClientsCopy = {
   sendEmailAgain: "Send by email again",
   emailSheet: {
     title: "Send the invitation by email",
-    description: "We send it from Praximo on your behalf. The link inside is the one above.",
+    description:
+      "We send it for you, and it arrives under your name. The link inside is the one above.",
     label: "Email",
     placeholder: "client@example.com",
     action: "Send",
     invalid: "That does not look like an email address.",
   },
-  emailSent: "Sent",
   emailInvalid: "That address was not accepted. Check it and try again.",
   emailUnavailable: "Could not send just now. Nothing was sent — try again in a moment.",
   emailGone: "This invitation has moved on. The screen has been refreshed.",
@@ -458,13 +458,13 @@ const uk: ClientsCopy = {
   sendEmailAgain: "Надіслати листом ще раз",
   emailSheet: {
     title: "Надіслати запрошення листом",
-    description: "Ми надішлемо його від вашого імені. Усередині — те саме посилання, що вище.",
+    description:
+      "Ми надішлемо його за вас, і прийде воно від вашого імені. Усередині — те саме посилання, що вище.",
     label: "Електронна пошта",
     placeholder: "client@example.com",
     action: "Надіслати",
     invalid: "Це не схоже на адресу електронної пошти.",
   },
-  emailSent: "Надіслано",
   emailInvalid: "Адресу не прийнято. Перевірте її та спробуйте ще раз.",
   emailUnavailable: "Зараз не вдалося надіслати. Нічого не пішло — спробуйте за хвилину.",
   emailGone: "Це запрошення вже змінилося. Екран оновлено.",
@@ -585,13 +585,13 @@ const ru: ClientsCopy = {
   sendEmailAgain: "Отправить письмом ещё раз",
   emailSheet: {
     title: "Отправить приглашение письмом",
-    description: "Мы отправим его от вашего имени. Внутри — та же ссылка, что выше.",
+    description:
+      "Мы отправим его за вас, и придёт оно от вашего имени. Внутри — та же ссылка, что выше.",
     label: "Электронная почта",
     placeholder: "client@example.com",
     action: "Отправить",
     invalid: "Это не похоже на адрес электронной почты.",
   },
-  emailSent: "Отправлено",
   emailInvalid: "Адрес не принят. Проверьте его и попробуйте ещё раз.",
   emailUnavailable: "Сейчас отправить не удалось. Ничего не ушло — попробуйте через минуту.",
   emailGone: "Это приглашение уже изменилось. Экран обновлён.",

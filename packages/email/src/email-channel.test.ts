@@ -13,7 +13,7 @@ const INVITE = {
 } as const
 
 interface Recorded {
-  readonly from: string
+  readonly from: { readonly email: string; readonly name?: string }
   readonly to: string
   readonly subject: string
   readonly html: string
@@ -46,7 +46,13 @@ describe("EmailChannel.sendClientInvite", () => {
       expect(result.messageId).toBe("cf-1")
 
       const sent = fake.calls[0]
-      expect(sent?.from).toBe(EmailChannel.SenderAddress)
+      // The inbox line reads as the coach, not as the platform: it is the
+      // strongest signal in the whole message and the client has never heard of
+      // Praximo. The address stays pinned, which is what Cloudflare checks.
+      expect(sent?.from).toEqual({
+        email: EmailChannel.SenderAddress,
+        name: INVITE.coachName,
+      })
       expect(sent?.to).toBe(INVITE.to)
       expect(sent?.subject).toBe(inviteEmailCopy("ru").subject(INVITE.coachName))
       // Both parts, always: a message without text/plain loses ground with part

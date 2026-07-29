@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 
-import { readEmailAddress } from "@praximo/domain"
+import { EmailAddressMaxLength, readEmailAddress } from "@praximo/domain"
 import {
   Drawer,
   DrawerContent,
@@ -41,7 +41,10 @@ export function InviteEmailSheet({
   readonly copy: ClientsCopy
   readonly open: boolean
   readonly onOpenChange: (open: boolean) => void
-  /** The address on file, from `invite.address` — survives a reissue. */
+  /**
+   * What the field opens on: the address on file (`invite.address`, which
+   * survives a reissue), or the one an attempt just failed on.
+   */
   readonly suggested: string | undefined
   readonly pending: boolean
   readonly onSend: (address: string) => void
@@ -50,9 +53,10 @@ export function InviteEmailSheet({
   const [address, setAddress] = useState(suggested ?? "")
   const [invalid, setInvalid] = useState(false)
 
-  // Reopening starts from what we know rather than from what was typed last
-  // time: a coach who mistyped, closed the sheet and came back should meet the
-  // address on file again, not their own typo.
+  // Reopening starts from `suggested`, which is the address on file *or* the one
+  // the last attempt failed on — the screen decides which, and the difference
+  // matters: «Адрес не принят. Проверьте его» has to point at a field that still
+  // holds the address it is talking about, not at an empty one.
   useEffect(() => {
     if (!open) return
     setAddress(suggested ?? "")
@@ -86,6 +90,9 @@ export function InviteEmailSheet({
               inputMode="email"
               autoComplete="email"
               placeholder={copy.emailSheet.placeholder}
+              // RFC 5321's ceiling for a whole address — a stop, not a budget,
+              // so there is no counter beside it.
+              maxLength={EmailAddressMaxLength}
               value={address}
               // Once it has complained, it re-checks on every keystroke: the
               // error must clear as the coach fixes it, not on a second failed tap.

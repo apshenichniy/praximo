@@ -116,7 +116,13 @@ export interface InviteDoor {
  * happens next.
  */
 export type SendInviteEmailOutcome =
-  | { readonly sent: true; readonly address: string }
+  /**
+   * Carries nothing back. The address the coach needs to *see* is the one the
+   * re-read puts on the screen beside «отправлено письмом», which is what the
+   * database actually holds; echoing it from here would be a second copy that
+   * could disagree with the first.
+   */
+  | { readonly sent: true }
   | { readonly sent: false; readonly reason: "invalid-address" | "unavailable" | "gone" }
 
 export interface ClientSessionSummary {
@@ -1057,10 +1063,11 @@ export const layer = Layer.effect(
         })
         .pipe(
           Effect.as("sent" as const),
-          Effect.catchTag("EmailChannel.AddressRejected", () =>
-            Effect.succeed("invalid-address" as const),
-          ),
+          // One cascade over the whole union: two of the three reach the coach
+          // as the same word, and splitting them across two combinators only
+          // hid how few answers there really are.
           Effect.catchTags({
+            "EmailChannel.AddressRejected": () => Effect.succeed("invalid-address" as const),
             "EmailChannel.SenderNotConfigured": () => Effect.succeed("unavailable" as const),
             "EmailChannel.SendFailed": () => Effect.succeed("unavailable" as const),
           }),
@@ -1077,7 +1084,7 @@ export const layer = Layer.effect(
           now,
         })
         .pipe(Effect.ignore)
-      return { sent: true, address: to } as const
+      return { sent: true } as const
     })
 
     const saveTimezone = Effect.fn("CoachClients.saveTimezone")(function* (
