@@ -67,19 +67,26 @@
    * The light scheme's surface steps, sized against the dark scheme's own and
    * against iOS (#195).
    *
-   * `--card` stays `oklch(1 0 0)` and the page recedes beneath it. 0.955 is not
-   * a named zinc step — it sits on the ramp between 50 and 100 — and that is
-   * deliberate: the two named neighbours spend 0.015 and 0.033 on this step,
-   * while iOS's grouped background against a white card spends about 0.045
-   * (`#F2F2F7`). Landing between rungs is the only way to hit that depth
-   * without going to zinc-200, which is grey rather than recessed.
+   * `--card` stays `oklch(1 0 0)` and the page recedes to zinc-50 beneath it —
+   * 0.015, which is all it takes for a ringed card to read as raised.
+   *
+   * iOS spends about 0.045 on the same step, and this theme tried it: page at
+   * `oklch(0.955 ...)`. On a screen built out of cards it was better. On the
+   * scheduling screen, which has no card anywhere and is nothing but chips on
+   * the page, it was fifty shades of grey — because the page had walked *down
+   * to* the chips. That is the number that matters and it is not the card's
+   * lift: a chip is zinc-200, so the page-to-control step went 0.080 on white,
+   * 0.065 at zinc-50, and 0.035 at 0.955 — no better than the 0.033 this whole
+   * change set out to fix, with the white given up as well.
+   *
+   * So the depth is chosen from the control, not from the card. Screens with no
+   * card have nothing else to be white.
    *
    * Everything below follows from it rather than being chosen beside it: a
-   * passive fill has to sit under the page, a hairline has to sit under the
-   * fill, and muted text has to keep AA against a ground that is no longer
-   * white.
+   * passive fill has to sit under the page, and a hairline has to sit under the
+   * fill.
    */
-  --background: oklch(0.955 0.002 286.36);
+  --background: oklch(0.985 0 0);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
@@ -94,23 +101,28 @@
    * them equal all along, so this is the two schemes agreeing again on what a
    * recessed fill is rather than the light one inventing a second kind.
    *
-   * They sit 0.035 under the page, which is the same order as the 0.045 the card
-   * gains above it — recessed and raised cost about the same.
+   * They sit 0.065 under the page — four times what the card gains above it,
+   * which is the right asymmetry: a card is an object and reads by its edge as
+   * much as its fill, while a chip has to be legible as a target on its own.
    */
   --secondary: oklch(0.92 0.004 286.32);
   --secondary-foreground: oklch(0.21 0.006 285.885);
   --muted: oklch(0.92 0.004 286.32);
   /*
-   * Between zinc-500 and zinc-600, and this one is arithmetic rather than taste.
+   * Between zinc-500 and zinc-600, and the reason is `bg-muted` rather than the
+   * page.
    *
-   * zinc-500 was already thin on white at 4.83:1, and against the receded page
-   * it lands at 4.23 — under AA's 4.5 for body text, which this token *is*: the
-   * invitation's explanatory sentence and every caption are drawn in it. On
-   * `bg-muted` it was worse before this change and still is (3.81 at zinc-500).
+   * On the page zinc-500 passes, if thinly: 4.62:1 against zinc-50 where AA asks
+   * 4.5 for body text — and this token *is* body text, the invitation's
+   * explanatory sentence and every caption. But it is also the ink that sits on
+   * `bg-muted`, which the muted `StatusBadge` pairs it with directly, and there
+   * zinc-500 has always been 3.81 — under the line before any of this and still
+   * under it.
    *
-   * 0.51 reads 5.06 on the page, 5.77 on a card and 4.55 on `bg-muted` — over
-   * the line on all three grounds. zinc-600 would have been 6.78 and no longer
-   * muted; the point is a quieter voice, not a second foreground.
+   * 0.51 reads 5.53 on the page, 5.77 on a card and 4.55 on `bg-muted`: over the
+   * line on all three grounds, one of which was never over it. zinc-600 would
+   * have been 6.78 and no longer muted — the point is a quieter voice, not a
+   * second foreground.
    */
   --muted-foreground: oklch(0.51 0.017 285.9);
   --accent: oklch(0.92 0.004 286.32);
@@ -119,9 +131,9 @@
   /*
    * zinc-300, forced twice over. A hairline at zinc-200 on a zinc-200 fill is no
    * hairline at all, and `ChoiceChip` states the invariant it would have broken
-   * — a control at rest is a fill *and* an edge (#198). And an edge has less to
-   * push against on a page that is no longer white: zinc-200 would have been
-   * 0.035 from the ground where it used to be 0.08.
+   * — a control at rest is a fill *and* an edge (#198). And zinc-300 leaves the
+   * edge 0.049 under the fill it outlines, which is the same order as the step
+   * the fill itself gets from the page.
    */
   --border: oklch(0.871 0.006 286.286);
   --input: oklch(0.871 0.006 286.286);
@@ -159,24 +171,23 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   /*
-   * Two of the four status inks lost AA when the light page receded, and the
-   * foundation contract test is what said so — `success` fell to 4.40:1 against
-   * the new ground and `error` to 4.36, where 4.5 is the floor for text and
-   * these are drawn as text. `warning` (4.73) and `info` (4.83) had the headroom
-   * and are untouched.
+   * Untouched, and once measured rather than assumed. At `oklch(0.955)` the page
+   * pulled `success` to 4.40:1 and `error` to 4.36, under AA's 4.5 for text, and
+   * the foundation contract test is what caught it. At zinc-50 they read 4.81 and
+   * 4.76, so the baseline values stand.
    *
-   * Both move by less than a hundredth of L, with chroma and hue held: the ink
-   * is the same colour, one notch deeper. Each now reads 4.55 on the page, 5.19
-   * on a card and over 4.7 on its own surface.
+   * `--destructive` clears it too, at 4.56 on zinc-50 — so there is no contrast
+   * argument for moving it, and there could not have been a value anyway:
+   * `oklch(0.577 0.245 27.325)` is already outside sRGB as shipped, green
+   * resolving to -0.122 for the browser to clamp, so a deeper ink only leaves the
+   * gamut further behind.
    *
-   * `--destructive` is the one that could not be fixed this way. It fails on the
-   * new ground too — 4.18 — but `oklch(0.577 0.245 27.325)` is already outside
-   * sRGB as shipped (green at -0.122, so the browser clamps it), and darkening
-   * pushes it further out. What it wants is not a new number here but to stop
-   * being drawn as body text on the page: `text-error` is the family for a state
-   * said in words, and `--destructive` is the fill under a button that destroys.
+   * What every one of these five *does* fail against is `bg-muted` itself — 3.76
+   * to 4.35 — which the contract test does not check because it checks `--background`
+   * and `--card`. Nothing pairs a status ink with that fill today. Worth knowing
+   * before something does.
    */
-  --success: oklch(0.5191 0.138742 149.393);
+  --success: oklch(0.527142 0.138742 149.393);
   --success-foreground: oklch(1 0 0);
   --success-surface: oklch(0.978938 0.018074 155.825);
   --success-border: oklch(0.81303 0.098609 154.122);
@@ -184,7 +195,7 @@
   --warning-foreground: oklch(1 0 0);
   --warning-surface: oklch(0.976562 0.030054 90.324);
   --warning-border: oklch(0.811489 0.119614 80.886);
-  --error: oklch(0.5589 0.204136 23.849);
+  --error: oklch(0.569446 0.204136 23.849);
   --error-foreground: oklch(1 0 0);
   --error-surface: oklch(0.96941 0.015168 12.422);
   --error-border: oklch(0.773069 0.10222 15.117);
