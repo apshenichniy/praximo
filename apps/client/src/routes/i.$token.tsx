@@ -31,9 +31,22 @@ import type { WebAcceptance } from "@/server/web-acceptance.ts"
 export const Route = createFileRoute("/i/$token")({
   validateSearch: (search: Record<string, unknown>): { readonly lang?: CoachLanguage } =>
     typeof search.lang === "string" ? { lang: narrowCoachLanguage(search.lang) } : {},
-  loaderDeps: ({ search }) => ({ lang: search.lang }),
-  loader: async ({ params, deps }) => {
+  /**
+   * **No `loaderDeps`, and the absence is the feature.**
+   *
+   * Keying the loader on `lang` would re-run it on every switch of the header
+   * control — a database read each time, counted against the lookup limit — and
+   * a throttled switch answers `unknown`, which would replace a form the client
+   * has been filling in with the page that names nobody. Changing the language
+   * has to lose nothing; re-fetching what it is rendering is how it would.
+   *
+   * The redirect below still sees the current URL through `location`, and the
+   * cache keyed on the token alone is what stops it looping: after the redirect
+   * lands, the loader is not re-run at all.
+   */
+  loader: async ({ params, location }) => {
     const outcome = await openInvite({ data: { token: params.token } })
+    const lang = (location.search as { readonly lang?: string }).lang
 
     // Every outcome, refusals included, and not as a nicety: `__root.tsx` sets
     // `<html lang>` from this search parameter, so a page served without it
@@ -41,7 +54,7 @@ export const Route = createFileRoute("/i/$token")({
     // marked `lang="en"` is one a screen reader pronounces in the wrong voice
     // and a translation tool offers to translate into the language it already
     // is. One extra hop on first open is the whole cost.
-    if (deps.lang === undefined) {
+    if (lang === undefined) {
       throw redirect({
         to: "/i/$token",
         params: { token: params.token },

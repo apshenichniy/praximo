@@ -16,7 +16,14 @@ import type { WebAcceptance } from "./web-acceptance.ts"
  * protection against guessing a token, and nothing here claims it is.
  */
 
-const throttled = async (which: "lookup" | "commit"): Promise<boolean> => {
+/**
+ * `true` when this caller has spent their allowance.
+ *
+ * The polarity is inverted from `throttle`, which answers "may I proceed" — so
+ * the name says which question is being asked rather than leaving the reader to
+ * infer it from a `!`.
+ */
+const overLimit = async (which: "lookup" | "commit"): Promise<boolean> => {
   const limiters = await inviteLimiters()
   return !(await throttle(limiters[which], connectingIp(getRequestHeaders())))
 }
@@ -54,7 +61,7 @@ export const openInvite = createServerFn({ method: "POST" })
     // A throttled request and a token nobody issued get the same answer, on
     // purpose: a person with a typo and a script working through the keyspace
     // must not be able to tell each other apart by what the page says.
-    if (await throttled("lookup")) return { kind: "unknown", language }
+    if (await overLimit("lookup")) return { kind: "unknown", language }
     return openInvitation(data.token, language)
   })
 
@@ -81,7 +88,7 @@ export const acceptInvite = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }): Promise<WebAcceptance.AcceptOutcome> => {
     if (data.token === undefined) return { kind: "stale" }
-    if (await throttled("commit")) return { kind: "stale" }
+    if (await overLimit("commit")) return { kind: "stale" }
     return acceptInvitation({
       token: data.token,
       name: data.name,

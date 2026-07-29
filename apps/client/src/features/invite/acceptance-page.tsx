@@ -2,7 +2,6 @@ import { Calendar03Icon } from "@hugeicons-pro/core-stroke-rounded"
 import { HugeiconsIcon } from "@hugeicons/react"
 import type { CoachLanguage } from "@praximo/domain"
 import { clientCopy, DefaultTimeZone, sessionMoment } from "@praximo/i18n"
-import { Avatar, AvatarFallback } from "@praximo/ui/components/avatar"
 import { Button } from "@praximo/ui/components/button"
 import { Input } from "@praximo/ui/components/input"
 import {
@@ -16,8 +15,9 @@ import { Label } from "@praximo/ui/components/label"
 import { useId, useState } from "react"
 
 import { inviteCopy } from "@/features/i18n/invite-copy.ts"
+import { CoachBadge } from "@/features/invite/coach-badge.tsx"
 import { ConsentPane } from "@/features/invite/consent-pane.tsx"
-import { initials } from "@/features/invite/initials.ts"
+import type { SessionSummary } from "@/features/invite/session-summary.ts"
 import { useConsentGate } from "@/features/invite/use-consent-gate.ts"
 
 /**
@@ -36,12 +36,6 @@ import { useConsentGate } from "@/features/invite/use-consent-gate.ts"
  * height, and it is the only one that needs height, because it holds five points
  * and the scroll gate.
  */
-
-export interface SessionSummary {
-  readonly scheduledAt: string
-  readonly durationMinutes: number
-  readonly kind: string
-}
 
 export interface AcceptanceFormState {
   readonly name: string
@@ -73,7 +67,18 @@ export function AcceptancePage({
   const [email, setEmail] = useState("")
   const { unlocked, sentinelRef } = useConsentGate()
 
-  const ready = unlocked && !submitting
+  /**
+   * An identity, which on this page means both fields.
+   *
+   * Checked **here** and not only on the server, because the commit being
+   * unreachable until an identity is given is the spec's own wording — and
+   * because a round trip that fails costs more than a wasted request. Each press
+   * is counted against a rate limit of five a minute; somebody fumbling an
+   * address would spend it and then be told their invitation is no longer open,
+   * which is the worst sentence this page owns and would be a lie.
+   */
+  const identified = name.trim().length > 0 && email.trim().length > 0
+  const ready = unlocked && identified && !submitting
 
   /**
    * What sits beside the commit, in three states.
@@ -88,7 +93,7 @@ export function AcceptancePage({
    */
   const commitNote = !unlocked
     ? consentCopy.locked
-    : name.trim().length > 0 && email.trim().length > 0
+    : identified
       ? consentCopy.summary({ name: name.trim(), email: email.trim() })
       : clientCopy(locale).consent.footer
 
@@ -118,28 +123,19 @@ export function AcceptancePage({
 
                 <div className="grid gap-[18px]">
                   {/*
-                   * Google sits **above** the typed fields, because an import
-                   * placed below them discards what the client already wrote —
-                   * validated in prototype #28. It arrives separately with #59;
-                   * until then this is a disabled affordance rather than a gap,
-                   * and the column has to look finished either way.
+                   * **Continue with Google is not here yet, deliberately.**
+                   *
+                   * It belongs above these fields — an import placed below them
+                   * discards what the client already typed, validated in
+                   * prototype #28 — but it is #59's, and shipping it disabled
+                   * would put a dead control on a legally operative page. That is
+                   * the placeholder-reads-as-a-promise failure this whole ticket
+                   * is built on refusing.
+                   *
+                   * So the column is finished **without** it today, which is half
+                   * of what the ticket asks; #59 adds the button and the «или»
+                   * rule above `nameId` and owes the other half.
                    */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="w-full font-[540]"
-                    disabled
-                  >
-                    <GoogleG />
-                    {copy.form.google}
-                  </Button>
-                  <div className="text-muted-foreground flex items-center gap-3 text-xs">
-                    <span className="bg-border h-px flex-1" />
-                    {copy.form.or}
-                    <span className="bg-border h-px flex-1" />
-                  </div>
-
                   <Field
                     id={nameId}
                     label={copy.form.nameLabel}
@@ -230,11 +226,7 @@ function Greeting({
 
   return (
     <div className="grid justify-items-start gap-3.5">
-      <Avatar className="ring-background outline-primary/45 size-[60px] ring-[3px] outline-[1.5px]">
-        <AvatarFallback className="bg-secondary text-secondary-foreground text-xl font-[620]">
-          {initials(coachName)}
-        </AvatarFallback>
-      </Avatar>
+      <CoachBadge locale={locale} coachName={coachName} />
       <div className="grid gap-2">
         <b className="text-[19px] leading-[1.25] font-[620] tracking-[-0.022em] sm:text-xl">
           {copy.greeting.invites(coachName)}
@@ -348,17 +340,5 @@ function Field({
         <span className="text-muted-foreground text-xs leading-[1.45]">{hint}</span>
       )}
     </div>
-  )
-}
-
-/** Google's own mark arrives with #59; until then the button carries a placeholder. */
-function GoogleG() {
-  return (
-    <span
-      aria-hidden="true"
-      className="border-border grid size-[17px] place-items-center rounded-full border font-mono text-[10px] font-bold"
-    >
-      G
-    </span>
   )
 }

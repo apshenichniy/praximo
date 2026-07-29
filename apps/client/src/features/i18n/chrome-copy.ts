@@ -10,9 +10,12 @@ import { makeCatalogue } from "@praximo/i18n"
  * surface that says it (ADR 0002). Only the mechanism is shared.
  *
  * Deliberately small. It grows with the surfaces that arrive — the acceptance
- * page (#57), the web room — and not before.
+ * page (#57) added the language menu's label beside the theme one — and not
+ * before.
  */
 export interface ChromeCopy {
+  /** The language menu's accessible name. A frame control, like the theme one. */
+  readonly language: string
   readonly theme: {
     /** The group's accessible name. Not rendered as a heading — the footer is a footer. */
     readonly label: string
@@ -23,14 +26,17 @@ export interface ChromeCopy {
 }
 
 const en: ChromeCopy = {
+  language: "Language",
   theme: { label: "Appearance", system: "System", light: "Light", dark: "Dark" },
 }
 
 const uk: ChromeCopy = {
+  language: "Мова",
   theme: { label: "Вигляд", system: "Системний", light: "Світлий", dark: "Темний" },
 }
 
 const ru: ChromeCopy = {
+  language: "Язык",
   theme: { label: "Внешний вид", system: "Системный", light: "Светлый", dark: "Тёмный" },
 }
 

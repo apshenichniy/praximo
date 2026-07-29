@@ -37,8 +37,8 @@ const sentences = (locale: (typeof CoachLanguages)[number]): ReadonlyArray<[stri
     ["refusal.unknown.title", copy.refusal.unknown.title],
     ["refusal.unknown.body", copy.refusal.unknown.body],
     ["refusal.stale", copy.refusal.stale],
+    ["refusal.yourCoach", copy.refusal.yourCoach],
     ["failure", copy.failure],
-    ["language", copy.language],
   ]
 }
 
@@ -81,6 +81,31 @@ describe("invite copy", () => {
       expect(copy.done.remindersTo("maria@example.com")).toContain("maria@example.com")
       expect(copy.refusal.alreadyAccepted.body).not.toMatch(/сюди|сюда|right here/i)
     }
+  })
+
+  /**
+   * `docs/agents/product-copy.md`: "A person's name is interpolated only in the
+   * nominative, and only into a slot where the nominative is grammatical. When a
+   * sentence needs an oblique case, use a common noun («ваш коуч») and put the
+   * name in the surrounding interface instead."
+   *
+   * «Попросите у …» is genitive, so ru and uk must not take the name — the
+   * refusal screen shows it in the frame instead (`CoachBadge`). `en` inflects
+   * nothing and keeps it. Without this the sentence reads «Попросите у Олена
+   * Пшенична», which is the exact failure #222 spent a ticket removing.
+   */
+  it("keeps the coach's name out of oblique slots in ru and uk", () => {
+    for (const locale of ["ru", "uk"] as const) {
+      const refusal = inviteCopy(locale).refusal
+      expect(refusal.superseded.body(COACH)).not.toContain(COACH)
+      expect(refusal.expired.body(COACH)).not.toContain(COACH)
+      expect(refusal.stale).not.toContain(COACH)
+      // And the frame's own slot exists to carry it.
+      expect(refusal.yourCoach.trim().length).toBeGreaterThan(0)
+    }
+
+    // English keeps the name in the sentence — it declines nothing.
+    expect(inviteCopy("en").refusal.expired.body(COACH)).toContain(COACH)
   })
 
   /** The unknown refusal names neither the coach nor the workspace, in any language. */

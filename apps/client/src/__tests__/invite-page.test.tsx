@@ -137,13 +137,37 @@ describe("the screens that are not the happy path", () => {
     expect(html).not.toContain("10:00")
   })
 
+  /**
+   * These two say who to ask, and the name reaches the reader through the
+   * *frame* rather than the sentence: «попросите у …» is genitive, and
+   * `docs/agents/product-copy.md` forbids declining an operator-entered string.
+   * So the screen owes a nominative slot — and this is what says it kept it.
+   */
   it("names who to ask for a link that expired or was replaced", async () => {
-    expect(await render(<RefusalScreen locale="ru" kind="expired" coachName={COACH} />)).toContain(
-      COACH,
-    )
-    expect(
-      await render(<RefusalScreen locale="ru" kind="superseded" coachName={COACH} />),
-    ).toContain(COACH)
+    for (const kind of ["expired", "superseded"] as const) {
+      const html = await render(<RefusalScreen locale="ru" kind={kind} coachName={COACH} />)
+      expect(html).toContain(COACH)
+      expect(html).toContain("Ваш коуч")
+      // Not inside the sentence, which would need a case nobody can compute.
+      expect(html).not.toContain(`у ${COACH}`)
+    }
+  })
+
+  /** The commit ships locked, and stays locked until an identity is given. */
+  it("does not offer a commit before the fields are filled", async () => {
+    const html = await page("ru")
+    const button = html.slice(html.lastIndexOf("<button"))
+    expect(button).toContain("disabled")
+  })
+
+  /**
+   * Google is #59's. Shipping it disabled would put a dead control on a legally
+   * operative page — the placeholder-reads-as-a-promise failure this ticket is
+   * built on refusing — so the column is finished without it today.
+   */
+  it("ships no dead Google affordance", async () => {
+    const html = await page("ru")
+    expect(html).not.toContain("Google")
   })
 
   /** A typo and a token-guessing script get the same page, and it names nobody. */

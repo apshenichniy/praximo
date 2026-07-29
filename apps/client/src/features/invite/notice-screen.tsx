@@ -1,10 +1,10 @@
 import type { CoachLanguage } from "@praximo/domain"
 import { DefaultTimeZone, sessionMoment } from "@praximo/i18n"
-import { Avatar, AvatarFallback } from "@praximo/ui/components/avatar"
 
 import { inviteCopy } from "@/features/i18n/invite-copy.ts"
-import type { SessionSummary } from "@/features/invite/acceptance-page.tsx"
-import { initials } from "@/features/invite/initials.ts"
+import { CoachBadge } from "@/features/invite/coach-badge.tsx"
+import type { SessionSummary } from "@/features/invite/session-summary.ts"
+import type { WebRefusal } from "@/features/invite/web-refusal.ts"
 
 /**
  * Everything this page shows that is not the form (#57): the confirmation, and
@@ -36,11 +36,7 @@ export function ConfirmationScreen({
 
   return (
     <Centred>
-      <Avatar className="ring-background outline-primary/45 size-[60px] ring-[3px] outline-[1.5px]">
-        <AvatarFallback className="bg-secondary text-secondary-foreground text-xl font-[620]">
-          {initials(coachName)}
-        </AvatarFallback>
-      </Avatar>
+      <CoachBadge locale={locale} coachName={coachName} />
       <b className="text-2xl font-[640] tracking-[-0.025em]">{copy.done.title}</b>
       {moment === undefined || session === undefined ? (
         <p className="text-muted-foreground text-[15px] leading-[1.65]">
@@ -65,7 +61,54 @@ export function ConfirmationScreen({
   )
 }
 
-export type NoticeKind = "already-accepted" | "superseded" | "expired" | "unknown"
+/** The refusal union plus the one outcome that has no invitation behind it. */
+export type NoticeKind = WebRefusal | "unknown"
+
+/**
+ * What each refusal shows, in one table rather than a cascade.
+ *
+ * `settled` marks the one that is not an error at all — the client scrolled up
+ * and opened the link again — and gets the tick. `names` marks the two that say
+ * who to ask, and is what puts the coach in the frame: their sentences cannot
+ * carry the name in ru or uk without declining it, which
+ * `docs/agents/product-copy.md` forbids.
+ */
+const NOTICES: Record<
+  NoticeKind,
+  {
+    readonly read: (
+      copy: ReturnType<typeof inviteCopy>["refusal"],
+      coach: string,
+    ) => {
+      readonly title: string
+      readonly body: string
+    }
+    readonly settled: boolean
+    readonly names: boolean
+  }
+> = {
+  "already-accepted": {
+    // Says so, offers nothing to press, and discloses **no session details**:
+    // the token is spent, and turning a forwarded invitation into a permanent
+    // read-only view of somebody's schedule is not a trade worth making.
+    read: (copy) => copy.alreadyAccepted,
+    settled: true,
+    names: false,
+  },
+  superseded: {
+    read: (copy, coach) => ({ title: copy.superseded.title, body: copy.superseded.body(coach) }),
+    settled: false,
+    names: true,
+  },
+  expired: {
+    read: (copy, coach) => ({ title: copy.expired.title, body: copy.expired.body(coach) }),
+    settled: false,
+    names: true,
+  },
+  // Names nobody and admits nothing. A typo and a token-guessing script get the
+  // same page, so neither learns whether the code exists or whose it is.
+  unknown: { read: (copy) => copy.unknown, settled: false, names: false },
+}
 
 export function RefusalScreen({
   locale,
@@ -74,41 +117,23 @@ export function RefusalScreen({
 }: {
   readonly locale: CoachLanguage
   readonly kind: NoticeKind
-  /** Absent for `unknown`, and absent by construction — see below. */
+  /** Absent for `unknown`, and absent by construction — there is no invitation. */
   readonly coachName?: string
 }) {
-  const copy = inviteCopy(locale).refusal
-
-  // The four, told apart. `already-accepted` is the common case and not an error
-  // at all — the client scrolled up and opened the link again — so it says so,
-  // offers nothing to press, and discloses **no session details**: the token is
-  // spent, and turning a forwarded invitation into a permanent read-only view of
-  // somebody's schedule is not a trade worth making.
-  //
-  // `unknown` names nobody and admits nothing. A typo and a token-guessing
-  // script get the same page, so neither learns whether the code exists.
-  const notice =
-    kind === "already-accepted"
-      ? { title: copy.alreadyAccepted.title, body: copy.alreadyAccepted.body, tone: "settled" }
-      : kind === "superseded"
-        ? {
-            title: copy.superseded.title,
-            body: copy.superseded.body(coachName ?? ""),
-            tone: "plain",
-          }
-        : kind === "expired"
-          ? { title: copy.expired.title, body: copy.expired.body(coachName ?? ""), tone: "plain" }
-          : { title: copy.unknown.title, body: copy.unknown.body, tone: "plain" }
+  const notice = NOTICES[kind]
+  const { title, body } = notice.read(inviteCopy(locale).refusal, coachName ?? "")
+  const named = notice.names && coachName !== undefined
 
   return (
     <Centred>
-      {notice.tone === "settled" ? (
+      {named ? <CoachBadge locale={locale} coachName={coachName} withName /> : null}
+      {notice.settled ? (
         <span className="bg-success-surface text-success grid size-[52px] place-items-center rounded-full text-[22px] font-bold">
           ✓
         </span>
       ) : null}
-      <b className="text-[22px] font-[640] tracking-[-0.02em]">{notice.title}</b>
-      <p className="text-muted-foreground text-[15px] leading-[1.65]">{notice.body}</p>
+      <b className="text-[22px] font-[640] tracking-[-0.02em]">{title}</b>
+      <p className="text-muted-foreground text-[15px] leading-[1.65]">{body}</p>
     </Centred>
   )
 }

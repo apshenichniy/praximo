@@ -12,7 +12,6 @@ import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 
 import { chromeCopy } from "@/features/i18n/chrome-copy.ts"
-import { inviteCopy } from "@/features/i18n/invite-copy.ts"
 import { useSystemThemeWhileUnset } from "@/lib/use-system-theme.ts"
 import {
   applyColorScheme,
@@ -51,7 +50,7 @@ export function InviteShell({
    */
   readonly onLanguageChange: (language: CoachLanguage) => void
 }) {
-  const copy = inviteCopy(locale)
+  const copy = chromeCopy(locale)
 
   return (
     <div className="bg-background text-foreground font-sans flex min-h-svh flex-col">

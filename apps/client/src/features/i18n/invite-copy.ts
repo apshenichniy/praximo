@@ -55,14 +55,24 @@ export interface InviteCopy {
   }
   readonly refusal: {
     readonly alreadyAccepted: { readonly title: string; readonly body: string }
+    /**
+     * These two say who to ask. The name is **not** in the sentence in ru and
+     * uk: «попросите у …» takes the genitive, and a case table applied to an
+     * operator-entered string produces confident nonsense
+     * (`docs/agents/product-copy.md`). They say «своего коуча» and the screen's
+     * frame carries the name in the nominative instead — which is exactly what
+     * that rule means by "a surface that means to carry the name owes it
+     * explicitly". `en` inflects nothing and keeps the name in the sentence.
+     */
     readonly superseded: { readonly title: string; readonly body: (coach: string) => string }
     readonly expired: { readonly title: string; readonly body: (coach: string) => string }
     /** Names nobody: a typo and a guessing script get the same page. */
     readonly unknown: { readonly title: string; readonly body: string }
     readonly stale: string
+    /** The nominative slot the frame uses above those two. */
+    readonly yourCoach: string
   }
   readonly failure: string
-  readonly language: string
 }
 
 const en: InviteCopy = {
@@ -113,9 +123,9 @@ const en: InviteCopy = {
       body: "Check that you copied all of it, or ask for a new one.",
     },
     stale: "This invitation is no longer open. Ask your coach for a new link.",
+    yourCoach: "Your coach",
   },
   failure: "That did not go through. Nothing was saved — try again.",
-  language: "Language",
 }
 
 const uk: InviteCopy = {
@@ -155,20 +165,20 @@ const uk: InviteCopy = {
     },
     superseded: {
       title: "Це посилання замінено",
-      body: (coach) => `Попросіть у ${coach} актуальне.`,
+      body: () => `Попросіть у свого коуча актуальне.`,
     },
     expired: {
       title: "Термін дії посилання минув",
-      body: (coach) => `Попросіть у ${coach} свіже.`,
+      body: () => `Попросіть у свого коуча свіже.`,
     },
     unknown: {
       title: "Це посилання не працює",
       body: "Перевірте, чи скопіювали його повністю, або попросіть нове.",
     },
     stale: "Це запрошення вже недійсне. Попросіть у свого коуча нове посилання.",
+    yourCoach: "Ваш коуч",
   },
   failure: "Не вдалося. Нічого не збережено — спробуйте ще раз.",
-  language: "Мова",
 }
 
 const ru: InviteCopy = {
@@ -208,20 +218,20 @@ const ru: InviteCopy = {
     },
     superseded: {
       title: "Эта ссылка заменена",
-      body: (coach) => `Попросите у ${coach} актуальную.`,
+      body: () => `Попросите у своего коуча актуальную.`,
     },
     expired: {
       title: "Срок действия ссылки истёк",
-      body: (coach) => `Попросите у ${coach} свежую.`,
+      body: () => `Попросите у своего коуча свежую.`,
     },
     unknown: {
       title: "Эта ссылка не работает",
       body: "Проверьте, скопировали ли вы её целиком, или попросите новую.",
     },
     stale: "Это приглашение больше не действует. Попросите у своего коуча новую ссылку.",
+    yourCoach: "Ваш коуч",
   },
   failure: "Не получилось. Ничего не сохранено — попробуйте ещё раз.",
-  language: "Язык",
 }
 
 /**

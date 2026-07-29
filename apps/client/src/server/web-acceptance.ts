@@ -1,8 +1,9 @@
 import { ClientAcceptanceRepo } from "@praximo/db"
-import { type CoachLanguage, CoachLanguages, narrowCoachLanguage } from "@praximo/domain"
+import { type CoachLanguage, narrowCoachLanguage } from "@praximo/domain"
 import { clientConsentVersion } from "@praximo/i18n"
 import { Clock, Context, Effect, Layer } from "effect"
 
+import type { SessionSummary } from "@/features/invite/session-summary.ts"
 import { type WebRefusal, webRefusal } from "@/features/invite/web-refusal.ts"
 
 /**
@@ -27,11 +28,7 @@ export interface AcceptanceView {
   /** Pre-selection, not a choice: the language the coach wrote the invite in. */
   readonly language: CoachLanguage
   readonly consentVersion: string
-  readonly session?: {
-    readonly scheduledAt: string
-    readonly durationMinutes: number
-    readonly kind: string
-  }
+  readonly session?: SessionSummary
   readonly coachTimezone?: string
 }
 
@@ -89,11 +86,7 @@ export interface ConfirmationView {
    * is built on.
    */
   readonly email: string
-  readonly session?: {
-    readonly scheduledAt: string
-    readonly durationMinutes: number
-    readonly kind: string
-  }
+  readonly session?: SessionSummary
   readonly coachTimezone?: string
 }
 
@@ -139,6 +132,32 @@ const readEmail = (value: string): string | undefined => {
 const identifier = (prefix: string): string =>
   `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
 
+/**
+ * The optional halves of a lookup, shaped for the wire.
+ *
+ * Both `open` and `accept` hand the same two facts to their own view, and both
+ * have to turn a `Date` into a string on the way — written once so the two
+ * cannot drift into disagreeing about a meeting they are describing from the
+ * same row.
+ */
+const sessionDetails = (
+  lookup: ClientAcceptanceRepo.InviteLookup,
+): {
+  readonly session?: SessionSummary
+  readonly coachTimezone?: string
+} => ({
+  ...(lookup.coachTimezone === undefined ? {} : { coachTimezone: lookup.coachTimezone }),
+  ...(lookup.nextSession === undefined
+    ? {}
+    : {
+        session: {
+          scheduledAt: lookup.nextSession.scheduledAt.toISOString(),
+          durationMinutes: lookup.nextSession.durationMinutes,
+          kind: lookup.nextSession.kind,
+        },
+      }),
+})
+
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -179,16 +198,7 @@ export const layer = Layer.effect(
         coachName: lookup.coachName,
         language: lookup.inviteLanguage,
         consentVersion: clientConsentVersion(lookup.inviteLanguage),
-        ...(lookup.coachTimezone === undefined ? {} : { coachTimezone: lookup.coachTimezone }),
-        ...(lookup.nextSession === undefined
-          ? {}
-          : {
-              session: {
-                scheduledAt: lookup.nextSession.scheduledAt.toISOString(),
-                durationMinutes: lookup.nextSession.durationMinutes,
-                kind: lookup.nextSession.kind,
-              },
-            }),
+        ...sessionDetails(lookup),
       } as const satisfies AcceptanceView
     })
 
@@ -224,10 +234,9 @@ export const layer = Layer.effect(
 
       // Narrowed rather than trusted: the language arrives from a form field, and
       // an unrecognised one would otherwise reach `clientConsentVersion` and be
-      // recorded as the language somebody agreed in.
-      const language = CoachLanguages.includes(input.language)
-        ? input.language
-        : narrowCoachLanguage(input.language)
+      // recorded as the language somebody agreed in. `narrowCoachLanguage` is
+      // total and the identity on a valid value, so it needs no guard in front.
+      const language = narrowCoachLanguage(input.language)
 
       const outcome = yield* repo
         .acceptFromWeb({
@@ -252,16 +261,7 @@ export const layer = Layer.effect(
         view: {
           coachName: lookup.coachName,
           email,
-          ...(lookup.coachTimezone === undefined ? {} : { coachTimezone: lookup.coachTimezone }),
-          ...(lookup.nextSession === undefined
-            ? {}
-            : {
-                session: {
-                  scheduledAt: lookup.nextSession.scheduledAt.toISOString(),
-                  durationMinutes: lookup.nextSession.durationMinutes,
-                  kind: lookup.nextSession.kind,
-                },
-              }),
+          ...sessionDetails(lookup),
         },
       } as const
     })
