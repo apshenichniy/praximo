@@ -136,7 +136,7 @@ describe.skipIf(skipWithoutDatabase)("WorkspaceDeletionRepo (dev Neon branch)", 
           id: uniqueId("channel"),
           clientId,
           kind: "telegram",
-          telegramSnapshot: { avatarR2Key: expectedKeys[3] },
+          snapshot: { avatarR2Key: expectedKeys[3] },
         }),
       )
       yield* Effect.promise(() =>

@@ -39,6 +39,8 @@ const clientsLayer = Layer.succeed(
   ClientAcceptanceRepo.Service,
   ClientAcceptanceRepo.Service.of({
     findByToken: unsupported,
+    findByWebToken: unsupported,
+    acceptFromWeb: unsupported,
     findBotOwner: unsupported,
     findAcceptedClient: (clientId) =>
       Effect.succeed(

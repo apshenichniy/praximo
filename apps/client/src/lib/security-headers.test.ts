@@ -58,4 +58,20 @@ describe("security headers", () => {
     expect(start).toContain("withSecurityHeaders(result.response)")
     expect(start).toContain("requestMiddleware: [securityHeaders]")
   })
+
+  /**
+   * The route the policy was written for finally exists (#57). This is a
+   * verification rather than new work — the middleware above already covers
+   * every response — but the AC asks for it in as many words, and the reason is
+   * worth pinning to the route that carries a token in its *path*: one image,
+   * one font, one beacon on a page named `/i/<token>` is all it takes to hand a
+   * client's single-use invitation to somebody else's log.
+   */
+  it("covers the acceptance route, token and all", () => {
+    const sealed = withSecurityHeaders(
+      new Response("<!doctype html>", { headers: { "content-type": "text/html" } }),
+    )
+
+    expect(sealed.headers.get("referrer-policy")).toBe("no-referrer")
+  })
 })

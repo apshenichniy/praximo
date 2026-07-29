@@ -259,7 +259,7 @@ export const layer = Layer.effect(
               ${isoColumn('"i"."expires_at"')} as "expires_at",
               "ch"."kind" as "channel_kind",
               "ch"."address" as "channel_address",
-              "ch"."telegram_snapshot" as "telegram_snapshot",
+              "ch"."snapshot" as "snapshot",
               ${isoColumn('"ch"."created_at"')} as "accepted_at",
               ${isoColumn('"cg"."granted_at"')} as "consent_granted_at",
               exists (
@@ -319,7 +319,7 @@ export const layer = Layer.effect(
       const clientLanguage = readLanguage(record.language)
       const consentGrantedAt = readDate(record.consent_granted_at)
       const delivery = record.delivery as { readonly language?: string } | null
-      const snapshot = record.telegram_snapshot as {
+      const snapshot = record.snapshot as {
         readonly name?: string
         readonly username?: string
       } | null

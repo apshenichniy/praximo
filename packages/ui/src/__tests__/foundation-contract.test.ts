@@ -281,11 +281,14 @@ describe("@praximo/ui public foundation", () => {
       expect(source).not.toContain("var(--ease")
     }
 
-    // 25 since #210 added `collapsible`, installed from the live registry and
-    // left as upstream source: the hours the scheduling sheet hides open behind
-    // one, and the trigger it needs is a caller's own markup rather than a
-    // variant added here.
-    expect(Object.keys(componentSources)).toHaveLength(25)
+    // 26 since #57 added `dropdown-menu`, installed from the live registry and
+    // left as upstream source: the Acceptance Page's header carries language and
+    // appearance as buttons that open a list, and this package had no dropdown,
+    // select or menu at all. Composing `popover` would have meant writing the
+    // keyboard and focus behaviour of a menu by hand.
+    //
+    // 25 was #210's `collapsible`, for the hours the scheduling sheet hides.
+    expect(Object.keys(componentSources)).toHaveLength(26)
   })
 
   it("enables Tailwind font antialiasing at the shared body boundary", () => {

@@ -456,7 +456,7 @@ export const layer = Layer.effect(
                 from "client"
                 where "workspace_id" in (select "workspace_id" from ready)
                 union
-                select "channel"."telegram_snapshot"->>'avatarR2Key'
+                select "channel"."snapshot"->>'avatarR2Key'
                 from "channel"
                 join "client" on "client"."id" = "channel"."client_id"
                 where "client"."workspace_id" in (select "workspace_id" from ready)

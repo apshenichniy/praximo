@@ -116,11 +116,13 @@ function MarkArtwork({
   palette,
   idPrefix,
   size,
+  guidePointOpacity,
   className,
 }: {
   readonly palette: Palette
   readonly idPrefix: string
-  readonly size: number
+  readonly size: number | "fluid"
+  readonly guidePointOpacity: number | undefined
   readonly className: string
 }) {
   const orbitBackId = `${idPrefix}-orbit-back`
@@ -129,8 +131,7 @@ function MarkArtwork({
 
   return (
     <svg
-      width={size}
-      height={size}
+      {...(size === "fluid" ? { width: "100%", height: "auto" } : { width: size, height: size })}
       viewBox="0 0 512 512"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
@@ -166,7 +167,7 @@ function MarkArtwork({
       <path d={FIGURE_BODY_PATH} fill={palette.figure} />
 
       <circle cx="389" cy="134" r="43" fill={`url(#${haloId})`} />
-      <circle cx="389" cy="134" r="15.5" fill="#fff" />
+      <circle cx="389" cy="134" r="15.5" fill="#fff" opacity={guidePointOpacity} />
     </svg>
   )
 }
@@ -179,10 +180,29 @@ function MarkArtwork({
  */
 export function PraximoMark({
   size,
+  guidePointOpacity,
   className,
 }: {
-  /** Edge of the square the mark is drawn in, in pixels. */
-  readonly size: number
+  /**
+   * Edge of the square the mark is drawn in, in pixels — or `"fluid"` to fill
+   * the container's width and take its height from the aspect ratio.
+   *
+   * `"fluid"` exists for the mark used as a *ground* rather than a badge (#57's
+   * consent pane). Never crop it to fit instead: `preserveAspectRatio: slice` in
+   * a tall narrow column reduces the lockup to two arbitrary diagonal bands, and
+   * the thing that makes this artwork usable as a wash is that it stays the
+   * whole mark, only quieter.
+   */
+  readonly size: number | "fluid"
+  /**
+   * Dims the guiding point's white core. Left alone, it is solid `#fff`.
+   *
+   * Only interesting for a wash: white is the brightest element in the lockup by
+   * some distance, so at the opacity a background needs the orbit fades to a
+   * whisper while the point stays a visible dot — it reads as a blot on the page
+   * rather than as part of a mark. #57 sets it to 0.45.
+   */
+  readonly guidePointOpacity?: number
   readonly className?: string
 }) {
   // React's own ids carry punctuation that would have to be escaped wherever a
@@ -196,17 +216,22 @@ export function PraximoMark({
     // that swaps the mark for something else then moves. `flex` also blockifies
     // the two copies inside, so no line box forms in here either. `w-fit` keeps
     // it shrink-wrapped, so `mx-auto` still centres it in a block container.
-    <span aria-hidden="true" className={cn("flex w-fit shrink-0", className)}>
+    <span
+      aria-hidden="true"
+      className={cn(size === "fluid" ? "flex w-full" : "flex w-fit shrink-0", className)}
+    >
       <MarkArtwork
         palette={PALETTE.light}
         idPrefix={`praximo-mark-light-${unique}`}
         size={size}
+        guidePointOpacity={guidePointOpacity}
         className="dark:hidden"
       />
       <MarkArtwork
         palette={PALETTE.dark}
         idPrefix={`praximo-mark-dark-${unique}`}
         size={size}
+        guidePointOpacity={guidePointOpacity}
         className="hidden dark:block"
       />
     </span>

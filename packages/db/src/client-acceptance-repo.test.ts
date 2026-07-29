@@ -34,7 +34,9 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
     Database.testLayer(testDatabaseUrl),
   )
 
-  const fixture = Effect.fnUntraced(function* (options: { readonly expired?: boolean } = {}) {
+  const fixture = Effect.fnUntraced(function* (
+    options: { readonly expired?: boolean; readonly withoutBot?: boolean } = {},
+  ) {
     const { client } = yield* Database.Service
     const suffix = uid()
     const made: Fixture = {
@@ -65,14 +67,16 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
         timezone: "Europe/Kyiv",
       }),
     )
-    yield* Effect.promise(() =>
-      client.insert(schema.bot).values({
-        workspaceId: made.workspaceId,
-        telegramBotId: made.telegramBotId,
-        username: `praximo_${suffix}_bot`,
-        connectionStatus: "connected",
-      }),
-    )
+    if (options.withoutBot !== true) {
+      yield* Effect.promise(() =>
+        client.insert(schema.bot).values({
+          workspaceId: made.workspaceId,
+          telegramBotId: made.telegramBotId,
+          username: `praximo_${suffix}_bot`,
+          connectionStatus: "connected",
+        }),
+      )
+    }
     yield* Effect.promise(() =>
       client
         .insert(schema.client)
@@ -159,7 +163,7 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
       expect(invites[0]?.status).toBe("accepted")
       expect(channels).toHaveLength(1)
       expect(channels[0]?.address).toBe("810000123")
-      expect(channels[0]?.telegramSnapshot).toEqual({ name: "Maria", username: "maria" })
+      expect(channels[0]?.snapshot).toEqual({ name: "Maria", username: "maria" })
       expect(consents[0]?.textVersion).toBe(CONSENT_VERSION)
       expect(clients[0]?.language).toBe("ru")
       expect(pushes).toHaveLength(1)
@@ -240,4 +244,160 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
       expect(lookup?.coachTimezone).toBe("Europe/Kyiv")
     }).pipe(Effect.provide(appLayer)),
   )
+
+  /**
+   * The web door (#57). A separate pair rather than optional arguments on the two
+   * above: `findByToken`'s bot id is a *join condition*, and one forgotten
+   * argument would silently drop the workspace scoping that keeps a token from
+   * resolving in another coach's workspace. Two doors, two signatures, and "the
+   * Telegram path cannot accept without a Telegram identity" holds by type.
+   */
+  describe("the web door", () => {
+    const acceptFromWeb = (
+      made: Fixture,
+      label: string,
+      overrides: { readonly googleSub?: string } = {},
+    ) =>
+      Effect.gen(function* () {
+        const repo = yield* ClientAcceptanceRepo.Service
+        return yield* repo.acceptFromWeb({
+          inviteId: made.inviteId,
+          workspaceId: made.workspaceId,
+          clientId: made.clientId,
+          // What the client typed about themselves, which is not what the coach
+          // filed them under.
+          clientName: "Марія",
+          email: "maria@example.com",
+          ...overrides,
+          language: "ru",
+          consentTextVersion: CONSENT_VERSION,
+          channelId: `ch_${label}_${made.suffix}`,
+          consentId: `cg_${label}_${made.suffix}`,
+          now: NOW,
+        })
+      })
+
+    it.effect("resolves a token with no bot in the picture at all", () =>
+      Effect.gen(function* () {
+        const repo = yield* ClientAcceptanceRepo.Service
+        // No bot row: a client who is not on Telegram may belong to a coach whose
+        // bot is not connected yet, and the link they were handed still has to
+        // open. This is the whole reason the bot id cannot be a join condition
+        // here — and the token is globally unique, so nothing is lost by it.
+        const made = yield* fixture({ withoutBot: true })
+
+        const lookup = yield* repo.findByWebToken(made.token)
+        expect(lookup?.clientName).toBe("Maria K.")
+        expect(lookup?.coachName).toBe("Ada Coaching")
+        expect(lookup?.status).toBe("pending")
+        expect(lookup?.inviteLanguage).toBe("uk")
+      }).pipe(Effect.provide(appLayer)),
+    )
+
+    it.effect("discloses nothing for a token nobody issued", () =>
+      Effect.gen(function* () {
+        const repo = yield* ClientAcceptanceRepo.Service
+        expect(yield* repo.findByWebToken("ZZZZZZZZZZZZ")).toBeUndefined()
+      }).pipe(Effect.provide(appLayer)),
+    )
+
+    it.effect("lands an email channel, the consent and the coach's push together", () =>
+      Effect.gen(function* () {
+        const { client } = yield* Database.Service
+        const made = yield* fixture()
+
+        expect(yield* acceptFromWeb(made, "first")).toEqual({ accepted: true })
+
+        const invites = yield* Effect.promise(() =>
+          client.select().from(schema.invite).where(eq(schema.invite.id, made.inviteId)),
+        )
+        const channels = yield* Effect.promise(() =>
+          client.select().from(schema.channel).where(eq(schema.channel.clientId, made.clientId)),
+        )
+        const consents = yield* Effect.promise(() =>
+          client
+            .select()
+            .from(schema.consentGrant)
+            .where(eq(schema.consentGrant.clientId, made.clientId)),
+        )
+        const clients = yield* Effect.promise(() =>
+          client.select().from(schema.client).where(eq(schema.client.id, made.clientId)),
+        )
+        const pushes = yield* Effect.promise(() =>
+          client
+            .select()
+            .from(schema.coachBotNotification)
+            .where(eq(schema.coachBotNotification.workspaceId, made.workspaceId)),
+        )
+
+        expect(invites[0]?.status).toBe("accepted")
+        expect(channels).toHaveLength(1)
+        expect(channels[0]?.kind).toBe("email")
+        expect(channels[0]?.address).toBe("maria@example.com")
+        expect(channels[0]?.isPrimary).toBe(true)
+        // The client's own name lives here, mirroring the Telegram path exactly.
+        expect(channels[0]?.snapshot).toEqual({ name: "Марія" })
+        expect(consents[0]?.textVersion).toBe(CONSENT_VERSION)
+        expect(consents[0]?.channelKind).toBe("email")
+        expect(clients[0]?.language).toBe("ru")
+        // And `client.name` keeps the coach's private label — «Анна через
+        // Марину» is theirs, and showing it back to the client would leak it.
+        expect(clients[0]?.name).toBe("Maria K.")
+        expect(clients[0]?.googleSub).toBeNull()
+        expect(pushes).toHaveLength(1)
+        expect(pushes[0]?.recipientTelegramId).toBe(made.coachTelegramId)
+      }).pipe(Effect.provide(appLayer)),
+    )
+
+    it.effect("records a Google subject only when one was actually supplied", () =>
+      Effect.gen(function* () {
+        const { client } = yield* Database.Service
+        const made = yield* fixture()
+
+        yield* acceptFromWeb(made, "first", { googleSub: "108120977000" })
+
+        const clients = yield* Effect.promise(() =>
+          client.select().from(schema.client).where(eq(schema.client.id, made.clientId)),
+        )
+        expect(clients[0]?.googleSub).toBe("108120977000")
+      }).pipe(Effect.provide(appLayer)),
+    )
+
+    // The retry the page promises is safe: acceptance is gated on
+    // `where status = 'pending'`, and everything else selects from that update.
+    it.effect("creates nothing twice when the commit is pressed again", () =>
+      Effect.gen(function* () {
+        const { client } = yield* Database.Service
+        const made = yield* fixture()
+
+        expect(yield* acceptFromWeb(made, "first")).toEqual({ accepted: true })
+        expect(yield* acceptFromWeb(made, "second")).toEqual({ accepted: false })
+
+        const channels = yield* Effect.promise(() =>
+          client.select().from(schema.channel).where(eq(schema.channel.clientId, made.clientId)),
+        )
+        const consents = yield* Effect.promise(() =>
+          client
+            .select()
+            .from(schema.consentGrant)
+            .where(eq(schema.consentGrant.clientId, made.clientId)),
+        )
+        expect(channels).toHaveLength(1)
+        expect(consents).toHaveLength(1)
+      }).pipe(Effect.provide(appLayer)),
+    )
+
+    // A link already walked through on Telegram cannot be walked through again on
+    // the web, and the reverse: one invite, one door, whichever it turns out to be.
+    it.effect("refuses a token the Telegram door already spent", () =>
+      Effect.gen(function* () {
+        const repo = yield* ClientAcceptanceRepo.Service
+        const made = yield* fixture()
+        yield* accept(made, "810000123", "telegram")
+
+        expect(yield* acceptFromWeb(made, "web")).toEqual({ accepted: false })
+        expect((yield* repo.findByWebToken(made.token))?.status).toBe("accepted")
+      }).pipe(Effect.provide(appLayer)),
+    )
+  })
 })

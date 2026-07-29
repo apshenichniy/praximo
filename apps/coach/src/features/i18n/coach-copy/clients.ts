@@ -71,6 +71,12 @@ export interface ClientsCopy {
   readonly pendingLanguage: string
   readonly pendingConsent: string
   readonly channelTelegram: string
+  /**
+   * A client who accepted on the web (#57) leaves an email address, not a
+   * Telegram id. Before this the profile row said "Telegram" for every accepted
+   * client, because Telegram was the only door there was.
+   */
+  readonly channelEmail: string
 
   readonly dangerTitle: string
   readonly resetTitle: string
@@ -209,6 +215,7 @@ const en: ClientsCopy = {
   pendingLanguage: "They pick it",
   pendingConsent: "Pending",
   channelTelegram: "Telegram",
+  channelEmail: "Email",
 
   dangerTitle: "Danger zone",
   resetTitle: "Reset the invitation",
@@ -299,6 +306,7 @@ const uk: ClientsCopy = {
   pendingLanguage: "Обере сам",
   pendingConsent: "Очікується",
   channelTelegram: "Telegram",
+  channelEmail: "Пошта",
 
   dangerTitle: "Небезпечна зона",
   resetTitle: "Скинути запрошення",
@@ -389,6 +397,7 @@ const ru: ClientsCopy = {
   pendingLanguage: "Выберет сам",
   pendingConsent: "Ожидается",
   channelTelegram: "Telegram",
+  channelEmail: "Почта",
 
   dangerTitle: "Опасная зона",
   resetTitle: "Сбросить приглашение",

@@ -465,13 +465,19 @@ export const channel = pgTable(
     clientId: text("client_id")
       .notNull()
       .references(() => client.id, { onDelete: "cascade" }),
-    // Open set: telegram | email | manual in MVP.
+    // Open set, and `telegram | email` is the whole of it in MVP. `manual` was
+    // removed in #57: a channel is an address we can reach, and "no address, the
+    // coach is the transport" was never one.
     kind: text("kind").notNull(),
-    // Telegram user/chat id or email address; null for `manual`.
+    // The address itself — a Telegram user/chat id, or an email address.
     address: text("address"),
     isPrimary: boolean("is_primary").notNull().default(false),
-    // Telegram profile snapshot captured at acceptance: { name, username, avatarR2Key }.
-    telegramSnapshot: jsonb("telegram_snapshot"),
+    // What the person said about themselves on the way in, per transport:
+    // { name, username, avatarR2Key } from Telegram, { name } typed on the web.
+    // Named for neither of them since #57, when the web client began typing their
+    // own name in here and a column called `telegram_snapshot` started reading as
+    // a promise about which door they came through.
+    snapshot: jsonb("snapshot"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
   },

@@ -71,10 +71,29 @@ export default Alchemy.Stack(
 
     // Client is independent and declared first because Coach and Bot consume its
     // deployed origin for public legal URLs.
+    //
+    // Two rate limits rather than one because a binding carries exactly one
+    // namespace and one `simple` config. They also defend different things: the
+    // lookup keeps `/i/*` from being a free database query for anyone with a
+    // loop, and the commit is the write. Neither is protection against token
+    // guessing — twelve symbols from a 32-character alphabet is ≈ 1.2 × 10¹⁸, and
+    // a per-colo best-effort counter is not what stands between a stranger and a
+    // client's join links (#57).
     const client = yield* Cloudflare.Website.Vite("Client", {
       rootDir: "./apps/client",
       compatibility,
       ...(canonical ? { domain: canonicalDomains.client } : {}),
+      env: {
+        DATABASE_URL: branch.connectionUri,
+        INVITE_LOOKUP: Cloudflare.RateLimit("INVITE_LOOKUP", {
+          namespaceId: 1001,
+          simple: { limit: 20, period: 60 },
+        }),
+        INVITE_COMMIT: Cloudflare.RateLimit("INVITE_COMMIT", {
+          namespaceId: 1002,
+          simple: { limit: 5, period: 60 },
+        }),
+      },
     })
     const clientAppUrl = requiredUrl("Client", client.url)
 
