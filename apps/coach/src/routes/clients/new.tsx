@@ -6,13 +6,11 @@ import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { HostFullscreen } from "@/presentation-host"
 import { NewClientScreen } from "@/features/coach/components/new-client-screen.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
+import { coachLaunch } from "@/features/entry/coach-loader.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { notifyHaptic } from "@/presentation-host"
 import { acceptOnce } from "@/routes/index.tsx"
 import { createClient } from "@/server/coach-clients.functions.ts"
-import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
  * New client — a route rather than a state, because it is somewhere a coach
@@ -28,25 +26,18 @@ export const Route = createFileRoute("/clients/new")({
   pendingMs: 0,
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
-  loader: async () => {
-    const [entry, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      resolveLaunchCredential(),
-    ])
-    return { entry, launchLanguage: launchLocale(credential.initData) }
-  },
+  loader: coachLaunch,
   component: NewClientRoute,
 })
 
 function NewClientRoute() {
-  const { entry, launchLanguage } = Route.useLoaderData()
+  const { language } = Route.useLoaderData()
   const navigate = useNavigate()
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const inFlight = useRef(false)
 
-  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
 
   const create = useCallback(

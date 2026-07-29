@@ -1,5 +1,7 @@
 import { notFound } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
+import { Schema } from "effect"
+import { coachInput, TransportString } from "./coach-operation.ts"
 
 /**
  * Local development mints a *real* Ed25519 launch and runs the real verifier
@@ -87,15 +89,7 @@ const signLaunch = async (botId: string, telegramId: string, authDate: number): 
  * everything below it — the same mechanism the admin minter beside it relies on.
  */
 export const loadDevelopmentCoachInitData = createServerFn({ method: "POST" })
-  .validator((input: unknown): { readonly botId: string } => ({
-    botId:
-      typeof input === "object" &&
-      input !== null &&
-      "botId" in input &&
-      typeof input.botId === "string"
-        ? input.botId
-        : "",
-  }))
+  .validator(coachInput(Schema.Struct({ botId: TransportString })))
   .handler(async ({ data }) => {
     if (!import.meta.env.DEV) throw notFound()
 

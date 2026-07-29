@@ -13,11 +13,10 @@ import { TodayScreen } from "@/features/coach/components/today-screen.tsx"
 import { WorkingHoursStep } from "@/features/coach/components/working-hours-step.tsx"
 import { shareClientInvite } from "@/features/coach/invite-share.ts"
 import { useCoachTimezone } from "@/features/coach/use-coach-timezone.ts"
+import { type CoachLaunch, coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { impactHaptic, notifyHaptic } from "@/presentation-host"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { ActionBar } from "@/features/mini-app/components/action-bar.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
@@ -27,8 +26,7 @@ import {
   acceptCoachTerms,
   chooseCoachLanguage,
   type CoachEntryTransportResult,
-  loadCoachEntry,
-} from "@/server/coach.functions.ts"
+} from "@/server/coach-surface.functions.ts"
 
 /**
  * The coach Mini App's entry (#54), and since #61 the **Today dashboard** it
@@ -42,9 +40,7 @@ import {
  * language the launch itself claims, because at that point there is no member to
  * ask (#130).
  */
-export interface CoachEntryLoaderData {
-  readonly entry: CoachEntryTransportResult
-  readonly launchLanguage: CoachLanguage
+export interface CoachEntryLoaderData extends CoachLaunch {
   /** Absent until a coach is past the terms — there is no day to show yet. */
   readonly today: TodayResult | undefined
 }
@@ -55,20 +51,15 @@ export const Route = createFileRoute("/")({
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
   loader: async (): Promise<CoachEntryLoaderData> => {
-    // Both halves come from the same launch, and the credential is memoized, so
-    // this is one round trip rather than two.
-    const [entry, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      resolveLaunchCredential(),
-    ])
+    const launch = await coachLaunch()
     // The day is only asked for once there is a screen to put it on: a coach who
     // has not accepted the terms has no practice, and asking anyway would spend
     // a round trip on the one screen that must paint fastest.
     const today =
-      entry.ok && entry.entry.kind === "home"
-        ? await loadToday().catch(() => ({ ok: false, error: "server" }) as const)
+      launch.entry.ok && launch.entry.entry.kind === "home"
+        ? await orServerFailure(loadToday())
         : undefined
-    return { entry, launchLanguage: launchLocale(credential.initData), today }
+    return { ...launch, today }
   },
   component: CoachEntry,
 })

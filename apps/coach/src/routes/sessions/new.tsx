@@ -21,16 +21,14 @@ import {
   SchedulingScreen,
 } from "@/features/coach/components/scheduling-screen.tsx"
 import { validateSchedulingSearch } from "@/features/coach/scheduling-search.ts"
+import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { acceptOnce } from "@/routes/index.tsx"
 import type { CoachClients } from "@/server/coach-clients.ts"
 import { getClient, listClients, scheduleSession } from "@/server/coach-clients.functions.ts"
-import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
  * The whole booking, on one route (#61, routed in #186).
@@ -51,18 +49,14 @@ export const Route = createFileRoute("/sessions/new")({
   pendingComponent: EntryLoading,
   validateSearch: validateSchedulingSearch,
   loader: async () => {
-    const [entry, clients, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      listClients().catch(() => ({ ok: false, error: "server" }) as const),
-      resolveLaunchCredential(),
-    ])
-    return { entry, clients, launchLanguage: launchLocale(credential.initData) }
+    const [launch, clients] = await Promise.all([coachLaunch(), orServerFailure(listClients())])
+    return { ...launch, clients }
   },
   component: NewSessionRoute,
 })
 
 function NewSessionRoute() {
-  const { entry, clients, launchLanguage } = Route.useLoaderData()
+  const { language, clients } = Route.useLoaderData()
   const { client: clientId, from } = Route.useSearch()
   const navigate = useNavigate()
   const router = useRouter()
@@ -74,7 +68,6 @@ function NewSessionRoute() {
   const [date, setDate] = useState(() => calendarDate(new Date()))
   const inFlight = useRef(false)
 
-  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
 
   /**

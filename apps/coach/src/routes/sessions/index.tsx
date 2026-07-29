@@ -6,12 +6,10 @@ import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { HostFullscreen } from "@/presentation-host"
 import { SessionsScreen } from "@/features/coach/components/sessions-screen.tsx"
+import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { listUpcomingSessions } from "@/server/coach-sessions.functions.ts"
-import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
  * The sessions list (#61): everything ahead, grouped by day. A drill-in from
@@ -24,20 +22,18 @@ export const Route = createFileRoute("/sessions/")({
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
   loader: async () => {
-    const [entry, upcoming, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      listUpcomingSessions().catch(() => ({ ok: false, error: "server" }) as const),
-      resolveLaunchCredential(),
+    const [launch, upcoming] = await Promise.all([
+      coachLaunch(),
+      orServerFailure(listUpcomingSessions()),
     ])
-    return { entry, upcoming, launchLanguage: launchLocale(credential.initData) }
+    return { ...launch, upcoming }
   },
   component: SessionsRoute,
 })
 
 function SessionsRoute() {
   const navigate = useNavigate()
-  const { entry, upcoming, launchLanguage } = Route.useLoaderData()
-  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
+  const { language, upcoming } = Route.useLoaderData()
   const copy = coachCopy(language)
   // Read once per render of the screen rather than per row: every heading is
   // decided against the same instant, so a list cannot straddle midnight.

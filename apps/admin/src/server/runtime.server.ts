@@ -9,7 +9,7 @@ import {
 } from "@praximo/db"
 import type { WorkspaceRunCancellationRpcClient } from "@praximo/domain"
 import { CoachBotRelease, ManagerBotSender } from "@praximo/telegram"
-import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
+import { ConfigProvider, type Effect, Layer, ManagedRuntime } from "effect"
 import { AdminSurface } from "./admin-surface.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
 import { ViewerRole } from "./viewer-role.ts"
@@ -103,110 +103,15 @@ let runtimePromise: Promise<ReturnType<typeof runtimeFromEnv>> | undefined
 
 const getRuntime = () => (runtimePromise ??= resolveEnv().then(runtimeFromEnv))
 
-/** The manager Mini App's entry gate (#106) — the one call every viewer makes. */
-export const resolveViewerRole = async (initData: string): Promise<ViewerRole.Role> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(ViewerRole.Service, (service) => service.resolveRole(initData)),
-  )
-}
-
-export const listAdminWorkspaces = async (
-  initData: string,
-): Promise<AdminSurface.CoachListResult> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) => service.listWorkspaces(initData)),
-  )
-}
-
-export const createAdminWorkspace = async (initData: string, input: unknown, delivery: unknown) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.createWorkspace(initData, input, delivery),
-    ),
-  )
-}
-
-export const prepareAdminInviteShareMessage = async (
-  initData: string,
-  inviteId: string,
-  language: unknown,
-) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.prepareInviteShareMessage(initData, inviteId, language),
-    ),
-  )
-}
-
-export const recordAdminInviteShare = async (
-  initData: string,
-  inviteId: string,
-  language: unknown,
-) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.recordInviteShare(initData, inviteId, language),
-    ),
-  )
-}
-
-export const getAdminWorkspace = async (initData: string, workspaceId: string) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) => service.getWorkspace(initData, workspaceId)),
-  )
-}
-
-export const renameAdminWorkspace = async (
-  initData: string,
-  workspaceId: string,
-  input: unknown,
-) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.renameWorkspace(initData, workspaceId, input),
-    ),
-  )
-}
-
-export const reissueAdminWorkspaceInvite = async (
-  initData: string,
-  workspaceId: string,
-  expectedInviteId: string,
-  requestId: string,
-) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.reissueWorkspaceInvite(initData, workspaceId, expectedInviteId, requestId),
-    ),
-  )
-}
-
-export const deleteAdminWorkspace = async (
-  initData: string,
-  workspaceId: string,
-  input: unknown,
-) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.deleteWorkspace(initData, workspaceId, input),
-    ),
-  )
-}
-
-export const getAdminWorkspaceDeletion = async (initData: string, workspaceId: string) => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(AdminSurface.Service, (service) =>
-      service.getWorkspaceDeletion(initData, workspaceId),
-    ),
-  )
-}
+/**
+ * The one entry into this Worker's runtime, and the whole of it.
+ *
+ * It replaced 10 exported wrappers (#234) whose bodies were this line with a
+ * service name pasted into it — the coach tree's `runCoach` under the admin
+ * tree's name, because the shape was never coach-specific. ADR 0002's "one
+ * runtime per Worker entrypoint" is what this preserves: the mandate is one
+ * *runtime*, and it is `getRuntime` above — never one export per operation.
+ */
+export const runAdmin = async <A, E>(
+  effect: Effect.Effect<A, E, AdminSurface.Service | ViewerRole.Service>,
+): Promise<A> => (await getRuntime()).runPromise(effect)

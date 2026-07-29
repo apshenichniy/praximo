@@ -15,7 +15,7 @@ import { MainMiniAppScreen } from "@/features/coach/components/main-mini-app-scr
 import { TermsScreen } from "@/features/coach/components/terms-screen.tsx"
 import { coachCatalog, coachCopy } from "@/features/i18n/coach-copy.ts"
 import { acceptOnce, CoachScreen, mainMiniAppUrlFor } from "@/routes/index.tsx"
-import type { CoachEntryTransportResult } from "@/server/coach.functions.ts"
+import type { CoachEntryTransportResult } from "@/server/coach-surface.functions.ts"
 
 /** The client app's origin, as the Worker's configuration hands it to the screen. */
 const LEGAL_ORIGIN = "https://me.praximo.io"

@@ -5,14 +5,12 @@ import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { HostFullscreen } from "@/presentation-host"
 import { ClientsScreen } from "@/features/coach/components/clients-screen.tsx"
+import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { listClients } from "@/server/coach-clients.functions.ts"
-import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
  * The clients list, on a route of its own (#61) — the list #56 put on the home
@@ -25,20 +23,15 @@ export const Route = createFileRoute("/clients/")({
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
   loader: async () => {
-    const [entry, clients, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      listClients().catch(() => ({ ok: false, error: "server" }) as const),
-      resolveLaunchCredential(),
-    ])
-    return { entry, clients, launchLanguage: launchLocale(credential.initData) }
+    const [launch, clients] = await Promise.all([coachLaunch(), orServerFailure(listClients())])
+    return { ...launch, clients }
   },
   component: ClientsRoute,
 })
 
 function ClientsRoute() {
   const navigate = useNavigate()
-  const { entry, clients, launchLanguage } = Route.useLoaderData()
-  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
+  const { language, clients } = Route.useLoaderData()
   const copy = coachCopy(language)
 
   return (

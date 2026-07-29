@@ -1,78 +1,52 @@
 import type { WorkingHours } from "@praximo/domain"
 import { createServerFn } from "@tanstack/react-start"
-import type { CoachClients } from "./coach-clients.ts"
-import { type CoachTransportError, isTagged, transportError } from "./coach-transport.ts"
+import { Effect, Schema } from "effect"
+import { CoachClients } from "./coach-clients.ts"
+import { coachInput, TransportNumber, TransportString, TransportValue } from "./coach-operation.ts"
+import type { CoachResult } from "./coach-transport.ts"
 import { launchCredential } from "./launch-credential.ts"
-import {
-  createCoachClient,
-  hideCoachMainMiniAppHint,
-  loadCoachClientDetail,
-  loadCoachClients,
-  loadCoachDaySchedule,
-  loadCoachRangeSchedule,
-  loadCoachWorkingHours,
-  prepareCoachInviteCard,
-  recordCoachInviteDelivery,
-  removeCoachClient,
-  resendCoachClientInvite,
-  resetCoachClientInvite,
-  saveCoachTimezone,
-  saveCoachWorkingHours,
-  scheduleCoachSession,
-  sendCoachInviteEmail,
-} from "./runtime.server.ts"
+import { coachAcknowledgement, coachOperation } from "./runtime.server.ts"
 
 /**
  * The client screens' transport: a tagged result rather than a thrown error, and
  * one undifferentiated `unauthenticated` so a refusal cannot be used to tell an
- * unknown bot from a stale credential. The mapping itself is shared (#61).
+ * unknown bot from a stale credential. The mapping itself is shared (#61), and
+ * since #234 so is everything around it — each operation below is the service
+ * call, the shape of its answer, and nothing else.
  */
-export type CoachClientsTransportError = CoachTransportError
 
-export type CoachClientsResult =
-  | { readonly ok: true; readonly home: CoachClients.CoachClientsHome }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
+/** The one shape read on both sides of every client operation. */
+const clientId = Schema.Struct({ clientId: TransportString })
+
+export type CoachClientsResult = CoachResult<{
+  readonly home: CoachClients.CoachClientsHome
+}>
 
 export const listClients = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .handler(async ({ context }): Promise<CoachClientsResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      return { ok: true, home: await loadCoachClients(context.credential) }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .handler(
+    coachOperation({
+      run: (credential) => Effect.flatMap(CoachClients.Service, (s) => s.home(credential)),
+      answer: (home): CoachClientsResult => ({ ok: true, home }),
+    }),
+  )
 
-export type ClientDetailResult =
-  | { readonly ok: true; readonly client: CoachClients.ClientDetail | undefined }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
-
-const clientIdOf = (input: unknown): { readonly clientId: string } => ({
-  clientId:
-    typeof input === "object" &&
-    input !== null &&
-    "clientId" in input &&
-    typeof input.clientId === "string"
-      ? input.clientId
-      : "",
-})
+export type ClientDetailResult = CoachResult<{
+  readonly client: CoachClients.ClientDetail | undefined
+}>
 
 export const getClient = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(clientIdOf)
-  .handler(async ({ context, data }): Promise<ClientDetailResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      return { ok: true, client: await loadCoachClientDetail(context.credential, data.clientId) }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(clientId))
+  .handler(
+    coachOperation({
+      run: (credential, data: typeof clientId.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.detail(credential, data.clientId)),
+      answer: (client): ClientDetailResult => ({ ok: true, client }),
+    }),
+  )
 
-export type CreateClientResult =
-  | { readonly ok: true; readonly clientId: string }
-  | { readonly ok: false; readonly error: CoachClientsTransportError | "invalid" }
+export type CreateClientResult = CoachResult<{ readonly clientId: string }, "invalid">
 
 /**
  * The New client screen's single commit. The name and the invitation language
@@ -80,62 +54,41 @@ export type CreateClientResult =
  * server — the screen offers a text field and three chips, so anything else is
  * a broken client.
  */
+const createClientInput = Schema.Struct({
+  name: TransportString,
+  inviteLanguage: TransportString,
+})
+
 export const createClient = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator((input: unknown): { readonly name: string; readonly inviteLanguage: string } => ({
-    name:
-      typeof input === "object" &&
-      input !== null &&
-      "name" in input &&
-      typeof input.name === "string"
-        ? input.name
-        : "",
-    inviteLanguage:
-      typeof input === "object" &&
-      input !== null &&
-      "inviteLanguage" in input &&
-      typeof input.inviteLanguage === "string"
-        ? input.inviteLanguage
-        : "",
-  }))
-  .handler(async ({ context, data }): Promise<CreateClientResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      const created = await createCoachClient(context.credential, data)
-      return { ok: true, clientId: created.clientId }
-    } catch (error) {
-      if (isTagged(error, "CoachClients.InvalidClient")) return { ok: false, error: "invalid" }
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(createClientInput))
+  .handler(
+    coachOperation({
+      failures: { "CoachClients.InvalidClient": "invalid" },
+      run: (credential, data: typeof createClientInput.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.create(credential, data)),
+      answer: (created): CreateClientResult => ({ ok: true, clientId: created.clientId }),
+    }),
+  )
 
-export type DayScheduleResult =
-  | { readonly ok: true; readonly day: CoachClients.DaySchedule }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
+export type DayScheduleResult = CoachResult<{ readonly day: CoachClients.DaySchedule }>
+
+const dayScheduleInput = Schema.Struct({ date: TransportString })
 
 export const getDaySchedule = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator((input: unknown): { readonly date: string } => ({
-    date:
-      typeof input === "object" &&
-      input !== null &&
-      "date" in input &&
-      typeof input.date === "string"
-        ? input.date
-        : "",
-  }))
-  .handler(async ({ context, data }): Promise<DayScheduleResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      return { ok: true, day: await loadCoachDaySchedule(context.credential, data.date) }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(dayScheduleInput))
+  .handler(
+    coachOperation({
+      run: (credential, data: typeof dayScheduleInput.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.daySchedule(credential, data.date)),
+      answer: (day): DayScheduleResult => ({ ok: true, day }),
+    }),
+  )
 
-export type RangeScheduleResult =
-  | { readonly ok: true; readonly days: ReadonlyArray<CoachClients.DatedDaySchedule> }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
+export type RangeScheduleResult = CoachResult<{
+  readonly days: ReadonlyArray<CoachClients.DatedDaySchedule>
+}>
 
 /**
  * A run of days in one read (#186). The strip asks for the fortnight it shows
@@ -143,84 +96,67 @@ export type RangeScheduleResult =
  * instead of fourteen — and the days themselves are a handful of intervals, so
  * the answer is smaller than the requests it replaces.
  */
+const rangeScheduleInput = Schema.Struct({ from: TransportString, days: TransportNumber(1) })
+
 export const getRangeSchedule = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator((input: unknown): { readonly from: string; readonly days: number } => {
-    const record = (input ?? {}) as Record<string, unknown>
-    return {
-      from: typeof record.from === "string" ? record.from : "",
-      days: typeof record.days === "number" && Number.isFinite(record.days) ? record.days : 1,
-    }
-  })
-  .handler(async ({ context, data }): Promise<RangeScheduleResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      return {
-        ok: true,
-        days: await loadCoachRangeSchedule(context.credential, data.from, data.days),
-      }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(rangeScheduleInput))
+  .handler(
+    coachOperation({
+      run: (credential, data: typeof rangeScheduleInput.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) =>
+          s.rangeSchedule(credential, data.from, data.days),
+        ),
+      answer: (days): RangeScheduleResult => ({ ok: true, days }),
+    }),
+  )
 
-export type ScheduleResult =
-  | { readonly ok: true; readonly outcome: CoachClients.ScheduleOutcome }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
+export type ScheduleResult = CoachResult<{ readonly outcome: CoachClients.ScheduleOutcome }>
+
+const scheduleInput = Schema.Struct({
+  clientId: TransportString,
+  date: TransportString,
+  startMinutes: TransportNumber(-1),
+  durationMinutes: TransportNumber(-1),
+  kind: TransportString,
+})
 
 export const scheduleSession = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator((input: unknown): CoachClients.ScheduleSessionInput => {
-    const record = (input ?? {}) as Record<string, unknown>
-    return {
-      clientId: typeof record.clientId === "string" ? record.clientId : "",
-      date: typeof record.date === "string" ? record.date : "",
-      startMinutes: typeof record.startMinutes === "number" ? record.startMinutes : -1,
-      durationMinutes: typeof record.durationMinutes === "number" ? record.durationMinutes : -1,
-      kind: typeof record.kind === "string" ? record.kind : "",
-    }
-  })
-  .handler(async ({ context, data }): Promise<ScheduleResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      return { ok: true, outcome: await scheduleCoachSession(context.credential, data) }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(scheduleInput))
+  .handler(
+    coachOperation({
+      run: (credential, data: typeof scheduleInput.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.schedule(credential, data)),
+      answer: (outcome): ScheduleResult => ({ ok: true, outcome }),
+    }),
+  )
 
-export type DeleteClientResult =
-  | { readonly ok: true; readonly deleted: boolean }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
+export type DeleteClientResult = CoachResult<{ readonly deleted: boolean }>
 
 export const deleteClient = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(clientIdOf)
-  .handler(async ({ context, data }): Promise<DeleteClientResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      const removed = await removeCoachClient(context.credential, data.clientId)
-      return { ok: true, deleted: removed.deleted }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(clientId))
+  .handler(
+    coachOperation({
+      run: (credential, data: typeof clientId.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.remove(credential, data.clientId)),
+      answer: ({ deleted }): DeleteClientResult => ({ ok: true, deleted }),
+    }),
+  )
 
 export const resetInvite = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(clientIdOf)
-  .handler(async ({ context, data }): Promise<ClientDetailResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      return { ok: true, client: await resetCoachClientInvite(context.credential, data.clientId) }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(clientId))
+  .handler(
+    coachOperation({
+      run: (credential, data: typeof clientId.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.resetInvite(credential, data.clientId)),
+      answer: (client): ClientDetailResult => ({ ok: true, client }),
+    }),
+  )
 
-export type ResendInviteResult =
-  | { readonly ok: true; readonly outcome: CoachClients.ResendOutcome }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
+export type ResendInviteResult = CoachResult<{ readonly outcome: CoachClients.ResendOutcome }>
 
 /**
  * Recovery behind the resend action (#61): the invitation to send again, minted
@@ -232,24 +168,24 @@ export type ResendInviteResult =
  */
 export const resendInvite = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(clientIdOf)
-  .handler(async ({ context, data }): Promise<ResendInviteResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      return { ok: true, outcome: await resendCoachClientInvite(context.credential, data.clientId) }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(clientId))
+  .handler(
+    coachOperation({
+      run: (credential, data: typeof clientId.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.resendInvite(credential, data.clientId)),
+      answer: (outcome): ResendInviteResult => ({ ok: true, outcome }),
+    }),
+  )
 
-export type PrepareInviteCardResult =
-  | { readonly ok: true; readonly card: CoachClients.PreparedInviteCard }
-  /**
-   * `gone` is the invitation that is no longer shareable — deleted, accepted, or
-   * reissued out from under the screen. `failed` is the coach's own bot refusing
-   * to author the card, which the same tap can retry.
-   */
-  | { readonly ok: false; readonly error: CoachClientsTransportError | "gone" | "failed" }
+/**
+ * `gone` is the invitation that is no longer shareable — deleted, accepted, or
+ * reissued out from under the screen. `failed` is the coach's own bot refusing
+ * to author the card, which the same tap can retry.
+ */
+export type PrepareInviteCardResult = CoachResult<
+  { readonly card: CoachClients.PreparedInviteCard },
+  "gone" | "failed"
+>
 
 /**
  * The card, minted on the coach's tap (#179).
@@ -260,18 +196,16 @@ export type PrepareInviteCardResult =
  */
 export const prepareInviteCard = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(clientIdOf)
-  .handler(async ({ context, data }): Promise<PrepareInviteCardResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      const card = await prepareCoachInviteCard(context.credential, data.clientId)
-      return card === undefined ? { ok: false, error: "gone" } : { ok: true, card }
-    } catch (error) {
-      if (isTagged(error, "CoachClients.CardPreparationFailed"))
-        return { ok: false, error: "failed" }
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(clientId))
+  .handler(
+    coachOperation({
+      failures: { "CoachClients.CardPreparationFailed": "failed" },
+      run: (credential, data: typeof clientId.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.prepareInviteCard(credential, data.clientId)),
+      answer: (card): PrepareInviteCardResult =>
+        card === undefined ? { ok: false, error: "gone" } : { ok: true, card },
+    }),
+  )
 
 /**
  * The delivery, reported once it has actually happened (#224).
@@ -286,28 +220,24 @@ export const prepareInviteCard = createServerFn({ method: "POST" })
  * domain's own set: the segment offers two doors, so anything else is a broken
  * client rather than a coach.
  */
+const recordDeliveryInput = Schema.Struct({ clientId: TransportString, kind: TransportString })
+
 export const recordInviteDelivery = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator((input: unknown): { readonly clientId: string; readonly kind: string } => {
-    const record = (input ?? {}) as Record<string, unknown>
-    return {
-      clientId: typeof record.clientId === "string" ? record.clientId : "",
-      kind: typeof record.kind === "string" ? record.kind : "",
-    }
-  })
-  .handler(async ({ context, data }): Promise<{ readonly ok: boolean }> => {
-    if (context.credential.initData.length === 0) return { ok: false }
-    try {
-      const outcome = await recordCoachInviteDelivery(context.credential, data.clientId, data.kind)
-      return { ok: outcome.recorded }
-    } catch {
-      return { ok: false }
-    }
-  })
+  .validator(coachInput(recordDeliveryInput))
+  .handler(
+    coachAcknowledgement({
+      run: (credential, data: typeof recordDeliveryInput.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) =>
+          s.recordDelivery(credential, data.clientId, data.kind),
+        ),
+      acknowledged: ({ recorded }) => recorded,
+    }),
+  )
 
-export type SendInviteEmailResult =
-  | { readonly ok: true; readonly outcome: CoachClients.SendInviteEmailOutcome }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
+export type SendInviteEmailResult = CoachResult<{
+  readonly outcome: CoachClients.SendInviteEmailOutcome
+}>
 
 /**
  * The invitation, sent by the service (#58).
@@ -322,28 +252,23 @@ export type SendInviteEmailResult =
  * the domain's own reader — the sheet checks it too, but a check on the screen is
  * a courtesy to the typist, never the fence.
  */
+const sendInviteEmailInput = Schema.Struct({
+  clientId: TransportString,
+  address: TransportString,
+})
+
 export const sendInviteEmail = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator((input: unknown): { readonly clientId: string; readonly address: string } => {
-    const record = (input ?? {}) as Record<string, unknown>
-    return {
-      clientId: typeof record.clientId === "string" ? record.clientId : "",
-      address: typeof record.address === "string" ? record.address : "",
-    }
-  })
-  .handler(async ({ context, data }): Promise<SendInviteEmailResult> => {
-    if (context.credential.initData.length === 0) {
-      return { ok: false, error: "unauthenticated" }
-    }
-    try {
-      return {
-        ok: true,
-        outcome: await sendCoachInviteEmail(context.credential, data.clientId, data.address),
-      }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .validator(coachInput(sendInviteEmailInput))
+  .handler(
+    coachOperation({
+      run: (credential, data: typeof sendInviteEmailInput.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) =>
+          s.sendInviteEmail(credential, data.clientId, data.address),
+        ),
+      answer: (outcome): SendInviteEmailResult => ({ ok: true, outcome }),
+    }),
+  )
 
 /**
  * The zone, sent on launch and answered with nothing.
@@ -352,75 +277,58 @@ export const sendInviteEmail = createServerFn({ method: "POST" })
  * failed write means the next launch tries again, which is exactly the right
  * amount of ceremony for a column nobody asked to fill in.
  */
+const timezoneInput = Schema.Struct({ timezone: TransportString })
+
 export const saveTimezone = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator((input: unknown): { readonly timezone: string } => ({
-    timezone:
-      typeof input === "object" &&
-      input !== null &&
-      "timezone" in input &&
-      typeof input.timezone === "string"
-        ? input.timezone
-        : "",
-  }))
-  .handler(async ({ context, data }): Promise<{ readonly ok: boolean }> => {
-    if (context.credential.initData.length === 0) return { ok: false }
-    try {
-      await saveCoachTimezone(context.credential, data.timezone)
-      return { ok: true }
-    } catch {
-      return { ok: false }
-    }
-  })
+  .validator(coachInput(timezoneInput))
+  .handler(
+    coachAcknowledgement({
+      run: (credential, data: typeof timezoneInput.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.saveTimezone(credential, data.timezone)),
+      acknowledged: () => true,
+    }),
+  )
 
 export const hideMainMiniAppHint = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .handler(async ({ context }): Promise<{ readonly ok: boolean }> => {
-    if (context.credential.initData.length === 0) return { ok: false }
-    try {
-      await hideCoachMainMiniAppHint(context.credential)
-      return { ok: true }
-    } catch {
-      return { ok: false }
-    }
-  })
+  .handler(
+    coachAcknowledgement({
+      run: (credential) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.hideMainMiniAppHint(credential)),
+      acknowledged: () => true,
+    }),
+  )
 
-export type WorkingHoursResult =
-  | { readonly ok: true; readonly hours: WorkingHours }
-  | { readonly ok: false; readonly error: CoachClientsTransportError }
+export type WorkingHoursResult = CoachResult<{ readonly hours: WorkingHours }>
 
 export const getWorkingHours = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .handler(async ({ context }): Promise<WorkingHoursResult> => {
-    if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
-    try {
-      return { ok: true, hours: await loadCoachWorkingHours(context.credential) }
-    } catch (error) {
-      return { ok: false, error: transportError(error) }
-    }
-  })
+  .handler(
+    coachOperation({
+      run: (credential) => Effect.flatMap(CoachClients.Service, (s) => s.workingHours(credential)),
+      answer: (hours): WorkingHoursResult => ({ ok: true, hours }),
+    }),
+  )
 
 /**
  * The screen commits on change, so this is called once per tap rather than once
  * per visit — and the answer matters, unlike `saveTimezone`: a coach who cannot
  * see that a change failed will keep the week they think they set.
  *
- * The value crosses unvalidated on purpose and is parsed strictly on the far
- * side. A validator here that fell back would turn a mangled request into a
- * silent reset, which is the one failure this write must not have.
+ * The value crosses unread on purpose and is parsed strictly on the far side. A
+ * reader here that fell back would turn a mangled request into a silent reset,
+ * which is the one failure this write must not have.
  */
+const workingHoursInput = Schema.Struct({ hours: TransportValue })
+
 export const saveWorkingHours = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator((input: unknown): { readonly hours: unknown } => ({
-    hours:
-      typeof input === "object" && input !== null && "hours" in input ? input.hours : undefined,
-  }))
-  .handler(async ({ context, data }): Promise<{ readonly ok: boolean }> => {
-    if (context.credential.initData.length === 0) return { ok: false }
-    try {
-      const outcome = await saveCoachWorkingHours(context.credential, data.hours)
-      return { ok: outcome.saved }
-    } catch {
-      return { ok: false }
-    }
-  })
+  .validator(coachInput(workingHoursInput))
+  .handler(
+    coachAcknowledgement({
+      run: (credential, data: typeof workingHoursInput.Type) =>
+        Effect.flatMap(CoachClients.Service, (s) => s.saveWorkingHours(credential, data.hours)),
+      acknowledged: ({ saved }) => saved,
+    }),
+  )

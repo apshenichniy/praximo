@@ -5,12 +5,10 @@ import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { HostFullscreen } from "@/presentation-host"
 import { SessionScreen } from "@/features/coach/components/session-screen.tsx"
+import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { getSession } from "@/server/coach-sessions.functions.ts"
-import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
  * One session — a **stub** in this ticket (#61), so that the list rows and
@@ -23,21 +21,17 @@ export const Route = createFileRoute("/sessions/$sessionId")({
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
   loader: async ({ params }) => {
-    const [entry, detail, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      getSession({ data: { sessionId: params.sessionId } }).catch(
-        () => ({ ok: false, error: "server" }) as const,
-      ),
-      resolveLaunchCredential(),
+    const [launch, detail] = await Promise.all([
+      coachLaunch(),
+      orServerFailure(getSession({ data: { sessionId: params.sessionId } })),
     ])
-    return { entry, detail, launchLanguage: launchLocale(credential.initData) }
+    return { ...launch, detail }
   },
   component: SessionRoute,
 })
 
 function SessionRoute() {
-  const { entry, detail, launchLanguage } = Route.useLoaderData()
-  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
+  const { language, detail } = Route.useLoaderData()
   const copy = coachCopy(language)
   const session = detail.ok ? detail.session : undefined
 

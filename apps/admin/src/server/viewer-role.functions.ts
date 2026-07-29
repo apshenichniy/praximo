@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start"
+import { Effect } from "effect"
 import { launchCredential } from "./launch-credential.ts"
-import { resolveViewerRole } from "./runtime.server.ts"
-import type { ViewerRole } from "./viewer-role.ts"
+import { runAdmin } from "./runtime.server.ts"
+import { ViewerRole } from "./viewer-role.ts"
 
 /**
  * Why the entry could not name a role. Neither answer is a missing page: a
@@ -29,7 +30,10 @@ export const loadViewerRole = createServerFn({ method: "POST" })
     const initData = context.credential.initData
     if (initData.length === 0) return { ok: false, error: "unauthenticated" }
     try {
-      return { ok: true, role: await resolveViewerRole(initData) }
+      const role = await runAdmin(
+        Effect.flatMap(ViewerRole.Service, (s) => s.resolveRole(initData)),
+      )
+      return { ok: true, role }
     } catch (error) {
       if (
         typeof error === "object" &&

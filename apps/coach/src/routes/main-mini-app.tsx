@@ -6,14 +6,12 @@ import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { HostFullscreen } from "@/presentation-host"
 import { MainMiniAppScreen } from "@/features/coach/components/main-mini-app-screen.tsx"
+import { coachLaunch } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { mainMiniAppUrlFor } from "@/routes/index.tsx"
 import { impactHaptic } from "@/presentation-host"
 import { hideMainMiniAppHint } from "@/server/coach-clients.functions.ts"
-import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
  * The optional @BotFather steps, behind Today's one-row hint (#61).
@@ -27,20 +25,13 @@ export const Route = createFileRoute("/main-mini-app")({
   pendingMs: 0,
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
-  loader: async () => {
-    const [entry, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      resolveLaunchCredential(),
-    ])
-    return { entry, launchLanguage: launchLocale(credential.initData) }
-  },
+  loader: coachLaunch,
   component: MainMiniAppRoute,
 })
 
 function MainMiniAppRoute() {
-  const { entry, launchLanguage } = Route.useLoaderData()
+  const { entry, language } = Route.useLoaderData()
   const router = useRouter()
-  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
 
   const hide = useCallback(() => {

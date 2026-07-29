@@ -4,13 +4,11 @@ import { useCallback } from "react"
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { AvailabilityScreen } from "@/features/coach/components/availability-screen.tsx"
+import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { HoursUnavailable } from "@/features/entry/components/hours-unavailable.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { HostFullscreen } from "@/presentation-host"
 import { getWorkingHours } from "@/server/coach-clients.functions.ts"
-import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
  * Availability (#210) — the screen the navigation model did not have, and the
@@ -25,23 +23,18 @@ export const Route = createFileRoute("/availability/")({
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
   loader: async () => {
-    const [entry, hours, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      getWorkingHours().catch(() => ({ ok: false, error: "server" }) as const),
-      resolveLaunchCredential(),
-    ])
-    return { entry, hours, launchLanguage: launchLocale(credential.initData) }
+    const [launch, hours] = await Promise.all([coachLaunch(), orServerFailure(getWorkingHours())])
+    return { ...launch, hours }
   },
   component: AvailabilityRoute,
 })
 
 function AvailabilityRoute() {
-  const { entry, hours, launchLanguage } = Route.useLoaderData()
+  const { language, hours } = Route.useLoaderData()
   const navigate = useNavigate()
   const router = useRouter()
   const retry = useCallback(() => void router.invalidate(), [router])
 
-  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   const copy = coachCopy(language)
 
   if (!hours.ok) {
