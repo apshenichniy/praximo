@@ -135,17 +135,25 @@ const footerText = {
   margin: "0 0 4px",
 } as const
 
-/** The wordmark beside the image, so the brand survives with images blocked. */
+/**
+ * The wordmark beside the image, so the brand survives with images blocked.
+ *
+ * 28px mark against a 16px word is `BrandLockup`'s casting, reused rather than
+ * re-decided: #173 settled that at 20px the mark's guiding point — the one
+ * detail that makes it the Praximo mark rather than a violet blob — falls below
+ * the threshold where it survives. A footer in an email is exactly the place
+ * that argument was made about.
+ */
 const wordmark = {
   color: Ink,
-  fontSize: "14px",
+  fontSize: "16px",
   fontWeight: 620,
   letterSpacing: "-0.02em",
-  margin: "0 0 8px",
+  margin: "0 0 10px",
   verticalAlign: "middle",
 } as const
 
-const mark = { display: "inline-block", marginRight: "8px", verticalAlign: "middle" } as const
+const mark = { display: "inline-block", marginRight: "10px", verticalAlign: "middle" } as const
 
 export interface InviteEmailProps {
   readonly locale: CoachLanguage
@@ -184,12 +192,15 @@ export function InviteEmail({ locale, coachName, acceptanceUrl, markUrl }: Invit
           <Hr style={rule} />
           <Section>
             {/*
-             * `alt` is load-bearing, not decoration: most inboxes block remote
-             * images by default, and the footer has to read as the brand for a
-             * client who never unblocks them.
+             * **Empty `alt`, deliberately.** Most inboxes block remote images,
+             * and the footer still has to read as the brand — but what carries
+             * that is the *word* beside it, which is text. An `alt="Praximo"`
+             * was tried and is worse than nothing: the placeholder is clipped to
+             * this 28px box, so a blocked image renders «Pra» hard against the
+             * real wordmark. Decorative image, empty alt, brand in the text.
              */}
             <Text style={wordmark}>
-              <Img alt="Praximo" height="20" src={markUrl} style={mark} width="20" />
+              <Img alt="" height="28" src={markUrl} style={mark} width="28" />
               Praximo
             </Text>
             <Text style={footerText}>{copy.footer.about}</Text>

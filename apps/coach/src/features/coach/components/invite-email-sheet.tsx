@@ -17,6 +17,15 @@ import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 import { notifyHaptic, useOpenHaptic } from "@/presentation-host"
 
 /**
+ * The padding every sheet in this app carries — and load-bearing here in a way
+ * it is nowhere else: this is the only sheet whose action sits under a *text
+ * field*, so the on-screen keyboard rises under the button. A bare `pb-4` left
+ * it touching the keys. `max()` keeps 24px of air on a device with no home
+ * indicator and yields to the inset on one that has it.
+ */
+const sheetPadding = "px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+
+/**
  * The address the service sends this client's invitation to (#58).
  *
  * The Admin section's sheet (#105) is the shape this follows, with **one
@@ -76,12 +85,17 @@ export function InviteEmailSheet({
 
   return (
     <Drawer open={open} showSwipeHandle onOpenChange={onOpenChange}>
-      <DrawerContent>
-        <DrawerHeader>
+      <DrawerContent className={sheetPadding}>
+        {/*
+          Left-aligned, like every other sheet in this app: the drawer centres by
+          default on a vertical swipe axis, and a centred title over a
+          left-aligned form label reads as two different sheets stacked.
+        */}
+        <DrawerHeader className="p-0 pt-2 text-left group-data-[swipe-axis=y]/drawer-popup:text-left">
           <DrawerTitle>{copy.emailSheet.title}</DrawerTitle>
           <DrawerDescription>{copy.emailSheet.description}</DrawerDescription>
         </DrawerHeader>
-        <div className="flex flex-col gap-4 px-4 pb-4">
+        <div className="flex flex-col gap-5 pt-5">
           <div className="flex flex-col gap-2">
             <Label htmlFor="invite-email">{copy.emailSheet.label}</Label>
             <Input

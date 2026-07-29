@@ -40,12 +40,20 @@ describe("InviteEmail", () => {
     },
   )
 
-  // Most inboxes block remote images by default. The footer has to read as the
-  // brand for a client who never unblocks them.
-  it("names the brand in text as well as in the image", async () => {
+  /**
+   * Most inboxes block remote images by default, so the footer has to read as
+   * the brand without them — and what does that is the **word**, which is text.
+   *
+   * The mark's `alt` is empty on purpose. An `alt="Praximo"` was tried and is
+   * worse than nothing: the placeholder is clipped to the 28px box, so a blocked
+   * image renders «Pra» hard against the real wordmark.
+   */
+  it("carries the brand as text, with the mark decorative", async () => {
     const output = await html("en")
-    expect(output).toContain(`alt="Praximo"`)
     expect(output).toContain(MARK)
+    expect(output).toContain(`alt=""`)
+    expect(output).not.toContain(`alt="Praximo"`)
+    // The plain-text part has no images at all, so this is the whole of it there.
     expect(toPlainText(output)).toContain("Praximo")
   })
 

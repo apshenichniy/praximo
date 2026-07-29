@@ -314,7 +314,17 @@ export function ClientScreen({
                 }}
               >
                 {InviteDoors.literals.map((value) => (
-                  <ToggleGroupItem key={value} value={value} className="flex-1" disabled={pending}>
+                  // `rounded-full px-5` is what both other `ToggleGroup` call
+                  // sites pass — the onboarding language step and the Admin
+                  // section's invite chips. Without it this segment inherited
+                  // the primitive's bare `rounded-4xl px-3` and read as two
+                  // words on a pale smudge rather than as a control.
+                  <ToggleGroupItem
+                    key={value}
+                    value={value}
+                    className="flex-1 rounded-full px-5"
+                    disabled={pending}
+                  >
                     {copy.clients.doors[value].label}
                   </ToggleGroupItem>
                 ))}

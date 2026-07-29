@@ -49,10 +49,16 @@ cannot go as itself, and an image in an email needs an absolute URL on a public
 origin. That origin is already in the Coach Worker's environment as
 `CLIENT_APP_URL`, so the mark rides in on the same host as the link beside it.
 
-Regenerated from the light master rather than hand-drawn — 40px for a 20px slot,
-and *light* because the email body sits on a fixed light ground:
+Rasterized from the **transparent** light master, not from `avatar-512.png`:
+that one carries its theme background, which on the email's white card read as a
+pale tile around the mark. The transparent variant is cut for exactly this —
+"the mark for placement over a matching themed surface" — and the email body is
+a fixed light ground.
+
+56px for a 28px slot. 28 rather than 20 is `BrandLockup`'s casting, reused
+rather than re-decided: at 20px the guiding point stops surviving (#173).
 
 ```sh
-sips -Z 40 assets/branding/coach-bot/light/avatar-512.png \
-  --out apps/client/public/brand/praximo-mark.png
+rsvg-convert -w 56 -h 56 assets/branding/coach-bot/light/avatar-transparent.svg \
+  -o apps/client/public/brand/praximo-mark.png
 ```
