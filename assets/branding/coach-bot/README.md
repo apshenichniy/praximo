@@ -39,3 +39,20 @@ bun run branding:avatar:set --stage dev_apshenichniy \
 
 Use the light set on pale UI surfaces and select the matching favicon set for
 the page theme.
+
+## Email casting
+
+`apps/client/public/brand/praximo-mark.png` is the mark as it travels in the
+invitation email (#58), served publicly from `me.praximo.io`. Email cannot use
+the real one: Gmail strips SVG, so `PraximoMark` — a React SVG component —
+cannot go as itself, and an image in an email needs an absolute URL on a public
+origin. That origin is already in the Coach Worker's environment as
+`CLIENT_APP_URL`, so the mark rides in on the same host as the link beside it.
+
+Regenerated from the light master rather than hand-drawn — 40px for a 20px slot,
+and *light* because the email body sits on a fixed light ground:
+
+```sh
+sips -Z 40 assets/branding/coach-bot/light/avatar-512.png \
+  --out apps/client/public/brand/praximo-mark.png
+```

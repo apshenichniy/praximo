@@ -1,5 +1,5 @@
 import { ClientAcceptanceRepo } from "@praximo/db"
-import { type CoachLanguage, narrowCoachLanguage } from "@praximo/domain"
+import { type CoachLanguage, narrowCoachLanguage, readEmailAddress } from "@praximo/domain"
 import { clientConsentVersion } from "@praximo/i18n"
 import { Clock, Context, Effect, Layer } from "effect"
 
@@ -27,6 +27,17 @@ export interface AcceptanceView {
   readonly coachName: string
   /** Pre-selection, not a choice: the language the coach wrote the invite in. */
   readonly language: CoachLanguage
+  /**
+   * The address the invitation was emailed to, when it was (#58).
+   *
+   * A suggestion in exactly the sense the language above is one, and the form
+   * leaves it editable. Worth knowing while reading the commit below: this is
+   * the only address in the product with evidence behind it — the client
+   * demonstrably received mail there, or they would not be on this page — and a
+   * client who edits it replaces a working address with an unverified one. The
+   * result screen's echo is what catches that, so it stays.
+   */
+  readonly suggestedEmail?: string
   readonly consentVersion: string
   readonly session?: SessionSummary
   readonly coachTimezone?: string
@@ -107,26 +118,10 @@ export class Service extends Context.Service<Service, Interface>()(
   "@praximo/client/WebAcceptance",
 ) {}
 
-/**
- * Deliberately loose, and the looseness is the point.
- *
- * The page's job is to catch a client who typed nothing or typed obvious
- * nonsense, not to adjudicate RFC 5322 — a regex strict enough to be interesting
- * is a regex that eventually rejects somebody's real address, and this is the
- * one screen where being turned away means not reaching your coach. What follows
- * is "there is something either side of an @, with a dot after it".
- */
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/
-
 /** Names are not validated beyond being present: people's names are not a schema. */
 const readName = (value: string): string | undefined => {
   const trimmed = value.trim()
   return trimmed.length === 0 || trimmed.length > 200 ? undefined : trimmed
-}
-
-const readEmail = (value: string): string | undefined => {
-  const trimmed = value.trim()
-  return EMAIL_SHAPE.test(trimmed) && trimmed.length <= 320 ? trimmed : undefined
 }
 
 const identifier = (prefix: string): string =>
@@ -197,6 +192,7 @@ export const layer = Layer.effect(
         kind: "open",
         coachName: lookup.coachName,
         language: lookup.inviteLanguage,
+        ...(lookup.inviteAddress === undefined ? {} : { suggestedEmail: lookup.inviteAddress }),
         consentVersion: clientConsentVersion(lookup.inviteLanguage),
         ...sessionDetails(lookup),
       } as const satisfies AcceptanceView
@@ -219,7 +215,7 @@ export const layer = Layer.effect(
     const accept = Effect.fn("WebAcceptance.accept")(function* (input: AcceptInput) {
       const name = readName(input.name)
       if (name === undefined) return { kind: "invalid", field: "name" } as const
-      const email = readEmail(input.email)
+      const email = readEmailAddress(input.email)
       if (email === undefined) return { kind: "invalid", field: "email" } as const
 
       const lookup = yield* repo

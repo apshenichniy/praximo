@@ -77,6 +77,7 @@ const screen = (detail: CoachClients.ClientDetail) =>
         onShare={() => undefined}
         onShareSheet={() => undefined}
         onDelivered={() => undefined}
+        onSendEmail={() => undefined}
         onResetInvite={() => undefined}
         onDelete={() => undefined}
         pending={false}
@@ -164,8 +165,8 @@ describe("what the state word claims", () => {
     expect(html).toContain(copy.clients.stateNotSent)
     expect(html).not.toContain(copy.clients.stateInvited)
     // Nothing has gone out, so there is no door and no moment to name.
-    expect(html).not.toContain(copy.clients.doors.link.sentVia)
-    expect(html).not.toContain(copy.clients.doors.telegram.sentVia)
+    expect(html).not.toContain(copy.clients.sentVia.link)
+    expect(html).not.toContain(copy.clients.sentVia.telegram)
   })
 
   /**
@@ -181,7 +182,7 @@ describe("what the state word claims", () => {
 
     expect(html).toContain(copy.clients.stateInvited)
     expect(html).not.toContain(copy.clients.stateNotSent)
-    expect(html).toContain(copy.clients.doors.link.sentVia)
+    expect(html).toContain(copy.clients.sentVia.link)
   })
 
   it("names the Telegram door on the client's own screen too", async () => {
@@ -189,8 +190,8 @@ describe("what the state word claims", () => {
       client({ delivered: { at: "2026-07-27T10:00:00.000Z", kind: "telegram" } }),
     )
 
-    expect(html).toContain(copy.clients.doors.telegram.sentVia)
-    expect(html).not.toContain(copy.clients.doors.link.sentVia)
+    expect(html).toContain(copy.clients.sentVia.telegram)
+    expect(html).not.toContain(copy.clients.sentVia.link)
   })
 })
 
@@ -230,8 +231,8 @@ describe("the clients list", () => {
     ])
 
     expect(html).toContain(copy.clients.stateInvited)
-    expect(html).toContain(copy.clients.doors.link.sentVia)
-    expect(html).not.toContain(copy.clients.doors.telegram.sentVia)
+    expect(html).toContain(copy.clients.sentVia.link)
+    expect(html).not.toContain(copy.clients.sentVia.telegram)
   })
 
   it("names the Telegram door in the same shape", async () => {
@@ -239,6 +240,75 @@ describe("the clients list", () => {
       summary({ delivered: { at: "2026-07-27T09:00:00.000Z", kind: "telegram" } }),
     ])
 
-    expect(html).toContain(copy.clients.doors.telegram.sentVia)
+    expect(html).toContain(copy.clients.sentVia.telegram)
+  })
+})
+
+/**
+ * The service-sent invitation on the coach's screen (#58).
+ *
+ * The screen's job here is narrow — offer the send in the one place it belongs,
+ * and say afterwards *where* it went — so these assert the placement and the
+ * address, not the sending, which is the server's test.
+ */
+describe("the service-sent invitation", () => {
+  /**
+   * Not a third chip on the segment: an email is not a form of the token a coach
+   * hands over, it is us sending the web URL for them. Behind Telegram's door it
+   * would be an address for a client who is reachable in a chat.
+   */
+  it("offers the send behind the Link door and not behind Telegram", async () => {
+    const html = await screen(client())
+
+    // The screen opens on Telegram for an invitation nothing has been done with.
+    expect(html).not.toContain(copy.clients.sendEmail)
+
+    const linkDoor = await screen(
+      client({ delivered: { at: "2026-07-27T10:00:00.000Z", kind: "link" } }),
+    )
+    expect(linkDoor).toContain(copy.clients.sendEmail)
+  })
+
+  // Once there is an address on file the button is answering «не дошло», not
+  // sending for the first time — and the sheet opens on that same address.
+  it("reads as a resend once an address is on file", async () => {
+    const html = await screen(
+      client({
+        address: "anna@example.com",
+        delivered: { at: "2026-07-27T10:00:00.000Z", kind: "email" },
+      }),
+    )
+
+    expect(html).toContain(copy.clients.sendEmailAgain)
+  })
+
+  /**
+   * The line that makes a typo findable. Without it the coach reads
+   * «отправлено», the client never arrives, and nothing anywhere says the
+   * message went to `ann@gmial.com`.
+   */
+  it("names the address a service-sent invitation went to", async () => {
+    const html = await screen(
+      client({
+        address: "anna@example.com",
+        delivered: { at: "2026-07-27T10:00:00.000Z", kind: "email" },
+      }),
+    )
+
+    expect(html).toContain(copy.clients.sentVia.email)
+    expect(html).toContain("anna@example.com")
+    expect(html).not.toContain(copy.clients.stateNotSent)
+  })
+
+  /**
+   * A reissue carries the address and drops the delivery, so the screen must be
+   * able to say «Не отправлено» while still knowing where to send. The address
+   * belongs to the sheet then, not to a line claiming something was sent.
+   */
+  it("does not claim a send from a carried-over address alone", async () => {
+    const html = await screen(client({ address: "anna@example.com" }))
+
+    expect(html).toContain(copy.clients.stateNotSent)
+    expect(html).not.toContain(copy.clients.sentVia.email)
   })
 })

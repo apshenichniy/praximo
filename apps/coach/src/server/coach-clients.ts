@@ -5,6 +5,7 @@ import {
   ClientInviteTokenAlphabet,
   ClientInviteTokenLength,
   ClientInviteTtlMillis,
+  clientBrandMarkUrl,
   clientInviteStartParameter,
   clientInviteUrl,
   type CoachLanguage,
@@ -16,6 +17,7 @@ import {
   nextSlotStart,
   parseWorkingHours,
   PlannedDurations,
+  readEmailAddress,
   readMemberSettings,
   readWorkingHours,
   SessionKind,
@@ -23,6 +25,7 @@ import {
   type WorkingHours,
   type WorkspaceId,
 } from "@praximo/domain"
+import { EmailChannel } from "@praximo/email"
 import { clientCopy } from "@praximo/i18n"
 import { BotRegistry } from "@praximo/telegram"
 import { Clock, Config, Context, Effect, Layer, Schema } from "effect"
@@ -101,6 +104,21 @@ export interface InviteDoor {
   readonly message: string
 }
 
+/**
+ * The three answers a coach can act on after pressing send (#58).
+ *
+ * Three and no more, because there is no fourth thing they could do about it.
+ * `invalid-address` is the only one that asks them to retype — everything the
+ * channel could not classify as the address's fault reaches them as
+ * `unavailable`, since telling somebody to fix an address that was fine is worse
+ * than telling them to wait. `gone` is the screen having gone stale: the client
+ * accepted, or the link lapsed and the shipped reissue path (#61) owns what
+ * happens next.
+ */
+export type SendInviteEmailOutcome =
+  | { readonly sent: true; readonly address: string }
+  | { readonly sent: false; readonly reason: "invalid-address" | "unavailable" | "gone" }
+
 export interface ClientSessionSummary {
   readonly id: string
   readonly scheduledAt: string
@@ -128,6 +146,14 @@ export interface ClientDetail {
      */
     readonly telegram: InviteDoor
     readonly link: InviteDoor
+    /**
+     * The address this invitation was last emailed to (#58), surviving a reissue
+     * so the sheet opens pre-filled rather than blank.
+     *
+     * Independent of `delivered` below: a coach who emailed and then copied the
+     * link has a `link` delivery and this address, and both are true.
+     */
+    readonly address?: string
     /** Absent until the coach actually handed one of them over. */
     readonly delivered?: InviteDelivery
   }
@@ -324,6 +350,23 @@ export interface Interface {
     { readonly recorded: boolean },
     CoachSession.Unauthenticated | CoachSession.LoadFailed
   >
+  /**
+   * Send this client their invitation by email (#58).
+   *
+   * The one delivery the *service* performs rather than the coach, which is why
+   * it is an operation here and not a position on the door segment: the other
+   * two doors hand a token to a person, and this one hands it to an address.
+   *
+   * Synchronous by design. The coach is standing in front of the screen when
+   * they press it, and an outbox would answer them five minutes later into
+   * nothing. Nothing is written until Cloudflare has accepted the message, so a
+   * failure leaves the invitation exactly as it was and pressing again is safe.
+   */
+  readonly sendInviteEmail: (
+    credential: LaunchCredential,
+    clientId: string,
+    address: unknown,
+  ) => Effect.Effect<SendInviteEmailOutcome, CoachSession.Unauthenticated | CoachSession.LoadFailed>
   /** Written silently on launch, with no UI and no answer worth waiting for. */
   readonly saveTimezone: (
     credential: LaunchCredential,
@@ -443,6 +486,7 @@ export const layer = Layer.effect(
     const members = yield* MemberRepo.Service
     const registry = yield* BotRegistry.Service
     const workspaces = yield* WorkspaceRepo.Service
+    const email = yield* EmailChannel.Service
     // Read once, at layer construction, exactly as `CoachSurface` reads it for
     // the legal texts: the client app's origin is a deployment fact rather than
     // a per-call one, and a stage that cannot address its own Acceptance Page
@@ -549,6 +593,7 @@ export const layer = Layer.effect(
                 language: invite.language,
                 telegram: doors.telegram,
                 link: doors.link,
+                ...(invite.address === undefined ? {} : { address: invite.address }),
                 ...delivered(invite.delivered),
               },
             }),
@@ -964,6 +1009,77 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failed("clients.recordDelivery")))
     })
 
+    /**
+     * The service-sent invitation (#58).
+     *
+     * **Nothing is written before Cloudflare accepts the message** — not the
+     * address, not the kind, not the moment. That is the same rule the
+     * Acceptance Page's commit follows, and here it is what makes a retry safe:
+     * a failed send leaves the invitation byte-for-byte as it was, so pressing
+     * the button again cannot produce a second delivery record for a message
+     * that never left.
+     *
+     * The bookkeeping **afterwards** is best-effort, for the same reason
+     * `recordDelivery` is on the coach's own share and more strongly: by then the
+     * message has left and cannot be unsent. A failed write turning a real send
+     * into a reported failure would invite the coach to send a second email to a
+     * client who already has one. It surfaces instead as «не отправлено» beside a
+     * client who did get their invitation — an understatement, which is the safe
+     * direction for this screen to be wrong in (#224).
+     */
+    const sendInviteEmail = Effect.fn("CoachClients.sendInviteEmail")(function* (
+      credential: LaunchCredential,
+      clientId: string,
+      address: unknown,
+    ) {
+      const principal = yield* session.requireOnboardedCoach(credential, WRITE_WINDOW_MILLIS)
+      const to = typeof address === "string" ? readEmailAddress(address) : undefined
+      if (to === undefined) return { sent: false, reason: "invalid-address" } as const
+
+      const existing = yield* detailFor(principal, clientId)
+      // An invitation that has been accepted, or one whose link has lapsed —
+      // the latter belongs to the reissue path (#61), which is already on the
+      // screen. Either way the screen re-reads itself and finds out which.
+      if (existing?.invite === undefined || existing.state !== "invited") {
+        return { sent: false, reason: "gone" } as const
+      }
+
+      const coach = yield* coachName(principal.workspaceId)
+      const outcome = yield* email
+        .sendClientInvite({
+          to,
+          locale: existing.invite.language,
+          coachName: coach,
+          // The Link door's URL, because that is what this is: the same door,
+          // sent by us instead of pasted by them.
+          acceptanceUrl: existing.invite.link.url,
+          markUrl: clientBrandMarkUrl(clientOrigin),
+        })
+        .pipe(
+          Effect.as("sent" as const),
+          Effect.catchTag("EmailChannel.AddressRejected", () =>
+            Effect.succeed("invalid-address" as const),
+          ),
+          Effect.catchTags({
+            "EmailChannel.SenderNotConfigured": () => Effect.succeed("unavailable" as const),
+            "EmailChannel.SendFailed": () => Effect.succeed("unavailable" as const),
+          }),
+        )
+      if (outcome !== "sent") return { sent: false, reason: outcome } as const
+
+      const now = new Date(yield* Clock.currentTimeMillis)
+      yield* clients
+        .recordDelivery({
+          workspaceId: principal.workspaceId,
+          clientId,
+          kind: "email",
+          address: to,
+          now,
+        })
+        .pipe(Effect.ignore)
+      return { sent: true, address: to } as const
+    })
+
     const saveTimezone = Effect.fn("CoachClients.saveTimezone")(function* (
       credential: LaunchCredential,
       timezone: string,
@@ -1041,6 +1157,7 @@ export const layer = Layer.effect(
       resendInvite,
       prepareInviteCard,
       recordDelivery,
+      sendInviteEmail,
       saveTimezone,
       hideMainMiniAppHint,
       workingHours,

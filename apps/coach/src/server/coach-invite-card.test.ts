@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { CoachInitData } from "@praximo/auth"
 import { ClientRepo, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
 import { WorkspaceId } from "@praximo/domain"
+import { EmailChannel } from "@praximo/email"
 import { clientCopy } from "@praximo/i18n"
 import { BotRegistry } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer } from "effect"
@@ -75,7 +76,17 @@ const unused = () => Effect.die(new Error("unused in this suite"))
 
 const run = <A, E>(
   row: ClientRepo.ClientDetailRow | undefined,
-  body: Effect.Effect<A, E, CoachClients.Service | BotRegistry.TestService>,
+  body: Effect.Effect<
+    A,
+    E,
+    CoachClients.Service | BotRegistry.TestService | EmailChannel.TestService
+  >,
+  /**
+   * Where the repository fake writes what it was asked to record, so a test can
+   * assert on the *arguments* rather than only on the boolean. The email path
+   * needs it: what makes that delivery right is the address it carries (#58).
+   */
+  deliveries: ClientRepo.RecordDeliveryInput[] = [],
 ) => {
   const members = Layer.succeed(
     MemberRepo.Service,
@@ -108,11 +119,11 @@ const run = <A, E>(
       reissueInvite: unused,
       // Fenced by the same pair the read is, because the real statement is: the
       // workspace comes from the launch and the client id from the tap.
-      recordDelivery: Effect.fn("ClientRepo.Test.recordDelivery")((input) =>
-        Effect.succeed({
-          recorded: input.workspaceId === WORKSPACE && input.clientId === row?.id,
-        }),
-      ),
+      recordDelivery: Effect.fn("ClientRepo.Test.recordDelivery")((input) => {
+        const recorded = input.workspaceId === WORKSPACE && input.clientId === row?.id
+        if (recorded) deliveries.push(input)
+        return Effect.succeed({ recorded })
+      }),
     }),
   )
   const sessions = Layer.succeed(
@@ -144,6 +155,7 @@ const run = <A, E>(
               sessions,
               workspaces,
               BotRegistry.testLayer,
+              EmailChannel.testLayer,
               CoachSession.layer.pipe(
                 Layer.provide(Layer.mergeAll(CoachInitData.testLayer(TEST_PUBLIC_KEY), members)),
               ),
@@ -155,6 +167,7 @@ const run = <A, E>(
           ),
         ),
         BotRegistry.testLayer,
+        EmailChannel.testLayer,
       ),
     ),
   )
@@ -373,6 +386,191 @@ describe("preparing the invitation card", () => {
         const service = yield* CoachClients.Service
         const failure = yield* Effect.flip(
           service.prepareInviteCard(yield* Effect.promise(() => credential()), "cl_anna"),
+        )
+
+        expect(failure._tag).toBe("CoachSession.Unauthenticated")
+      }),
+    ),
+  )
+})
+
+/**
+ * The one delivery the service performs itself (#58).
+ *
+ * Everything here turns on the same rule: **nothing is written until Cloudflare
+ * has accepted the message**. That is what makes the button safe to press twice,
+ * and it is why every refusal below is checked against an empty delivery log
+ * rather than only against its own return value.
+ */
+describe("sending the invitation by email", () => {
+  const ADDRESS = "anna@example.com"
+
+  it.effect("sends the Link door's URL and records the address it went to", () => {
+    const deliveries: ClientRepo.RecordDeliveryInput[] = []
+    return run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachClients.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        expect(yield* service.sendInviteEmail(launch, "cl_anna", ` ${ADDRESS} `)).toEqual({
+          sent: true,
+          address: ADDRESS,
+        })
+
+        const sent = yield* Effect.flatMap(EmailChannel.TestService, (test) => test.sent())
+        expect(sent).toHaveLength(1)
+        // The email is the Link door's other transport, so it carries that
+        // door's URL — never the Telegram deep link.
+        expect(sent[0]?.acceptanceUrl).toBe(`${CLIENT_APP_URL}/i/${TOKEN}`)
+        // The invitation's own language, not the coach's: this client was
+        // created in English while the coach reads Ukrainian (#181).
+        expect(sent[0]?.locale).toBe("en")
+        expect(sent[0]?.coachName).toBe(COACH_NAME)
+        expect(sent[0]?.markUrl).toBe(`${CLIENT_APP_URL}/brand/praximo-mark.png`)
+
+        expect(deliveries).toEqual([
+          {
+            workspaceId: WORKSPACE,
+            clientId: "cl_anna",
+            kind: "email",
+            address: ADDRESS,
+            now: new Date(NOW),
+          },
+        ])
+      }),
+      deliveries,
+    )
+  })
+
+  /**
+   * Caught here rather than at Cloudflare, and before the coach's keyboard has
+   * gone away. Nothing is sent and nothing is written.
+   */
+  it.effect("refuses an address that is not one, without sending", () => {
+    const deliveries: ClientRepo.RecordDeliveryInput[] = []
+    return run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachClients.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        for (const bad of ["", "   ", "anna", "anna@example", 7]) {
+          expect(yield* service.sendInviteEmail(launch, "cl_anna", bad)).toEqual({
+            sent: false,
+            reason: "invalid-address",
+          })
+        }
+
+        expect(yield* Effect.flatMap(EmailChannel.TestService, (test) => test.sent())).toHaveLength(
+          0,
+        )
+        expect(deliveries).toEqual([])
+      }),
+      deliveries,
+    )
+  })
+
+  /**
+   * Cloudflare refusing the address is the only failure that may ever ask the
+   * coach to retype. Nothing is recorded — the message did not leave.
+   */
+  it.effect("passes on an address the sender itself refuses", () => {
+    const deliveries: ClientRepo.RecordDeliveryInput[] = []
+    return run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        yield* Effect.flatMap(EmailChannel.TestService, (test) =>
+          test.failNextSend(new EmailChannel.EmailAddressRejected({ address: ADDRESS })),
+        )
+        const service = yield* CoachClients.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        expect(yield* service.sendInviteEmail(launch, "cl_anna", ADDRESS)).toEqual({
+          sent: false,
+          reason: "invalid-address",
+        })
+        expect(deliveries).toEqual([])
+      }),
+      deliveries,
+    )
+  })
+
+  /**
+   * Weather, and a misconfigured sender, reach the coach as the same word:
+   * there is nothing else they can do about either. Pressing again is safe
+   * precisely because this branch wrote nothing.
+   */
+  it.effect.each([
+    ["throttling", () => new EmailChannel.EmailSendFailed({ reason: "E_RATE_LIMIT_EXCEEDED" })],
+    [
+      "a sender this stage never onboarded",
+      () => new EmailChannel.EmailSenderNotConfigured({ sender: "no-reply@mail.praximo.io" }),
+    ],
+  ] as const)("reports %s as temporary and writes nothing", ([, failure]) => {
+    const deliveries: ClientRepo.RecordDeliveryInput[] = []
+    return run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        yield* Effect.flatMap(EmailChannel.TestService, (test) => test.failNextSend(failure()))
+        const service = yield* CoachClients.Service
+        const launch = yield* Effect.promise(() => credential())
+
+        expect(yield* service.sendInviteEmail(launch, "cl_anna", ADDRESS)).toEqual({
+          sent: false,
+          reason: "unavailable",
+        })
+        expect(deliveries).toEqual([])
+      }),
+      deliveries,
+    )
+  })
+
+  /**
+   * A screen that has gone stale sends nothing. An accepted client has no door
+   * left to open, and a lapsed link belongs to the reissue path (#61) — the
+   * screen re-reads itself and finds out which.
+   */
+  it.effect.each([
+    ["an accepted invitation", client({ state: "accepted", invite: invite("accepted") })],
+    ["a client this coach does not own", client()],
+  ] as const)("sends nothing for %s", ([label, row]) => {
+    const deliveries: ClientRepo.RecordDeliveryInput[] = []
+    return run(
+      row,
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachClients.Service
+        const launch = yield* Effect.promise(() => credential())
+        const target = label === "a client this coach does not own" ? "cl_someone_else" : "cl_anna"
+
+        expect(yield* service.sendInviteEmail(launch, target, ADDRESS)).toEqual({
+          sent: false,
+          reason: "gone",
+        })
+        expect(yield* Effect.flatMap(EmailChannel.TestService, (test) => test.sent())).toHaveLength(
+          0,
+        )
+        expect(deliveries).toEqual([])
+      }),
+      deliveries,
+    )
+  })
+
+  // The write window, not the read one: sending an invitation is a delivery, and
+  // a launch credential older than fifteen minutes cannot authorise one.
+  it.effect("refuses a launch too old to act on", () =>
+    run(
+      client(),
+      Effect.gen(function* () {
+        yield* TestClock.setTime(AUTH_DATE + 20 * 60 * 1_000)
+        const service = yield* CoachClients.Service
+        const failure = yield* Effect.flip(
+          service.sendInviteEmail(yield* Effect.promise(() => credential()), "cl_anna", ADDRESS),
         )
 
         expect(failure._tag).toBe("CoachSession.Unauthenticated")

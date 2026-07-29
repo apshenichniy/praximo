@@ -50,6 +50,17 @@ export interface ClientInviteRow {
   /** The language the invitation was *written* in — never the client's own. */
   readonly language: CoachLanguage
   readonly delivered?: InviteDeliveryRow
+  /**
+   * The address this invitation was emailed to, or carried forward from the one
+   * it replaced (#58).
+   *
+   * Read separately from {@link delivered} rather than folded into it, because
+   * the two answer different questions and get out of step on purpose. A reissue
+   * carries the address and *not* the delivery — the coach should not retype an
+   * address they already gave us, and the fresh link has still been sent
+   * nowhere. A later copy moves the door to `link` and leaves the address alone.
+   */
+  readonly address?: string
 }
 
 export interface ClientChannelRow {
@@ -124,6 +135,14 @@ export interface RecordDeliveryInput {
    * column — including a value written by a deploy this one predates.
    */
   readonly kind: ClientInviteDeliveryKind
+  /**
+   * Where it went, for a service-sent invitation (#58).
+   *
+   * Only the `email` door has one — the other two hand the token to a person,
+   * not to an address — and it is written with the moment, after Cloudflare has
+   * accepted the message and never before.
+   */
+  readonly address?: string
   readonly now: Date
 }
 
@@ -385,6 +404,7 @@ export const layer = Layer.effect(
       const delivery = record.delivery as {
         readonly language?: string
         readonly kind?: string
+        readonly address?: string
       } | null
       const delivered = deliveryOf(record.delivered_at, delivery)
       const snapshot = record.snapshot as {
@@ -408,6 +428,11 @@ export const layer = Layer.effect(
                 expiresAt,
                 language: readLanguage(delivery?.language) ?? "en",
                 ...(delivered === undefined ? {} : { delivered }),
+                // Independent of `delivered` on purpose: a reissue carries this
+                // and drops that, so the sheet still opens pre-filled (#58).
+                ...(typeof delivery?.address === "string" && delivery.address.length > 0
+                  ? { address: delivery.address }
+                  : {}),
               },
             }),
         ...(record.channel_kind === null || record.channel_kind === undefined
@@ -472,6 +497,15 @@ export const layer = Layer.effect(
      * a second link would only send a client who is already in back through it.
      * `undefined` is that refusal, and it is also what a client of another
      * workspace gets.
+     *
+     * **The address rides across; the delivery does not** (#58). The spec's
+     * «re-issue copies the delivery target» is honoured for the one part of the
+     * target that is still true — where this client can be reached — while
+     * `kind` returns to the creation default and `delivered_at` starts empty,
+     * because the new link has been sent nowhere. Carried in SQL rather than
+     * passed by the caller: a forgotten argument would silently cost the coach
+     * an address they had already given us, and there is no screen on which that
+     * would look like a bug.
      */
     const reissueInvite = Effect.fn("ClientRepo.reissueInvite")(function* (
       input: ReissueInviteInput,
@@ -491,6 +525,13 @@ export const layer = Layer.effect(
                   where "invite"."client_id" = "c"."id" and "invite"."status" = 'accepted'
                 )
             ),
+            "carried" as (
+              select "i"."delivery" -> 'address' as "address"
+              from "invite" as "i"
+              join "target" on "i"."client_id" = "target"."id"
+              order by "i"."created_at" desc
+              limit 1
+            ),
             "replaced" as (
               update "invite"
               set "status" = 'expired'
@@ -504,7 +545,16 @@ export const layer = Layer.effect(
             )
             select
               ${input.inviteId}, "target"."workspace_id", "target"."id", ${input.token},
-              'pending', ${delivery}::jsonb, ${input.expiresAt}, ${input.now}
+              'pending',
+              ${delivery}::jsonb || coalesce(
+                (
+                  select jsonb_build_object('address', "carried"."address")
+                  from "carried"
+                  where "carried"."address" is not null
+                ),
+                '{}'::jsonb
+              ),
+              ${input.expiresAt}, ${input.now}
             from "target"
             returning "token", ${isoColumn('"expires_at"')} as "expires_at"
           `),
@@ -547,7 +597,11 @@ export const layer = Layer.effect(
             update "invite"
             set
               "delivered_at" = ${input.now},
-              "delivery" = "delivery" || ${JSON.stringify({ kind: input.kind })}::jsonb
+              "delivery" = "delivery" || ${JSON.stringify(
+                input.address === undefined
+                  ? { kind: input.kind }
+                  : { kind: input.kind, address: input.address },
+              )}::jsonb
             where "invite"."id" = (
               select "id"
               from "invite"

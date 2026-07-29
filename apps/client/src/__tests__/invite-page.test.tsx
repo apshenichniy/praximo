@@ -195,3 +195,39 @@ describe("the screens that are not the happy path", () => {
     expect(html).toContain("Готово")
   })
 })
+
+/**
+ * The address the invitation arrived at, offered back (#58).
+ *
+ * The name and the email are deliberately asymmetric, and these are what hold
+ * that apart: the name arrives empty because what the coach typed is *their*
+ * private label, while the address is one this client has already been reached
+ * at and retyping it is copying from the message that brought them.
+ */
+describe("the pre-filled address", () => {
+  it("fills the email field from the invitation and leaves the name empty", async () => {
+    const html = await render(
+      <AcceptancePage
+        locale="ru"
+        coachName={COACH}
+        suggestedEmail="anna@example.com"
+        submitting={false}
+        onSubmit={() => {}}
+      />,
+    )
+
+    expect(html).toContain('value="anna@example.com"')
+    // The client names themselves. The coach's label — «Анна через Марину» —
+    // stays in the coach's list and is never shown back, so the name field is
+    // the one input that still renders empty.
+    expect(html).toContain('value=""')
+    expect(html).not.toContain(`value="${COACH}"`)
+  })
+
+  // A hand-forwarded link has no address behind it, and the field is blank.
+  it("leaves the field empty when the invitation was not emailed", async () => {
+    const html = await page()
+
+    expect(html).not.toContain("anna@example.com")
+  })
+})

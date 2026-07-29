@@ -20,6 +20,7 @@ import {
   deleteClient,
   getClient,
   recordInviteDelivery,
+  sendInviteEmail,
   resetInvite,
 } from "@/server/coach-clients.functions.ts"
 import { loadCoachEntry } from "@/server/coach.functions.ts"
@@ -181,6 +182,61 @@ function ClientRoute() {
   )
 
   /**
+   * The invitation the service sends itself (#58).
+   *
+   * A `pending` operation like Reissue and Delete, and unlike every share above
+   * it: those hand something to a host we do not control and settle when that
+   * host feels like it, while this one is our own round trip and the coach is
+   * waiting for its answer. Holding the busy flag across it is what stops a
+   * second tap becoming a second email.
+   *
+   * The three outcomes reach the coach as three sentences and nothing is
+   * inferred from a thrown error: a transport failure is `unavailable` like any
+   * other, because nothing was written either way and pressing again is safe.
+   *
+   * `gone` re-reads the screen rather than only complaining — the invitation
+   * moved on underneath it, and what the coach needs next (the reissue control,
+   * or an accepted client) is on the screen this fetches.
+   */
+  const sendEmail = useCallback(
+    (address: string) => {
+      if (client === undefined) return
+      acceptOnce(inFlight, async () => {
+        setPending(true)
+        setError(undefined)
+        try {
+          const result = await sendInviteEmail({ data: { clientId: client.id, address } })
+          if (!result.ok) {
+            notifyHaptic("error")
+            setError(copy.clients.emailUnavailable)
+            return
+          }
+          if (result.outcome.sent) {
+            notifyHaptic("success")
+            await router.invalidate()
+            return
+          }
+          notifyHaptic("error")
+          if (result.outcome.reason === "invalid-address") {
+            setError(copy.clients.emailInvalid)
+          } else if (result.outcome.reason === "gone") {
+            setError(copy.clients.emailGone)
+            await router.invalidate()
+          } else {
+            setError(copy.clients.emailUnavailable)
+          }
+        } catch {
+          notifyHaptic("error")
+          setError(copy.clients.emailUnavailable)
+        } finally {
+          setPending(false)
+        }
+      })
+    },
+    [client, copy, router],
+  )
+
+  /**
    * The system share sheet, on iOS only — the screen decides whether to offer
    * it; this only has to tell a completed share from a cancelled one.
    *
@@ -231,6 +287,7 @@ function ClientRoute() {
           onShare={share}
           onShareSheet={shareSheet}
           onDelivered={delivered}
+          onSendEmail={sendEmail}
           onResetInvite={reset}
           onDelete={remove}
           pending={pending}

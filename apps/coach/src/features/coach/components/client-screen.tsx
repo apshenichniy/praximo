@@ -17,6 +17,7 @@ import { Card } from "@praximo/ui/components/card"
 import { ToggleGroup, ToggleGroupItem } from "@praximo/ui/components/toggle-group"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"
+import { InviteEmailSheet } from "@/features/coach/components/invite-email-sheet.tsx"
 import { ConfirmSheet } from "@/features/mini-app/components/confirm-sheet.tsx"
 import { StatusBadge, type StatusTone } from "@/features/mini-app/components/status-badge.tsx"
 import { DangerCard, DangerZone } from "@/features/mini-app/components/danger-zone.tsx"
@@ -28,7 +29,7 @@ import {
 } from "@/features/mini-app/components/detail-card.tsx"
 import { InviteLinkPanel } from "@/features/mini-app/components/invite-link-panel.tsx"
 import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
-import { isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
+import { doorFor, isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
 import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
 import type { CoachClients } from "@/server/coach-clients.ts"
 
@@ -52,8 +53,8 @@ const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
  * What each door *offers*, as data rather than as a branch per control (#224).
  *
  * The words live in the copy catalogue keyed the same way; this is the other
- * half — the two places where the doors differ in behaviour rather than in
- * wording, and both differences have one reason each:
+ * half — the places where the doors differ in behaviour rather than in wording,
+ * and each difference has one reason:
  *
  * - **No card behind the Link door.** A bot-authored card opens a chat with a
  *   bot this client will never appear in, which is the whole reason they are
@@ -62,13 +63,17 @@ const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
  * - **The share sheet only where the link travels by hand.** A Telegram
  *   invitation already has a native picker behind Send a card; offering the
  *   system sheet beside it would be two ways to open two pickers.
+ * - **The service-sent email only behind the Link door** (#58). It is not a
+ *   third position on the segment: an email is not a form of the token a coach
+ *   hands over, it is us sending the *web* URL for them. Telegram's door already
+ *   has a transport and no use for an address.
  */
 const doorOffers: Record<
   ClientInviteDoor,
-  { readonly card: boolean; readonly shareSheet: boolean }
+  { readonly card: boolean; readonly shareSheet: boolean; readonly email: boolean }
 > = {
-  telegram: { card: true, shareSheet: false },
-  link: { card: false, shareSheet: true },
+  telegram: { card: true, shareSheet: false, email: false },
+  link: { card: false, shareSheet: true, email: true },
 }
 
 const initials = (name: string): string =>
@@ -87,6 +92,7 @@ export function ClientScreen({
   onShare,
   onShareSheet,
   onDelivered,
+  onSendEmail,
   onResetInvite,
   onDelete,
   pending,
@@ -101,6 +107,11 @@ export function ClientScreen({
   readonly onShareSheet: (message: string) => void
   /** A delivery that actually happened: a resolved clipboard write, here. */
   readonly onDelivered: (kind: ClientInviteDoor) => void
+  /**
+   * The service-sent invitation (#58) — the one delivery this screen asks for
+   * rather than reports, because nothing has happened until the server answers.
+   */
+  readonly onSendEmail: (address: string) => void
   readonly onResetInvite: () => void
   readonly onDelete: () => void
   readonly pending: boolean
@@ -108,6 +119,7 @@ export function ClientScreen({
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [emailSheet, setEmailSheet] = useState(false)
   /**
    * Which door the coach is looking at (#224).
    *
@@ -118,10 +130,11 @@ export function ClientScreen({
    * It opens on the door already recorded, when there is one. A coach who sent a
    * link last week and comes back to a screen defaulting to Telegram would be
    * reading a state word about one door beside a control set for the other.
+   *
+   * `doorFor` and not the delivery kind itself: a service-sent email put the
+   * *web* URL in that message, so it opens the Link door (#58).
    */
-  const [door, setDoor] = useState<ClientInviteDoor>(() =>
-    isClientInviteDoor(client.invite?.delivered?.kind) ? client.invite.delivered.kind : "telegram",
-  )
+  const [door, setDoor] = useState<ClientInviteDoor>(() => doorFor(client.invite?.delivered?.kind))
   const invitation = client.invite === undefined ? undefined : client.invite[door]
   // Everything that differs between the doors, looked up once: the words from
   // the catalogue, the two behaviours from the table above.
@@ -215,6 +228,19 @@ export function ClientScreen({
             {sentDoor}
             {" · "}
             {timestamps.relative(sent.at)}
+            {/*
+              And *where*, for the one route that has an address (#58). Without
+              it a typo is unfindable: the coach reads «отправлено», the client
+              never arrives, and nothing on any screen says the message went to
+              `ann@gmial.com`.
+            */}
+            {sent.kind === "email" && client.invite?.address !== undefined ? (
+              <>
+                {" · "}
+                {copy.clients.sentToPrefix}
+                {client.invite.address}
+              </>
+            ) : null}
           </Text>
         )}
       </header>
@@ -318,6 +344,24 @@ export function ClientScreen({
                     disabled={pending}
                   >
                     {copy.clients.shareAction}
+                  </Button>
+                ) : null}
+                {/*
+                  The one control on this screen that asks the service to do the
+                  sending (#58). It reads «ещё раз» once an address is on file,
+                  because by then a coach pressing it is answering «не дошло»
+                  rather than sending for the first time.
+                */}
+                {offers.email ? (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setEmailSheet(true)}
+                    disabled={pending}
+                  >
+                    {client.invite.address === undefined
+                      ? copy.clients.sendEmail
+                      : copy.clients.sendEmailAgain}
                   </Button>
                 ) : null}
               </div>
@@ -499,6 +543,19 @@ export function ClientScreen({
         onConfirm={() => {
           setConfirmDelete(false)
           onDelete()
+        }}
+      />
+      <InviteEmailSheet
+        copy={copy.clients}
+        open={emailSheet}
+        onOpenChange={setEmailSheet}
+        // Pre-filled from the address on file, which survives a reissue (#58) —
+        // a resend after «не дошло» should not cost the coach a retype.
+        suggested={client.invite?.address}
+        pending={pending}
+        onSend={(address) => {
+          setEmailSheet(false)
+          onSendEmail(address)
         }}
       />
     </main>

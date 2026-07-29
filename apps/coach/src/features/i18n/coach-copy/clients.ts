@@ -1,4 +1,4 @@
-import type { ClientInviteDoor, CoachLanguage } from "@praximo/domain"
+import type { ClientInviteDeliveryKind, ClientInviteDoor, CoachLanguage } from "@praximo/domain"
 
 /**
  * Everything one door of an invitation is called (#224).
@@ -40,14 +40,6 @@ export interface DoorCopy {
    * nothing else on the screen says so.
    */
   readonly reminder: string
-  /**
-   * Which door it went out through, said after the moment it went:
-   * «Приглашён · 2 дня назад · отправлено ссылкой».
-   *
-   * The door and not only the time, because a coach coming back a week later
-   * needs to know what the client is holding.
-   */
-  readonly sentVia: string
 }
 
 /**
@@ -98,6 +90,30 @@ export interface ClientsCopy {
    */
   readonly doorLabel: string
   readonly doors: Record<ClientInviteDoor, DoorCopy>
+  /**
+   * How the invitation travelled, said after the moment it went:
+   * «Приглашён · 2 дня назад · отправлено ссылкой».
+   *
+   * Keyed by *delivery kind* rather than by door, and that is the whole point of
+   * it being here instead of inside `DoorCopy` (#58). A door is a form of the
+   * token a coach hands over by hand; `email` is the service sending one itself,
+   * which is a third way it can have travelled and never a third chip on the
+   * segment. Folding it into `DoorCopy` would mean declaring `email` a door to
+   * get a sentence out of it.
+   *
+   * The route and not only the time, because a coach coming back a week later
+   * needs to know what the client is holding.
+   */
+  readonly sentVia: Record<ClientInviteDeliveryKind, string>
+  /**
+   * The address a service-sent invitation went to, under the line above:
+   * «отправлено письмом · на anna@example.com».
+   *
+   * Shown rather than implied, because without it a typo is unfindable — the
+   * coach sees «отправлено», the client never arrives, and no screen in the
+   * product says the message went to `ann@gmial.com`.
+   */
+  readonly sentToPrefix: string
   readonly sendCard: string
   readonly copyInvite: string
   readonly copied: string
@@ -114,6 +130,38 @@ export interface ClientsCopy {
    * so the danger zone's framing would be a lie about what the tap does.
    */
   readonly reissueAction: string
+
+  /**
+   * The invitation the service sends itself (#58).
+   *
+   * It sits **under the Link door and nowhere else**, because that is what it
+   * is: the same web URL, sent by us instead of pasted by the coach. Telegram's
+   * door has its own transport and no use for an address.
+   */
+  readonly sendEmail: string
+  readonly sendEmailAgain: string
+  readonly emailSheet: {
+    readonly title: string
+    readonly description: string
+    readonly label: string
+    readonly placeholder: string
+    readonly action: string
+    /** Checked while the keyboard is still up — a courtesy, never the fence. */
+    readonly invalid: string
+  }
+  /**
+   * The three answers, and no fourth, because there is no fourth thing a coach
+   * could do about it.
+   *
+   * `unavailable` covers throttling, an outage and a misconfigured sender alike:
+   * they differ in the log and not in what the coach does next, and telling
+   * somebody to fix an address that was fine is worse than telling them to wait.
+   */
+  readonly emailSent: string
+  readonly emailInvalid: string
+  readonly emailUnavailable: string
+  /** The invitation moved on under the screen — it re-reads itself. */
+  readonly emailGone: string
 
   readonly sessionsTitle: string
   readonly scheduleAction: string
@@ -258,16 +306,20 @@ const en: ClientsCopy = {
       eyebrow: "Invitation · Telegram",
       leadTail: " opens your bot in Telegram and accepts there. The link works for 7 days.",
       reminder: "Reminders will reach them in Telegram.",
-      sentVia: "sent in Telegram",
     },
     link: {
       label: "Link",
       eyebrow: "Invitation · Link",
       leadTail: " opens the invitation page and accepts there. The link works for 7 days.",
       reminder: "Reminders will go to the email they leave when they accept.",
-      sentVia: "sent as a link",
     },
   },
+  sentVia: {
+    telegram: "sent in Telegram",
+    link: "sent as a link",
+    email: "sent by email",
+  },
+  sentToPrefix: "to ",
   sendCard: "Send a card in Telegram",
   copyInvite: "Copy invite",
   copied: "Copied",
@@ -275,6 +327,21 @@ const en: ClientsCopy = {
   linkLabel: "Invitation link",
   reissueLead: "This link is no longer valid. Issue a fresh one to invite them again.",
   reissueAction: "Issue a fresh link",
+
+  sendEmail: "Send by email",
+  sendEmailAgain: "Send by email again",
+  emailSheet: {
+    title: "Send the invitation by email",
+    description: "We send it from Praximo on your behalf. The link inside is the one above.",
+    label: "Email",
+    placeholder: "client@example.com",
+    action: "Send",
+    invalid: "That does not look like an email address.",
+  },
+  emailSent: "Sent",
+  emailInvalid: "That address was not accepted. Check it and try again.",
+  emailUnavailable: "Could not send just now. Nothing was sent — try again in a moment.",
+  emailGone: "This invitation has moved on. The screen has been refreshed.",
 
   sessionsTitle: "Sessions",
   scheduleAction: "Schedule a session",
@@ -365,16 +432,20 @@ const uk: ClientsCopy = {
       eyebrow: "Запрошення · Telegram",
       leadTail: " відкриє вашого бота в Telegram і прийме запрошення там. Посилання діє 7 днів.",
       reminder: "Нагадування надходитимуть у Telegram.",
-      sentVia: "надіслано в Telegram",
     },
     link: {
       label: "Посилання",
       eyebrow: "Запрошення · Посилання",
       leadTail: " відкриє сторінку запрошення і прийме його там. Посилання діє 7 днів.",
       reminder: "Нагадування надходитимуть на пошту, яку клієнт залишить під час прийняття.",
-      sentVia: "надіслано посиланням",
     },
   },
+  sentVia: {
+    telegram: "надіслано в Telegram",
+    link: "надіслано посиланням",
+    email: "надіслано листом",
+  },
+  sentToPrefix: "на ",
   sendCard: "Надіслати картку в Telegram",
   copyInvite: "Скопіювати запрошення",
   copied: "Скопійовано",
@@ -382,6 +453,21 @@ const uk: ClientsCopy = {
   linkLabel: "Посилання-запрошення",
   reissueLead: "Це посилання більше не діє. Випустіть нове, щоб запросити ще раз.",
   reissueAction: "Випустити нове посилання",
+
+  sendEmail: "Надіслати листом",
+  sendEmailAgain: "Надіслати листом ще раз",
+  emailSheet: {
+    title: "Надіслати запрошення листом",
+    description: "Ми надішлемо його від вашого імені. Усередині — те саме посилання, що вище.",
+    label: "Електронна пошта",
+    placeholder: "client@example.com",
+    action: "Надіслати",
+    invalid: "Це не схоже на адресу електронної пошти.",
+  },
+  emailSent: "Надіслано",
+  emailInvalid: "Адресу не прийнято. Перевірте її та спробуйте ще раз.",
+  emailUnavailable: "Зараз не вдалося надіслати. Нічого не пішло — спробуйте за хвилину.",
+  emailGone: "Це запрошення вже змінилося. Екран оновлено.",
 
   sessionsTitle: "Сесії",
   scheduleAction: "Запланувати сесію",
@@ -473,16 +559,20 @@ const ru: ClientsCopy = {
       leadTail:
         " откроет вашего бота в Telegram и примет приглашение там. Ссылка действует 7 дней.",
       reminder: "Напоминания будут приходить в Telegram.",
-      sentVia: "отправлено в Telegram",
     },
     link: {
       label: "Ссылка",
       eyebrow: "Приглашение · Ссылка",
       leadTail: " откроет страницу приглашения и примет его там. Ссылка действует 7 дней.",
       reminder: "Напоминания будут приходить на почту, которую клиент оставит при принятии.",
-      sentVia: "отправлено ссылкой",
     },
   },
+  sentVia: {
+    telegram: "отправлено в Telegram",
+    link: "отправлено ссылкой",
+    email: "отправлено письмом",
+  },
+  sentToPrefix: "на ",
   sendCard: "Отправить карточку в Telegram",
   copyInvite: "Скопировать приглашение",
   copied: "Скопировано",
@@ -490,6 +580,21 @@ const ru: ClientsCopy = {
   linkLabel: "Ссылка-приглашение",
   reissueLead: "Эта ссылка больше не действует. Выпустите новую, чтобы пригласить ещё раз.",
   reissueAction: "Выпустить новую ссылку",
+
+  sendEmail: "Отправить письмом",
+  sendEmailAgain: "Отправить письмом ещё раз",
+  emailSheet: {
+    title: "Отправить приглашение письмом",
+    description: "Мы отправим его от вашего имени. Внутри — та же ссылка, что выше.",
+    label: "Электронная почта",
+    placeholder: "client@example.com",
+    action: "Отправить",
+    invalid: "Это не похоже на адрес электронной почты.",
+  },
+  emailSent: "Отправлено",
+  emailInvalid: "Адрес не принят. Проверьте его и попробуйте ещё раз.",
+  emailUnavailable: "Сейчас отправить не удалось. Ничего не ушло — попробуйте через минуту.",
+  emailGone: "Это приглашение уже изменилось. Экран обновлён.",
 
   sessionsTitle: "Сессии",
   scheduleAction: "Запланировать сессию",

@@ -1,6 +1,7 @@
 import { CoachInitData, CoachOnboardingToken } from "@praximo/auth"
 import { ClientRepo, Database, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
 import type { WorkingHours } from "@praximo/domain"
+import { EmailChannel, type SendBinding } from "@praximo/email"
 import { BotRegistry } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
 import { CoachClients } from "./coach-clients.ts"
@@ -40,6 +41,18 @@ interface Env {
    */
   readonly COACH_DEV_PUBLIC_KEY?: string
   readonly MANAGER_BOT?: BotWorkerBinding
+  /**
+   * The `send_email` binding (#58), **optional on purpose** for the same reason
+   * the client Worker's rate limits are: `vite dev` is not workerd and has no
+   * bindings to offer, so a required one would make the coach app
+   * undevelopable locally.
+   *
+   * Unlike a rate limit, its absence does not fail open. `EmailChannel`'s
+   * unwired layer refuses every send with a typed error, so a local coach meets
+   * the same failure path a deployed one would — never a screen claiming to have
+   * sent something that never existed.
+   */
+  readonly EMAIL?: SendBinding
 }
 
 const runtimeFromEnv = (env: Env) => {
@@ -58,10 +71,14 @@ const runtimeFromEnv = (env: Env) => {
     env.COACH_DEV_PUBLIC_KEY === undefined
       ? CoachInitData.layer
       : CoachInitData.testLayer(env.COACH_DEV_PUBLIC_KEY)
+  // No binding, no pretending: the unwired layer refuses the send with a typed
+  // error rather than logging it and answering success (#58).
+  const email = env.EMAIL === undefined ? EmailChannel.unwiredLayer : EmailChannel.layer(env.EMAIL)
   const dependencies = Layer.mergeAll(
     coachInitData,
     CoachOnboardingToken.layer,
     coachBots,
+    email,
     repositories,
   )
   const app = Layer.mergeAll(
@@ -115,6 +132,7 @@ const resolveEnv = async (): Promise<Env> => {
     ...(workerEnv.MANAGER_BOT === undefined
       ? {}
       : { MANAGER_BOT: workerEnv.MANAGER_BOT as BotWorkerBinding }),
+    ...(workerEnv.EMAIL === undefined ? {} : { EMAIL: workerEnv.EMAIL as SendBinding }),
   }
 }
 
@@ -304,6 +322,20 @@ export const recordCoachInviteDelivery = async (
   return appRuntime.runPromise(
     Effect.flatMap(CoachClients.Service, (service) =>
       service.recordDelivery(credential, clientId, kind),
+    ),
+  )
+}
+
+/** The invitation the service sends itself (#58) — the only email this Worker sends. */
+export const sendCoachInviteEmail = async (
+  credential: LaunchCredential,
+  clientId: string,
+  address: unknown,
+): Promise<CoachClients.SendInviteEmailOutcome> => {
+  const appRuntime = await getRuntime()
+  return appRuntime.runPromise(
+    Effect.flatMap(CoachClients.Service, (service) =>
+      service.sendInviteEmail(credential, clientId, address),
     ),
   )
 }

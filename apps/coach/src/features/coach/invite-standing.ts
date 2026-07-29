@@ -1,4 +1,4 @@
-import { isClientInviteDoor } from "@praximo/domain"
+import { type ClientInviteDoor, isClientInviteDeliveryKind } from "@praximo/domain"
 
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 
@@ -41,13 +41,30 @@ export const stateWord = (copy: ClientsCopy, client: InviteStanding): string =>
         : copy.stateInvited
 
 /**
- * Which door it went out through, or `undefined` for a kind this deploy has no
- * word for — the same refusal `coach-clients.ts` makes on the way out, because a
- * raw identifier in the middle of a sentence is worse than a quieter row.
+ * How it travelled, or `undefined` for a kind this deploy has no word for — the
+ * same refusal `coach-clients.ts` makes on the way out, because a raw identifier
+ * in the middle of a sentence is worse than a quieter row.
  *
- * `email` reaches here as a kind and leaves as `undefined` on purpose: the
- * service-sent invitation is #58's, and until it has copy of its own a row about
- * one should say less rather than guess.
+ * Since #58 that includes `email`, which used to leave here as `undefined` while
+ * the service-sent invitation was unbuilt. The words are keyed by *delivery
+ * kind* and not by door: `email` is how a message travelled, never a chip a
+ * coach can press, and reading `copy.doors[kind]` would have forced it to be
+ * declared one.
  */
 export const sentVia = (copy: ClientsCopy, kind: string | undefined): string | undefined =>
-  isClientInviteDoor(kind) ? copy.doors[kind].sentVia : undefined
+  isClientInviteDeliveryKind(kind) ? copy.sentVia[kind] : undefined
+
+/**
+ * Which door the client's screen should open on, given how the invitation last
+ * travelled (#58).
+ *
+ * Not the identity it looks like, and that is the whole reason it exists:
+ * **`email` opens the Link door.** What the service put in that message was the
+ * web URL, so the Acceptance Page is what the client is holding, the Link door
+ * is where the resend lives, and the reminder line under it is the true one.
+ * Falling back to Telegram — which is what a plain «is this a door?» check does,
+ * since `email` is not one — would sit a Telegram control set under «отправлено
+ * письмом», exactly the drift #224 opened this default to prevent.
+ */
+export const doorFor = (kind: string | undefined): ClientInviteDoor =>
+  kind === "email" || kind === "link" ? "link" : "telegram"

@@ -16,6 +16,7 @@
     "@praximo/auth": "workspace:*",
     "@praximo/db": "workspace:*",
     "@praximo/domain": "workspace:*",
+    "@praximo/email": "workspace:*",
     "@praximo/i18n": "workspace:*",
     "@praximo/telegram": "workspace:*",
     "@praximo/ui": "workspace:*",

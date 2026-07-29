@@ -126,6 +126,22 @@ export const clientInviteUrl = (origin: string, token: string): string =>
   `${bareOrigin(origin)}${ClientInviteWebPath}${token}`
 
 /**
+ * The brand mark as it travels in the invitation email (#58).
+ *
+ * Beside `clientInviteUrl` because it is the same message and the same origin:
+ * the email carries a link and a logo, both built on the Client app's deployed
+ * host, and neither should be assembled by hand at a call site. Gmail strips
+ * SVG, so this is a PNG published from `apps/client/public/brand/` rather than
+ * `@praximo/ui`'s `PraximoMark`.
+ *
+ * `bareOrigin` for the same reason the invitation URL needs it: this string ends
+ * up in an `<img src>` in somebody's mailbox, and a stage's `?b=<botId>` riding
+ * along would say something about who was sent it.
+ */
+export const clientBrandMarkUrl = (origin: string): string =>
+  `${bareOrigin(origin)}/brand/praximo-mark.png`
+
+/**
  * Which door an invitation was actually handed over through (#224).
  *
  * The spec's own set. `telegram` is what an invitation is created with, `link`
@@ -138,6 +154,20 @@ export const clientInviteUrl = (origin: string, token: string): string =>
  */
 export const ClientInviteDeliveryKind = Schema.Literals(["telegram", "email", "link"])
 export type ClientInviteDeliveryKind = typeof ClientInviteDeliveryKind.Type
+
+/**
+ * A narrowing for the read side, where the column is a plain `string` and may
+ * hold a value written by a deploy this one predates.
+ *
+ * Beside {@link isClientInviteDoor} rather than instead of it: the two answer
+ * different questions. That one asks «is this a chip the coach could have
+ * pressed», this one asks «is this a route we have a word for» — and since #58
+ * the second set is strictly larger.
+ */
+export const isClientInviteDeliveryKind = (
+  value: string | undefined,
+): value is ClientInviteDeliveryKind =>
+  ClientInviteDeliveryKind.literals.some((literal) => literal === value)
 
 /**
  * The kinds a coach hands over **by hand** — the two forms of the token that a

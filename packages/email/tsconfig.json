@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@praximo/tooling/tsconfig/base.json",
+  "compilerOptions": {
+    // Templates are JSX rendered to a string on the server, never mounted. The
+    // React JSX transform is therefore needed, but the DOM ambient types are
+    // not — beyond what `@types/react` itself pulls in for the intrinsic
+    // elements an email is made of.
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM"],
+    // `node` for the manifest read in the barrel-guard test; nothing in `src`
+    // outside a test touches a Node API, and the Worker bundle never sees one.
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}
