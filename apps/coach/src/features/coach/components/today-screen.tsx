@@ -14,6 +14,14 @@ import { useMemo } from "react"
 
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@praximo/ui/components/item"
 import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import { sessionClock } from "@/features/coach/session-days.ts"
 import { workingHoursLine } from "@/features/coach/working-hours-line.ts"
@@ -168,10 +176,20 @@ export function TodayScreen({
         <Card className="gap-0 overflow-hidden py-0">
           <ul className="divide-border divide-y">
             <li>
-              <NavRow to="/sessions" icon={Calendar03Icon} label={copy.today.allSessions} />
+              <NavRow
+                to="/sessions"
+                icon={Calendar03Icon}
+                label={copy.today.allSessions}
+                value={copy.today.allSessionsHint}
+              />
             </li>
             <li>
-              <NavRow to="/clients" icon={UserMultipleIcon} label={copy.today.clients} />
+              <NavRow
+                to="/clients"
+                icon={UserMultipleIcon}
+                label={copy.today.clients}
+                value={copy.today.clientsHint}
+              />
             </li>
             <li>
               <NavRow
@@ -268,7 +286,7 @@ function SessionCard({
       */}
       {session.clientAccepted ? null : (
         <div className="border-border/60 border-t bg-warning/10 px-5 py-3">
-          <p className="text-xs leading-normal leading-5 text-warning">
+          <p className="text-xs leading-5 text-warning">
             {copy.today.unacceptedLead}
             <span className="font-semibold">{session.clientName}</span>
             {copy.today.unacceptedTail}
@@ -289,19 +307,26 @@ function SessionCard({
 }
 
 /**
- * One row of the navigation card: a glyph, where it goes, and — where there is
- * one — what it already says without being opened.
+ * One row of the navigation card, composed from `Item` rather than hand-rolled.
  *
- * `value` is #210's argument as a prop rather than as a special case. The
- * availability row earns its height on the days nobody presses it, because it
- * answers «what are my hours» in place. Sessions and Clients have nothing to
- * state yet, so they leave it out rather than invent a number; when one of them
- * has something true to say — the next session, a count — it says it here.
+ * `variant="default"` and `size="xs"`: no fill, a transparent border and the
+ * tightest padding the primitive offers, because the fill and the edge belong to
+ * the card around all three. A row that carried its own would be a box in a box.
  *
- * The glyphs are the ones each thing already wears elsewhere in the app: a
- * calendar for sessions, the same mark a session row carries; two figures rather
- * than a group for clients, because a coach's clients are individuals seen one at
- * a time and not a team; a clock for the hours, which is what availability is.
+ * Every row has a second line, so the three are one height. Availability states
+ * its hours — #210's argument, and the shape the other two are aimed at: a row
+ * that answers its own question without being opened. Sessions and Clients say
+ * what is behind them instead, because `TodayView` carries neither a client count
+ * nor a session total, and a number invented here would be worse than a true
+ * sentence. When the view carries them, they go in this same slot.
+ *
+ * Glyphs are the marks each thing already wears: a calendar for sessions, the
+ * same one a session row carries; two figures rather than a group for clients,
+ * because a coach's clients are individuals seen one at a time and not a team; a
+ * clock for the hours, which is what availability is.
+ *
+ * `active:bg-muted` is the caller's, not the primitive's: `Item` ships
+ * `[a]:hover:bg-muted`, and hover is not an event a phone has.
  */
 function NavRow({
   to,
@@ -312,34 +337,35 @@ function NavRow({
   readonly to: "/sessions" | "/clients" | "/availability"
   readonly icon: typeof Clock01Icon
   readonly label: string
-  readonly value?: string
+  readonly value: string
 }) {
   return (
-    <Link
-      to={to}
-      className="transition-colors duration-100 active:bg-muted flex min-h-14 items-center gap-3 px-5 py-3 text-left"
+    <Item
+      render={<Link to={to} />}
+      size="xs"
+      className="active:bg-muted min-h-14 rounded-none px-5"
     >
-      <HugeiconsIcon
-        icon={icon}
-        size={18}
-        strokeWidth={2}
-        className="text-muted-foreground shrink-0"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-base leading-relaxed font-medium">{label}</span>
-        {value === undefined ? null : (
-          <span className="text-muted-foreground mt-0.5 block truncate text-xs leading-normal">
-            {value}
-          </span>
-        )}
-      </span>
-      <HugeiconsIcon
-        icon={ArrowRight01Icon}
-        size={18}
-        strokeWidth={2}
-        className="text-muted-foreground shrink-0"
-      />
-    </Link>
+      <ItemMedia>
+        <HugeiconsIcon
+          icon={icon}
+          size={18}
+          strokeWidth={2}
+          className="text-muted-foreground shrink-0"
+        />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>{label}</ItemTitle>
+        <ItemDescription>{value}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <HugeiconsIcon
+          icon={ArrowRight01Icon}
+          size={18}
+          strokeWidth={2}
+          className="text-muted-foreground shrink-0"
+        />
+      </ItemActions>
+    </Item>
   )
 }
 

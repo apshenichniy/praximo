@@ -42,8 +42,26 @@ export interface TodayCopy {
   readonly checklistSession: string
   readonly checklistSessionBody: string
 
+  /**
+   * The bottom navigation, as three rows of one card (#210).
+   *
+   * Each row carries a second line, and the two here are **descriptions rather
+   * than data**: they say what is behind the row, in the coach's own terms, so a
+   * label that reads «Клиенты» does not have to also mean «and their
+   * invitations». The availability row states its hours instead, which is the
+   * better shape — a row that answers its own question without being opened.
+   * These two will state something too once the view carries it: how many
+   * sessions are still ahead, how many clients there are. Neither is in
+   * `TodayView` today, and a fabricated number would be worse than a true
+   * sentence.
+   *
+   * Not a repeat of the title: «Клиенты» over «Все клиенты» would spend the line
+   * saying the same word twice.
+   */
   readonly allSessions: string
+  readonly allSessionsHint: string
   readonly clients: string
+  readonly clientsHint: string
   readonly newSession: string
   readonly newClient: string
 }
@@ -73,7 +91,9 @@ const en: TodayCopy = {
     "You can book it before they accept — they just cannot join until they have.",
 
   allSessions: "All sessions",
+  allSessionsHint: "Upcoming and past",
   clients: "Clients",
+  clientsHint: "Invitations and profiles",
   newSession: "New session",
   newClient: "New client",
 }
@@ -108,7 +128,9 @@ const uk: TodayCopy = {
     "Можна запланувати ще до прийняття запрошення — приєднатися вийде лише після нього.",
 
   allSessions: "Усі сесії",
+  allSessionsHint: "Майбутні та минулі",
   clients: "Клієнти",
+  clientsHint: "Запрошення та профілі",
   newSession: "Нова сесія",
   newClient: "Новий клієнт",
 }
@@ -144,7 +166,9 @@ const ru: TodayCopy = {
     "Можно запланировать ещё до принятия приглашения — присоединиться выйдет только после него.",
 
   allSessions: "Все сессии",
+  allSessionsHint: "Предстоящие и прошедшие",
   clients: "Клиенты",
+  clientsHint: "Приглашения и профили",
   newSession: "Новая сессия",
   newClient: "Новый клиент",
 }
