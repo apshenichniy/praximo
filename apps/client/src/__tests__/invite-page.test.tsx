@@ -11,7 +11,8 @@ import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
-import { AcceptancePage } from "@/features/invite/acceptance-page.tsx"
+import { inviteCopy } from "@/features/i18n/invite-copy.ts"
+import { AcceptancePage, keepTyped } from "@/features/invite/acceptance-page.tsx"
 import { ConfirmationScreen, RefusalScreen } from "@/features/invite/notice-screen.tsx"
 
 const COACH = "Олена Пшенична"
@@ -161,11 +162,11 @@ describe("the screens that are not the happy path", () => {
   })
 
   /**
-   * Google is #59's. Shipping it disabled would put a dead control on a legally
-   * operative page — the placeholder-reads-as-a-promise failure this ticket is
-   * built on refusing — so the column is finished without it today.
+   * Google is offered or it is absent — never disabled. A dead control on a
+   * legally operative page is the placeholder-reads-as-a-promise failure this
+   * page was built on refusing, and #57 shipped the column finished without one.
    */
-  it("ships no dead Google affordance", async () => {
+  it("draws no Google affordance where there is no import to offer", async () => {
     const html = await page("ru")
     expect(html).not.toContain("Google")
   })
@@ -239,6 +240,158 @@ describe("the pre-filled address", () => {
  * conversation with their coach rather than a stranger's consent wall — and the
  * initials are what most clients will actually see, so both have to be right.
  */
+/**
+ * The Google import as the page presents it (#59).
+ *
+ * The criterion this file can hold is the sharpest one the ticket has: **no
+ * Google script, request or cookie before the button is pressed.** A rendered
+ * page either reaches Google or it does not, and that is a string search away.
+ */
+describe("Continue with Google", () => {
+  const googlePage = (
+    locale: (typeof CoachLanguages)[number] = "ru",
+    props: Partial<Parameters<typeof AcceptancePage>[0]> = {},
+  ) =>
+    render(
+      <AcceptancePage
+        locale={locale}
+        coachName={COACH}
+        submitting={false}
+        onSubmit={() => {}}
+        googleAvailable
+        onGoogleImport={() => {}}
+        {...props}
+      />,
+    )
+
+  it("reaches Google for nothing at all before it is pressed", async () => {
+    const html = await googlePage()
+
+    // The whole reason the button is ours rather than Google Identity Services:
+    // no script, no iframe, no remote mark, nothing to set a cookie with.
+    expect(html).not.toContain("accounts.google.com")
+    expect(html).not.toContain("gsi/client")
+    expect(html).not.toContain("<script")
+    expect(html).not.toContain("googleusercontent")
+    // The mark is inlined, so even the logo costs no request.
+    expect(html).toContain("<svg")
+    expect(html).not.toMatch(/<img[^>]+https?:\/\//)
+  })
+
+  it("uses Google's own wording, in Google's own translations", async () => {
+    const wording: Record<(typeof CoachLanguages)[number], string> = {
+      en: "Continue with Google",
+      uk: "Продовжити з Google",
+      ru: "Продолжить с Google",
+    }
+    for (const locale of CoachLanguages) {
+      expect(await googlePage(locale)).toContain(wording[locale])
+    }
+  })
+
+  /** Absent, never disabled — see the sibling case above the fields. */
+  it("is gone entirely when the stage has no import to offer", async () => {
+    const html = await render(
+      <AcceptancePage
+        locale="ru"
+        coachName={COACH}
+        submitting={false}
+        onSubmit={() => {}}
+        googleAvailable={false}
+        onGoogleImport={() => {}}
+      />,
+    )
+    expect(html).not.toContain("Google")
+  })
+
+  it("replaces the button with a line saying where the data came from", async () => {
+    const html = await googlePage("ru", {
+      imported: { name: "Олена", email: "olena@example.com", emailVerified: true },
+    })
+
+    expect(html).not.toContain("Продолжить с Google")
+    expect(html).toContain(inviteCopy("ru").form.googleDone)
+    // Nothing claims the fields are verified: they stay ordinary editable
+    // fields, and a badge would be a claim the next keystroke makes false.
+    expect(html).not.toContain("verified")
+  })
+
+  it("does not call an unconfirmed address confirmed", async () => {
+    const html = await googlePage("ru", {
+      imported: { email: "olena@example.com", emailVerified: false },
+    })
+    expect(html).toContain(inviteCopy("ru").form.googleDoneUnverified)
+    expect(html).not.toContain(inviteCopy("ru").form.googleDone)
+  })
+
+  /** A declined consent screen is the client's own decision, not an error. */
+  it("says a failed import quietly, and keeps the fields as the way through", async () => {
+    const html = await googlePage("ru", { googleFailed: true })
+
+    expect(html).toContain(inviteCopy("ru").form.googleFailed)
+    expect(html).toContain(inviteCopy("ru").form.nameLabel)
+    expect(html).toContain(inviteCopy("ru").form.emailLabel)
+  })
+
+  it("restores what was typed before a full-page import left the page", async () => {
+    const html = await googlePage("ru", {
+      draft: { read: () => ({ name: "Олена", email: "olena@example.com" }), write: () => {} },
+    })
+
+    expect(html).toContain('value="Олена"')
+    expect(html).toContain('value="olena@example.com"')
+  })
+
+  /**
+   * The draft is the more recent truth, including when the client deliberately
+   * cleared the address the invitation was emailed to before pressing.
+   */
+  it("does not put back an address the client had cleared", async () => {
+    const html = await googlePage("ru", {
+      suggestedEmail: "old@example.com",
+      draft: { read: () => ({ name: "Олена", email: "" }), write: () => {} },
+    })
+    expect(html).not.toContain("old@example.com")
+  })
+})
+
+/**
+ * The rule that keeps an import from costing the client what they wrote.
+ *
+ * Held here as a function rather than through a render, because it is a rule
+ * about a *transition* — an import arriving over fields that are already filled —
+ * and this app's suite runs without a DOM to transition in.
+ */
+describe("filling from the import", () => {
+  it("fills an empty field and leaves a typed one alone", () => {
+    expect(keepTyped("Олена")("")).toBe("Олена")
+    expect(keepTyped("Олена")("Марина")).toBe("Марина")
+  })
+
+  it("changes nothing when Google offered nothing", () => {
+    expect(keepTyped(undefined)("Марина")).toBe("Марина")
+    expect(keepTyped(undefined)("")).toBe("")
+  })
+
+  /**
+   * The address field is **pre-filled** for every emailed invitation (#58).
+   * Treating that as the client's own writing meant Google's address silently
+   * never landed for exactly the clients the invitation had reached by email —
+   * while the line above the fields told them it had.
+   */
+  it("replaces an address the server suggested, which nobody typed", () => {
+    expect(keepTyped("olena@gmail.com", "old@example.com")("old@example.com")).toBe(
+      "olena@gmail.com",
+    )
+  })
+
+  it("still refuses to overwrite one the client typed over the suggestion", () => {
+    expect(keepTyped("olena@gmail.com", "old@example.com")("mine@example.com")).toBe(
+      "mine@example.com",
+    )
+  })
+})
+
 describe("the coach's photo", () => {
   const PHOTO = "/i/ABCDEFGH2345/coach-avatar"
 

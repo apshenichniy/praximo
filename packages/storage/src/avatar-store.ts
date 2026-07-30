@@ -129,6 +129,33 @@ const storeInto = (bucket: Bucket): Interface["store"] =>
 export const layer = (bucket: Bucket): Layer.Layer<Service> =>
   Layer.succeed(Service, Service.of({ store: storeInto(bucket) }))
 
+/**
+ * No bucket bound, and it refuses rather than pretending — `AvatarReader`'s
+ * unwired layer on the write side.
+ *
+ * `vite dev` is not workerd and has no bindings to offer, so this is what the
+ * client Worker runs on locally: a Google import still completes, the client is
+ * still committed and still told so, and the picture alone does not land. Which
+ * is the same shape as every other refusal on that path — the client keeps the
+ * initials that are the specified fallback everywhere — and is exactly why #59's
+ * own verification is a live one.
+ *
+ * `write-failed` rather than a reason of its own: it is what every caller already
+ * handles, and a fifth reason would be a branch nobody has, to describe a
+ * condition only a developer's own machine is ever in.
+ */
+export const unwiredLayer: Layer.Layer<Service> = Layer.succeed(
+  Service,
+  Service.of({
+    store: Effect.fn("AvatarStore.store")(function* (input: StoreInput) {
+      yield* Effect.logDebug(
+        `avatar for ${input.subject} ${input.subjectId} not stored: no bucket is bound`,
+      )
+      return yield* new AvatarRejected({ reason: "write-failed" })
+    }),
+  }),
+)
+
 /** One object as the test layer recorded it, exactly as it was put. */
 export interface StoredAvatar {
   readonly key: string

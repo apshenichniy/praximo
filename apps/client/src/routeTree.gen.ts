@@ -13,6 +13,8 @@ import { Route as HealthRouteImport } from './routes/health'
 import { Route as ITokenRouteImport } from './routes/i.$token'
 import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as LegalTermsRouteImport } from './routes/legal/terms'
+import { Route as AuthGoogleCallbackRouteImport } from './routes/auth.google.callback'
+import { Route as AuthGoogleStartRouteImport } from './routes/auth.google.start'
 import { Route as ITokenCoachAvatarRouteImport } from './routes/i.$token_.coach-avatar'
 
 const HealthRoute = HealthRouteImport.update({
@@ -35,6 +37,16 @@ const LegalTermsRoute = LegalTermsRouteImport.update({
   path: '/legal/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthGoogleCallbackRoute = AuthGoogleCallbackRouteImport.update({
+  id: '/auth/google/callback',
+  path: '/auth/google/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthGoogleStartRoute = AuthGoogleStartRouteImport.update({
+  id: '/auth/google/start',
+  path: '/auth/google/start',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ITokenCoachAvatarRoute = ITokenCoachAvatarRouteImport.update({
   id: '/i/$token_/coach-avatar',
   path: '/i/$token/coach-avatar',
@@ -46,6 +58,8 @@ export interface FileRoutesByFullPath {
   '/i/$token': typeof ITokenRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/auth/google/start': typeof AuthGoogleStartRoute
   '/i/$token/coach-avatar': typeof ITokenCoachAvatarRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +67,8 @@ export interface FileRoutesByTo {
   '/i/$token': typeof ITokenRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/auth/google/start': typeof AuthGoogleStartRoute
   '/i/$token/coach-avatar': typeof ITokenCoachAvatarRoute
 }
 export interface FileRoutesById {
@@ -61,6 +77,8 @@ export interface FileRoutesById {
   '/i/$token': typeof ITokenRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/auth/google/callback': typeof AuthGoogleCallbackRoute
+  '/auth/google/start': typeof AuthGoogleStartRoute
   '/i/$token_/coach-avatar': typeof ITokenCoachAvatarRoute
 }
 export interface FileRouteTypes {
@@ -70,6 +88,8 @@ export interface FileRouteTypes {
     | '/i/$token'
     | '/legal/privacy'
     | '/legal/terms'
+    | '/auth/google/callback'
+    | '/auth/google/start'
     | '/i/$token/coach-avatar'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -77,6 +97,8 @@ export interface FileRouteTypes {
     | '/i/$token'
     | '/legal/privacy'
     | '/legal/terms'
+    | '/auth/google/callback'
+    | '/auth/google/start'
     | '/i/$token/coach-avatar'
   id:
     | '__root__'
@@ -84,6 +106,8 @@ export interface FileRouteTypes {
     | '/i/$token'
     | '/legal/privacy'
     | '/legal/terms'
+    | '/auth/google/callback'
+    | '/auth/google/start'
     | '/i/$token_/coach-avatar'
   fileRoutesById: FileRoutesById
 }
@@ -92,6 +116,8 @@ export interface RootRouteChildren {
   ITokenRoute: typeof ITokenRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalTermsRoute: typeof LegalTermsRoute
+  AuthGoogleCallbackRoute: typeof AuthGoogleCallbackRoute
+  AuthGoogleStartRoute: typeof AuthGoogleStartRoute
   ITokenCoachAvatarRoute: typeof ITokenCoachAvatarRoute
 }
 
@@ -125,6 +151,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalTermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/google/callback': {
+      id: '/auth/google/callback'
+      path: '/auth/google/callback'
+      fullPath: '/auth/google/callback'
+      preLoaderRoute: typeof AuthGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/google/start': {
+      id: '/auth/google/start'
+      path: '/auth/google/start'
+      fullPath: '/auth/google/start'
+      preLoaderRoute: typeof AuthGoogleStartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/i/$token_/coach-avatar': {
       id: '/i/$token_/coach-avatar'
       path: '/i/$token/coach-avatar'
@@ -140,6 +180,8 @@ const rootRouteChildren: RootRouteChildren = {
   ITokenRoute: ITokenRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalTermsRoute: LegalTermsRoute,
+  AuthGoogleCallbackRoute: AuthGoogleCallbackRoute,
+  AuthGoogleStartRoute: AuthGoogleStartRoute,
   ITokenCoachAvatarRoute: ITokenCoachAvatarRoute,
 }
 export const routeTree = rootRouteImport

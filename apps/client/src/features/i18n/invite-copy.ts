@@ -26,8 +26,38 @@ export interface InviteCopy {
     readonly session: string
   }
   readonly form: {
+    /**
+     * Google's own approved call to action, in Google's own translations.
+     *
+     * Localising it is explicitly encouraged by their branding guidelines, and
+     * the strings are theirs rather than ours: a button that says something
+     * Google does not say is a button that fails app verification.
+     */
     readonly google: string
     readonly or: string
+    /**
+     * What replaces the button once the import has happened (#59).
+     *
+     * A line saying where the data came from, and **not** a badge saying it is
+     * verified. Every field it filled stays an ordinary editable field, so a mark
+     * claiming otherwise would be a lie the next keystroke exposes.
+     */
+    readonly googleDone: string
+    /**
+     * The same line when Google reported `email_verified: false` — which happens
+     * when a non-Google domain is attached to the account (#28). The address is
+     * still filled in and still editable; it is simply not described as
+     * confirmed, which is the whole of what reading that flag buys.
+     */
+    readonly googleDoneUnverified: string
+    /**
+     * A declined consent screen, a closed popup, a webview Google refuses to run
+     * OAuth in. Quiet and recoverable: the fields are exactly as they were left,
+     * and typing them is the way through it always was.
+     */
+    readonly googleFailed: string
+    /** For the popup, in the rare case the browser will not let it close itself. */
+    readonly googleClose: string
     readonly nameLabel: string
     readonly namePlaceholder: string
     readonly emailLabel: string
@@ -85,6 +115,11 @@ const en: InviteCopy = {
   form: {
     google: "Continue with Google",
     or: "or",
+    googleDone: "Filled in from your Google profile — edit anything that is not right.",
+    googleDoneUnverified:
+      "Filled in from your Google profile. Google has not confirmed this address, so do check it.",
+    googleFailed: "That did not finish. Nothing was sent — fill the fields in below instead.",
+    googleClose: "You can close this window.",
     nameLabel: "What should we call you?",
     namePlaceholder: "Your name",
     emailLabel: "Email",
@@ -138,6 +173,11 @@ const uk: InviteCopy = {
   form: {
     google: "Продовжити з Google",
     or: "або",
+    googleDone: "Заповнено з вашого профілю Google — виправте те, що не так.",
+    googleDoneUnverified:
+      "Заповнено з вашого профілю Google. Google не підтвердив цю адресу, тож перевірте її.",
+    googleFailed: "Не вдалося завершити. Нічого не надіслано — заповніть поля нижче.",
+    googleClose: "Це вікно можна закрити.",
     nameLabel: "Як вас звати?",
     namePlaceholder: "Ваше ім'я",
     emailLabel: "Електронна пошта",
@@ -191,6 +231,11 @@ const ru: InviteCopy = {
   form: {
     google: "Продолжить с Google",
     or: "или",
+    googleDone: "Заполнено из вашего профиля Google — исправьте то, что не так.",
+    googleDoneUnverified:
+      "Заполнено из вашего профиля Google. Google не подтвердил этот адрес, так что проверьте его.",
+    googleFailed: "Не удалось завершить. Ничего не отправлено — заполните поля ниже.",
+    googleClose: "Это окно можно закрыть.",
     nameLabel: "Как вас зовут?",
     namePlaceholder: "Ваше имя",
     emailLabel: "Электронная почта",
