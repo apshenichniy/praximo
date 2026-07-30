@@ -10,19 +10,21 @@
  */
 @import "./typeset.css";
 /*
- * The interface sans is Ficus, not the preset's Inter — the one deliberate
- * departure from the resolved shadcn baseline, decided in #255 and held by the
- * foundation contract test. Vendored because it has no package; the provenance
- * and the reason the weight range is written out live in the file itself.
+ * No webfont for the interface sans, and that absence is the decision (#255).
+ * The preset ships Inter; this product ships nothing and asks the host for its
+ * own UI face instead — `system-ui`, which is SF on iOS, Roboto on Android, and
+ * the shell's own font on desktop. Not plain `sans-serif`: that is the
+ * browser's default sans, which on iOS is Helvetica rather than the face the
+ * system actually dresses its interfaces in. Mono still loads, because a mono
+ * fallback is not a typeface choice, it is a coin flip.
  */
-@import "./fonts/ficus.css";
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: "Ficus", sans-serif;
+  --font-sans: system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -9,9 +9,9 @@ Status: **accepted** by implementation issue
 Coach, Client, WWW React islands, and UI Lab:
 
 - the clean shadcn preset `bcB3Gj2` — Maia, Base UI, Zinc/Violet, Inter, and
-  HugeIcons, with one recorded exception: the interface sans is **Ficus**
-  (#255);
-- Ficus, vendored under `packages/ui/src/fonts/`, and Geist Mono;
+  HugeIcons, with one recorded exception: there is **no interface webfont**, the
+  sans is the host's own (#255);
+- Geist Mono, the one face this package still loads;
 - light and dark semantic CSS tokens;
 - the union of shadcn primitives actually consumed by the applications;
 - `cn` with standard `tailwind-merge`;
@@ -67,24 +67,30 @@ after that choice.
 Status: **accepted** by implementation issue
 [#255](https://github.com/apshenichniy/praximo/issues/255).
 
-`--font-sans` is [Ficus](https://github.com/apshenichniy/ficus-font): Erik
-Kennedy's Figtree 2.001 extended with Cyrillic — ru, uk, be, plus ₽ ₴ № and the
-quote marks those languages set with — variable 300–900, upright and italic, SIL
-OFL. It replaced Inter, which is the one departure from the resolved preset that
-the baseline rule allows and this document records. `--font-mono` stays Geist
-Mono and `--font-heading` still resolves through `--font-sans`.
+`--font-sans` is `system-ui, sans-serif`. The preset's Inter is dropped and
+nothing replaces it: Admin, Coach and Client are Telegram WebViews, and each
+renders the interface in its host's own UI face — SF on iOS, Roboto on Android,
+the shell's font on desktop. This is the one departure from the resolved preset
+that the baseline rule allows and this document records. `--font-heading` still
+resolves through `--font-sans`; `--font-mono` still loads Geist Mono, because a
+mono fallback is a coin flip rather than a typeface choice.
 
-It is **vendored, not installed**: the font publishes no package, so the two
-variable `woff2` files (33 KB and 34 KB), the licence, and a hand-written
-`@font-face` stylesheet live in `packages/ui/src/fonts/`, pinned to a release
-tag and commit recorded in `fonts/ficus.css`. The Vite asset pipeline emits and
-hashes them exactly as it does the Fontsource files.
+`system-ui` is the keyword that names the platform's interface face. Plain
+`sans-serif` would name the browser's default sans instead, which in the iOS
+WebView is Helvetica — the generic answer, not the native one. `sans-serif`
+remains as the trailing fallback.
 
-Ficus is not metrically compatible with Inter — Figtree's x-height is smaller
-and its letterforms wider — so the same `font-size` reads slightly smaller and
-sets slightly longer. Any size response to that is a separate typography
-decision, made in UI Lab against ru and uk text, not a tweak folded into a font
-swap.
+What the product gives up is a single typographic identity: the interface now
+looks like its host and reads differently on iOS, on Android, and on desktop.
+What it gets back is the platform's own face, hinting and metrics on every
+device, no webfont on the critical path, and nothing to swap after first paint.
+Any size, weight, or leading decision therefore has to be checked on more than
+one host before it is accepted.
+
+The contract test for this is written as an absence: no `@font-face` in the
+shared stylesheet, no vendored font directory, and `@fontsource-variable/geist-mono`
+as the only font dependency. An interface webfont is exactly the kind of thing
+that returns one `@import` at a time.
 
 ## Prose
 
@@ -111,8 +117,8 @@ it. It is deliberately not `@tailwindcss/typography`, which ships its own scale
 and colours.
 
 The presets are the product decision and live in the Praximo extension layer of
-`styles.css`. Each repoints the fonts at Ficus and Geist Mono — the builder
-defaults to Geist — and sets nothing but the six variables:
+`styles.css`. Each repoints the fonts at the shared theme variables — the
+builder defaults to Geist — and sets nothing but the six variables:
 
 | Preset              | Size | Leading | Flow     | Used by                              |
 | ------------------- | ---- | ------- | -------- | ------------------------------------ |

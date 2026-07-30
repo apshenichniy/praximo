@@ -19,12 +19,14 @@ describe("global application theme", () => {
     expect(appCss).not.toMatch(/:root\s*{/)
     expect(appCss).not.toMatch(/\.dark\s*{/)
     expect(root).toContain("background:${APP_BACKGROUND_COLOR.light}")
-    // The pre-stylesheet paint names the interface sans literally, so it is the
-    // one place the shared token cannot reach and the one that drifts in
-    // silence: the first paint would land in the fallback and then swap, which
-    // is the exact flash this declaration exists to prevent (#255).
-    expect(root).toContain(`font-family:"Ficus"`)
-    expect(root).not.toContain("Inter Variable")
+    // The first paint declares the stack even though the stylesheet declares
+    // it too: with no font-family at all a document opens in the browser's
+    // standard font, which is a serif, so the flash this prevents is real
+    // even once the interface sans is the host's own (#255).
+    expect(root).toContain("font-family:system-ui,sans-serif")
+    // A named family here would be a webfont sneaking back in ahead of the
+    // stylesheet, where nothing else in the suite would see it.
+    expect(root).not.toMatch(/font-family:[^}]*["']/)
     expect(root).toContain("color:${APP_FOREGROUND_COLOR.dark}")
     expect(APP_BACKGROUND_COLOR.light).toMatch(/^#[0-9a-f]{6}$/)
     expect(APP_FOREGROUND_COLOR.dark).toMatch(/^#[0-9a-f]{6}$/)

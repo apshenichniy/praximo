@@ -10,8 +10,8 @@ components.
 1. `packages/ui/src/components/ui/**` contains the registry-owned shadcn
    primitives. The live registry and resolved preset `bcB3Gj2` — Maia, Base UI,
    Zinc/Violet, Inter, and HugeIcons — are the baseline, with **one recorded
-   exception: the interface sans is Ficus, not Inter** (#255, and Interface
-   sans below).
+   exception: there is no interface webfont** — the preset's Inter is dropped
+   and the sans is the host's own (#255, and Interface sans below).
 2. `packages/ui/src/components/**`, excluding `components/ui/**`, contains
    Praximo-owned wrappers and shared composites built above those primitives.
 3. Application feature directories contain product and domain composition that
@@ -70,25 +70,34 @@ shadcn primitives or treat their current roles and values as design decisions.
 
 ## Interface sans
 
-`--font-sans` is **Ficus** — [ficus-font](https://github.com/apshenichniy/ficus-font),
-Figtree 2.001 extended with Cyrillic for ru, uk and be. It replaced the preset's
-Inter in #255, which is the human decision the Baseline rule asks for; the
-foundation contract test is the other half. `--font-mono` is unchanged.
+`--font-sans` is **`system-ui, sans-serif`**, and that is the whole declaration.
+The preset's Inter is dropped and no face replaces it: every product surface but
+WWW is a Telegram WebView, and each one renders in its host's own UI face — SF
+on iOS, Roboto on Android, the shell's font on desktop. That is the decision
+recorded in #255, which is what the Baseline rule asks for; the foundation
+contract test is the other half, and it is written as an absence because an
+absence is what has to hold.
 
-It is vendored, not installed — the font publishes no package, so
-`packages/ui/src/fonts/` holds the two variable `woff2` files, the licence, and
-the `@font-face` stylesheet `styles.css` imports. Re-vendor from a release tag
-and update the tag and commit recorded in `fonts/ficus.css`; never copy from a
-branch and never hand-edit a font file.
+`system-ui` rather than plain `sans-serif`, and the difference is not
+cosmetic: `sans-serif` is the browser's *default sans*, which in the iOS WebView
+is Helvetica — not the face iOS actually dresses its own interfaces in.
+`sans-serif` stays on the end as the fallback for anything that does not know
+the keyword.
 
-Two things about it are easy to break quietly:
+`--font-mono` still loads Geist Mono. A mono fallback is not a typeface choice,
+it is a coin flip, so that one keeps a face.
 
-- The font's own default instance is **Light**. `@font-face` declares
-  `font-weight: 300 900` so an unstyled element lands on 400. Drop the range and
-  the whole interface renders thin — and it will look like a design choice.
-- The **critical CSS in each app's `__root.tsx` names the family literally**,
-  because it paints before the stylesheet arrives. It cannot read `--font-sans`,
-  so it is the one copy that has to be changed by hand.
+Two consequences worth knowing before you touch type here:
+
+- **Do not add an interface webfont back.** Not an `@import`, not an
+  `@font-face`, not a `@fontsource-*` dependency, not a `<link>` in an app.
+  Reintroducing one is a design decision that reopens #255, not a fix.
+- **The critical CSS in each app's `__root.tsx` still declares the stack.** It
+  cannot read `--font-sans`, and it is not redundant: a document with no
+  `font-family` at all opens in the browser's standard font, which is a serif.
+
+The corollary is that type now renders differently on every host. Any size,
+weight, or leading decision has to be looked at on more than one of them.
 
 ## Prose
 
