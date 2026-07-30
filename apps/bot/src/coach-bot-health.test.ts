@@ -1,14 +1,25 @@
 import { describe, expect, it } from "@effect/vitest"
 import { CoachBotHealthRepo, CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, TelegramId, WorkspaceId } from "@praximo/domain"
+import { AvatarStore, avatarKey } from "@praximo/storage"
 import { BotRegistry, CoachBotCredential } from "@praximo/telegram"
 import { GrammyError, HttpError } from "grammy"
 import { Clock, ConfigProvider, Effect, Layer } from "effect"
 import {
+  unusedAvatarRepo,
+  unusedAvatarStore,
   unusedClientAcceptanceRepo,
   unusedManagerSender,
   unusedRegistry,
 } from "./__tests__/coach-bot-provisioning.ts"
+import {
+  type AvatarRepoStub,
+  avatarRepoStub,
+  CHANGED_PHOTO,
+  COACH_PHOTO,
+  type PhotoFixture,
+  telegramPhotoRoutes,
+} from "./__tests__/coach-photo.ts"
 import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
 import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import {
@@ -205,11 +216,19 @@ const PREPARED_CARD_EXPIRY_SECONDS = Math.floor(Date.parse("2026-07-26T12:30:00.
 const telegramStub = (
   options: {
     readonly management?: "fresh" | "deleted" | "unmanaged" | "outage" | "manager-token"
+    /**
+     * What the coach's Telegram profile currently shows. `"none"` by default,
+     * because the sweep now asks about it on every healthy tick (#225) and most
+     * of this suite is about credentials rather than pictures.
+     */
+    readonly photo?: PhotoFixture | "none"
   } = {},
 ): TelegramStub => {
   const calls: Array<TelegramCall> = []
+  const photos = telegramPhotoRoutes(options.photo ?? "none")
   const fetch: typeof globalThis.fetch = async (input, init) => {
-    const path = new URL(input.toString()).pathname.split("/")
+    const url = input.toString()
+    const path = new URL(url).pathname.split("/")
     const method = path.at(-1) ?? ""
     const token = decodeURIComponent(path.at(-2)?.replace(/^bot/, "") ?? "")
     const body = init?.body
@@ -249,6 +268,8 @@ const telegramStub = (
         { status: 401 },
       )
     }
+    const photo = photos(url)
+    if (photo !== undefined) return photo
     if (method === "savePreparedInlineMessage") {
       return Response.json({
         ok: true,
@@ -282,10 +303,20 @@ const check = (
   telegram: TelegramStub,
   rotated: Array<RotateRecord> = [],
   input = target(),
+  /** The coach's stored photo, for the refresh the sweep now runs. */
+  avatars: AvatarRepoStub = avatarRepoStub(),
 ) =>
   checkCoachBot(input).pipe(
     Effect.provide(CoachBotProvisioningRuntime.testLayer(env.UPLOADS, telegram.fetch)),
-    Effect.provide(Layer.mergeAll(health.layer, provisioningStub(rotated), credentialLayer)),
+    Effect.provide(
+      Layer.mergeAll(
+        health.layer,
+        provisioningStub(rotated),
+        credentialLayer,
+        avatars.layer,
+        AvatarStore.testLayer,
+      ),
+    ),
     Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
   )
 
@@ -441,7 +472,13 @@ describe("checking one coach bot", () => {
       const outcome = yield* checkCoachBot(target()).pipe(
         Effect.provide(CoachBotProvisioningRuntime.testLayer(originless.UPLOADS, telegram.fetch)),
         Effect.provide(
-          Layer.mergeAll(healthStub().layer, provisioningStub(rotated), credentialLayer),
+          Layer.mergeAll(
+            healthStub().layer,
+            provisioningStub(rotated),
+            credentialLayer,
+            avatarRepoStub().layer,
+            AvatarStore.testLayer,
+          ),
         ),
         Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(originless))),
       )
@@ -471,6 +508,8 @@ describe("the daily sweep", () => {
                 unusedClientAcceptanceRepo,
                 unusedRegistry,
                 unusedManagerSender,
+                unusedAvatarRepo,
+                unusedAvatarStore,
               ),
             ),
           ),
@@ -479,6 +518,115 @@ describe("the daily sweep", () => {
       )
 
       expect(outcomes.map((outcome) => outcome._tag)).toEqual(["Repaired", "Healthy"])
+    }),
+  )
+})
+
+/**
+ * The coach's own profile photo, refreshed on the pass that was already asking
+ * Telegram about their bot (#225).
+ *
+ * The sweep is the cadence because a changed picture is not urgent, and the two
+ * properties that make it affordable are the ones checked here: an unchanged
+ * photo downloads nothing, and nothing about the photo may touch the health
+ * decision.
+ */
+describe("refreshing the coach's photo on the way past", () => {
+  const avatarKeyFor = (photo: PhotoFixture): string | undefined =>
+    avatarKey({
+      subject: "coach",
+      subjectId: workspaceId,
+      sourceId: photo.fileUniqueId,
+      contentType: "image/jpeg",
+    })
+
+  it.effect("stores a photo the coach has changed since the last pass", () =>
+    Effect.gen(function* () {
+      const health = healthStub()
+      const telegram = telegramStub({ photo: CHANGED_PHOTO })
+      const avatars = avatarRepoStub(avatarKeyFor(COACH_PHOTO))
+
+      const outcome = yield* check(
+        health,
+        telegram,
+        [],
+        target({ encryptedToken: "sealed:fine" }),
+        avatars,
+      )
+
+      expect(outcome).toEqual({ _tag: "Healthy" })
+      // What the store accepted is `coach-photo.test.ts`'s subject; here the
+      // column is the observable fact, and it moved.
+      expect(avatars.key()).toBe(avatarKeyFor(CHANGED_PHOTO))
+    }),
+  )
+
+  it.effect("downloads nothing for a photo it already holds", () =>
+    Effect.gen(function* () {
+      const health = healthStub()
+      const telegram = telegramStub({ photo: COACH_PHOTO })
+      const avatars = avatarRepoStub(avatarKeyFor(COACH_PHOTO))
+
+      yield* check(health, telegram, [], target({ encryptedToken: "sealed:fine" }), avatars)
+
+      // One extra Bot API call per bot per day, and that is the whole cost.
+      expect(telegram.calls.filter((call) => call.method === "getFile")).toEqual([])
+      expect(avatars.writes).toEqual([])
+    }),
+  )
+
+  it.effect("refreshes a repaired bot's coach too", () =>
+    Effect.gen(function* () {
+      const health = healthStub()
+      const telegram = telegramStub({ photo: COACH_PHOTO })
+      const avatars = avatarRepoStub()
+
+      const outcome = yield* check(health, telegram, [], target(), avatars)
+
+      expect(outcome).toMatchObject({ _tag: "Repaired" })
+      expect(avatars.key()).toBe(avatarKeyFor(COACH_PHOTO))
+    }),
+  )
+
+  it.effect("leaves the health decision and the stamp alone when the photo fails", () =>
+    Effect.gen(function* () {
+      const health = healthStub()
+      // Telegram answers `getMe` but refuses the photo call: a courtesy that
+      // failed may not defer the check or take a bot off its coach.
+      const telegram = telegramStub({ photo: "none" })
+      const failing: AvatarRepoStub = {
+        layer: unusedAvatarRepo,
+        writes: [],
+        key: () => undefined,
+      }
+
+      const outcome = yield* check(
+        health,
+        telegram,
+        [],
+        target({ encryptedToken: "sealed:fine" }),
+        failing,
+      )
+
+      expect(outcome).toEqual({ _tag: "Healthy" })
+      expect(health.checked).toEqual([workspaceId])
+      expect(health.stamps).toHaveLength(1)
+    }),
+  )
+
+  it.effect("asks about nobody when the workspace has no coach identity bound", () =>
+    Effect.gen(function* () {
+      const health = healthStub()
+      const telegram = telegramStub({ photo: COACH_PHOTO })
+      const avatars = avatarRepoStub()
+      const { coachTelegramId: _omitted, ...ownerless } = target({
+        encryptedToken: "sealed:fine",
+      })
+
+      yield* check(health, telegram, [], ownerless, avatars)
+
+      expect(telegram.calls.filter((call) => call.method === "getUserProfilePhotos")).toEqual([])
+      expect(avatars.writes).toEqual([])
     }),
   )
 })

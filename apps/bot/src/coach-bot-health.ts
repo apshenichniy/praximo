@@ -4,7 +4,9 @@ import { CoachBotCredential } from "@praximo/telegram"
 import { GrammyError, HttpError } from "grammy"
 import { Clock, Effect, Result } from "effect"
 import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
-import { apiFor, reconfigureCoachBot, sha256 } from "./provisioning.ts"
+import { refreshCoachPhotoQuietly } from "./coach-photo.ts"
+import { reconfigureCoachBot, sha256 } from "./provisioning.ts"
+import { apiFor } from "./telegram-api.ts"
 
 /**
  * A coach bot that stops answering Telegram is **repaired first, and only
@@ -260,6 +262,27 @@ export const repairCoachBot = Effect.fn("BotWorker.repairCoachBot")(function* (
 })
 
 /**
+ * Bring the coach's stored profile photo in step, on the pass that was already
+ * asking Telegram about their bot (#225).
+ *
+ * The sweep is the right cadence and the reason is the photo, not the sweep: a
+ * changed profile picture is not urgent, and a coach who changes theirs does not
+ * expect a coaching platform to notice within minutes. The cost of putting it
+ * here is one Bot API call per connected bot per day, because an unchanged photo
+ * is decided by comparing a key and never downloads anything.
+ *
+ * It cannot change the health decision or the `health_checked_at` stamp: whether
+ * a bot answers Telegram and whether its coach has a new picture are unrelated
+ * facts, and letting the second defer the first would put a courtesy in charge of
+ * an outage.
+ */
+const refreshPhoto = (target: CoachBotHealthRepo.HealthTarget) =>
+  refreshCoachPhotoQuietly({
+    workspaceId: target.workspaceId,
+    ...(target.coachTelegramId === undefined ? {} : { coachTelegramId: target.coachTelegramId }),
+  })
+
+/**
  * One bot, one decision: does Telegram still accept the credential we hold, and
  * if not, can the manager hand us a working one?
  *
@@ -311,6 +334,7 @@ export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
   if (Result.isSuccess(probe)) {
     const now = new Date(yield* Clock.currentTimeMillis)
     yield* health.markChecked(target.workspaceId, now).pipe(Effect.ignore)
+    yield* refreshPhoto(target)
     return { _tag: "Healthy" } as const satisfies HealthOutcome
   }
   if (probe.failure === "transient") {
@@ -320,6 +344,11 @@ export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
 
   const repaired = yield* repairCoachBot(target)
   if (repaired._tag === "Unchanged") yield* deferCheck()
+  // A repaired bot's coach is as due a photo refresh as a healthy one's, and this
+  // is the pass that was going to notice. Every other outcome leaves the workspace
+  // either unrepairable or undecided, and neither is a place to spend Telegram
+  // calls on a courtesy.
+  if (repaired._tag === "Repaired") yield* refreshPhoto(target)
   return repaired
 })
 

@@ -32,7 +32,10 @@ describe.skipIf(skipWithoutDatabase)("WorkspaceDeletionRepo (dev Neon branch)", 
       const keyPrefix = uniqueId("delete-test")
       const expectedKeys = [
         `${keyPrefix}/workspace/custom.jpg`,
-        `${keyPrefix}/member/custom.jpg`,
+        // The shape `AvatarRepo` actually writes since #225 — the coach's own
+        // Telegram photo — rather than a stand-in, so this assertion stays honest
+        // about the key the column now holds.
+        `avatars/coach/${keyPrefix}/AQADBAADq6cxG4AB-1abc2de.jpg`,
         `${keyPrefix}/client/custom.jpg`,
         `${keyPrefix}/telegram/snapshot.jpg`,
         `${keyPrefix}/audio/segment-1.ogg`,

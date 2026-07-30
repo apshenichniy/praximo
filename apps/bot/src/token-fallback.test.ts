@@ -1,16 +1,25 @@
 import { createHash } from "node:crypto"
 import { describe, expect, it } from "@effect/vitest"
-import { CoachBotProvisioningRepo } from "@praximo/db"
+import { AvatarRepo, CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, CoachOnboardingInviteId, TelegramId, WorkspaceId } from "@praximo/domain"
+import { AvatarStore, avatarKey } from "@praximo/storage"
 import { CoachBotCredential } from "@praximo/telegram"
 import type { Update } from "grammy/types"
 import { ConfigProvider, Effect, Layer } from "effect"
 import {
+  unusedAvatarRepo,
+  unusedAvatarStore,
   unusedClientAcceptanceRepo,
   unusedHealthRepo,
   unusedManagerSender,
   unusedRegistry,
 } from "./__tests__/coach-bot-provisioning.ts"
+import {
+  avatarRepoStub,
+  COACH_PHOTO,
+  type PhotoFixture,
+  telegramPhotoRoutes,
+} from "./__tests__/coach-photo.ts"
 import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import { messages as messagesFor } from "./messages.ts"
 import { authenticateProof, botFatherToken } from "./token-fallback.ts"
@@ -173,12 +182,20 @@ interface TelegramStub {
   readonly edits: Array<Edit>
 }
 
-const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
+const telegramStub = (
+  failing: ReadonlyArray<string> = [],
+  /** What the coach's Telegram profile shows; nothing, in almost every test here. */
+  photo: PhotoFixture | "none" = "none",
+): TelegramStub => {
+  // A coach with no profile photo by default, so the tail of the handshake has
+  // nothing to import and this suite stays about what it is about (#225).
+  const photos = telegramPhotoRoutes(photo)
   const calls: Array<{ readonly method: string; readonly token: string }> = []
   const messages: Array<string> = []
   const edits: Array<Edit> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
-    const [, credential = "", method = ""] = new URL(input.toString()).pathname.split("/")
+    const url = input.toString()
+    const [, credential = "", method = ""] = new URL(url).pathname.split("/")
     const token = credential.replace(/^bot/, "")
     calls.push({ method, token })
     if (failing.includes(method)) {
@@ -217,7 +234,10 @@ const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
         },
       })
     }
-    return Response.json({ ok: true, result: true })
+    // The provisioning tail asks about the coach's profile photo (#225); a coach
+    // without one is the shape that leaves every assertion here about the
+    // messages rather than about a picture.
+    return photos(url) ?? Response.json({ ok: true, result: true })
   }
   return { fetch, calls, messages, edits }
 }
@@ -238,6 +258,8 @@ const runIngestion = (repo: RepoStub, telegram: TelegramStub) =>
             unusedClientAcceptanceRepo,
             unusedRegistry,
             unusedManagerSender,
+            unusedAvatarRepo,
+            unusedAvatarStore,
           ),
         ),
       ),
@@ -369,7 +391,14 @@ describe("BotFather token fallback", () => {
     }),
   )
 
-  const proofOf = (repo: RepoStub, telegram: TelegramStub, update: Update, parked = candidate()) =>
+  const proofOf = (
+    repo: RepoStub,
+    telegram: TelegramStub,
+    update: Update,
+    parked = candidate(),
+    avatars: Layer.Layer<AvatarRepo.Service> = unusedAvatarRepo,
+    store: Layer.Layer<AvatarStore.Service> = unusedAvatarStore,
+  ) =>
     Effect.flatMap(CoachBotProvisioning.Service, (service) =>
       service.completeOwnershipProof({
         candidate: parked,
@@ -388,12 +417,41 @@ describe("BotFather token fallback", () => {
               unusedClientAcceptanceRepo,
               unusedRegistry,
               unusedManagerSender,
+              avatars,
+              store,
             ),
           ),
         ),
       ),
       Effect.provide(configLayer),
     )
+
+  it.effect("imports the coach's photo on this path too, once the bot is connected", () =>
+    Effect.gen(function* () {
+      const repo = repoStub({ parked: candidate() })
+      const telegram = telegramStub([], COACH_PHOTO)
+      const avatars = avatarRepoStub()
+
+      const outcome = yield* proofOf(
+        repo,
+        telegram,
+        proofUpdate(`/start ${PROOF}`, coach),
+        candidate(),
+        avatars.layer,
+        AvatarStore.testLayer,
+      )
+
+      expect(outcome).toEqual({ _tag: "Activated", username: BOT_USERNAME })
+      expect(avatars.key()).toBe(
+        avatarKey({
+          subject: "coach",
+          subjectId: workspaceId,
+          sourceId: COACH_PHOTO.fileUniqueId,
+          contentType: "image/jpeg",
+        }),
+      )
+    }),
+  )
 
   it.effect("refuses the coach's own nonce presented by another account", () =>
     Effect.gen(function* () {
@@ -440,6 +498,11 @@ describe("BotFather token fallback", () => {
       // On this path the bot has been pointed at us since the paste, so that
       // re-arm is belt-and-braces rather than the fix; one order for both paths is
       // what stops them drifting.
+      //
+      // The coach's own profile photo is asked about *last*, after they have been
+      // told their bot is ready (#225): it is a courtesy on top of a workspace
+      // that is already connected, and its place in this list is the assertion
+      // that it can never delay or fail any of the steps above it.
       expect(telegram.calls.map((call) => call.method)).toEqual([
         "setChatMenuButton",
         "setChatMenuButton",
@@ -449,8 +512,15 @@ describe("BotFather token fallback", () => {
         "setMyShortDescription",
         "setWebhook",
         "sendMessage",
+        "getUserProfilePhotos",
       ])
-      expect(telegram.calls.every((call) => call.token === TOKEN)).toBe(true)
+      // Every call but the photo one carries the pasted bot's own credential; the
+      // photo is the manager's, the only bot that can see the coach.
+      expect(
+        telegram.calls
+          .filter((call) => call.method !== "getUserProfilePhotos")
+          .every((call) => call.token === TOKEN),
+      ).toBe(true)
 
       const completed = repo.completed[0]
       expect(completed?.provisioningId).toBe("cbp_test_800000101")

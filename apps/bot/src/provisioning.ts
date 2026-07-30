@@ -9,17 +9,14 @@ import {
 import { type CoachLanguage, TelegramId, type WorkspaceId } from "@praximo/domain"
 import { ClientLanguageNames, formatters } from "@praximo/i18n"
 import { BotRegistry, CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
-import { Api, GrammyError, InlineKeyboard, InputFile } from "grammy"
+import { GrammyError, InlineKeyboard, InputFile } from "grammy"
 import type { User } from "grammy/types"
-import { Clock, Effect, Result, Schema } from "effect"
+import { Clock, Effect, Result } from "effect"
 import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
+import { refreshCoachPhotoQuietly } from "./coach-photo.ts"
 import { defaultBotDescription, defaultBotShortDescription } from "./default-branding.ts"
 import { messages } from "./messages.ts"
-
-export class TelegramSetupFailed extends Schema.TaggedErrorClass<TelegramSetupFailed>()(
-  "BotWorker.TelegramSetupFailed",
-  { operation: Schema.String },
-) {}
+import { apiFor, telegram, TelegramSetupFailed } from "./telegram-api.ts"
 
 /**
  * Telegram's shape for a bot username: 5–32 characters of `[A-Za-z0-9_]`,
@@ -107,17 +104,6 @@ export const coachDisplayName = (user: User, workspaceName: string): string => {
   return telegramName.length === 0 ? workspaceName : telegramName
 }
 
-/**
- * Every Telegram call the provisioning paths make. The cause is dropped on
- * purpose: a grammY failure carries the request URL, and for a coach bot that
- * URL carries its token (ADR 0004).
- */
-export const telegram = <A>(operation: string, run: () => Promise<A>) =>
-  Effect.tryPromise({
-    try: run,
-    catch: () => new TelegramSetupFailed({ operation }),
-  })
-
 export const webhookSecret = (): string => {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
   return btoa(String.fromCharCode(...bytes))
@@ -185,9 +171,6 @@ export interface CoachBotConfiguration {
  * affordance, not our copy.
  */
 export const CoachMenuButtonText = "Open"
-
-export const apiFor = (token: string, fetch?: typeof globalThis.fetch): Api =>
-  new Api(token, fetch === undefined ? undefined : { fetch })
 
 /**
  * The coach Mini App URL for one specific bot: the configured base plus
@@ -1006,6 +989,20 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     secret: configured.secret,
     webhookOrigin,
     dropPendingUpdates: greeted,
+  })
+  // After everything, including the webhook, and on purpose (#225). The coach has
+  // been greeted and their bot is live, so the three Telegram calls and the R2 put
+  // this spends happen behind a screen that already says it is done — where put
+  // any earlier they would be several hundred milliseconds of the silence #154
+  // exists to remove. Nothing here can fail this update: the whole operation
+  // resolves to an outcome, never to an error.
+  //
+  // The redelivery branch above returns before this, deliberately: that bot is
+  // already installed, no photo can have changed between two deliveries of one
+  // update, and the daily sweep is what keeps it in step from then on.
+  yield* refreshCoachPhotoQuietly({
+    workspaceId: installation.workspaceId,
+    coachTelegramId: provisioning.coachTelegramId,
   })
   return { _tag: "Connected", installation } as const
 })

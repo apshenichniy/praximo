@@ -1,4 +1,5 @@
 export { AdminRepo } from "./admin-repo.ts"
+export { AvatarRepo } from "./avatar-repo.ts"
 export { BotConnection } from "./bot-connection-status.ts"
 export { ClientAcceptanceRepo } from "./client-acceptance-repo.ts"
 export { ClientRepo } from "./client-repo.ts"

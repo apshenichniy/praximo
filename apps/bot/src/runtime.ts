@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { CoachOnboardingToken } from "@praximo/auth"
 import {
+  AvatarRepo,
   ClientAcceptanceRepo,
   CoachBotHealthRepo,
   CoachBotProvisioningRepo,
@@ -15,6 +16,7 @@ import {
   WorkspaceId,
 } from "@praximo/domain"
 import { clientCopy } from "@praximo/i18n"
+import { AvatarStore } from "@praximo/storage"
 import {
   BotRegistry,
   CoachBotCredential,
@@ -80,6 +82,7 @@ const DbLive = Layer.mergeAll(
   CoachBotHealthRepo.layer,
   CoachOnboardingRepo.layer,
   ClientAcceptanceRepo.layer,
+  AvatarRepo.layer,
 ).pipe(Layer.provide(Database.layer))
 const CoachBotDataLive = Layer.mergeAll(DbLive, CoachBotCredential.layer)
 const appLive = (env: Env, fetch: typeof globalThis.fetch) => {
@@ -88,7 +91,16 @@ const appLive = (env: Env, fetch: typeof globalThis.fetch) => {
       ? BotRegistryLive.layer(env.UPLOADS)
       : BotRegistryLive.layerWithFetch(env.UPLOADS, fetch)
   ).pipe(Layer.provide(CoachBotDataLive))
-  const core = Layer.mergeAll(CoachBotDataLive, registry, ManagerBotSender.layer)
+  // The same bucket the provisioning runtime reads the bot's branding image out
+  // of, as a separate service because it is a separate concern: one reads one
+  // stage-wide object, the other writes one object per coach — and the writer is
+  // the seam `apps/client` shares for the Google import (#59).
+  const core = Layer.mergeAll(
+    CoachBotDataLive,
+    registry,
+    ManagerBotSender.layer,
+    AvatarStore.layer(env.UPLOADS),
+  )
   const provisioning = (
     fetch === globalThis.fetch
       ? CoachBotProvisioning.layer(env.UPLOADS)

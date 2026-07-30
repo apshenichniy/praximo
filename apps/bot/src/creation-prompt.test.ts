@@ -5,11 +5,14 @@ import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
 import { ConfigProvider, Effect, Layer } from "effect"
 import {
+  unusedAvatarRepo,
+  unusedAvatarStore,
   unusedClientAcceptanceRepo,
   unusedHealthRepo,
   unusedManagerSender,
   unusedRegistry,
 } from "./__tests__/coach-bot-provisioning.ts"
+import { telegramPhotoRoutes } from "./__tests__/coach-photo.ts"
 import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import { messages } from "./messages.ts"
 import { createBotLink, suggestedBotName } from "./provisioning.ts"
@@ -160,10 +163,14 @@ interface TelegramStub {
 
 /** Every Telegram method, with the body it was called with; `failing` 401s. */
 const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
+  // A coach with no profile photo, so the tail of provisioning has nothing to
+  // import and this suite stays about what it is about (#225).
+  const photos = telegramPhotoRoutes("none")
   const calls: Array<TelegramCall> = []
   let nextMessageId = 500
   const fetch: typeof globalThis.fetch = async (input, init) => {
-    const method = new URL(input.toString()).pathname.split("/").at(-1) ?? ""
+    const url = input.toString()
+    const method = new URL(url).pathname.split("/").at(-1) ?? ""
     const raw = init?.body
     calls.push({
       method,
@@ -196,7 +203,10 @@ const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
         },
       })
     }
-    return Response.json({ ok: true, result: true })
+    // The provisioning tail asks about the coach's profile photo (#225); a coach
+    // without one is the shape that leaves every assertion here about the
+    // messages rather than about a picture.
+    return photos(url) ?? Response.json({ ok: true, result: true })
   }
   return { fetch, calls }
 }
@@ -219,6 +229,8 @@ const serviceLayer = (
         unusedClientAcceptanceRepo,
         unusedRegistry,
         unusedManagerSender,
+        unusedAvatarRepo,
+        unusedAvatarStore,
       ),
     ),
   )
