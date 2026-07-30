@@ -3,7 +3,8 @@ import type { WorkspaceId } from "@praximo/domain"
 import { BotRegistry, CoachBotCredential } from "@praximo/telegram"
 import type { Api } from "grammy"
 import { Effect, Layer, Result } from "effect"
-import { classifyCoachBotFailure, type HealthEnv, repairCoachBot } from "./coach-bot-health.ts"
+import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
+import { classifyCoachBotFailure, repairCoachBot } from "./coach-bot-health.ts"
 import { apiFor } from "./provisioning.ts"
 
 /**
@@ -49,7 +50,7 @@ type Attempt<A> =
 const Refused = { _tag: "Refused" } as const
 const Transient = { _tag: "Transient" } as const
 
-const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
+const makeLayer = (uploads: R2Bucket, fetch?: typeof globalThis.fetch) =>
   Layer.effect(
     BotRegistry.Service,
     Effect.gen(function* () {
@@ -59,7 +60,10 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
       // promises effects with no requirements, and the repair path needs three
       // services.
       const services = yield* Effect.context<
-        CoachBotHealthRepo.Service | CoachBotProvisioningRepo.Service | CoachBotCredential.Service
+        | CoachBotHealthRepo.Service
+        | CoachBotProvisioningRepo.Service
+        | CoachBotCredential.Service
+        | CoachBotProvisioningRuntime.Service
       >()
 
       /**
@@ -79,7 +83,7 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
         Effect.gen(function* () {
           const token = yield* credentials.decrypt(target.encryptedToken).pipe(Effect.result)
           if (Result.isFailure(token)) return Transient
-          const api = apiFor(token.success, telegramFetch)
+          const api = apiFor(token.success, fetch)
           const answered = yield* Effect.tryPromise({
             try: () => call(api, chatId),
             catch: classifyCoachBotFailure,
@@ -126,9 +130,7 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
 
           // Telegram no longer accepts the credential. Repair, and give the call
           // the one retry the refresh earns it.
-          const repaired = yield* repairCoachBot(env, target, telegramFetch).pipe(
-            Effect.provideContext(services),
-          )
+          const repaired = yield* repairCoachBot(target).pipe(Effect.provideContext(services))
           if (repaired._tag !== "Repaired") {
             return yield* Effect.fail(
               repaired._tag === "Unchanged"
@@ -212,10 +214,16 @@ const makeLayer = (env: HealthEnv, telegramFetch?: typeof globalThis.fetch) =>
 
       return BotRegistry.Service.of({ send, prepareCard })
     }),
+  ).pipe(
+    Layer.provide(
+      fetch === undefined
+        ? CoachBotProvisioningRuntime.layer(uploads)
+        : CoachBotProvisioningRuntime.testLayer(uploads, fetch),
+    ),
   )
 
-export const layer = (env: HealthEnv) => makeLayer(env)
+export const layer = (uploads: R2Bucket) => makeLayer(uploads)
 
 /** The same layer over an injected Telegram transport, for tests. */
-export const layerWithFetch = (env: HealthEnv, telegramFetch: typeof globalThis.fetch) =>
-  makeLayer(env, telegramFetch)
+export const layerWithFetch = (uploads: R2Bucket, fetch: typeof globalThis.fetch) =>
+  makeLayer(uploads, fetch)

@@ -3,10 +3,17 @@ import { CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, CoachOnboardingInviteId, TelegramId, WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
-import { Effect, Layer, Logger } from "effect"
+import { ConfigProvider, Effect, Layer, Logger } from "effect"
 import { GrammyError } from "grammy"
+import {
+  unusedClientAcceptanceRepo,
+  unusedHealthRepo,
+  unusedManagerSender,
+  unusedRegistry,
+} from "./__tests__/coach-bot-provisioning.ts"
+import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import { messages } from "./messages.ts"
-import { announcementFailure, provisionManagedBot } from "./provisioning.ts"
+import { announcementFailure } from "./provisioning.ts"
 import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 
 /**
@@ -28,6 +35,7 @@ const ANNOUNCEMENT_MESSAGE_ID = 777
 
 const env = {
   MANAGER_BOT_TOKEN,
+  MANAGER_BOT_USERNAME: "PraximoManagerBot",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
   COACH_MINI_APP_URL: "https://coach.praximo.io/",
   CLIENT_APP_URL: "https://me.praximo.io",
@@ -162,8 +170,24 @@ const telegramStub = (
 }
 
 const provision = (telegram: TelegramStub) =>
-  provisionManagedBot(env, user, managedBot, "https://bot.praximo.test", telegram.fetch).pipe(
-    Effect.provide(Layer.mergeAll(repoLayer, credentialLayer)),
+  Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+    service.provisionManagedBot(user, managedBot, "https://bot.praximo.test"),
+  ).pipe(
+    Effect.provide(
+      CoachBotProvisioning.testLayer(env.UPLOADS, telegram.fetch).pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            repoLayer,
+            credentialLayer,
+            unusedHealthRepo,
+            unusedClientAcceptanceRepo,
+            unusedRegistry,
+            unusedManagerSender,
+          ),
+        ),
+      ),
+    ),
+    Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
   )
 
 const coachBotCalls = (telegram: TelegramStub, method: string): ReadonlyArray<TelegramCall> =>

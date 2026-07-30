@@ -1,6 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { TelegramId } from "@praximo/domain"
-import { Effect } from "effect"
+import { ConfigProvider, Effect } from "effect"
+import { uploadsStub } from "./__tests__/uploads.ts"
+import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
 import { CoachMenuButtonText, setCoachBotMenuButton } from "./provisioning.ts"
 
 /**
@@ -20,6 +22,12 @@ const TOKEN = "9100010:AAHkq2Lb8fN1sQx3TzVpYr7WcJd4MgEuKvB"
 const BOT_ID = "9100010"
 const COACH_CHAT_ID = TelegramId.make("800000101")
 const MINI_APP_URL = "https://coach.praximo.io/"
+const env = {
+  MANAGER_BOT_TOKEN: "manager-token",
+  MANAGER_BOT_USERNAME: "PraximoManagerBot",
+  DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default-coach-avatar.jpg",
+  COACH_MINI_APP_URL: MINI_APP_URL,
+}
 
 interface TelegramCall {
   readonly method: string
@@ -50,9 +58,14 @@ const setButton = (telegram: ReturnType<typeof telegramStub>, miniAppBaseUrl = M
     token: TOKEN,
     botId: BOT_ID,
     coachChatId: COACH_CHAT_ID,
-    miniAppBaseUrl,
-    telegramFetch: telegram.fetch,
-  })
+  }).pipe(
+    Effect.provide(CoachBotProvisioningRuntime.testLayer(uploadsStub().bucket, telegram.fetch)),
+    Effect.provide(
+      ConfigProvider.layer(
+        ConfigProvider.fromUnknown({ ...env, COACH_MINI_APP_URL: miniAppBaseUrl }),
+      ),
+    ),
+  )
 
 const expectedButton = {
   type: "web_app",

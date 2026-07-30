@@ -3,7 +3,8 @@ import type { WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
 import { GrammyError, HttpError } from "grammy"
 import { Clock, Effect, Result } from "effect"
-import { apiFor, type ProvisioningEnv, reconfigureCoachBot, sha256 } from "./provisioning.ts"
+import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
+import { apiFor, reconfigureCoachBot, sha256 } from "./provisioning.ts"
 
 /**
  * A coach bot that stops answering Telegram is **repaired first, and only
@@ -22,20 +23,6 @@ import { apiFor, type ProvisioningEnv, reconfigureCoachBot, sha256 } from "./pro
  * creation, and a revoked token stops inbound webhooks too, so a coach bot can
  * be dead in both directions with nothing to notice it by.
  */
-
-export interface HealthEnv extends ProvisioningEnv {
-  /**
-   * The bot Worker's own public origin — the same value `manager-bot:set-webhook`
-   * installs on the manager bot, which is why it travels under that name.
-   *
-   * The sweep runs on a cron, where there is no inbound request to read an
-   * origin off, and a repair re-arms the coach bot's webhook. Optional so a
-   * stage that never set it still repairs the credential rather than refusing to:
-   * a bot whose token was refreshed can talk again either way, and its webhook is
-   * left exactly as Telegram already has it.
-   */
-  readonly MANAGER_BOT_WEBHOOK_URL?: string
-}
 
 /**
  * How often a connected bot is asked whether it still answers. Daily, per ADR
@@ -177,15 +164,13 @@ const flagNeedsRelink = Effect.fn("BotWorker.flagNeedsRelink")(function* (
  * announce, and the next tick tries again.
  */
 export const repairCoachBot = Effect.fn("BotWorker.repairCoachBot")(function* (
-  env: HealthEnv,
   target: CoachBotHealthRepo.HealthTarget,
-  telegramFetch?: typeof globalThis.fetch,
 ) {
   const provisioning = yield* CoachBotProvisioningRepo.Service
   const health = yield* CoachBotHealthRepo.Service
   const credentials = yield* CoachBotCredential.Service
-  const injectedFetch = telegramFetch === undefined ? {} : { telegramFetch }
-  const managerApi = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
+  const runtime = yield* CoachBotProvisioningRuntime.Service
+  const managerApi = apiFor(runtime.managerBotToken, runtime.fetch)
 
   const refreshed = yield* Effect.tryPromise({
     try: () => managerApi.getManagedBotToken(Number(target.telegramBotId)),
@@ -203,14 +188,13 @@ export const repairCoachBot = Effect.fn("BotWorker.repairCoachBot")(function* (
   }
 
   const token = refreshed.success
-  const origin = webhookOriginFrom(env.MANAGER_BOT_WEBHOOK_URL)
+  const origin = webhookOriginFrom(runtime.managerBotWebhookUrl)
   if (origin === undefined) {
     yield* Effect.logWarning(
       `coach bot @${target.username}: repairing without re-arming its webhook — no public origin is configured for this stage`,
     )
   }
   const configured = yield* reconfigureCoachBot({
-    env,
     token,
     botId: target.telegramBotId,
     workspace: target.workspace,
@@ -220,7 +204,6 @@ export const repairCoachBot = Effect.fn("BotWorker.repairCoachBot")(function* (
     coachName: target.workspace.name,
     ...(target.coachTelegramId === undefined ? {} : { coachChatId: target.coachTelegramId }),
     ...(origin === undefined ? {} : { webhookOrigin: origin }),
-    ...injectedFetch,
   }).pipe(Effect.result)
   if (Result.isFailure(configured)) {
     yield* Effect.logWarning(
@@ -290,12 +273,11 @@ export const repairCoachBot = Effect.fn("BotWorker.repairCoachBot")(function* (
  * bots from holding the batch and starving the daily pass.
  */
 export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
-  env: HealthEnv,
   target: CoachBotHealthRepo.HealthTarget,
-  telegramFetch?: typeof globalThis.fetch,
 ) {
   const health = yield* CoachBotHealthRepo.Service
   const credentials = yield* CoachBotCredential.Service
+  const runtime = yield* CoachBotProvisioningRuntime.Service
 
   /** Back-dated so `dueForCheck`'s own window brings this bot back in an hour. */
   const deferCheck = (): Effect.Effect<void> =>
@@ -320,7 +302,7 @@ export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
     return unchanged("decrypt")
   }
 
-  const api = apiFor(token.success, telegramFetch)
+  const api = apiFor(token.success, runtime.fetch)
   const probe = yield* Effect.tryPromise({
     try: () => api.getMe(),
     catch: classifyCoachBotFailure,
@@ -336,7 +318,7 @@ export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
     return unchanged("getMe")
   }
 
-  const repaired = yield* repairCoachBot(env, target, telegramFetch)
+  const repaired = yield* repairCoachBot(target)
   if (repaired._tag === "Unchanged") yield* deferCheck()
   return repaired
 })
@@ -348,10 +330,7 @@ export const checkCoachBot = Effect.fn("BotWorker.checkCoachBot")(function* (
  * taken oldest-check-first, so the work spreads itself over the day and a stage
  * with a handful of coaches spends most ticks reading nothing.
  */
-export const sweepCoachBotHealth = Effect.fn("BotWorker.sweepCoachBotHealth")(function* (
-  env: HealthEnv,
-  telegramFetch?: typeof globalThis.fetch,
-) {
+export const sweepCoachBotHealth = Effect.fn("BotWorker.sweepCoachBotHealth")(function* () {
   const health = yield* CoachBotHealthRepo.Service
   const now = yield* Clock.currentTimeMillis
   const due = yield* health.dueForCheck(
@@ -360,5 +339,5 @@ export const sweepCoachBotHealth = Effect.fn("BotWorker.sweepCoachBotHealth")(fu
   )
   // Serial on purpose: this is background work against per-bot rate limits, and
   // nothing downstream is waiting for it.
-  return yield* Effect.forEach(due, (target) => checkCoachBot(env, target, telegramFetch))
+  return yield* Effect.forEach(due, (target) => checkCoachBot(target))
 })

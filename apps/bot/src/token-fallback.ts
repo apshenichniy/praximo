@@ -1,17 +1,18 @@
 import { CoachBotProvisioningRepo } from "@praximo/db"
 import type { CoachLanguage, TelegramId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
-import { Api, InlineKeyboard } from "grammy"
+import { InlineKeyboard } from "grammy"
 import type { Update } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
+import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
 import { clientLanguage, messages } from "./messages.ts"
 import {
+  apiFor,
   armCoachBotWebhook,
   coachDisplayName,
   coachMiniAppUrl,
   configureCoachBot,
   constantTimeEqual,
-  type ProvisioningEnv,
   setCoachBotMenuButton,
   settleCreationPrompt,
   sha256,
@@ -55,9 +56,6 @@ const proofNonce = webhookSecret
 const startParameter = (text: string): string | undefined =>
   /^\/start(?:@[A-Za-z0-9_]+)?(?:\s+(\S+))?\s*$/.exec(text)?.[1]
 
-const apiFor = (token: string, telegramFetch?: typeof globalThis.fetch) =>
-  new Api(token, telegramFetch === undefined ? undefined : { fetch: telegramFetch })
-
 export interface IngestedCandidate {
   readonly username: string
   /** The deep link whose `/start` proves the coach owns the pasted bot. */
@@ -77,11 +75,11 @@ export const ingestBotFatherToken = Effect.fn("BotWorker.ingestBotFatherToken")(
   coachTelegramId: TelegramId,
   token: string,
   webhookOrigin: string,
-  telegramFetch?: typeof globalThis.fetch,
 ) {
   const repo = yield* CoachBotProvisioningRepo.Service
   const credentials = yield* CoachBotCredential.Service
-  const api = apiFor(token, telegramFetch)
+  const runtime = yield* CoachBotProvisioningRuntime.Service
+  const api = apiFor(token, runtime.fetch)
   const botInfo = yield* telegram("getMe", () => api.getMe()).pipe(
     Effect.mapError(() => new TokenIngestionFailed({ reason: "invalid-token" })),
   )
@@ -147,7 +145,6 @@ export interface ProofInput {
   readonly secretToken: string
   readonly update: Update
   readonly webhookOrigin: string
-  readonly telegramFetch?: typeof globalThis.fetch
 }
 
 /**
@@ -181,11 +178,11 @@ export const authenticateProof = Effect.fn("BotWorker.authenticateProof")(functi
  * both leaves the workspace unconnected and the attempt resumable.
  */
 export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProof")(function* (
-  env: ProvisioningEnv,
   input: ProofInput,
 ) {
   const repo = yield* CoachBotProvisioningRepo.Service
   const credentials = yield* CoachBotCredential.Service
+  const runtime = yield* CoachBotProvisioningRuntime.Service
   const candidate = input.candidate
 
   const message = input.update.message
@@ -195,7 +192,7 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
   }
 
   const token = yield* credentials.decrypt(candidate.encryptedToken)
-  const api = apiFor(token, input.telegramFetch)
+  const api = apiFor(token, runtime.fetch)
   const parameter = startParameter(message.text)
   const provenNonce =
     parameter !== undefined && constantTimeEqual(yield* sha256(parameter), candidate.proofHash)
@@ -225,8 +222,6 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
     candidate.botUsername,
     now,
   )
-  const injectedFetch =
-    input.telegramFetch === undefined ? {} : { telegramFetch: input.telegramFetch }
   // Same first step as the managed path (#156). Here the coach is looking at the
   // bot they pasted a token for — they have already opened it to answer the proof
   // handshake — so their client's cache is just as much in play.
@@ -234,17 +229,13 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
     token,
     botId: candidate.botId,
     coachChatId: candidate.coachTelegramId,
-    miniAppBaseUrl: env.COACH_MINI_APP_URL,
-    ...injectedFetch,
   })
   const configured = yield* configureCoachBot({
-    env,
     token,
     botId: candidate.botId,
     workspace: claimed.workspace,
     coachName: coachDisplayName(from, claimed.workspace.name),
     secret: input.secretToken,
-    ...injectedFetch,
   })
   const activation = yield* repo.complete({
     provisioningId: claimed.id,
@@ -259,11 +250,9 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
   // the manager chat from before they gave up on it. Their bot is connected now,
   // whichever path got them here, so that button is retired the same way (#134).
   yield* settleCreationPrompt(
-    env,
     claimed,
     candidate.botUsername,
     activation.reconnected ? "reconnected" : "connected",
-    input.telegramFetch,
   )
   // Re-armed with the very secret this request authenticated against, which the
   // activation transaction has just recorded the hash of. On this path the bot has
@@ -275,7 +264,6 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
     botId: candidate.botId,
     secret: input.secretToken,
     webhookOrigin: input.webhookOrigin,
-    ...injectedFetch,
   })
 
   const copy = messages(candidate.coachLanguage)
@@ -286,7 +274,7 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
       parse_mode: "HTML",
       reply_markup: new InlineKeyboard().webApp(
         copy.openButton,
-        coachMiniAppUrl(env.COACH_MINI_APP_URL, candidate.botId),
+        coachMiniAppUrl(runtime.coachMiniAppUrl, candidate.botId),
       ),
     }),
   ).pipe(Effect.result)

@@ -2,8 +2,10 @@ import { describe, expect, it } from "@effect/vitest"
 import { ClientAcceptanceRepo, CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, TelegramId, WorkspaceId } from "@praximo/domain"
 import { BotRegistry, ManagerBotSender } from "@praximo/telegram"
-import { Effect, Layer, Ref } from "effect"
-import { deliverCoachNotifications } from "./provisioning.ts"
+import { ConfigProvider, Effect, Layer, Ref } from "effect"
+import { unusedCredential, unusedHealthRepo } from "./__tests__/coach-bot-provisioning.ts"
+import { uploadsStub } from "./__tests__/uploads.ts"
+import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 
 const unsupported = () => Effect.die(new Error("unsupported test operation"))
 
@@ -32,7 +34,12 @@ interface Marks {
   readonly deferred: Ref.Ref<ReadonlyArray<string>>
 }
 
-const env = { COACH_MINI_APP_URL: "https://coach.praximo.io/" }
+const env = {
+  MANAGER_BOT_TOKEN: "manager-token",
+  MANAGER_BOT_USERNAME: "PraximoManagerBot",
+  DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default-coach-avatar.jpg",
+  COACH_MINI_APP_URL: "https://coach.praximo.io/",
+}
 
 /** The client-accepted push reads one client; every other kind reads none. */
 const clientsLayer = Layer.succeed(
@@ -80,14 +87,33 @@ const run = (queued: ReadonlyArray<CoachBotProvisioningRepo.PendingNotification>
       }),
     )
 
-    yield* deliverCoachNotifications(env).pipe(Effect.provide(Layer.mergeAll(repo, clientsLayer)))
-    return {
-      sent: yield* (yield* ManagerBotSender.TestService).sent(),
-      throughCoachBot: yield* (yield* BotRegistry.TestService).sent(),
-      delivered: yield* Ref.get(marks.delivered),
-      deferred: yield* Ref.get(marks.deferred),
-    }
-  }).pipe(Effect.provide(Layer.mergeAll(ManagerBotSender.testLayer, BotRegistry.testLayer)))
+    const dependencies = Layer.mergeAll(
+      repo,
+      clientsLayer,
+      unusedHealthRepo,
+      unusedCredential,
+      ManagerBotSender.testLayer,
+      BotRegistry.testLayer,
+    )
+    return yield* Effect.gen(function* () {
+      yield* Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+        service.deliverCoachNotifications(),
+      )
+      return {
+        sent: yield* (yield* ManagerBotSender.TestService).sent(),
+        throughCoachBot: yield* (yield* BotRegistry.TestService).sent(),
+        delivered: yield* Ref.get(marks.delivered),
+        deferred: yield* Ref.get(marks.deferred),
+      }
+    }).pipe(
+      Effect.provide(
+        CoachBotProvisioning.testLayer(uploadsStub().bucket, globalThis.fetch).pipe(
+          Layer.provideMerge(dependencies),
+        ),
+      ),
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
+    )
+  })
 
 describe("coach notification delivery", () => {
   it.effect("tells the invite issuer when a coach finishes onboarding", () =>

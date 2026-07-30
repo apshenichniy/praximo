@@ -3,9 +3,15 @@ import { CoachBotProvisioningRepo, QueryFailed } from "@praximo/db"
 import { CoachLanguage, WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
-import { Effect, Layer } from "effect"
+import { ConfigProvider, Effect, Layer } from "effect"
+import {
+  unusedClientAcceptanceRepo,
+  unusedHealthRepo,
+  unusedManagerSender,
+  unusedRegistry,
+} from "./__tests__/coach-bot-provisioning.ts"
+import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import { messages } from "./messages.ts"
-import { provisionManagedBot } from "./provisioning.ts"
 import { handleRequest, managedBotReply } from "./runtime.ts"
 
 const coach: User = {
@@ -24,6 +30,7 @@ const secondBot: User = {
 
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
+  MANAGER_BOT_USERNAME: "PraximoManagerBot",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: "branding/default-coach-avatar.jpg",
   COACH_MINI_APP_URL: "https://coach.praximo.io/",
   CLIENT_APP_URL: "https://me.praximo.io",
@@ -98,8 +105,24 @@ const repoStub = (
 }
 
 const provision = (repo: RepoStub) =>
-  provisionManagedBot(env, coach, secondBot, "https://bot.praximo.test").pipe(
-    Effect.provide(Layer.mergeAll(repo.layer, credentialLayer)),
+  Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+    service.provisionManagedBot(coach, secondBot, "https://bot.praximo.test"),
+  ).pipe(
+    Effect.provide(
+      CoachBotProvisioning.testLayer(env.UPLOADS, globalThis.fetch).pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            repo.layer,
+            credentialLayer,
+            unusedHealthRepo,
+            unusedClientAcceptanceRepo,
+            unusedRegistry,
+            unusedManagerSender,
+          ),
+        ),
+      ),
+    ),
+    Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
   )
 
 describe("a second managed bot", () => {

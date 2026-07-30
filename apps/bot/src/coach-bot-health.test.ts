@@ -3,14 +3,20 @@ import { CoachBotHealthRepo, CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, TelegramId, WorkspaceId } from "@praximo/domain"
 import { BotRegistry, CoachBotCredential } from "@praximo/telegram"
 import { GrammyError, HttpError } from "grammy"
-import { Clock, Effect, Layer } from "effect"
+import { Clock, ConfigProvider, Effect, Layer } from "effect"
+import {
+  unusedClientAcceptanceRepo,
+  unusedManagerSender,
+  unusedRegistry,
+} from "./__tests__/coach-bot-provisioning.ts"
+import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
+import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import {
   checkCoachBot,
   classifyCoachBotFailure,
   classifyManagementFailure,
   HEALTH_CHECK_INTERVAL_MILLIS,
   HEALTH_RETRY_INTERVAL_MILLIS,
-  sweepCoachBotHealth,
   webhookOriginFrom,
 } from "./coach-bot-health.ts"
 import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
@@ -35,6 +41,7 @@ const FRESH_TOKEN = `${BOT_ID}:AAHfreshAAHfreshAAHfreshAAHfreshAAH`
 
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
+  MANAGER_BOT_USERNAME: "PraximoManagerBot",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
   COACH_MINI_APP_URL: "https://coach.praximo.io/",
   CLIENT_APP_URL: "https://me.praximo.io",
@@ -276,8 +283,10 @@ const check = (
   rotated: Array<RotateRecord> = [],
   input = target(),
 ) =>
-  checkCoachBot(env, input, telegram.fetch).pipe(
+  checkCoachBot(input).pipe(
+    Effect.provide(CoachBotProvisioningRuntime.testLayer(env.UPLOADS, telegram.fetch)),
     Effect.provide(Layer.mergeAll(health.layer, provisioningStub(rotated), credentialLayer)),
+    Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
   )
 
 describe("classifying a coach bot's refusal", () => {
@@ -428,10 +437,13 @@ describe("checking one coach bot", () => {
       const rotated: Array<RotateRecord> = []
       const originless = { ...env, MANAGER_BOT_WEBHOOK_URL: "" }
 
-      const outcome = yield* checkCoachBot(originless, target(), telegramStub().fetch).pipe(
+      const telegram = telegramStub()
+      const outcome = yield* checkCoachBot(target()).pipe(
+        Effect.provide(CoachBotProvisioningRuntime.testLayer(originless.UPLOADS, telegram.fetch)),
         Effect.provide(
           Layer.mergeAll(healthStub().layer, provisioningStub(rotated), credentialLayer),
         ),
+        Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(originless))),
       )
 
       expect(outcome).toMatchObject({ _tag: "Repaired" })
@@ -446,8 +458,24 @@ describe("the daily sweep", () => {
       const health = healthStub([target(), target({ encryptedToken: "sealed:fine" })])
       const telegram = telegramStub()
 
-      const outcomes = yield* sweepCoachBotHealth(env, telegram.fetch).pipe(
-        Effect.provide(Layer.mergeAll(health.layer, provisioningStub([]), credentialLayer)),
+      const outcomes = yield* Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+        service.sweepCoachBotHealth(),
+      ).pipe(
+        Effect.provide(
+          CoachBotProvisioning.testLayer(env.UPLOADS, telegram.fetch).pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                health.layer,
+                provisioningStub([]),
+                credentialLayer,
+                unusedClientAcceptanceRepo,
+                unusedRegistry,
+                unusedManagerSender,
+              ),
+            ),
+          ),
+        ),
+        Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
       )
 
       expect(outcomes.map((outcome) => outcome._tag)).toEqual(["Repaired", "Healthy"])
@@ -480,7 +508,7 @@ describe("sending through a workspace's own bot", () => {
   ) =>
     body.pipe(
       Effect.provide(
-        BotRegistryLive.layerWithFetch(env, telegram.fetch).pipe(
+        BotRegistryLive.layerWithFetch(env.UPLOADS, telegram.fetch).pipe(
           Layer.provide(
             Layer.mergeAll(
               health.layer,
@@ -494,6 +522,7 @@ describe("sending through a workspace's own bot", () => {
           ),
         ),
       ),
+      Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
     )
 
   const send = (health: HealthStub, telegram: TelegramStub, rotated: Array<RotateRecord> = []) =>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import type { CoachBotProvisioningRepo } from "@praximo/db"
-import { Effect } from "effect"
+import { ConfigProvider, Effect } from "effect"
+import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
 import { coachMiniAppUrl, configureCoachBot } from "./provisioning.ts"
 import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 
@@ -11,6 +12,7 @@ const WORKSPACE_AVATAR_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x0
 
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
+  MANAGER_BOT_USERNAME: "PraximoManagerBot",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
   COACH_MINI_APP_URL: "https://coach.praximo.io/",
   CLIENT_APP_URL: "https://me.praximo.io",
@@ -73,13 +75,16 @@ const configure = (
   profile: CoachBotProvisioningRepo.WorkspaceProfile = workspace,
 ) =>
   configureCoachBot({
-    env: { ...env, ...overrides },
     token: TOKEN,
     botId: BOT_ID,
     workspace: profile,
     coachName: "Ada",
-    telegramFetch: telegram.fetch,
-  })
+  }).pipe(
+    Effect.provide(
+      CoachBotProvisioningRuntime.testLayer({ ...env, ...overrides }.UPLOADS, telegram.fetch),
+    ),
+    Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({ ...env, ...overrides }))),
+  )
 
 describe("coach bot configuration", () => {
   it.effect("dresses the bot in the stage's stored branding image, not a generated one", () =>
