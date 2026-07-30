@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start"
 import { Effect } from "effect"
+import { transportWord } from "./admin-transport.ts"
 import { launchCredential } from "./launch-credential.ts"
 import { runAdmin } from "./runtime.server.ts"
 import { ViewerRole } from "./viewer-role.ts"
@@ -35,14 +36,13 @@ export const loadViewerRole = createServerFn({ method: "POST" })
       )
       return { ok: true, role }
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "ViewerRole.Unauthenticated"
-      ) {
-        return { ok: false, error: "unauthenticated" }
+      // `transportWord` rather than `adminRefusal`: this is the one admin endpoint
+      // that must never answer with a missing page, so it takes the mapping and
+      // leaves the tree's `AccessDenied` rule alone — which it could not hit
+      // anyway, since `resolveRole` cannot fail that way.
+      return {
+        ok: false,
+        error: transportWord(error, { "ViewerRole.Unauthenticated": "unauthenticated" }),
       }
-      return { ok: false, error: "server" }
     }
   })
