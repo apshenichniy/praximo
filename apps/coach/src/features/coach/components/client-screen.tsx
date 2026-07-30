@@ -7,6 +7,7 @@ import {
   ClientInviteDoor as InviteDoors,
 } from "@praximo/domain"
 import { localeTag } from "@praximo/i18n"
+import { Link } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 
 import { HostBackButton, isIosHost } from "@/mini-app.tsx"
@@ -27,6 +28,7 @@ import {
   TimestampValue,
 } from "@/features/mini-app/components/detail-card.tsx"
 import { useClientPhoto } from "@/features/coach/use-client-photo.ts"
+import { stateSentence } from "@/features/coach/session-standing.ts"
 import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
 import { doorFor, isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
 import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
@@ -71,6 +73,73 @@ const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
  *   card's header beside an eyebrow that already reads «Приглашение · Telegram»,
  *   so the glyph confirms the word rather than replacing it.
  */
+/**
+ * One session of this client's, ahead or behind (#232).
+ *
+ * **A link, both ways round.** A past session is otherwise a dead end: it is on
+ * neither Today nor the Upcoming list, and reschedule, cancel and — later —
+ * the artifact list all live on its own screen. Making only the upcoming rows
+ * lead somewhere would put the coach's whole history behind a row that looks
+ * like the others and does nothing.
+ *
+ * `standing` is what became of it, and it is absent on everything still ahead:
+ * an ordinary session says nothing about itself.
+ */
+function ClientSessionRow({
+  copy,
+  format,
+  session,
+  standing,
+}: {
+  readonly copy: CoachCopy
+  readonly format: Intl.DateTimeFormat
+  readonly session: {
+    readonly id: string
+    readonly scheduledAt: string
+    readonly kind: string
+    readonly durationMinutes: number
+  }
+  readonly standing?: string | undefined
+}) {
+  return (
+    <li>
+      <Link
+        to="/sessions/$sessionId"
+        params={{ sessionId: session.id }}
+        className="transition-colors duration-100 active:bg-muted flex min-h-11 items-center gap-3 px-5 py-4 text-left"
+      >
+        {/*
+          Kind is a word with a glyph and no colour of its own: amber / sky /
+          emerald / rose already mean invite and session *state*, and a second
+          colour vocabulary makes both harder to read.
+        */}
+        <HugeiconsIcon
+          icon={session.kind === "intake" ? FlagIcon : Calendar03Icon}
+          size={16}
+          strokeWidth={2}
+          className="text-muted-foreground shrink-0"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-base leading-relaxed tabular-nums">
+            {format.format(new Date(session.scheduledAt))}
+          </span>
+          {standing === undefined ? null : (
+            <span className="text-muted-foreground mt-0.5 block truncate text-xs leading-normal">
+              {standing}
+            </span>
+          )}
+        </span>
+        <span className="text-muted-foreground shrink-0 text-xs leading-normal">
+          {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
+          {" · "}
+          {session.durationMinutes}
+          {copy.clients.durationSuffix}
+        </span>
+      </Link>
+    </li>
+  )
+}
+
 const doorOffers: Record<
   ClientInviteDoor,
   {
@@ -474,28 +543,12 @@ export function ClientScreen({
               </li>
             ) : (
               client.sessions.map((session) => (
-                <li key={session.id} className="flex items-center gap-3 px-5 py-4">
-                  {/*
-                    Kind is a word with a glyph and no colour of its own: amber /
-                    sky / emerald / rose already mean invite and session *state*,
-                    and a second colour vocabulary makes both harder to read.
-                  */}
-                  <HugeiconsIcon
-                    icon={session.kind === "intake" ? FlagIcon : Calendar03Icon}
-                    size={16}
-                    strokeWidth={2}
-                    className="text-muted-foreground"
-                  />
-                  <span className="flex-1 text-base leading-relaxed tabular-nums">
-                    {sessionFormat.format(new Date(session.scheduledAt))}
-                  </span>
-                  <span className="text-muted-foreground text-xs leading-normal">
-                    {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
-                    {" · "}
-                    {session.durationMinutes}
-                    {copy.clients.durationSuffix}
-                  </span>
-                </li>
+                <ClientSessionRow
+                  key={session.id}
+                  copy={copy}
+                  format={sessionFormat}
+                  session={session}
+                />
               ))
             )}
             <li>
@@ -516,6 +569,35 @@ export function ClientScreen({
           </ul>
         </Card>
       </Section>
+
+      {/*
+        The history, and **absent rather than present-and-empty** (#232).
+        `mini-app.md`'s rule applies here and not to the sessions list's segment:
+        this is a block on a page the coach opened to read about a person, so a
+        heading over «пока ничего» promises something they then hunt for. The
+        segment is navigation they chose, which is the opposite case.
+
+        Below the upcoming sessions rather than above them: this screen is read
+        top-down and what happens next outranks what already did.
+      */}
+      {client.past.length === 0 ? null : (
+        <Section>
+          <SectionTitle>{copy.clients.pastSessionsTitle}</SectionTitle>
+          <Card className="mt-4 gap-0 overflow-hidden py-0">
+            <ul className="divide-border divide-y">
+              {client.past.map((session) => (
+                <ClientSessionRow
+                  key={session.id}
+                  copy={copy}
+                  format={sessionFormat}
+                  session={session}
+                  standing={stateSentence(copy.sessions, session.state, session.cancelReason)}
+                />
+              ))}
+            </ul>
+          </Card>
+        </Section>
+      )}
 
       <Section>
         <SectionTitle>{copy.clients.profileTitle}</SectionTitle>

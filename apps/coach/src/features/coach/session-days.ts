@@ -79,6 +79,29 @@ export const groupByDay = <T extends { readonly scheduledAt: string }>(
   const todayDate = localParts(options.now, options.timezone).date
   const tomorrowDate = nextDate(todayDate)
   const format = headingFormat(options.language, options.timezone)
+  // `YYYY-MM-DD` in the coach's zone, so a session at 01:30 on 1 January is
+  // theirs to place even while UTC is still on 31 December.
+  const thisYear = todayDate.slice(0, 4)
+
+  /**
+   * The date, **with its year only when that year is not the current one**
+   * (#232).
+   *
+   * Upcoming barely needed this — a coach books months ahead, not years — but
+   * Past walks backwards without a floor, and «понедельник, 3 августа» in a list
+   * that reaches into last year is a date nobody can place. Printing it on every
+   * heading would be the opposite mistake: a year the reader already knows, on
+   * every group, is noise the eye learns to skip.
+   *
+   * Appended rather than asked of `Intl`, which reshapes the whole pattern once
+   * `year` is in the options — `Thursday 30 July` becomes `Monday, 4 August
+   * 2025` — so two headings in one list would be punctuated differently. The
+   * year goes last in all three languages this app speaks.
+   */
+  const dateHeading = (at: Date, date: string): string => {
+    const year = date.slice(0, 4)
+    return year === thisYear ? format.format(at) : `${format.format(at)} ${year}`
+  }
 
   const days: Array<{ date: string; heading: string; sessions: Array<T> }> = []
   for (const session of sessions) {
@@ -96,7 +119,7 @@ export const groupByDay = <T extends { readonly scheduledAt: string }>(
           ? options.words.today
           : date === tomorrowDate
             ? options.words.tomorrow
-            : format.format(at),
+            : dateHeading(at, date),
       sessions: [session],
     })
   }
@@ -111,9 +134,28 @@ export const groupByDay = <T extends { readonly scheduledAt: string }>(
  * Here rather than in either route because **both entrances draw the same
  * month**: the client route holds these sessions already, and the picker path
  * reads the same client before the sheet opens.
+ *
+ * It reads `sessions` and deliberately not the history beside it (#232): the
+ * dots exist so a coach can place a rhythm, the grid refuses a day that has
+ * gone, and a dot on a day nothing can be booked on is noise.
  */
 export const bookedDates = (client: {
   readonly timezone: string
   readonly sessions: ReadonlyArray<{ readonly scheduledAt: string }>
 }): ReadonlyArray<string> =>
   client.sessions.map((session) => localParts(new Date(session.scheduledAt), client.timezone).date)
+
+/**
+ * Whether the session about to be booked is this client's first — what turns the
+ * intake switch on before the coach has touched it (#61).
+ *
+ * **Both fields, and that is the fix** (#232). It used to ask only whether
+ * anything was scheduled ahead, which is true of a client seen weekly for a year
+ * and rebooking after a gap: the screen opened with «Первая сессия» on, and the
+ * debrief prompt it drives would have treated a long engagement as a first
+ * meeting. A history is exactly the evidence that this is not one.
+ */
+export const firstSessionFor = (client: {
+  readonly sessions: ReadonlyArray<unknown>
+  readonly past: ReadonlyArray<unknown>
+}): boolean => client.sessions.length === 0 && client.past.length === 0

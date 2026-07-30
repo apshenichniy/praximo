@@ -331,25 +331,39 @@ describe("needs attention", () => {
 })
 
 describe("sessions list", () => {
-  const upcoming = {
+  const list = (
+    overrides: Partial<CoachSessions.SessionsList> = {},
+  ): CoachSessions.SessionsList => ({
     timezone: "Europe/Kyiv",
-    sessions: [
+    upcoming: [
       session(),
       session({ id: "se_2", scheduledAt: "2026-07-28T08:00:00.000Z" }),
       session({ id: "se_3", scheduledAt: "2026-08-03T08:00:00.000Z", clientName: "Ivan L." }),
     ],
-  }
+    past: [],
+    pastBounded: false,
+    ...overrides,
+  })
 
-  it("groups by day, names today and tomorrow, and dates the rest", async () => {
-    const html = await render(
+  const screen = (
+    overrides: Partial<CoachSessions.SessionsList> = {},
+    past = false,
+    language: "en" | "uk" | "ru" = "en",
+  ) =>
+    render(
       <SessionsScreen
-        copy={coachCopy("en")}
-        language="en"
-        upcoming={upcoming}
+        copy={coachCopy(language)}
+        language={language}
+        list={list(overrides)}
         now={NOW}
+        past={past}
+        onView={() => {}}
         onCreate={() => {}}
       />,
     )
+
+  it("groups by day, names today and tomorrow, and dates the rest", async () => {
+    const html = await screen()
 
     expect(html).toContain(coachCatalog.en.sessions.today)
     expect(html).toContain(coachCatalog.en.sessions.tomorrow)
@@ -357,64 +371,90 @@ describe("sessions list", () => {
     expect(html).toContain("/sessions/se_3")
   })
 
-  /**
-   * No session can be `completed` before #42, so a history heading here would
-   * be a heading over nothing — the same rule that keeps the artifacts feed off
-   * Today. #62 brings history.
-   */
-  it("has no past section", async () => {
-    const html = await render(
-      <SessionsScreen
-        copy={coachCopy("en")}
-        language="en"
-        upcoming={upcoming}
-        now={NOW}
-        onCreate={() => {}}
-      />,
-    )
-
-    for (const absent of ["Past", "History", "Completed"]) {
-      expect(html).not.toContain(absent)
-    }
-  })
-
   it("says nothing about a healthy session, and warns about a broken one", async () => {
-    const healthy = await render(
-      <SessionsScreen
-        copy={coachCopy("en")}
-        language="en"
-        upcoming={upcoming}
-        now={NOW}
-        onCreate={() => {}}
-      />,
-    )
+    const healthy = await screen()
     expect(healthy).not.toContain(coachCatalog.en.sessions.rowUnaccepted)
 
-    const broken = await render(
-      <SessionsScreen
-        copy={coachCopy("en")}
-        language="en"
-        upcoming={{ ...upcoming, sessions: [session({ clientAccepted: false })] }}
-        now={NOW}
-        onCreate={() => {}}
-      />,
-    )
+    const broken = await screen({ upcoming: [session({ clientAccepted: false })] })
     expect(broken).toContain(coachCatalog.en.sessions.rowUnaccepted)
     expect(broken).toContain("text-warning")
     expect(broken).not.toMatch(/text-warning\/\d+/)
   })
 
   it("says so plainly when nothing is booked", async () => {
-    const html = await render(
-      <SessionsScreen
-        copy={coachCopy("en")}
-        language="en"
-        upcoming={{ timezone: "Europe/Kyiv", sessions: [] }}
-        now={NOW}
-        onCreate={() => {}}
-      />,
+    expect(await screen({ upcoming: [] })).toContain(coachCatalog.en.sessions.empty)
+  })
+
+  /**
+   * The segment is navigation the coach chose to open, so it is present from the
+   * first day rather than materialising once #42 starts writing terminal states
+   * — and an empty Past is a sentence, not a blank panel (#232).
+   */
+  it("offers both views even on a practice with no history, and says the past is empty", async () => {
+    const fresh = await screen({ past: [] })
+    expect(fresh).toContain(coachCatalog.en.sessions.viewUpcoming)
+    expect(fresh).toContain(coachCatalog.en.sessions.viewPast)
+
+    const behind = await screen({ past: [] }, true)
+    expect(behind).toContain(coachCatalog.en.sessions.pastEmpty)
+    expect(behind).not.toContain(coachCatalog.en.sessions.empty)
+  })
+
+  /**
+   * A past row is nothing but what became of it, and an automatic cancellation
+   * reads as what happened rather than as a failure the coach caused — so it
+   * carries no warning colour, and the invitation warning is gone with the day.
+   */
+  it("says what became of each past session, in plain words and without alarm", async () => {
+    const html = await screen(
+      {
+        past: [
+          {
+            ...session({
+              id: "se_off",
+              scheduledAt: "2026-07-24T08:00:00.000Z",
+              clientAccepted: false,
+            }),
+            state: "cancelled",
+            cancelReason: "no_show",
+          },
+          {
+            ...session({ id: "se_done", scheduledAt: "2026-07-20T08:00:00.000Z" }),
+            state: "completed",
+          },
+        ],
+      },
+      true,
     )
-    expect(html).toContain(coachCatalog.en.sessions.empty)
+
+    expect(html).toContain(coachCatalog.en.sessions.stateCancelledNoShow)
+    expect(html).toContain(coachCatalog.en.sessions.stateCompleted)
+    expect(html).not.toContain("text-warning")
+    expect(html).not.toContain(coachCatalog.en.sessions.rowUnaccepted)
+    // A past session is not a dead end: it is in neither Today nor Upcoming,
+    // and everything a coach can do with it lives on its own screen.
+    expect(html).toContain("/sessions/se_off")
+    expect(html).toContain("/sessions/se_done")
+  })
+
+  it("admits when the history it shows is a window rather than all of it", async () => {
+    const behind = [
+      {
+        ...session({ id: "se_done", scheduledAt: "2026-07-20T08:00:00.000Z" }),
+        state: "completed" as const,
+      },
+    ]
+
+    expect(await screen({ past: behind, pastBounded: false }, true)).not.toContain(
+      coachCatalog.en.sessions.pastBounded(1),
+    )
+    expect(await screen({ past: behind, pastBounded: true }, true)).toContain(
+      coachCatalog.en.sessions.pastBounded(1),
+    )
+    // And never on the view it says nothing about.
+    expect(await screen({ past: behind, pastBounded: true })).not.toContain(
+      coachCatalog.en.sessions.pastBounded(1),
+    )
   })
 })
 

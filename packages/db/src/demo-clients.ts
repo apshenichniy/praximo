@@ -239,6 +239,37 @@ export const demoClients: ReadonlyArray<DemoClient> = [
     channel: { kind: "telegram", address: "810000006" },
     sessions: [],
   },
+  {
+    /**
+     * The returning client: a history, and nothing on the calendar (#232).
+     *
+     * The one state that used to lie. With no upcoming session the scheduling
+     * screen read this person as somebody the coach had never met and turned the
+     * intake switch on — and no seeded client was in this position, so the bug
+     * was unreachable and so is its fix. It is also the only way to see a client
+     * route whose whole sessions section is history.
+     */
+    id: "demo_client_kateryna",
+    name: "Катерина В.",
+    language: "uk",
+    channel: { kind: "telegram", address: "810000007" },
+    sessions: [
+      {
+        id: "demo_session_kateryna_first",
+        startsInMinutes: -45 * Day,
+        durationMinutes: 90,
+        kind: "intake",
+        state: "completed",
+      },
+      {
+        id: "demo_session_kateryna_last",
+        startsInMinutes: -11 * Day,
+        durationMinutes: 60,
+        kind: "regular",
+        state: "completed",
+      },
+    ],
+  },
 ]
 
 /** The consent text version a seeded client agreed to; shape only, never read. */

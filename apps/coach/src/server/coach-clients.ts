@@ -19,7 +19,10 @@ import {
   readEmailAddress,
   readMemberSettings,
   readWorkingHours,
+  type SessionCancelReason,
   SessionKind,
+  type SessionState,
+  sessionStillAhead,
   windowForWeekday,
   type WorkingHours,
   type WorkspaceId,
@@ -141,6 +144,20 @@ export interface ClientSessionSummary {
   readonly kind: string
 }
 
+/**
+ * A session this client and coach have already had, or already called off
+ * (#232).
+ *
+ * The state is what makes the row worth showing: an entry in a history that
+ * does not say whether it happened is a date the coach has to remember for
+ * themselves.
+ */
+export interface PastClientSession extends ClientSessionSummary {
+  readonly state: SessionState
+  /** Absent on every state but `cancelled`. */
+  readonly cancelReason?: SessionCancelReason
+}
+
 export interface ClientDetail {
   readonly id: string
   readonly name: string
@@ -181,7 +198,18 @@ export interface ClientDetail {
   }
   readonly acceptedAt?: string
   readonly consentGrantedAt?: string
+  /**
+   * What is still ahead of this client, soonest first — and **only** that.
+   *
+   * The field keeps its meaning from #56 because two things read it and both
+   * mean «live, ahead»: the scheduling screen dots its month with these days so
+   * the coach can place a rhythm, and a past day is not bookable; and the intake
+   * switch asks whether this is a first session, which `past` now answers the
+   * other half of.
+   */
   readonly sessions: ReadonlyArray<ClientSessionSummary>
+  /** Everything else, newest first — the history the route shows below (#232). */
+  readonly past: ReadonlyArray<PastClientSession>
   readonly canDelete: boolean
   /** The zone every time on this screen is written in — the coach's own. */
   readonly timezone: string
@@ -482,6 +510,55 @@ const delivered = (
 const failed = (operation: string) => () => new CoachSession.LoadFailed({ operation })
 
 /**
+ * One client's calendar, cut into the two fields the route reads (#232).
+ *
+ * The repository hands over the whole thing newest first, and the cut is made
+ * here with `sessionStillAhead` — the same predicate the sessions list is cut
+ * along — so the two surfaces cannot come to disagree about what «past» means.
+ *
+ * The floor is **this minute**, not the start of the day as on the flat list.
+ * That difference is deliberate and both are right: the list is about a coach's
+ * day and shows the whole of it, while these sessions dot a month the coach is
+ * about to book into, and a morning that has gone is not a day they can place
+ * anything on.
+ *
+ * Ahead comes back ascending — the repository's order reversed — because that
+ * list is read as «what happens next», while a history is read from the most
+ * recent thing backwards.
+ */
+const splitSessions = (
+  rows: ReadonlyArray<ClientRepo.ClientSessionRow>,
+  now: Date,
+): {
+  readonly sessions: ReadonlyArray<ClientSessionSummary>
+  readonly past: ReadonlyArray<PastClientSession>
+} => {
+  const ahead: Array<ClientSessionSummary> = []
+  const behind: Array<PastClientSession> = []
+  for (const entry of rows) {
+    const summary = {
+      id: entry.id,
+      scheduledAt: iso(entry.scheduledAt),
+      durationMinutes: entry.durationMinutes,
+      kind: entry.kind,
+    }
+    if (sessionStillAhead(entry.state, entry.scheduledAt, now)) {
+      ahead.push(summary)
+      continue
+    }
+    behind.push({
+      ...summary,
+      state: entry.state,
+      ...(entry.cancelReason === undefined ? {} : { cancelReason: entry.cancelReason }),
+    })
+  }
+  // In-place is safe and intended: the array was built two lines up and nothing
+  // else holds it, and the ES2022 target has no `toReversed` to build it again.
+  // oxlint-disable-next-line unicorn/no-array-reverse
+  return { sessions: ahead.reverse(), past: behind }
+}
+
+/**
  * The hours a coach works on one of their own calendar dates (#210).
  *
  * A date whose weekday cannot be read falls back on the shared window rather
@@ -632,12 +709,7 @@ export const layer = Layer.effect(
         ...(row.consentGrantedAt === undefined
           ? {}
           : { consentGrantedAt: iso(row.consentGrantedAt) }),
-        sessions: row.sessions.map((entry) => ({
-          id: entry.id,
-          scheduledAt: iso(entry.scheduledAt),
-          durationMinutes: entry.durationMinutes,
-          kind: entry.kind,
-        })),
+        ...splitSessions(row.sessions, now),
         canDelete: row.canDelete,
         timezone: zoneOf(principal),
       } satisfies ClientDetail

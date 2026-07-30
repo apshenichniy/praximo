@@ -80,13 +80,28 @@ Hub-and-spoke, no tab bar. One home dashboard; every other screen is a
 drill-in with a back affordance. Screen inventory:
 
 - **Home ("Today")** — the dashboard, described below. Route `/`.
-- **Sessions list** — upcoming + past, flat, grouped by day. Route `/sessions`. Grouping
-  shipped with the list ([#61](https://github.com/apshenichniy/praximo/issues/61)) rather than
-  after it: three to five sessions a day appear in the first week, and adding grouping to a
-  flat list afterwards means rewriting it. **Past is not there yet** — no session can be
-  `completed` before #42, and history on both this list and the client route is
+- **Sessions list** — flat, grouped by day, behind an **Upcoming | Past** segment. Route
+  `/sessions`. Grouping shipped with the list
+  ([#61](https://github.com/apshenichniy/praximo/issues/61)) rather than after it: three to
+  five sessions a day appear in the first week, and adding grouping to a flat list afterwards
+  means rewriting it. Past arrived with
   [#232](https://github.com/apshenichniy/praximo/issues/232), split out of #62 so the two
-  lifecycle writes could ship without it.
+  lifecycle writes could ship without it, and it carries three rules:
+  - **The two views are complements, not two filters.** Upcoming is a *live* session
+    (`scheduled` / `in_progress`) at or after the start of the coach's own today; Past is
+    everything else, newest first. So a cancellation booked for next week is history — it is
+    what happened, and it will not happen — and a session left `scheduled` after its hour is
+    history too. That last case is not an edge: until #42's reconciler exists it is what
+    *every* conducted session looks like, and under a «completed and cancelled» reading it
+    would be on no screen at all.
+  - **The segment is always present**, with a sentence rather than a blank behind it. The
+    absent-rather-than-present-and-empty rule below is about dashboard blocks that promise
+    content the coach then hunts for; this is navigation the coach chose to open, and a
+    control that materialises weeks later is worse than an empty list.
+  - **Past is bounded, and says so.** A practice has a ceiling on what it can book ahead and
+    none on what it has already done, so the read is capped and the screen states the window
+    when it is full. No «show more»: the targeted question — *what have I done with this
+    person* — is answered on the client's own route.
 - **Session detail** — client, time, lifecycle actions, artifact list. Route
   `/sessions/$sessionId`. #61 shipped it as a deliberate **stub** — the facts and no actions —
   so the list rows and Today's cards led somewhere complete-looking;
@@ -97,8 +112,15 @@ drill-in with a back affordance. Screen inventory:
   `in_progress` are both silent, the second because a running session's story belongs to the
   room rather than to a past-tense line. The artifact list is #44's.
 - **Clients list** — all clients with invite status. Route `/clients`.
-- **Client detail** — profile (channel, language, consent), invite banner,
-  session history.
+- **Client detail** — profile (channel, language, consent), invite banner, upcoming sessions
+  and, below them, the history
+  ([#232](https://github.com/apshenichniy/praximo/issues/232)). The two are **separate
+  fields**, not one wider list: the scheduling screen's month dots and the intake switch read
+  only what is still ahead, because a past day is not bookable and a dot on it is noise. The
+  history section is *absent* when there is none — the rule the segment on `/sessions` is
+  deliberately exempt from. **Every session row is a link to `/sessions/$sessionId`**, ahead
+  and behind alike: a past session is on neither Today nor the list's Upcoming view, and
+  reschedule, cancel and the artifact list all live on that screen.
 - **Artifact reader** — full-screen render of one artifact version.
 - **New session** — client picker + date/time. Route `/sessions/new`. Scheduling for a client
   the coach is *already looking at* skips the picker by naming them in the URL
@@ -120,7 +142,8 @@ drill-in with a back affordance. Screen inventory:
   ([#61](https://github.com/apshenichniy/praximo/issues/61)). It exists because no Bot API can
   set the chat-list button (ADR 0004 §Mini App entry points).
 - **Client route** — one client: header, invitation while unaccepted, upcoming
-  sessions, profile, danger zone (#56). It arrives *before* the Today dashboard.
+  sessions, past sessions (#232), profile, danger zone (#56). It arrives *before* the Today
+  dashboard.
 - **Availability** — route `/availability`
   ([#210](https://github.com/apshenichniy/praximo/issues/210)): when this coach is
   reachable. **Working hours** first, because every coach has them and they are already in

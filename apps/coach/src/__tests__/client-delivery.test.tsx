@@ -66,6 +66,7 @@ const client = (
     ...invite,
   },
   sessions: [],
+  past: [],
   canDelete: true,
   timezone: "Europe/Kyiv",
 })

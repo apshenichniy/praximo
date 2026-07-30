@@ -171,6 +171,11 @@ export interface ClientsCopy {
   readonly sessionsTitle: string
   readonly scheduleAction: string
   readonly noSessions: string
+  /**
+   * The history below the upcoming sessions (#232) — a heading with no empty
+   * state beside it, because the section is absent when there is nothing in it.
+   */
+  readonly pastSessionsTitle: string
   readonly kindIntake: string
   readonly kindRegular: string
 
@@ -358,6 +363,7 @@ const en: ClientsCopy = {
   sessionsTitle: "Sessions",
   scheduleAction: "Schedule a session",
   noSessions: "Nothing scheduled yet.",
+  pastSessionsTitle: "Past sessions",
   kindIntake: "Intake",
   kindRegular: "Regular",
 
@@ -484,6 +490,7 @@ const uk: ClientsCopy = {
   sessionsTitle: "Сесії",
   scheduleAction: "Запланувати сесію",
   noSessions: "Поки нічого не заплановано.",
+  pastSessionsTitle: "Минулі сесії",
   kindIntake: "Перша",
   kindRegular: "Звичайна",
 
@@ -610,6 +617,7 @@ const ru: ClientsCopy = {
   sessionsTitle: "Сессии",
   scheduleAction: "Запланировать сессию",
   noSessions: "Пока ничего не запланировано.",
+  pastSessionsTitle: "Прошедшие сессии",
   kindIntake: "Первая",
   kindRegular: "Обычная",
 

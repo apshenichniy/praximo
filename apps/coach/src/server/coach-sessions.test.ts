@@ -50,6 +50,10 @@ interface FixtureState {
   moveOutcome: SessionRepo.RescheduleOutcome
   cancelled: boolean
   found: SessionRepo.ScheduledSessionRow | undefined
+  /** The two halves of the list, and the windows they were asked for (#232). */
+  ahead: ReadonlyArray<SessionRepo.ScheduledSessionRow>
+  behind: ReadonlyArray<SessionRepo.ScheduledSessionRow>
+  readonly windows: Array<{ from?: Date; before?: Date; limit: number }>
 }
 
 const emptyState = (): FixtureState => ({
@@ -58,6 +62,9 @@ const emptyState = (): FixtureState => ({
   moveOutcome: { rescheduled: true },
   cancelled: true,
   found: undefined,
+  ahead: [],
+  behind: [],
+  windows: [],
 })
 
 const run = <A, E>(body: Effect.Effect<A, E, CoachSessions.Service>, state = emptyState()) => {
@@ -84,7 +91,14 @@ const run = <A, E>(body: Effect.Effect<A, E, CoachSessions.Service>, state = emp
     SessionRepo.Service.of({
       schedule: unused,
       between: unused,
-      scheduled: unused,
+      scheduled: Effect.fn("SessionRepo.Test.scheduled")((query) => {
+        state.windows.push({ from: query.from, limit: query.limit })
+        return Effect.succeed(state.ahead)
+      }),
+      past: Effect.fn("SessionRepo.Test.past")((query) => {
+        state.windows.push({ before: query.before, limit: query.limit })
+        return Effect.succeed(state.behind)
+      }),
       find: Effect.fn("SessionRepo.Test.find")(() => Effect.succeed(state.found)),
       reschedule: Effect.fn("SessionRepo.Test.reschedule")((input) => {
         state.moves.push(input)
@@ -150,6 +164,20 @@ const move = {
   startMinutes: 15 * 60,
   durationMinutes: 60,
 }
+
+/** A listing row with only what a test cares about spelled out. */
+const row = (
+  over: Partial<SessionRepo.ScheduledSessionRow> & { readonly id: string },
+): SessionRepo.ScheduledSessionRow => ({
+  clientId: "cl_maria",
+  clientName: "Maria K.",
+  scheduledAt: new Date("2026-07-27T07:00:00.000Z"),
+  durationMinutes: 60,
+  kind: "regular",
+  state: "scheduled",
+  clientAccepted: true,
+  ...over,
+})
 
 const cancelledRow: SessionRepo.ScheduledSessionRow = {
   id: "se_one",
@@ -308,6 +336,117 @@ describe("CoachSessions lifecycle", () => {
           cancelReason: "no_show",
           timezone: "Europe/Kyiv",
         })
+      }),
+      state,
+    )
+  })
+})
+
+/**
+ * The list's two views (#232), through the service rather than the database.
+ *
+ * What this suite owns and the repository suite cannot: that both halves are
+ * read from **the same instant** — the start of the coach's own day, not this
+ * minute — which is the whole reason nothing falls between them, and that the
+ * bound is decided here rather than by a screen counting rows.
+ */
+describe("CoachSessions list", () => {
+  it.effect("reads both halves from the start of the coach's own day", () => {
+    const state = emptyState()
+    state.ahead = [row({ id: "se_ahead" })]
+    state.behind = [row({ id: "se_behind", state: "completed" })]
+    return run(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachSessions.Service
+        const list = yield* service.list(yield* Effect.promise(() => credential()))
+
+        expect(list.upcoming.map((entry) => entry.id)).toEqual(["se_ahead"])
+        expect(list.past.map((entry) => entry.id)).toEqual(["se_behind"])
+        expect(list.timezone).toBe("Europe/Kyiv")
+
+        // 06:00 UTC is 09:00 in Kyiv, so the coach's day began at 21:00 UTC the
+        // evening before — and Past reads back from exactly that instant.
+        const floor = new Date("2026-07-26T21:00:00.000Z")
+        expect(state.windows).toEqual([
+          { from: floor, limit: CoachSessions.UpcomingSessionsLimit },
+          { before: floor, limit: CoachSessions.PastSessionsLimit },
+        ])
+      }),
+      state,
+    )
+  })
+
+  /**
+   * An ordinary session says nothing about itself; a past one is nothing *but*
+   * what became of it. So the state rides on the past summary and on no other.
+   */
+  it.effect("carries what became of a past session, and only there", () => {
+    const state = emptyState()
+    state.ahead = [row({ id: "se_ahead" })]
+    state.behind = [
+      row({ id: "se_off", state: "cancelled", cancelReason: "no_show" }),
+      row({ id: "se_done", state: "completed" }),
+    ]
+    return run(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachSessions.Service
+        const list = yield* service.list(yield* Effect.promise(() => credential()))
+
+        expect(list.past[0]).toMatchObject({ state: "cancelled", cancelReason: "no_show" })
+        expect(list.past[1]).toMatchObject({ state: "completed" })
+        expect(list.past[1]).not.toHaveProperty("cancelReason")
+        expect(list.upcoming[0]).not.toHaveProperty("state")
+      }),
+      state,
+    )
+  })
+
+  it.effect("says when the history it returned is a window rather than all of it", () => {
+    const short = emptyState()
+    short.behind = [row({ id: "se_one", state: "completed" })]
+    const full = emptyState()
+    full.behind = Array.from({ length: CoachSessions.PastSessionsLimit }, (_, index) =>
+      row({ id: `se_${index}`, state: "completed" }),
+    )
+
+    return run(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachSessions.Service
+        expect((yield* service.list(yield* Effect.promise(() => credential()))).pastBounded).toBe(
+          false,
+        )
+      }),
+      short,
+    ).pipe(
+      Effect.andThen(
+        run(
+          Effect.gen(function* () {
+            yield* TestClock.setTime(NOW)
+            const service = yield* CoachSessions.Service
+            expect(
+              (yield* service.list(yield* Effect.promise(() => credential()))).pastBounded,
+            ).toBe(true)
+          }),
+          full,
+        ),
+      ),
+    )
+  })
+
+  /** A read accepts a day-old launch, unlike the two writes above (ADR 0006). */
+  it.effect("answers a launch too old to write with", () => {
+    const state = emptyState()
+    state.ahead = [row({ id: "se_ahead" })]
+    return run(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const service = yield* CoachSessions.Service
+        const stale = yield* Effect.promise(() => credential(STALE))
+
+        expect((yield* service.list(stale)).upcoming.map((entry) => entry.id)).toEqual(["se_ahead"])
       }),
       state,
     )

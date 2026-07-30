@@ -16,8 +16,8 @@ import { sessionDraft } from "./session-draft.ts"
 import type { LaunchCredential } from "@/launch-credential.ts"
 
 /**
- * The coach's day and their calendar (#61): Today, the flat upcoming list, and
- * one session.
+ * The coach's day and their calendar (#61): Today, the flat list in both of its
+ * directions (#232), and one session.
  *
  * A service of its own rather than more of `CoachClients`, per the seam rule
  * (#38). `CoachClients` answers "who is in this practice and what do I do to
@@ -82,8 +82,42 @@ export interface TodayView {
   readonly workingHours: WorkingHours
 }
 
-export interface UpcomingSessions {
-  readonly sessions: ReadonlyArray<SessionSummary>
+/**
+ * A session the calendar has finished with, as the Past view lists one (#232).
+ *
+ * `state` and `cancelReason` ride along here and **not** on `SessionSummary`,
+ * which Today and the Upcoming view share: a session still ahead has nothing to
+ * say about its state, and a field with no reader is a field that drifts. Here
+ * they are the whole point of the row — a past session that does not say what
+ * became of it is a date with no meaning attached.
+ */
+export interface PastSessionSummary extends SessionSummary {
+  readonly state: SessionState
+  /** Absent on every state but `cancelled`. */
+  readonly cancelReason?: SessionCancelReason
+}
+
+/**
+ * The sessions list, both of its views, in one answer (#232).
+ *
+ * One read rather than two because the screen is one screen: the segment
+ * switches which half is on show and writes nothing, so a coach who taps Past
+ * should not be waiting on a network round trip to find out whether there is
+ * anything behind it. The two halves are complements — `sessionStillAhead`
+ * decides, and the repository's two statements are that rule in SQL — so a
+ * session appears under exactly one of them.
+ */
+export interface SessionsList {
+  /** Everything ahead, earliest first. */
+  readonly upcoming: ReadonlyArray<SessionSummary>
+  /** Everything behind, newest first. */
+  readonly past: ReadonlyArray<PastSessionSummary>
+  /**
+   * Whether the past read hit its bound, so the screen can say it is looking
+   * through a window rather than at everything. Decided here, where the limit
+   * is, rather than by a screen counting rows against a number it was told.
+   */
+  readonly pastBounded: boolean
   readonly timezone: string
 }
 
@@ -133,6 +167,17 @@ export type RescheduleOutcome =
  */
 export const UpcomingSessionsLimit = 500
 
+/**
+ * How far back the Past view will draw.
+ *
+ * Smaller than the bound above, and for the opposite reason: a practice has a
+ * ceiling on what it can book ahead and none at all on what it has already done
+ * — three a day is a thousand a year — so this one really is a window, and the
+ * screen says so when it is full. There is no «show more»: the targeted
+ * question, *what have I done with this person*, is answered on their own route.
+ */
+export const PastSessionsLimit = 200
+
 /** One day cannot hold more than the business day divided by the grid step. */
 const DaySessionsLimit = 100
 
@@ -140,9 +185,9 @@ export interface Interface {
   readonly today: (
     credential: LaunchCredential,
   ) => Effect.Effect<TodayView, CoachSession.Unauthenticated | CoachSession.LoadFailed>
-  readonly upcoming: (
+  readonly list: (
     credential: LaunchCredential,
-  ) => Effect.Effect<UpcomingSessions, CoachSession.Unauthenticated | CoachSession.LoadFailed>
+  ) => Effect.Effect<SessionsList, CoachSession.Unauthenticated | CoachSession.LoadFailed>
   readonly detail: (
     credential: LaunchCredential,
     sessionId: string,
@@ -179,6 +224,13 @@ const summarise = (row: SessionRepo.ScheduledSessionRow): SessionSummary => ({
   durationMinutes: row.durationMinutes,
   kind: row.kind,
   clientAccepted: row.clientAccepted,
+})
+
+/** The same row, plus what became of it — the Past view's own summary (#232). */
+const summarisePast = (row: SessionRepo.ScheduledSessionRow): PastSessionSummary => ({
+  ...summarise(row),
+  state: row.state,
+  ...(row.cancelReason === undefined ? {} : { cancelReason: row.cancelReason }),
 })
 
 /**
@@ -289,25 +341,51 @@ export const layer = Layer.effect(
     })
 
     /**
-     * Everything ahead, from the *start of the coach's today* rather than from
-     * this minute.
+     * The whole list, both ways round, cut at the *start of the coach's today*
+     * rather than at this minute.
      *
      * A session that began twenty minutes ago is still today's, and Today shows
      * it: a list that dropped it the moment it started would disagree with the
-     * dashboard it was reached from. Nothing here is past in the sense #62
-     * means — no session can be `completed` before #42.
+     * dashboard it was reached from. The same instant is what Past reads back
+     * from, which is what makes the two views complements rather than two
+     * filters that happen to agree — a session is on exactly one of them, and
+     * a session left `scheduled` after its hour is on the second.
+     *
+     * Both reads go together: neither needs the other's answer, and the coach
+     * who taps Past has already paid for it.
      */
-    const upcoming = Effect.fn("CoachSessions.upcoming")(function* (credential: LaunchCredential) {
+    const list = Effect.fn("CoachSessions.list")(function* (credential: LaunchCredential) {
       const principal = yield* session.requireOnboardedCoach(credential, READ_WINDOW_MILLIS)
       const now = new Date(yield* Clock.currentTimeMillis)
       const timezone = zoneOf(principal)
-      const from = instantOf(localParts(now, timezone).date, 0, timezone) ?? now
+      const floor = instantOf(localParts(now, timezone).date, 0, timezone) ?? now
 
-      const rows = yield* sessions
-        .scheduled({ workspaceId: principal.workspaceId, from, limit: UpcomingSessionsLimit })
-        .pipe(Effect.mapError(failed("sessions.scheduled")))
+      const [ahead, behind] = yield* Effect.all(
+        [
+          sessions
+            .scheduled({
+              workspaceId: principal.workspaceId,
+              from: floor,
+              limit: UpcomingSessionsLimit,
+            })
+            .pipe(Effect.mapError(failed("sessions.scheduled"))),
+          sessions
+            .past({
+              workspaceId: principal.workspaceId,
+              before: floor,
+              limit: PastSessionsLimit,
+            })
+            .pipe(Effect.mapError(failed("sessions.past"))),
+        ],
+        { concurrency: "unbounded" },
+      )
 
-      return { sessions: rows.map(summarise), timezone } satisfies UpcomingSessions
+      return {
+        upcoming: ahead.map(summarise),
+        past: behind.map(summarisePast),
+        pastBounded: behind.length === PastSessionsLimit,
+        timezone,
+      } satisfies SessionsList
     })
 
     const detail = Effect.fn("CoachSessions.detail")(function* (
@@ -381,7 +459,7 @@ export const layer = Layer.effect(
         .pipe(Effect.mapError(failed("sessions.cancel")))
     })
 
-    return Service.of({ today, upcoming, detail, reschedule, cancel })
+    return Service.of({ today, list, detail, reschedule, cancel })
   }),
 )
 

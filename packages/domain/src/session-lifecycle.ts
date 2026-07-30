@@ -40,3 +40,25 @@ export const LiveSessionStates = [
  */
 export const SessionCancelReasons = ["coach_cancelled", "no_show", "room_unavailable"] as const
 export type SessionCancelReason = (typeof SessionCancelReasons)[number]
+
+/**
+ * Whether a session still lies ahead of `floor` — the rule the two views of the
+ * calendar are cut along (#232), and the *only* one.
+ *
+ * Upcoming and Past are complements rather than two filters that happen to
+ * disagree nowhere: a session this calls ahead belongs to Upcoming, and
+ * everything else is history. That is what stops a row falling between them —
+ * and until #42's reconciler exists, every conducted session is exactly such a
+ * row, still `scheduled` and long over.
+ *
+ * Two conditions and each is doing its own work. **A live state** is what still
+ * holds a slot, so a cancellation booked for next week is history the moment it
+ * is written: it is what happened, and it will not happen. **The floor** is the
+ * caller's, because the two surfaces mean different things by "now" — the flat
+ * list starts at the beginning of the coach's own today, so a session that began
+ * twenty minutes ago is still on it, while a client's route asks from this
+ * minute.
+ */
+export const sessionStillAhead = (state: SessionState, scheduledAt: Date, floor: Date): boolean =>
+  (LiveSessionStates as ReadonlyArray<SessionState>).includes(state) &&
+  scheduledAt.getTime() >= floor.getTime()
