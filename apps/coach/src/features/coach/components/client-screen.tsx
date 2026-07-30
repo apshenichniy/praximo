@@ -608,6 +608,7 @@ export function ClientScreen({
         onOpenChange={setConfirmReset}
         title={copy.clients.resetTitle}
         description={copy.clients.resetBody}
+        cancelLabel={copy.clients.cancel}
         confirmLabel={copy.clients.resetConfirm}
         confirmVariant="destructive"
         onConfirm={() => {
@@ -620,6 +621,7 @@ export function ClientScreen({
         onOpenChange={setConfirmDelete}
         title={copy.clients.deleteTitle}
         description={copy.clients.deleteBody}
+        cancelLabel={copy.clients.cancel}
         confirmLabel={copy.clients.deleteConfirm}
         confirmVariant="destructive"
         onConfirm={() => {

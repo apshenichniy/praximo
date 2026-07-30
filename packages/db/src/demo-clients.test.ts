@@ -79,6 +79,28 @@ describe("demo client fixture contract", () => {
   })
 
   /**
+   * Every sentence the session screen prints for a cancellation (#62) has a row
+   * behind it. Two of the three reasons are the reconciler's (ADR 0005) and it
+   * does not exist until #42, so without these fixtures those words could not be
+   * read anywhere — and copy nobody can look at is copy nobody proofreads.
+   */
+  it("seeds every cancellation reason the session screen has words for", () => {
+    const cancelled = sessions.filter((session) => session.state === "cancelled")
+    expect(new Set(cancelled.map((session) => session.cancelReason))).toEqual(
+      new Set(["coach_cancelled", "no_show", "room_unavailable"]),
+    )
+    // A cancelled session with no reason would print as the coach's own doing.
+    for (const session of cancelled) {
+      expect(session.cancelReason, session.id).toBeDefined()
+    }
+    // And a reason on anything else would be a row the schema allows and the
+    // screen would never look at.
+    for (const session of sessions.filter((entry) => entry.state !== "cancelled")) {
+      expect(session.cancelReason, session.id).toBeUndefined()
+    }
+  })
+
+  /**
    * `--clear` deletes on this prefix and nothing else. A fixture id without it
    * would survive a clear and then collide on the next seed — and, worse, would
    * be indistinguishable from a real client.

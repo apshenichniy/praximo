@@ -23,6 +23,7 @@ import { Route as SessionsIndexRouteImport } from './routes/sessions/index'
 import { Route as SessionsSessionIdRouteImport } from './routes/sessions/$sessionId'
 import { Route as SessionsNewRouteImport } from './routes/sessions/new'
 import { Route as AvailabilityHoursDaysRouteImport } from './routes/availability/hours_.days'
+import { Route as SessionsSessionIdRescheduleRouteImport } from './routes/sessions/$sessionId_.reschedule'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +95,12 @@ const AvailabilityHoursDaysRoute = AvailabilityHoursDaysRouteImport.update({
   path: '/availability/hours/days',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SessionsSessionIdRescheduleRoute =
+  SessionsSessionIdRescheduleRouteImport.update({
+    id: '/sessions/$sessionId_/reschedule',
+    path: '/sessions/$sessionId/reschedule',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/clients/': typeof ClientsIndexRoute
   '/sessions/': typeof SessionsIndexRoute
   '/availability/hours/days': typeof AvailabilityHoursDaysRoute
+  '/sessions/$sessionId/reschedule': typeof SessionsSessionIdRescheduleRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +134,7 @@ export interface FileRoutesByTo {
   '/clients': typeof ClientsIndexRoute
   '/sessions': typeof SessionsIndexRoute
   '/availability/hours/days': typeof AvailabilityHoursDaysRoute
+  '/sessions/$sessionId/reschedule': typeof SessionsSessionIdRescheduleRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +152,7 @@ export interface FileRoutesById {
   '/clients/': typeof ClientsIndexRoute
   '/sessions/': typeof SessionsIndexRoute
   '/availability/hours_/days': typeof AvailabilityHoursDaysRoute
+  '/sessions/$sessionId_/reschedule': typeof SessionsSessionIdRescheduleRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
     | '/clients/'
     | '/sessions/'
     | '/availability/hours/days'
+    | '/sessions/$sessionId/reschedule'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,6 +188,7 @@ export interface FileRouteTypes {
     | '/clients'
     | '/sessions'
     | '/availability/hours/days'
+    | '/sessions/$sessionId/reschedule'
   id:
     | '__root__'
     | '/'
@@ -193,6 +205,7 @@ export interface FileRouteTypes {
     | '/clients/'
     | '/sessions/'
     | '/availability/hours_/days'
+    | '/sessions/$sessionId_/reschedule'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,6 +223,7 @@ export interface RootRouteChildren {
   ClientsIndexRoute: typeof ClientsIndexRoute
   SessionsIndexRoute: typeof SessionsIndexRoute
   AvailabilityHoursDaysRoute: typeof AvailabilityHoursDaysRoute
+  SessionsSessionIdRescheduleRoute: typeof SessionsSessionIdRescheduleRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -312,6 +326,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AvailabilityHoursDaysRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sessions/$sessionId_/reschedule': {
+      id: '/sessions/$sessionId_/reschedule'
+      path: '/sessions/$sessionId/reschedule'
+      fullPath: '/sessions/$sessionId/reschedule'
+      preLoaderRoute: typeof SessionsSessionIdRescheduleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -330,6 +351,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClientsIndexRoute: ClientsIndexRoute,
   SessionsIndexRoute: SessionsIndexRoute,
   AvailabilityHoursDaysRoute: AvailabilityHoursDaysRoute,
+  SessionsSessionIdRescheduleRoute: SessionsSessionIdRescheduleRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

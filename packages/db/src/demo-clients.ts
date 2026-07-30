@@ -23,6 +23,15 @@ export interface DemoSession {
   readonly durationMinutes: number
   readonly kind: "intake" | "regular"
   readonly state: "scheduled" | "completed" | "cancelled"
+  /**
+   * Why a cancelled session was cancelled (#62).
+   *
+   * Seeded because only one of the three has a writer a person can reach: the
+   * coach's own. `no_show` and `room_unavailable` are the reconciler's (ADR
+   * 0005), which does not exist until #42 — so without a fixture the sentences
+   * the session screen prints for them could not be read on any screen at all.
+   */
+  readonly cancelReason?: "coach_cancelled" | "no_show" | "room_unavailable"
 }
 
 export interface DemoClientInvite {
@@ -83,6 +92,15 @@ export const demoClients: ReadonlyArray<DemoClient> = [
         kind: "intake",
         state: "completed",
       },
+      // The coach called this one off — the one cancellation a person writes.
+      {
+        id: "demo_session_maria_cancelled",
+        startsInMinutes: -3 * Day,
+        durationMinutes: 60,
+        kind: "regular",
+        state: "cancelled",
+        cancelReason: "coach_cancelled",
+      },
     ],
   },
   {
@@ -113,6 +131,24 @@ export const demoClients: ReadonlyArray<DemoClient> = [
         durationMinutes: 60,
         kind: "regular",
         state: "scheduled",
+      },
+      // The two the reconciler writes and nothing else can, so the screen's
+      // words for them are readable before #42 exists.
+      {
+        id: "demo_session_dmytro_noshow",
+        startsInMinutes: -4 * Day,
+        durationMinutes: 60,
+        kind: "regular",
+        state: "cancelled",
+        cancelReason: "no_show",
+      },
+      {
+        id: "demo_session_dmytro_room",
+        startsInMinutes: -6 * Day,
+        durationMinutes: 60,
+        kind: "regular",
+        state: "cancelled",
+        cancelReason: "room_unavailable",
       },
     ],
   },
@@ -482,6 +518,7 @@ export const seedDemoClients = Effect.fn("DemoClients.seedDemoClients")(function
         durationMinutes: session.durationMinutes,
         kind: session.kind,
         state: session.state,
+        cancelReason: session.cancelReason ?? null,
         startedAt: session.state === "completed" ? at(now, session.startsInMinutes) : null,
       })),
     ),

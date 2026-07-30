@@ -38,6 +38,7 @@ export function ConfirmSheet({
   onOpenChange,
   title,
   description,
+  cancelLabel,
   confirmLabel,
   confirmVariant = "default",
   onConfirm,
@@ -46,6 +47,15 @@ export function ConfirmSheet({
   readonly onOpenChange: (open: boolean) => void
   readonly title: ReactNode
   readonly description?: ReactNode
+  /**
+   * The way out, in the coach's own language.
+   *
+   * A prop rather than a constant because it was the literal string `Cancel`
+   * until #62 — English on every Russian and Ukrainian screen this sheet has
+   * ever opened on. The word is already in the clients catalogue; the sheet
+   * simply had no way to be told it.
+   */
+  readonly cancelLabel: ReactNode
   readonly confirmLabel: ReactNode
   readonly confirmVariant?: "default" | "destructive"
   readonly onConfirm: () => void
@@ -60,7 +70,7 @@ export function ConfirmSheet({
       className="h-13 w-full text-base leading-snug font-semibold"
       onClick={() => onOpenChange(false)}
     >
-      Cancel
+      {cancelLabel}
     </Button>
   )
 

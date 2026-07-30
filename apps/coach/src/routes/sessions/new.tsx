@@ -13,11 +13,12 @@ import {
   primeDayRange,
   UnknownDaySchedule,
 } from "@/features/coach/day-schedule-queries.ts"
+import { schedulingRefusal } from "@/features/coach/scheduling-refusal.ts"
 import { bookedDates } from "@/features/coach/session-days.ts"
 import { notifyHaptic } from "@/mini-app.tsx"
 import {
   calendarDate,
-  type SchedulingDraft,
+  type NewSessionDraft,
   SchedulingScreen,
 } from "@/features/coach/components/scheduling-screen.tsx"
 import { validateSchedulingSearch } from "@/features/coach/scheduling-search.ts"
@@ -136,7 +137,7 @@ function NewSessionRoute() {
   )
 
   const schedule = useCallback(
-    (draft: SchedulingDraft) => {
+    (draft: NewSessionDraft) => {
       if (chosen === undefined) return
       acceptOnce(inFlight, async () => {
         setPending(true)
@@ -174,15 +175,7 @@ function NewSessionRoute() {
           }
           const reason = result.ok && !result.outcome.scheduled ? result.outcome.reason : "failed"
           notifyHaptic("error")
-          setError(
-            reason === "overlap"
-              ? copy.clients.overlapError
-              : reason === "past"
-                ? copy.clients.pastError
-                : reason === "invalid"
-                  ? copy.clients.invalidError
-                  : copy.common.failed,
-          )
+          setError(schedulingRefusal(copy, reason === "unknown-client" ? "failed" : reason))
         } catch {
           notifyHaptic("error")
           setError(copy.common.failed)
@@ -242,12 +235,15 @@ function NewSessionRoute() {
             backLabel={copy.common.back}
             language={language}
             clientName={chosen.name}
-            firstSession={chosen.sessions.length === 0}
+            purpose={{
+              kind: "new",
+              firstSession: chosen.sessions.length === 0,
+              onSubmit: schedule,
+            }}
             bookedDates={bookedDates(chosen)}
             schedule={day}
             onDateChange={setDate}
             onDaysVisible={readDays}
-            onSubmit={schedule}
             pending={pending}
             error={error}
           />
