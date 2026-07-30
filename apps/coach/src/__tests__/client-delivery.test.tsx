@@ -53,6 +53,7 @@ const client = (
 ): CoachClients.ClientDetail => ({
   id: "cl_anna",
   name: "Анна",
+  hasAvatar: false,
   state: "invited",
   createdAt: "2026-07-27T09:00:00.000Z",
   invite: {
@@ -212,6 +213,7 @@ const summary = (
 ): CoachClients.ClientSummary => ({
   id: "cl_anna",
   name: "Анна",
+  hasAvatar: false,
   state: "invited",
   invitedAt: "2026-07-27T09:00:00.000Z",
   inviteExpiresAt: "2026-08-03T09:00:00.000Z",

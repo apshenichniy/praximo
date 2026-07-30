@@ -45,6 +45,7 @@ export interface AcceptanceFormState {
 export function AcceptancePage({
   locale,
   coachName,
+  coachPhotoSrc,
   session,
   coachTimezone,
   suggestedEmail,
@@ -54,6 +55,8 @@ export function AcceptancePage({
 }: {
   readonly locale: CoachLanguage
   readonly coachName: string
+  /** The coach's photo, when the platform has one to serve (#231). */
+  readonly coachPhotoSrc?: string
   readonly session?: SessionSummary
   readonly coachTimezone?: string
   /**
@@ -133,6 +136,7 @@ export function AcceptancePage({
                 <Greeting
                   locale={locale}
                   coachName={coachName}
+                  {...(coachPhotoSrc === undefined ? {} : { coachPhotoSrc })}
                   {...(session === undefined ? {} : { session })}
                   {...(coachTimezone === undefined ? {} : { coachTimezone })}
                 />
@@ -230,11 +234,13 @@ export function AcceptancePage({
 function Greeting({
   locale,
   coachName,
+  coachPhotoSrc,
   session,
   coachTimezone,
 }: {
   readonly locale: CoachLanguage
   readonly coachName: string
+  readonly coachPhotoSrc?: string
   readonly session?: SessionSummary
   readonly coachTimezone?: string
 }) {
@@ -242,7 +248,11 @@ function Greeting({
 
   return (
     <div className="grid justify-items-start gap-3.5">
-      <CoachBadge locale={locale} coachName={coachName} />
+      <CoachBadge
+        locale={locale}
+        coachName={coachName}
+        {...(coachPhotoSrc === undefined ? {} : { photoSrc: coachPhotoSrc })}
+      />
       <div className="grid gap-2">
         <b className="text-[19px] leading-[1.25] font-[620] tracking-[-0.022em] sm:text-xl">
           {copy.greeting.invites(coachName)}

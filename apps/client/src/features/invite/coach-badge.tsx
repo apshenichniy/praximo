@@ -1,16 +1,22 @@
 import type { CoachLanguage } from "@praximo/domain"
-import { Avatar, AvatarFallback } from "@praximo/ui/components/avatar"
+import { PersonAvatar } from "@praximo/ui/custom/person-avatar"
 
 import { inviteCopy } from "@/features/i18n/invite-copy.ts"
-import { initials } from "@/features/invite/initials.ts"
 
 /**
- * The coach, as this page shows them: initials on a ringed disc, optionally
- * with their name underneath.
+ * The coach, as this page shows them: their photo on a ringed disc where the
+ * platform has one, their initials where it does not.
  *
- * Initials rather than a photo, and not as a placeholder — #57 touches R2 zero
- * times. The coach's Telegram photo is #225 and Google's picture is #59; here
- * this *is* the design.
+ * **Initials are not a placeholder.** Plenty of coaches will have no Telegram photo,
+ * or will have hidden it from bots, so the fallback is an ordinary outcome and is what
+ * #57 shipped. What the photo adds when there *is* one is the whole reason #225
+ * captured it: this page reads as a continuation of the conversation the client has
+ * been having with their coach rather than a stranger's consent wall.
+ *
+ * `photoSrc` is an address rather than the image itself, and it is the invitation's
+ * own — `/i/<token>/coach-avatar`, resolved server-side. No object key reaches this
+ * component, and a plain `<img>` works because the route authorises on the token
+ * already in the URL (#231).
  *
  * `withName` exists for the refusals that say who to ask. Those sentences do not
  * contain the name in ru or uk — «попросите у …» takes the genitive, and
@@ -20,18 +26,22 @@ import { initials } from "@/features/invite/initials.ts"
 export function CoachBadge({
   locale,
   coachName,
+  photoSrc,
   withName = false,
 }: {
   readonly locale: CoachLanguage
   readonly coachName: string
+  /** Absent when there is no photo to serve, which is most of the time. */
+  readonly photoSrc?: string
   readonly withName?: boolean
 }) {
   const disc = (
-    <Avatar className="ring-background outline-primary/45 size-[60px] ring-[3px] outline-[1.5px]">
-      <AvatarFallback className="bg-secondary text-secondary-foreground text-xl font-[620]">
-        {initials(coachName)}
-      </AvatarFallback>
-    </Avatar>
+    <PersonAvatar
+      name={coachName}
+      {...(photoSrc === undefined ? {} : { photoSrc })}
+      className="ring-background outline-primary/45 size-[60px] ring-[3px] outline-[1.5px]"
+      fallbackClassName="bg-secondary text-secondary-foreground text-xl font-[620]"
+    />
   )
 
   if (!withName) return disc

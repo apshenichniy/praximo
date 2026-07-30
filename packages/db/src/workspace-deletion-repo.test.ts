@@ -32,12 +32,19 @@ describe.skipIf(skipWithoutDatabase)("WorkspaceDeletionRepo (dev Neon branch)", 
       const keyPrefix = uniqueId("delete-test")
       const expectedKeys = [
         `${keyPrefix}/workspace/custom.jpg`,
-        // The shape `AvatarRepo` actually writes since #225 — the coach's own
-        // Telegram photo — rather than a stand-in, so this assertion stays honest
-        // about the key the column now holds.
+        // The shapes `AvatarRepo` actually writes — the coach's own Telegram photo
+        // since #225, the client's since #231 — rather than stand-ins, so these
+        // assertions stay honest about the keys the columns now hold.
+        //
+        // The client's column and their channel snapshot get *different* keys here
+        // even though one statement writes the same key to both in production. That
+        // is what makes this a test of two `union` arms rather than one: a deletion
+        // that collected the column and forgot the snapshot would still pass with a
+        // shared key, and `object_cleanup_job.object_key` is unique so the duplicate
+        // would collapse to a single row and hide the gap.
         `avatars/coach/${keyPrefix}/AQADBAADq6cxG4AB-1abc2de.jpg`,
-        `${keyPrefix}/client/custom.jpg`,
-        `${keyPrefix}/telegram/snapshot.jpg`,
+        `avatars/client/${keyPrefix}/AQADBAADq6cxG4BM-3fed4cb.jpg`,
+        `avatars/client/${keyPrefix}/AQADBAADq6cxG4BN-5bca6fe.jpg`,
         `${keyPrefix}/audio/segment-1.ogg`,
         `${keyPrefix}/audio/segment-2.ogg`,
         `${keyPrefix}/transcripts/track.json`,

@@ -19,7 +19,7 @@ import {
   COACH_PHOTO,
   type PhotoFixture,
   telegramPhotoRoutes,
-} from "./__tests__/coach-photo.ts"
+} from "./__tests__/telegram-photo.ts"
 import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import { messages } from "./messages.ts"
 import { announcementFailure } from "./provisioning.ts"

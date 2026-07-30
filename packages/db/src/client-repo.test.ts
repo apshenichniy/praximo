@@ -153,6 +153,38 @@ describe.skipIf(skipWithoutDatabase)("ClientRepo (dev Neon branch)", () => {
     }).pipe(Effect.provide(appLayer)),
   )
 
+  /**
+   * Which discs the screens ask for, and which are initials (#231). Presence
+   * only — the key is resolved again, workspace-scoped, by the route that serves
+   * the bytes, so it never reaches a payload.
+   */
+  it.effect("says whether a client has a photo, on both reads and without the key", () =>
+    Effect.gen(function* () {
+      const repo = yield* ClientRepo.Service
+      const { client } = yield* Database.Service
+      const fixture = yield* workspaceFixture()
+      const withPhoto = yield* create(fixture, "with-photo")
+      const without = yield* create(fixture, "without-photo")
+      const key = `avatars/client/${withPhoto}/AQAD-1.jpg`
+      yield* Effect.promise(() =>
+        client
+          .update(schema.client)
+          .set({ avatarR2Key: key })
+          .where(eq(schema.client.id, withPhoto)),
+      )
+
+      const rows = yield* repo.list(fixture.workspaceId, NOW)
+      const detail = yield* repo.find(fixture.workspaceId, withPhoto, NOW)
+      const plain = yield* repo.find(fixture.workspaceId, without, NOW)
+
+      expect(rows.find((row) => row.id === withPhoto)?.hasAvatar).toBe(true)
+      expect(rows.find((row) => row.id === without)?.hasAvatar).toBe(false)
+      expect(detail?.hasAvatar).toBe(true)
+      expect(plain?.hasAvatar).toBe(false)
+      expect(JSON.stringify(detail)).not.toContain(key)
+    }).pipe(Effect.provide(appLayer)),
+  )
+
   it.effect("deletes a client while nothing has been recorded", () =>
     Effect.gen(function* () {
       const repo = yield* ClientRepo.Service

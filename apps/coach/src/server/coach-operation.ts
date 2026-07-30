@@ -1,4 +1,5 @@
 import { Effect, Exit, Option, Schema } from "effect"
+import type { CoachAvatars } from "./coach-avatars.ts"
 import type { CoachClients } from "./coach-clients.ts"
 import type { CoachSessions } from "./coach-sessions.ts"
 import type { CoachSurface } from "./coach-surface.ts"
@@ -39,7 +40,11 @@ import type { LaunchCredential } from "@/launch-credential.ts"
  */
 
 /** Everything this Worker's runtime provides, named once. */
-export type CoachServices = CoachClients.Service | CoachSessions.Service | CoachSurface.Service
+export type CoachServices =
+  | CoachAvatars.Service
+  | CoachClients.Service
+  | CoachSessions.Service
+  | CoachSurface.Service
 
 /**
  * The one way into the runtime — `runCoach`, in practice. Taken as a parameter

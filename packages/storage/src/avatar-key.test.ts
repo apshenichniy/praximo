@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { avatarKey } from "./avatar-key.ts"
+import { avatarContentTypeForKey, avatarETag, avatarKey } from "./avatar-key.ts"
 
 const coach = {
   subject: "coach",
@@ -86,5 +86,53 @@ describe("avatarKey", () => {
     const second = avatarKey({ ...coach, sourceId: `${"a".repeat(40)}/two` })
 
     expect(first).not.toBe(second)
+  })
+})
+
+describe("avatarContentTypeForKey", () => {
+  it("reads back the type each extension was written under", () => {
+    expect(avatarContentTypeForKey("avatars/coach/ws_1/a-1.jpg")).toBe("image/jpeg")
+    expect(avatarContentTypeForKey("avatars/client/cl_1/a-1.png")).toBe("image/png")
+    expect(avatarContentTypeForKey("avatars/client/cl_1/a-1.webp")).toBe("image/webp")
+  })
+
+  it("round-trips whatever avatarKey composed, for every type it accepts", () => {
+    for (const contentType of ["image/jpeg", "image/png", "image/webp"] as const) {
+      const key = avatarKey({ ...coach, contentType, sourceId: "AQADBAADq6cxG4AB" })
+
+      expect(key).toBeDefined()
+      expect(avatarContentTypeForKey(key ?? "")).toBe(contentType)
+    }
+  })
+
+  it("names nothing for a key this package did not compose", () => {
+    // Not a guess and not `octet-stream`: a reader that met one of these is
+    // looking at a column written by something else.
+    expect(avatarContentTypeForKey("avatars/coach/ws_1/a-1.gif")).toBeUndefined()
+    expect(avatarContentTypeForKey("avatars/coach/ws_1/a-1")).toBeUndefined()
+    expect(avatarContentTypeForKey("")).toBeUndefined()
+    // A dot in the prefix must not be read as an extension.
+    expect(avatarContentTypeForKey("avatars/coach/ws.1/photo")).toBeUndefined()
+  })
+})
+
+describe("avatarETag", () => {
+  const key = "avatars/client/cl_019f9251/AQADBAADq6cxG4AB-1a2b3c.jpg"
+
+  it("names the object without naming the key", () => {
+    const etag = avatarETag(key)
+
+    // Quoted and strong: two responses carrying this tag are the same bytes.
+    expect(etag).toMatch(/^"[a-z0-9]+"$/)
+    // The whole reason it is a digest: an ETag is echoed by the browser and kept
+    // in its cache, so the key must not be recoverable from one.
+    expect(etag).not.toContain("avatars/")
+    expect(etag).not.toContain("AQADBAADq6cxG4AB")
+    expect(etag).not.toContain("cl_019f9251")
+  })
+
+  it("is stable for one key and different for another", () => {
+    expect(avatarETag(key)).toBe(avatarETag(key))
+    expect(avatarETag(key)).not.toBe(avatarETag(key.replace("G4AB", "G4AC")))
   })
 })

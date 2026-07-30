@@ -1,8 +1,17 @@
 import { CoachInitData, CoachOnboardingToken } from "@praximo/auth"
-import { ClientRepo, Database, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
+import {
+  AvatarRepo,
+  ClientRepo,
+  Database,
+  MemberRepo,
+  SessionRepo,
+  WorkspaceRepo,
+} from "@praximo/db"
 import { EmailChannel, type SendBinding } from "@praximo/email"
+import { AvatarReader } from "@praximo/storage"
 import { BotRegistry } from "@praximo/telegram"
 import { ConfigProvider, Layer, ManagedRuntime } from "effect"
+import { CoachAvatars } from "./coach-avatars.ts"
 import { CoachClients } from "./coach-clients.ts"
 import { type CoachRunner, coachConveyor } from "./coach-operation.ts"
 import { CoachSession } from "./coach-session.ts"
@@ -52,6 +61,16 @@ interface Env {
    * sent something that never existed.
    */
   readonly EMAIL?: SendBinding
+  /**
+   * The shared avatar bucket (#231), **optional on purpose** and for the same
+   * reason as `EMAIL`: `vite dev` is not workerd and has no bindings to offer.
+   *
+   * Its absence does not fail open or pretend — `AvatarReader.unwiredLayer` answers
+   * every avatar route with 404, and every disc falls back to the initials that are
+   * the specified design anyway. So a local run is photoless rather than wrong,
+   * which is exactly why this ticket's own verification is a live one.
+   */
+  readonly UPLOADS?: AvatarReader.ReadableBucket
 }
 
 const runtimeFromEnv = (env: Env) => {
@@ -60,7 +79,12 @@ const runtimeFromEnv = (env: Env) => {
     MemberRepo.layer,
     ClientRepo.layer,
     SessionRepo.layer,
+    AvatarRepo.layer,
   ).pipe(Layer.provide(Database.layer))
+  // No binding, no pretending — the same rule the email channel follows, one
+  // severity down: an unserved avatar is a courtesy, and initials are the design.
+  const avatars =
+    env.UPLOADS === undefined ? AvatarReader.unwiredLayer : AvatarReader.layer(env.UPLOADS)
   const coachBots =
     env.MANAGER_BOT === undefined ? BotRegistry.layer : BotRegistry.rpcLayer(env.MANAGER_BOT)
   // Config *selects* Telegram's trust anchor from two keys already in source;
@@ -78,12 +102,14 @@ const runtimeFromEnv = (env: Env) => {
     CoachOnboardingToken.layer,
     coachBots,
     email,
+    avatars,
     repositories,
   )
   const app = Layer.mergeAll(
     CoachSurface.layer.pipe(Layer.provide(CoachSession.layer)),
     CoachClients.layer.pipe(Layer.provide(CoachSession.layer)),
     CoachSessions.layer.pipe(Layer.provide(CoachSession.layer)),
+    CoachAvatars.layer.pipe(Layer.provide(CoachSession.layer)),
   ).pipe(Layer.provide(dependencies))
   return ManagedRuntime.make(
     Layer.provide(app, ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
@@ -132,6 +158,9 @@ const resolveEnv = async (): Promise<Env> => {
       ? {}
       : { MANAGER_BOT: workerEnv.MANAGER_BOT as BotWorkerBinding }),
     ...(workerEnv.EMAIL === undefined ? {} : { EMAIL: workerEnv.EMAIL as SendBinding }),
+    ...(workerEnv.UPLOADS === undefined
+      ? {}
+      : { UPLOADS: workerEnv.UPLOADS as AvatarReader.ReadableBucket }),
   }
 }
 

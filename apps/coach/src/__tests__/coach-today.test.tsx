@@ -299,6 +299,7 @@ describe("needs attention", () => {
     state,
     invitedAt: new Date("2026-07-20T09:00:00.000Z"),
     inviteExpiresAt: new Date(NOW.getTime() + expiresInDays * 24 * 60 * 60 * 1000),
+    hasAvatar: false,
   })
 
   it("carries only the invitations inside their last two days, and the lapsed", () => {
@@ -422,6 +423,7 @@ describe("clients list and the picker", () => {
     {
       id: "cl_1",
       name: "Maria K.",
+      hasAvatar: false,
       state: "accepted" as const,
       invitedAt: "2026-07-01T09:00:00.000Z",
       inviteExpiresAt: "2026-07-08T09:00:00.000Z",
@@ -430,6 +432,7 @@ describe("clients list and the picker", () => {
     {
       id: "cl_2",
       name: "Олена П.",
+      hasAvatar: false,
       state: "invited" as const,
       invitedAt: "2026-07-25T09:00:00.000Z",
       inviteExpiresAt: "2026-08-01T09:00:00.000Z",

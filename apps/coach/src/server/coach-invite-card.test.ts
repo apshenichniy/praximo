@@ -69,6 +69,7 @@ const client = (
   invite: invite("pending"),
   sessions: [],
   canDelete: true,
+  hasAvatar: false,
   ...overrides,
 })
 

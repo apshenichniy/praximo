@@ -23,6 +23,7 @@ import { Route as SessionsIndexRouteImport } from './routes/sessions/index'
 import { Route as SessionsSessionIdRouteImport } from './routes/sessions/$sessionId'
 import { Route as SessionsNewRouteImport } from './routes/sessions/new'
 import { Route as AvailabilityHoursDaysRouteImport } from './routes/availability/hours_.days'
+import { Route as ClientsClientIdAvatarRouteImport } from './routes/clients/$clientId_.avatar'
 import { Route as SessionsSessionIdRescheduleRouteImport } from './routes/sessions/$sessionId_.reschedule'
 
 const IndexRoute = IndexRouteImport.update({
@@ -95,6 +96,11 @@ const AvailabilityHoursDaysRoute = AvailabilityHoursDaysRouteImport.update({
   path: '/availability/hours/days',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClientsClientIdAvatarRoute = ClientsClientIdAvatarRouteImport.update({
+  id: '/clients/$clientId_/avatar',
+  path: '/clients/$clientId/avatar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SessionsSessionIdRescheduleRoute =
   SessionsSessionIdRescheduleRouteImport.update({
     id: '/sessions/$sessionId_/reschedule',
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/clients/': typeof ClientsIndexRoute
   '/sessions/': typeof SessionsIndexRoute
   '/availability/hours/days': typeof AvailabilityHoursDaysRoute
+  '/clients/$clientId/avatar': typeof ClientsClientIdAvatarRoute
   '/sessions/$sessionId/reschedule': typeof SessionsSessionIdRescheduleRoute
 }
 export interface FileRoutesByTo {
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/clients': typeof ClientsIndexRoute
   '/sessions': typeof SessionsIndexRoute
   '/availability/hours/days': typeof AvailabilityHoursDaysRoute
+  '/clients/$clientId/avatar': typeof ClientsClientIdAvatarRoute
   '/sessions/$sessionId/reschedule': typeof SessionsSessionIdRescheduleRoute
 }
 export interface FileRoutesById {
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/clients/': typeof ClientsIndexRoute
   '/sessions/': typeof SessionsIndexRoute
   '/availability/hours_/days': typeof AvailabilityHoursDaysRoute
+  '/clients/$clientId_/avatar': typeof ClientsClientIdAvatarRoute
   '/sessions/$sessionId_/reschedule': typeof SessionsSessionIdRescheduleRoute
 }
 export interface FileRouteTypes {
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/clients/'
     | '/sessions/'
     | '/availability/hours/days'
+    | '/clients/$clientId/avatar'
     | '/sessions/$sessionId/reschedule'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/clients'
     | '/sessions'
     | '/availability/hours/days'
+    | '/clients/$clientId/avatar'
     | '/sessions/$sessionId/reschedule'
   id:
     | '__root__'
@@ -205,6 +216,7 @@ export interface FileRouteTypes {
     | '/clients/'
     | '/sessions/'
     | '/availability/hours_/days'
+    | '/clients/$clientId_/avatar'
     | '/sessions/$sessionId_/reschedule'
   fileRoutesById: FileRoutesById
 }
@@ -223,6 +235,7 @@ export interface RootRouteChildren {
   ClientsIndexRoute: typeof ClientsIndexRoute
   SessionsIndexRoute: typeof SessionsIndexRoute
   AvailabilityHoursDaysRoute: typeof AvailabilityHoursDaysRoute
+  ClientsClientIdAvatarRoute: typeof ClientsClientIdAvatarRoute
   SessionsSessionIdRescheduleRoute: typeof SessionsSessionIdRescheduleRoute
 }
 
@@ -326,6 +339,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AvailabilityHoursDaysRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/clients/$clientId_/avatar': {
+      id: '/clients/$clientId_/avatar'
+      path: '/clients/$clientId/avatar'
+      fullPath: '/clients/$clientId/avatar'
+      preLoaderRoute: typeof ClientsClientIdAvatarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sessions/$sessionId_/reschedule': {
       id: '/sessions/$sessionId_/reschedule'
       path: '/sessions/$sessionId/reschedule'
@@ -351,6 +371,7 @@ const rootRouteChildren: RootRouteChildren = {
   ClientsIndexRoute: ClientsIndexRoute,
   SessionsIndexRoute: SessionsIndexRoute,
   AvailabilityHoursDaysRoute: AvailabilityHoursDaysRoute,
+  ClientsClientIdAvatarRoute: ClientsClientIdAvatarRoute,
   SessionsSessionIdRescheduleRoute: SessionsSessionIdRescheduleRoute,
 }
 export const routeTree = rootRouteImport

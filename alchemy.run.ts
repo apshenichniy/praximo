@@ -126,6 +126,10 @@ export default Alchemy.Stack(
       ...(canonical ? { domain: canonicalDomains.client } : {}),
       env: {
         DATABASE_URL: branch.connectionUri,
+        // The coach's photo on the Acceptance Page (#231). Read-only here — this
+        // Worker serves an avatar the bot captured and, once #59 lands, writes the
+        // one it imports from Google.
+        UPLOADS: bucket,
         INVITE_LOOKUP: Cloudflare.RateLimit("INVITE_LOOKUP", {
           namespaceId: 1001,
           simple: { limit: 20, period: 60 },
@@ -198,6 +202,10 @@ export default Alchemy.Stack(
         MANAGER_BOT_USERNAME: managerBotUsername,
         TELEGRAM_ENV: telegramEnv,
         CLIENT_APP_URL: clientAppUrl,
+        // A client's photo on their route and in the roster (#231). Read-only, and
+        // authorised per request by the launch credential — the bucket is not
+        // public and no object key ever appears in a URL this Worker serves.
+        UPLOADS: bucket,
         // The invitation email is sent from the coach's own tap (#58), so the
         // binding lives on the Worker that serves that screen. `CLIENT_APP_URL`
         // above is what the email's link and its brand image are both built

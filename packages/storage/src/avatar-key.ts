@@ -58,6 +58,22 @@ export const avatarExtension = (contentType: string): string | undefined =>
   avatarContentType(contentType)?.extension
 
 /**
+ * The other direction, for whoever is *serving* the object: the content type a
+ * stored key promises, read back off its extension (#231).
+ *
+ * `undefined` for a key whose extension is not one of the three, which a key
+ * composed by {@link avatarKey} never is. A reader that met one would be looking
+ * at a column written by something other than this package, and handing those
+ * bytes to a browser under a guessed type is how an avatar becomes a content
+ * sniffing question.
+ */
+export const avatarContentTypeForKey = (key: string): AvatarContentType | undefined => {
+  const extension = key.slice(key.lastIndexOf(".") + 1).toLowerCase()
+  const match = Object.entries(AvatarExtensions).find(([, value]) => value === extension)
+  return match?.[0] as AvatarContentType | undefined
+}
+
+/**
  * How much of a source id survives into the key. Long enough that a Telegram
  * `file_unique_id` lands whole and readable in the bucket, short enough that a
  * URL used as a source id does not become the object's name.
@@ -88,6 +104,23 @@ const checksum = (value: string): string => {
   }
   return (hash >>> 0).toString(36)
 }
+
+/**
+ * The validator a served avatar carries, and the reason it is a digest rather
+ * than the key (#231).
+ *
+ * An `ETag` is echoed back by the browser and kept in its cache, so putting the
+ * object key in one would undo the whole point of addressing avatars by their
+ * entity: the key would be sitting in a cache index, quotable by anything that
+ * can read one. The digest changes exactly when the key does — which is exactly
+ * when the photo does, the key being derived from the source image — so it
+ * validates a cached copy without naming anything.
+ *
+ * Strong rather than weak (`W/`): two responses with this tag are the same
+ * bytes, because the tag is derived from the name of the object those bytes came
+ * from.
+ */
+export const avatarETag = (key: string): string => `"${checksum(key)}"`
 
 export interface AvatarKeyInput {
   readonly subject: AvatarSubject

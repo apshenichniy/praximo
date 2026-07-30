@@ -231,3 +231,63 @@ describe("the pre-filled address", () => {
     expect(html).not.toContain("anna@example.com")
   })
 })
+
+/**
+ * The coach's face, where the platform has one (#231).
+ *
+ * The photo is what makes this page read as a continuation of the client's
+ * conversation with their coach rather than a stranger's consent wall — and the
+ * initials are what most clients will actually see, so both have to be right.
+ */
+describe("the coach's photo", () => {
+  const PHOTO = "/i/ABCDEFGH2345/coach-avatar"
+
+  it("draws the photo on the greeting when there is one to draw", async () => {
+    const html = await render(
+      <AcceptancePage
+        locale="ru"
+        coachName={COACH}
+        coachPhotoSrc={PHOTO}
+        submitting={false}
+        onSubmit={() => {}}
+      />,
+    )
+
+    // The invitation's own address, so nothing about R2 is in the markup a client
+    // is handed — and the name is still in the frame, which #222's consent text
+    // depends on.
+    expect(html).toContain(`src="${PHOTO}"`)
+    expect(html).not.toContain("avatars/")
+    expect(html).toContain(COACH)
+  })
+
+  it("falls back to initials without asking for anything", async () => {
+    const html = await page()
+
+    // Not a placeholder: no request goes out for a coach with no photo, and the
+    // monogram is what #57 shipped.
+    expect(html).not.toContain("coach-avatar")
+    expect(html).toContain("ОП")
+  })
+
+  it("shows the coach on the confirmation and on a refusal too", async () => {
+    const confirmation = await render(
+      <ConfirmationScreen
+        locale="ru"
+        coachName={COACH}
+        coachPhotoSrc={PHOTO}
+        email="anna@example.com"
+      />,
+    )
+    // `expired`, not `already-accepted`: only the refusals that *name* the coach
+    // draw the badge at all, and a spent link deliberately names nobody.
+    const refusal = await render(
+      <RefusalScreen locale="ru" kind="expired" coachName={COACH} coachPhotoSrc={PHOTO} />,
+    )
+
+    // Every screen that names the coach shows their face: the confirmation is the
+    // one that reads as a continuation, and an expired link says who to ask.
+    expect(confirmation).toContain(`src="${PHOTO}"`)
+    expect(refusal).toContain(`src="${PHOTO}"`)
+  })
+})
