@@ -126,9 +126,6 @@ export class Service extends Context.Service<Service, Interface>()(
 const readName = (value: string): string | undefined =>
   Option.getOrUndefined(Schema.decodeUnknownOption(ClientName)(value))
 
-const identifier = (prefix: string): string =>
-  `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
-
 /**
  * The optional halves of a lookup, shaped for the wire.
  *
@@ -206,7 +203,7 @@ export const layer = Layer.effect(
      * The invitation is re-read here rather than trusted from the page's payload:
      * between the render and the press, the coach may have reissued the link or
      * the same person may have walked through on Telegram in another tab. The
-     * database is the arbiter either way — `acceptFromWeb` is gated on
+     * database is the arbiter either way — `claim` is gated on
      * `status = 'pending'` — so this read is about which *sentence* the client
      * gets, not about whether the write is safe.
      *
@@ -237,17 +234,17 @@ export const layer = Layer.effect(
       const language = narrowCoachLanguage(input.language)
 
       const outcome = yield* repo
-        .acceptFromWeb({
+        .claim({
           inviteId: lookup.inviteId,
           workspaceId: lookup.workspaceId,
           clientId: lookup.clientId,
-          clientName: name,
-          email,
-          ...(input.googleSub === undefined ? {} : { googleSub: input.googleSub }),
+          identity: {
+            kind: "email",
+            address: email,
+            clientName: name,
+            ...(input.googleSub === undefined ? {} : { googleSub: input.googleSub }),
+          },
           language,
-          consentTextVersion: clientConsentVersion(language),
-          channelId: identifier("ch"),
-          consentId: identifier("cg"),
           now,
         })
         .pipe(Effect.orElseSucceed(() => ({ accepted: false })))

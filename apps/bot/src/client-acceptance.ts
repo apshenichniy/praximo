@@ -6,7 +6,6 @@ import {
   parseClientInviteStartParameter,
 } from "@praximo/domain"
 import {
-  clientConsentVersion,
   clientCopy,
   ClientLanguageNames,
   DefaultTimeZone,
@@ -259,9 +258,6 @@ export const refusalText = (
 export const privacyUrl = (clientAppUrl: string, language: CoachLanguage): string =>
   legalUrl(clientAppUrl, "privacy", language)
 
-const identifier = (prefix: string): string =>
-  `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
-
 export type AcceptanceOutcome =
   | { readonly _tag: "Unknown" }
   | { readonly _tag: "Refused"; readonly refusal: Refusal; readonly message: BotMessage }
@@ -397,19 +393,17 @@ export const acceptInvitation = Effect.fn("ClientAcceptance.acceptInvitation")(f
     } as const
   }
 
-  const claimed = yield* repo.accept({
+  const claimed = yield* repo.claim({
     inviteId: lookup.inviteId,
     workspaceId: lookup.workspaceId,
     clientId: lookup.clientId,
-    telegramUserId: input.telegramUserId,
-    telegramName: input.telegramName,
-    ...(input.telegramUsername === undefined ? {} : { telegramUsername: input.telegramUsername }),
+    identity: {
+      kind: "telegram",
+      userId: input.telegramUserId,
+      name: input.telegramName,
+      ...(input.telegramUsername === undefined ? {} : { username: input.telegramUsername }),
+    },
     language: input.language,
-    // Derived from the text actually shown, in the language shown — which is
-    // why the version is per language here and not one across all three.
-    consentTextVersion: clientConsentVersion(input.language),
-    channelId: identifier("ch"),
-    consentId: identifier("cg"),
     now,
   })
 

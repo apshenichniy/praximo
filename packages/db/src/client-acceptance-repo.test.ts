@@ -10,7 +10,7 @@ const uid = () => crypto.randomUUID().replaceAll("-", "").slice(0, 12)
 
 const NOW = new Date("2026-07-26T09:00:00.000Z")
 const EXPIRES_AT = new Date("2026-08-02T09:00:00.000Z")
-const CONSENT_VERSION = "2026-08-01+ru+aaaaaaa"
+const CONSENT_VERSION = "2026-08-01+ru+d68f379"
 
 interface Fixture {
   readonly workspaceId: string
@@ -21,6 +21,22 @@ interface Fixture {
   readonly token: string
   readonly suffix: string
 }
+
+const telegramIdentity = (userId = "810000123"): ClientAcceptanceRepo.ClaimIdentity => ({
+  kind: "telegram",
+  userId,
+  name: "Maria",
+  username: "maria",
+})
+
+const emailIdentity = (
+  overrides: { readonly googleSub?: string } = {},
+): ClientAcceptanceRepo.ClaimIdentity => ({
+  kind: "email",
+  address: "maria@example.com",
+  clientName: "Марія",
+  ...overrides,
+})
 
 /**
  * Acceptance is the one write in this slice that has to be all-or-nothing: the
@@ -96,20 +112,15 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
     return made
   })
 
-  const accept = (made: Fixture, telegramUserId: string, label: string) =>
+  const claim = (made: Fixture, identity: ClientAcceptanceRepo.ClaimIdentity) =>
     Effect.gen(function* () {
       const repo = yield* ClientAcceptanceRepo.Service
-      return yield* repo.accept({
+      return yield* repo.claim({
         inviteId: made.inviteId,
         workspaceId: made.workspaceId,
         clientId: made.clientId,
-        telegramUserId,
-        telegramName: "Maria",
-        telegramUsername: "maria",
+        identity,
         language: "ru",
-        consentTextVersion: CONSENT_VERSION,
-        channelId: `ch_${label}_${made.suffix}`,
-        consentId: `cg_${label}_${made.suffix}`,
         now: NOW,
       })
     })
@@ -131,76 +142,107 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
     }).pipe(Effect.provide(appLayer)),
   )
 
-  it.effect("lands the channel, the consent, the language and the coach's push together", () =>
-    Effect.gen(function* () {
-      const { client } = yield* Database.Service
-      const made = yield* fixture()
+  const identities = [
+    {
+      label: "Telegram identity",
+      identity: telegramIdentity(),
+      expected: {
+        kind: "telegram",
+        address: "810000123",
+        snapshot: { name: "Maria", username: "maria" },
+      },
+    },
+    {
+      label: "email identity",
+      identity: emailIdentity(),
+      expected: {
+        kind: "email",
+        address: "maria@example.com",
+        snapshot: { name: "Марія" },
+      },
+    },
+  ] as const
 
-      expect(yield* accept(made, "810000123", "first")).toEqual({ accepted: true })
+  for (const identityCase of identities) {
+    describe(identityCase.label, () => {
+      it.effect("lands the Channel, Consent Grant, language and coach push together", () =>
+        Effect.gen(function* () {
+          const { client } = yield* Database.Service
+          const made = yield* fixture()
 
-      const invites = yield* Effect.promise(() =>
-        client.select().from(schema.invite).where(eq(schema.invite.id, made.inviteId)),
-      )
-      const channels = yield* Effect.promise(() =>
-        client.select().from(schema.channel).where(eq(schema.channel.clientId, made.clientId)),
-      )
-      const consents = yield* Effect.promise(() =>
-        client
-          .select()
-          .from(schema.consentGrant)
-          .where(eq(schema.consentGrant.clientId, made.clientId)),
-      )
-      const clients = yield* Effect.promise(() =>
-        client.select().from(schema.client).where(eq(schema.client.id, made.clientId)),
-      )
-      const pushes = yield* Effect.promise(() =>
-        client
-          .select()
-          .from(schema.coachBotNotification)
-          .where(eq(schema.coachBotNotification.workspaceId, made.workspaceId)),
+          expect(yield* claim(made, identityCase.identity)).toEqual({ accepted: true })
+
+          const invites = yield* Effect.promise(() =>
+            client.select().from(schema.invite).where(eq(schema.invite.id, made.inviteId)),
+          )
+          const channels = yield* Effect.promise(() =>
+            client.select().from(schema.channel).where(eq(schema.channel.clientId, made.clientId)),
+          )
+          const consents = yield* Effect.promise(() =>
+            client
+              .select()
+              .from(schema.consentGrant)
+              .where(eq(schema.consentGrant.clientId, made.clientId)),
+          )
+          const clients = yield* Effect.promise(() =>
+            client.select().from(schema.client).where(eq(schema.client.id, made.clientId)),
+          )
+          const pushes = yield* Effect.promise(() =>
+            client
+              .select()
+              .from(schema.coachBotNotification)
+              .where(eq(schema.coachBotNotification.workspaceId, made.workspaceId)),
+          )
+
+          expect(invites[0]?.status).toBe("accepted")
+          expect(channels).toHaveLength(1)
+          expect(channels[0]?.id).toMatch(/^ch_[0-9a-f]{20}$/)
+          expect(channels[0]?.kind).toBe(identityCase.expected.kind)
+          expect(channels[0]?.address).toBe(identityCase.expected.address)
+          expect(channels[0]?.isPrimary).toBe(true)
+          expect(channels[0]?.snapshot).toEqual(identityCase.expected.snapshot)
+          expect(consents).toHaveLength(1)
+          expect(consents[0]?.id).toMatch(/^cg_[0-9a-f]{20}$/)
+          expect(consents[0]?.textVersion).toBe(CONSENT_VERSION)
+          expect(consents[0]?.channelKind).toBe(identityCase.expected.kind)
+          expect(clients[0]?.language).toBe("ru")
+          expect(clients[0]?.name).toBe("Maria K.")
+          expect(clients[0]?.googleSub).toBeNull()
+          expect(pushes).toHaveLength(1)
+          expect(pushes[0]?.recipientTelegramId).toBe(made.coachTelegramId)
+          expect(pushes[0]?.recipientRole).toBe("coach")
+        }).pipe(Effect.provide(appLayer)),
       )
 
-      expect(invites[0]?.status).toBe("accepted")
-      expect(channels).toHaveLength(1)
-      expect(channels[0]?.address).toBe("810000123")
-      expect(channels[0]?.snapshot).toEqual({ name: "Maria", username: "maria" })
-      expect(consents[0]?.textVersion).toBe(CONSENT_VERSION)
-      expect(clients[0]?.language).toBe("ru")
-      expect(pushes).toHaveLength(1)
-      expect(pushes[0]?.recipientTelegramId).toBe(made.coachTelegramId)
-      expect(pushes[0]?.recipientRole).toBe("coach")
-    }).pipe(Effect.provide(appLayer)),
-  )
+      it.effect("creates nothing twice when the same claim arrives again", () =>
+        Effect.gen(function* () {
+          const { client } = yield* Database.Service
+          const made = yield* fixture()
 
-  // A double tap on the same button: the second statement updates nothing, and
-  // because everything else selects from that update, nothing else runs either.
-  it.effect("creates nothing twice when the same tap arrives again", () =>
-    Effect.gen(function* () {
-      const { client } = yield* Database.Service
-      const made = yield* fixture()
+          expect(yield* claim(made, identityCase.identity)).toEqual({ accepted: true })
+          expect(yield* claim(made, identityCase.identity)).toEqual({ accepted: false })
 
-      expect(yield* accept(made, "810000123", "first")).toEqual({ accepted: true })
-      expect(yield* accept(made, "810000123", "second")).toEqual({ accepted: false })
-
-      const channels = yield* Effect.promise(() =>
-        client.select().from(schema.channel).where(eq(schema.channel.clientId, made.clientId)),
+          const channels = yield* Effect.promise(() =>
+            client.select().from(schema.channel).where(eq(schema.channel.clientId, made.clientId)),
+          )
+          const consents = yield* Effect.promise(() =>
+            client
+              .select()
+              .from(schema.consentGrant)
+              .where(eq(schema.consentGrant.clientId, made.clientId)),
+          )
+          expect(channels).toHaveLength(1)
+          expect(consents).toHaveLength(1)
+        }).pipe(Effect.provide(appLayer)),
       )
-      const consents = yield* Effect.promise(() =>
-        client
-          .select()
-          .from(schema.consentGrant)
-          .where(eq(schema.consentGrant.clientId, made.clientId)),
-      )
-      expect(channels).toHaveLength(1)
-      expect(consents).toHaveLength(1)
-    }).pipe(Effect.provide(appLayer)),
-  )
+    })
+  }
 
   it.effect("tells apart the client who came back from the stranger who followed the link", () =>
     Effect.gen(function* () {
       const repo = yield* ClientAcceptanceRepo.Service
       const made = yield* fixture()
-      yield* accept(made, "810000123", "first")
+      yield* claim(made, telegramIdentity())
 
       const lookup = yield* repo.findByToken(made.token, made.telegramBotId)
       expect(lookup?.status).toBe("accepted")
@@ -245,38 +287,8 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
     }).pipe(Effect.provide(appLayer)),
   )
 
-  /**
-   * The web door (#57). A separate pair rather than optional arguments on the two
-   * above: `findByToken`'s bot id is a *join condition*, and one forgotten
-   * argument would silently drop the workspace scoping that keeps a token from
-   * resolving in another coach's workspace. Two doors, two signatures, and "the
-   * Telegram path cannot accept without a Telegram identity" holds by type.
-   */
+  /** The web lookup stays distinct: unlike `claim`, it has no Bot id to scope by. */
   describe("the web door", () => {
-    const acceptFromWeb = (
-      made: Fixture,
-      label: string,
-      overrides: { readonly googleSub?: string } = {},
-    ) =>
-      Effect.gen(function* () {
-        const repo = yield* ClientAcceptanceRepo.Service
-        return yield* repo.acceptFromWeb({
-          inviteId: made.inviteId,
-          workspaceId: made.workspaceId,
-          clientId: made.clientId,
-          // What the client typed about themselves, which is not what the coach
-          // filed them under.
-          clientName: "Марія",
-          email: "maria@example.com",
-          ...overrides,
-          language: "ru",
-          consentTextVersion: CONSENT_VERSION,
-          channelId: `ch_${label}_${made.suffix}`,
-          consentId: `cg_${label}_${made.suffix}`,
-          now: NOW,
-        })
-      })
-
     it.effect("resolves a token with no bot in the picture at all", () =>
       Effect.gen(function* () {
         const repo = yield* ClientAcceptanceRepo.Service
@@ -301,89 +313,17 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
       }).pipe(Effect.provide(appLayer)),
     )
 
-    it.effect("lands an email channel, the consent and the coach's push together", () =>
-      Effect.gen(function* () {
-        const { client } = yield* Database.Service
-        const made = yield* fixture()
-
-        expect(yield* acceptFromWeb(made, "first")).toEqual({ accepted: true })
-
-        const invites = yield* Effect.promise(() =>
-          client.select().from(schema.invite).where(eq(schema.invite.id, made.inviteId)),
-        )
-        const channels = yield* Effect.promise(() =>
-          client.select().from(schema.channel).where(eq(schema.channel.clientId, made.clientId)),
-        )
-        const consents = yield* Effect.promise(() =>
-          client
-            .select()
-            .from(schema.consentGrant)
-            .where(eq(schema.consentGrant.clientId, made.clientId)),
-        )
-        const clients = yield* Effect.promise(() =>
-          client.select().from(schema.client).where(eq(schema.client.id, made.clientId)),
-        )
-        const pushes = yield* Effect.promise(() =>
-          client
-            .select()
-            .from(schema.coachBotNotification)
-            .where(eq(schema.coachBotNotification.workspaceId, made.workspaceId)),
-        )
-
-        expect(invites[0]?.status).toBe("accepted")
-        expect(channels).toHaveLength(1)
-        expect(channels[0]?.kind).toBe("email")
-        expect(channels[0]?.address).toBe("maria@example.com")
-        expect(channels[0]?.isPrimary).toBe(true)
-        // The client's own name lives here, mirroring the Telegram path exactly.
-        expect(channels[0]?.snapshot).toEqual({ name: "Марія" })
-        expect(consents[0]?.textVersion).toBe(CONSENT_VERSION)
-        expect(consents[0]?.channelKind).toBe("email")
-        expect(clients[0]?.language).toBe("ru")
-        // And `client.name` keeps the coach's private label — «Анна через
-        // Марину» is theirs, and showing it back to the client would leak it.
-        expect(clients[0]?.name).toBe("Maria K.")
-        expect(clients[0]?.googleSub).toBeNull()
-        expect(pushes).toHaveLength(1)
-        expect(pushes[0]?.recipientTelegramId).toBe(made.coachTelegramId)
-      }).pipe(Effect.provide(appLayer)),
-    )
-
     it.effect("records a Google subject only when one was actually supplied", () =>
       Effect.gen(function* () {
         const { client } = yield* Database.Service
         const made = yield* fixture()
 
-        yield* acceptFromWeb(made, "first", { googleSub: "108120977000" })
+        yield* claim(made, emailIdentity({ googleSub: "108120977000" }))
 
         const clients = yield* Effect.promise(() =>
           client.select().from(schema.client).where(eq(schema.client.id, made.clientId)),
         )
         expect(clients[0]?.googleSub).toBe("108120977000")
-      }).pipe(Effect.provide(appLayer)),
-    )
-
-    // The retry the page promises is safe: acceptance is gated on
-    // `where status = 'pending'`, and everything else selects from that update.
-    it.effect("creates nothing twice when the commit is pressed again", () =>
-      Effect.gen(function* () {
-        const { client } = yield* Database.Service
-        const made = yield* fixture()
-
-        expect(yield* acceptFromWeb(made, "first")).toEqual({ accepted: true })
-        expect(yield* acceptFromWeb(made, "second")).toEqual({ accepted: false })
-
-        const channels = yield* Effect.promise(() =>
-          client.select().from(schema.channel).where(eq(schema.channel.clientId, made.clientId)),
-        )
-        const consents = yield* Effect.promise(() =>
-          client
-            .select()
-            .from(schema.consentGrant)
-            .where(eq(schema.consentGrant.clientId, made.clientId)),
-        )
-        expect(channels).toHaveLength(1)
-        expect(consents).toHaveLength(1)
       }).pipe(Effect.provide(appLayer)),
     )
 
@@ -393,9 +333,9 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
       Effect.gen(function* () {
         const repo = yield* ClientAcceptanceRepo.Service
         const made = yield* fixture()
-        yield* accept(made, "810000123", "telegram")
+        yield* claim(made, telegramIdentity())
 
-        expect(yield* acceptFromWeb(made, "web")).toEqual({ accepted: false })
+        expect(yield* claim(made, emailIdentity())).toEqual({ accepted: false })
         expect((yield* repo.findByWebToken(made.token))?.status).toBe("accepted")
       }).pipe(Effect.provide(appLayer)),
     )

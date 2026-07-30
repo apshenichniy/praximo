@@ -1,4 +1,5 @@
 import type { CoachLanguage } from "@praximo/domain"
+import { clientConsentVersion } from "@praximo/i18n"
 import { eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database, QueryFailed } from "./client.ts"
@@ -51,49 +52,37 @@ export interface InviteLookup {
   }
 }
 
-export interface AcceptInput {
+export type ClaimIdentity =
+  | {
+      readonly kind: "telegram"
+      readonly userId: string
+      readonly name: string
+      readonly username?: string
+    }
+  | {
+      readonly kind: "email"
+      readonly address: string
+      /**
+       * The name the client typed about **themselves**, which is not
+       * `client.name`. That column keeps what the coach filed them under.
+       */
+      readonly clientName: string
+      /** Present only when they came through Google (#59); no token is stored. */
+      readonly googleSub?: string
+    }
+
+export interface ClaimInput {
   readonly inviteId: string
   readonly workspaceId: string
   readonly clientId: string
-  readonly telegramUserId: string
-  readonly telegramName: string
-  readonly telegramUsername?: string
-  /** The language the client named themselves, one tap before the consent text. */
+  readonly identity: ClaimIdentity
+  /** The language the consent was read in. */
   readonly language: CoachLanguage
-  /** The version derived from the consent text actually shown, in that language. */
-  readonly consentTextVersion: string
-  readonly channelId: string
-  readonly consentId: string
   readonly now: Date
 }
 
-/**
- * The web door's half (#57), and deliberately not `AcceptInput` with optional
- * fields: the two doors demand different identities, and a type is the only
- * thing that can keep the Telegram path from accepting without a Telegram one.
- */
-export interface AcceptFromWebInput {
-  readonly inviteId: string
-  readonly workspaceId: string
-  readonly clientId: string
-  /**
-   * The name the client typed about **themselves**, which is not `client.name`.
-   * That column keeps what the coach filed them under — «Анна через Марину» is
-   * the coach's private label, and writing the client's own name over it would
-   * quietly rename a row in somebody else's list.
-   */
-  readonly clientName: string
-  /** Their address, and the reason the channel exists at all. */
-  readonly email: string
-  /** Present only when they came through Google (#59); no token is ever stored. */
-  readonly googleSub?: string
-  /** The language the consent was *read* in, which on the web is the one shown. */
-  readonly language: CoachLanguage
-  readonly consentTextVersion: string
-  readonly channelId: string
-  readonly consentId: string
-  readonly now: Date
-}
+const identifier = (prefix: string): string =>
+  `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
 
 /** What the coach is told when somebody walks in without them in the room. */
 export interface AcceptedClient {
@@ -124,12 +113,7 @@ export interface Interface {
   readonly findAcceptedClient: (
     clientId: string,
   ) => Effect.Effect<AcceptedClient | undefined, QueryFailed>
-  readonly accept: (
-    input: AcceptInput,
-  ) => Effect.Effect<{ readonly accepted: boolean }, QueryFailed>
-  readonly acceptFromWeb: (
-    input: AcceptFromWebInput,
-  ) => Effect.Effect<{ readonly accepted: boolean }, QueryFailed>
+  readonly claim: (input: ClaimInput) => Effect.Effect<{ readonly accepted: boolean }, QueryFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()(
@@ -280,126 +264,54 @@ export const layer = Layer.effect(
     })
 
     /**
-     * The whole acceptance, in one statement, gated on one conditional update.
+     * The one atomic commit shared by both Doors.
      *
-     * `where "status" = 'pending'` is the gate, and every other write in here
-     * *selects from* that update — so zero rows updated means zero rows
-     * everywhere, which is precisely what a losing double tap must produce.
-     * There is no interactive transaction available (`client.ts`) and this needs
-     * none: a single statement is atomic by itself.
-     *
-     * The coach's notification is enqueued in the same breath because acceptance
-     * is the one event in this whole onboarding that happens without the coach
-     * in the room. `on conflict do nothing` keeps a redelivered webhook from
-     * queueing it twice.
+     * `where "status" = 'pending'` is the gate, and every other write selects
+     * from that update. The identity variant supplies the only differences:
+     * profile update, Channel address and snapshot. Channel and Consent Grant
+     * kinds both come from the same discriminant and therefore cannot drift.
      */
-    const accept = Effect.fn("ClientAcceptanceRepo.accept")(function* (input: AcceptInput) {
+    const claim = Effect.fn("ClientAcceptanceRepo.claim")(function* (input: ClaimInput) {
       const kind = CoachNotification.Kind.ClientAccepted
       const workspaceId = sql`"coach"."workspace_id"`
       const clientId = sql`"coach"."client_id"`
-      const snapshot = JSON.stringify({
-        name: input.telegramName,
-        ...(input.telegramUsername === undefined ? {} : { username: input.telegramUsername }),
-      })
-
-      const result = yield* Effect.tryPromise({
-        try: () =>
-          client.execute(sql`
-            with "claimed" as (
-              update "invite"
-              set "status" = 'accepted'
-              where
-                "id" = ${input.inviteId}
-                and "workspace_id" = ${input.workspaceId}
-                and "status" = 'pending'
-              returning "id", "client_id", "workspace_id"
-            ),
-            "client_language" as (
-              update "client"
-              set "language" = ${input.language}, "updated_at" = ${input.now}
-              from "claimed"
-              where "client"."id" = "claimed"."client_id"
-              returning "client"."id"
-            ),
-            "channel_created" as (
-              insert into "channel" (
-                "id", "client_id", "kind", "address", "is_primary", "snapshot",
-                "created_at", "updated_at"
-              )
-              select
-                ${input.channelId}, "claimed"."client_id", 'telegram', ${input.telegramUserId},
-                true, ${snapshot}::jsonb, ${input.now}, ${input.now}
-              from "claimed"
-              returning "id"
-            ),
-            "consent_created" as (
-              insert into "consent_grant" (
-                "id", "client_id", "scope", "revoked", "text_version", "channel_kind", "granted_at"
-              )
-              select
-                ${input.consentId}, "claimed"."client_id", 'recording_and_processing', false,
-                ${input.consentTextVersion}, 'telegram', ${input.now}
-              from "claimed"
-              returning "id"
-            ),
-            "coach" as (
-              select
-                "m"."telegram_user_id" as "recipient",
-                "claimed"."workspace_id" as "workspace_id",
-                "claimed"."client_id" as "client_id"
-              from "claimed"
-              join "member" as "m" on "m"."workspace_id" = "claimed"."workspace_id"
-              where "m"."role" = 'owner' and "m"."telegram_user_id" is not null
-            ),
-            "queued_notification" as (
-              insert into "coach_bot_notification" (
-                "id", "workspace_id", "kind", "dedupe_key", "recipient_telegram_id",
-                "recipient_role", "status", "attempt_count", "available_at",
-                "created_at", "updated_at"
-              )
-              select
-                ${CoachNotification.id(kind, workspaceId, clientId)},
-                "coach"."workspace_id",
-                ${kind},
-                ${CoachNotification.dedupeKey(kind, workspaceId, clientId)},
-                "coach"."recipient",
-                ${CoachNotification.Role.Coach},
-                'pending', 0, ${input.now}, ${input.now}, ${input.now}
-              from "coach"
-              on conflict ("dedupe_key") do nothing
-            )
-            select "client_id" from "claimed"
-          `),
-        catch: (cause) => new QueryFailed({ operation: "clientAcceptance.accept", cause }),
-      })
-
-      return { accepted: result.rows.length > 0 }
-    })
-
-    /**
-     * The web page's commit (#57), and the same statement in a different key.
-     *
-     * Everything structural is deliberately identical to `accept` above: one
-     * conditional update on `status = 'pending'` as the gate, every other write
-     * selecting from it, so a losing double tap produces exactly nothing. That is
-     * also why the two doors cannot both spend one invitation — whichever gets
-     * there first leaves no `pending` row for the other.
-     *
-     * What differs is what the client brought: an address instead of a Telegram
-     * id, so `kind` is `email` and the grant records `email` as the channel it
-     * was given through. `client.name` is **not** written — the coach's private
-     * label stays theirs, and the name the client typed goes into the snapshot,
-     * exactly where the Telegram path puts the one it captured. `google_sub` is
-     * set only when Google supplied one; `coalesce` keeps a later manual
-     * acceptance from blanking a subject an earlier import recorded.
-     */
-    const acceptFromWeb = Effect.fn("ClientAcceptanceRepo.acceptFromWeb")(function* (
-      input: AcceptFromWebInput,
-    ) {
-      const kind = CoachNotification.Kind.ClientAccepted
-      const workspaceId = sql`"coach"."workspace_id"`
-      const clientId = sql`"coach"."client_id"`
-      const snapshot = JSON.stringify({ name: input.clientName })
+      const channelId = identifier("ch")
+      const consentId = identifier("cg")
+      const consentTextVersion = clientConsentVersion(input.language)
+      const identity =
+        input.identity.kind === "telegram"
+          ? {
+              channelKind: input.identity.kind,
+              address: input.identity.userId,
+              snapshot: JSON.stringify({
+                name: input.identity.name,
+                ...(input.identity.username === undefined
+                  ? {}
+                  : { username: input.identity.username }),
+              }),
+              clientProfile: sql`
+                update "client"
+                set "language" = ${input.language}, "updated_at" = ${input.now}
+                from "claimed"
+                where "client"."id" = "claimed"."client_id"
+                returning "client"."id"
+              `,
+            }
+          : {
+              channelKind: input.identity.kind,
+              address: input.identity.address,
+              snapshot: JSON.stringify({ name: input.identity.clientName }),
+              clientProfile: sql`
+                update "client"
+                set
+                  "language" = ${input.language},
+                  "google_sub" = coalesce(${input.identity.googleSub ?? null}, "client"."google_sub"),
+                  "updated_at" = ${input.now}
+                from "claimed"
+                where "client"."id" = "claimed"."client_id"
+                returning "client"."id"
+              `,
+            }
 
       const result = yield* Effect.tryPromise({
         try: () =>
@@ -414,14 +326,7 @@ export const layer = Layer.effect(
               returning "id", "client_id", "workspace_id"
             ),
             "client_profile" as (
-              update "client"
-              set
-                "language" = ${input.language},
-                "google_sub" = coalesce(${input.googleSub ?? null}, "client"."google_sub"),
-                "updated_at" = ${input.now}
-              from "claimed"
-              where "client"."id" = "claimed"."client_id"
-              returning "client"."id"
+              ${identity.clientProfile}
             ),
             "channel_created" as (
               insert into "channel" (
@@ -429,8 +334,8 @@ export const layer = Layer.effect(
                 "created_at", "updated_at"
               )
               select
-                ${input.channelId}, "claimed"."client_id", 'email', ${input.email},
-                true, ${snapshot}::jsonb, ${input.now}, ${input.now}
+                ${channelId}, "claimed"."client_id", ${identity.channelKind}, ${identity.address},
+                true, ${identity.snapshot}::jsonb, ${input.now}, ${input.now}
               from "claimed"
               returning "id"
             ),
@@ -439,8 +344,8 @@ export const layer = Layer.effect(
                 "id", "client_id", "scope", "revoked", "text_version", "channel_kind", "granted_at"
               )
               select
-                ${input.consentId}, "claimed"."client_id", 'recording_and_processing', false,
-                ${input.consentTextVersion}, 'email', ${input.now}
+                ${consentId}, "claimed"."client_id", 'recording_and_processing', false,
+                ${consentTextVersion}, ${identity.channelKind}, ${input.now}
               from "claimed"
               returning "id"
             ),
@@ -472,7 +377,7 @@ export const layer = Layer.effect(
             )
             select "client_id" from "claimed"
           `),
-        catch: (cause) => new QueryFailed({ operation: "clientAcceptance.acceptFromWeb", cause }),
+        catch: (cause) => new QueryFailed({ operation: "clientAcceptance.claim", cause }),
       })
 
       return { accepted: result.rows.length > 0 }
@@ -573,8 +478,7 @@ export const layer = Layer.effect(
       findByWebToken,
       findBotOwner,
       findAcceptedClient,
-      accept,
-      acceptFromWeb,
+      claim,
     })
   }),
 )

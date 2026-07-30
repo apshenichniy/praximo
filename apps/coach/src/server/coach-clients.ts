@@ -444,6 +444,8 @@ const mintToken = (): string => {
   ).join("")
 }
 
+// Intentionally stays caller-owned in #236: these Client/Invite/Session ids
+// cross CoachClients repository operations and migrate with those operations.
 const identifier = (prefix: string): string =>
   `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
 

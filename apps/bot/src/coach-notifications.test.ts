@@ -40,7 +40,6 @@ const clientsLayer = Layer.succeed(
   ClientAcceptanceRepo.Service.of({
     findByToken: unsupported,
     findByWebToken: unsupported,
-    acceptFromWeb: unsupported,
     findBotOwner: unsupported,
     findAcceptedClient: (clientId) =>
       Effect.succeed(
@@ -48,7 +47,7 @@ const clientsLayer = Layer.succeed(
           ? { id: clientId, name: "Maria K.", language: "ru" as const, telegramUsername: "maria" }
           : undefined,
       ),
-    accept: unsupported,
+    claim: unsupported,
   }),
 )
 
