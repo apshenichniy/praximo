@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query"
 import { queryOptions } from "@tanstack/react-query"
 
-import type { DayScheduleData } from "@/features/coach/components/scheduling-screen.tsx"
+import type { DayScheduleData } from "@/features/coach/day-view.ts"
 import { shiftDate } from "@/lib/coach-calendar.ts"
 import { getDaySchedule, getRangeSchedule } from "@/server/coach-clients.functions.ts"
 
