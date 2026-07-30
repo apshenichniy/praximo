@@ -14,6 +14,7 @@
   "dependencies": {
     "@neondatabase/serverless": "1.1.0",
     "@praximo/domain": "workspace:*",
+    "@praximo/i18n": "workspace:*",
     "drizzle-orm": "1.0.0-rc.4",
     "effect": "catalog:"
   },

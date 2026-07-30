@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ClientAcceptanceRepo } from "@praximo/db"
 import { CoachLanguages } from "@praximo/domain"
-import { clientConsentText, clientConsentVersion, clientCopy } from "@praximo/i18n"
+import { clientConsentText, clientCopy } from "@praximo/i18n"
 import { Effect, Layer, Ref } from "effect"
 import {
   AcceptCallbackPrefix,
@@ -40,7 +40,7 @@ const lookup = (
 
 interface Accepted {
   readonly language: string
-  readonly consentTextVersion: string
+  readonly identity: ClientAcceptanceRepo.ClaimIdentity
 }
 
 const repoLayer = (found: ClientAcceptanceRepo.InviteLookup | undefined, accepts = true) =>
@@ -56,13 +56,12 @@ const repoLayer = (found: ClientAcceptanceRepo.InviteLookup | undefined, accepts
           // bot has no business reaching for it, and a fake that answered would
           // let that mistake pass a test.
           findByWebToken: unsupported,
-          acceptFromWeb: unsupported,
           findBotOwner: unsupported,
           findAcceptedClient: unsupported,
-          accept: (input) =>
+          claim: (input) =>
             Ref.update(calls, (previous) => [
               ...previous,
-              { language: input.language, consentTextVersion: input.consentTextVersion },
+              { language: input.language, identity: input.identity },
             ]).pipe(Effect.as({ accepted: accepts })),
         }),
       ),
@@ -262,7 +261,7 @@ describe("opening an invitation", () => {
 })
 
 describe("accepting", () => {
-  it.effect("records the version of the text actually shown, in the language shown", () =>
+  it.effect("hands claim the chosen language and Telegram identity", () =>
     Effect.gen(function* () {
       const repo = yield* repoLayer(lookup())
       const outcome = yield* acceptInvitation({
@@ -276,7 +275,15 @@ describe("accepting", () => {
 
       expect(outcome._tag).toBe("Accepted")
       expect(yield* Ref.get(repo.calls)).toEqual([
-        { language: "ru", consentTextVersion: clientConsentVersion("ru") },
+        {
+          language: "ru",
+          identity: {
+            kind: "telegram",
+            userId: CLIENT_ID,
+            name: "Maria",
+            username: "maria",
+          },
+        },
       ])
     }),
   )

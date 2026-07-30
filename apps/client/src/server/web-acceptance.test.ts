@@ -1,6 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ClientAcceptanceRepo, QueryFailed } from "@praximo/db"
-import { clientConsentVersion } from "@praximo/i18n"
 import { Effect, Layer, Ref } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 
@@ -30,7 +29,7 @@ const makeRepoHarness = (initial: ClientAcceptanceRepo.InviteLookup | undefined)
     const found = yield* Ref.make<ClientAcceptanceRepo.InviteLookup | undefined>(initial)
     const lookupFails = yield* Ref.make(false)
     const acceptFails = yield* Ref.make(false)
-    const writes = yield* Ref.make<ReadonlyArray<ClientAcceptanceRepo.AcceptFromWebInput>>([])
+    const writes = yield* Ref.make<ReadonlyArray<ClientAcceptanceRepo.ClaimInput>>([])
     const repo = Layer.succeed(
       ClientAcceptanceRepo.Service,
       ClientAcceptanceRepo.Service.of({
@@ -49,13 +48,12 @@ const makeRepoHarness = (initial: ClientAcceptanceRepo.InviteLookup | undefined)
           }),
         findBotOwner: unsupported,
         findAcceptedClient: unsupported,
-        accept: unsupported,
-        acceptFromWeb: (input) =>
+        claim: (input) =>
           Effect.gen(function* () {
             if (yield* Ref.get(acceptFails)) {
               return yield* Effect.fail(
                 new QueryFailed({
-                  operation: "clientAcceptance.acceptFromWeb",
+                  operation: "clientAcceptance.claim",
                   cause: new Error("database unavailable"),
                 }),
               )
@@ -101,11 +99,15 @@ describe("WebAcceptance", () => {
         kind: "accepted",
         view: { email: "maria@example.com" },
       })
-      expect((yield* Ref.get(repo.writes))[0]?.email).toBe("maria@example.com")
+      expect((yield* Ref.get(repo.writes))[0]?.identity).toEqual({
+        kind: "email",
+        address: "maria@example.com",
+        clientName: "Maria",
+      })
     }),
   )
 
-  it.effect("records the Consent Grant version for a language selected after Invite Delivery", () =>
+  it.effect("hands claim the language selected after Invite Delivery", () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(NOW)
       const repo = yield* makeRepoHarness(lookup({ inviteLanguage: "uk" }))
@@ -126,12 +128,7 @@ describe("WebAcceptance", () => {
         }),
       )
 
-      expect(yield* Ref.get(repo.writes)).toMatchObject([
-        {
-          language: "ru",
-          consentTextVersion: clientConsentVersion("ru"),
-        },
-      ])
+      expect(yield* Ref.get(repo.writes)).toMatchObject([{ language: "ru" }])
     }),
   )
 
@@ -234,7 +231,10 @@ describe("WebAcceptance", () => {
         { kind: "invalid", field: "name" },
       ])
       expect(yield* Ref.get(repo.writes)).toHaveLength(1)
-      expect((yield* Ref.get(repo.writes))[0]?.clientName).toBe("M".repeat(80))
+      expect((yield* Ref.get(repo.writes))[0]?.identity).toMatchObject({
+        kind: "email",
+        clientName: "M".repeat(80),
+      })
     }),
   )
 })
