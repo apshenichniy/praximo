@@ -1,13 +1,29 @@
 import { describe, expect, it } from "@effect/vitest"
 import { AvatarRepo, ClientAcceptanceRepo, QueryFailed } from "@praximo/db"
-import { AvatarCacheControl, AvatarReader, avatarETag } from "@praximo/storage"
+import {
+  AvatarCacheControl,
+  AvatarReader,
+  AvatarStore,
+  avatarETag,
+  avatarKey,
+} from "@praximo/storage"
 import { Effect, Layer, Ref } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 
+import { GoogleIdentity } from "./google-identity.ts"
 import { WebAcceptance } from "./web-acceptance.ts"
 
 const TOKEN = "23456789ABCD"
 const NOW = Date.parse("2026-07-30T09:00:00.000Z")
+/** Where the page is served from — an origin the OAuth client knows (#59). */
+const ORIGIN = "https://me.praximo.io"
+const GOOGLE: GoogleIdentity.Settings = {
+  clientId: "1234.apps.googleusercontent.com",
+  clientSecret: "GOCSPX-not-a-real-client-secret",
+  origins: [ORIGIN],
+}
+const PICTURE = "https://lh3.googleusercontent.com/a/ACg8ocK=s256-c"
+const PICTURE_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])
 
 /** The coach's photo, as the bot's refresh left it (#225). */
 const COACH_KEY = "avatars/coach/ws_ada/AQADBAADq6cxG4AB-1a2b3c.jpg"
@@ -35,6 +51,11 @@ interface HarnessOptions {
   readonly coachAvatarKey?: string
   /** Which objects the bucket actually holds. */
   readonly objects?: Readonly<Record<string, Uint8Array>>
+  /** Absent means a stage with no OAuth client, and therefore no button (#59). */
+  readonly google?: GoogleIdentity.Settings
+  /** What the imported picture's address answers with, and what it was asked. */
+  readonly picture?: () => Response
+  readonly pictureRequests?: Array<string>
 }
 
 const makeRepoHarness = (
@@ -47,6 +68,8 @@ const makeRepoHarness = (
     const acceptFails = yield* Ref.make(false)
     const avatarFails = yield* Ref.make(false)
     const writes = yield* Ref.make<ReadonlyArray<ClientAcceptanceRepo.ClaimInput>>([])
+    /** Every key written to a client's row, so an imported picture is provable. */
+    const clientAvatars = yield* Ref.make<ReadonlyArray<string | undefined>>([])
     const repo = Layer.succeed(
       ClientAcceptanceRepo.Service,
       ClientAcceptanceRepo.Service.of({
@@ -101,19 +124,32 @@ const makeRepoHarness = (
             return token === TOKEN ? options.coachAvatarKey : undefined
           }),
         coachAvatarKey: unsupported,
-        setCoachAvatar: unsupported,
         clientAvatarKey: unsupported,
-        setClientAvatar: unsupported,
+        setCoachAvatar: unsupported,
+        setClientAvatar: (input) =>
+          Effect.as(
+            Ref.update(clientAvatars, (keys) => [...keys, input.r2Key]),
+            {
+              outcome: "written" as const,
+            },
+          ),
       }),
     )
+    const requests = options.pictureRequests ?? []
+    const fetch = (async (input: RequestInfo | URL) => {
+      requests.push(String(input))
+      return options.picture?.() ?? new Response("no picture scripted", { status: 502 })
+    }) as typeof globalThis.fetch
     // `provideMerge` rather than `provide`, so a test can reach the *same* recorder
     // the service just read through. Two `Effect.provide(bucket)` calls would build
     // two of them, and an assertion about "the bucket was never opened" would then
     // be reading an array nobody wrote to.
-    const app = WebAcceptance.layer.pipe(
+    const app = WebAcceptance.layer(fetch).pipe(
       Layer.provide(repo),
       Layer.provide(avatarRepo),
+      Layer.provide(GoogleIdentity.layerFor(options.google, fetch)),
       Layer.provideMerge(AvatarReader.testLayer(options.objects ?? {})),
+      Layer.provideMerge(AvatarStore.testLayer),
     )
     return {
       found,
@@ -121,8 +157,14 @@ const makeRepoHarness = (
       acceptFails,
       avatarFails,
       writes,
-      run: <A, E>(effect: Effect.Effect<A, E, WebAcceptance.Service | AvatarReader.TestService>) =>
-        effect.pipe(Effect.provide(app)),
+      clientAvatars,
+      run: <A, E>(
+        effect: Effect.Effect<
+          A,
+          E,
+          WebAcceptance.Service | AvatarReader.TestService | AvatarStore.TestService
+        >,
+      ) => effect.pipe(Effect.provide(app)),
     }
   })
 
@@ -171,7 +213,7 @@ describe("WebAcceptance", () => {
       yield* repo.run(
         Effect.gen(function* () {
           const acceptance = yield* WebAcceptance.Service
-          expect(yield* acceptance.open(TOKEN, "en")).toMatchObject({
+          expect(yield* acceptance.open(TOKEN, "en", ORIGIN)).toMatchObject({
             kind: "open",
             language: "uk",
           })
@@ -196,7 +238,7 @@ describe("WebAcceptance", () => {
       const outcome = yield* repo.run(
         Effect.gen(function* () {
           const acceptance = yield* WebAcceptance.Service
-          expect(yield* acceptance.open(TOKEN, "en")).toMatchObject({ kind: "open" })
+          expect(yield* acceptance.open(TOKEN, "en", ORIGIN)).toMatchObject({ kind: "open" })
 
           yield* Ref.set(repo.found, lookup({ status: "accepted" }))
           return yield* acceptance.accept(acceptInput())
@@ -255,7 +297,7 @@ describe("WebAcceptance", () => {
 
           for (const current of cases) {
             yield* Ref.set(repo.found, current.found)
-            expect(yield* acceptance.open(TOKEN, "en")).toMatchObject({
+            expect(yield* acceptance.open(TOKEN, "en", ORIGIN)).toMatchObject({
               kind: current.openKind,
             })
             expect(yield* acceptance.accept(acceptInput())).toEqual({ kind: "stale" })
@@ -295,6 +337,166 @@ describe("WebAcceptance", () => {
   )
 
   /**
+   * The Google import's two contributions to the commit (#59): the attestation
+   * that goes into it, and the picture that follows it.
+   */
+  describe("the Google import", () => {
+    const image = () =>
+      new Response(PICTURE_BYTES as unknown as BodyInit, {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      })
+    const imported = { google: GOOGLE, picture: image }
+    const withImport = acceptInput({ googleImport: { sub: "10472938475", pictureUrl: PICTURE } })
+
+    it.effect("offers the button only from an origin the OAuth client knows", () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const configured = yield* makeRepoHarness(lookup(), imported)
+        const bare = yield* makeRepoHarness(lookup())
+
+        const open = (harness: typeof configured, origin: string) =>
+          harness.run(Effect.flatMap(WebAcceptance.Service, (s) => s.open(TOKEN, "en", origin)))
+
+        expect(yield* open(configured, ORIGIN)).toMatchObject({ googleAvailable: true })
+        // An origin Google was not told about would answer the client with
+        // `redirect_uri_mismatch`; a stage with no client at all has no button to
+        // offer either. Both render the column finished, without one.
+        expect(yield* open(configured, "https://client-dev.workers.dev")).toMatchObject({
+          googleAvailable: false,
+        })
+        expect(yield* open(bare, ORIGIN)).toMatchObject({ googleAvailable: false })
+      }),
+    )
+
+    it.effect("hands the sub to claim and snapshots the picture after it", () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const requests: Array<string> = []
+        const repo = yield* makeRepoHarness(lookup(), { ...imported, pictureRequests: requests })
+
+        const outcome = yield* repo.run(
+          Effect.gen(function* () {
+            const acceptance = yield* WebAcceptance.Service
+            const result = yield* acceptance.accept(withImport)
+            const store = yield* AvatarStore.TestService
+            expect(yield* store.stored()).toEqual([
+              {
+                key: avatarKey({
+                  subject: "client",
+                  subjectId: "cl_1",
+                  sourceId: PICTURE,
+                  contentType: "image/jpeg",
+                }),
+                bytes: PICTURE_BYTES,
+                contentType: "image/jpeg",
+              },
+            ])
+            return result
+          }),
+        )
+
+        expect(outcome).toMatchObject({ kind: "accepted" })
+        // No account is created and no token is stored: the `sub` rides in as an
+        // attestation on the same identity the typed path uses.
+        expect((yield* Ref.get(repo.writes))[0]?.identity).toEqual({
+          kind: "email",
+          address: "maria@example.com",
+          clientName: "Maria",
+          googleSub: "10472938475",
+        })
+        expect(requests).toEqual([PICTURE])
+        expect((yield* Ref.get(repo.clientAvatars)).length).toBe(1)
+      }),
+    )
+
+    it.effect("writes no sub and fetches nothing when the client typed their details", () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const requests: Array<string> = []
+        const repo = yield* makeRepoHarness(lookup(), { ...imported, pictureRequests: requests })
+
+        yield* repo.run(
+          Effect.gen(function* () {
+            const acceptance = yield* WebAcceptance.Service
+            yield* acceptance.accept(acceptInput())
+            expect(yield* Effect.flatMap(AvatarStore.TestService, (s) => s.stored())).toEqual([])
+          }),
+        )
+
+        expect((yield* Ref.get(repo.writes))[0]?.identity).not.toHaveProperty("googleSub")
+        expect(requests).toEqual([])
+        expect(yield* Ref.get(repo.clientAvatars)).toEqual([])
+      }),
+    )
+
+    /**
+     * The client is committed and about to be told so. A picture nobody asked
+     * them for must not be able to take that away from them.
+     */
+    it.effect("still accepts when the picture will not download", () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const repo = yield* makeRepoHarness(lookup(), {
+          google: GOOGLE,
+          picture: () => new Response("gone", { status: 404 }),
+        })
+
+        const outcome = yield* repo.run(
+          Effect.flatMap(WebAcceptance.Service, (s) => s.accept(withImport)),
+        )
+
+        expect(outcome).toMatchObject({ kind: "accepted" })
+        expect(yield* Ref.get(repo.clientAvatars)).toEqual([])
+      }),
+    )
+
+    it.effect("accepts an import that brought no picture at all", () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const requests: Array<string> = []
+        const repo = yield* makeRepoHarness(lookup(), { ...imported, pictureRequests: requests })
+
+        const outcome = yield* repo.run(
+          Effect.flatMap(WebAcceptance.Service, (s) =>
+            s.accept(acceptInput({ googleImport: { sub: "10472938475" } })),
+          ),
+        )
+
+        expect(outcome).toMatchObject({ kind: "accepted" })
+        expect((yield* Ref.get(repo.writes))[0]?.identity).toMatchObject({
+          googleSub: "10472938475",
+        })
+        expect(requests).toEqual([])
+      }),
+    )
+
+    /** Nothing is stored for an invitation that was no longer open to claim. */
+    it.effect("stores no object when the commit came too late", () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW)
+        const requests: Array<string> = []
+        const repo = yield* makeRepoHarness(lookup({ status: "accepted" }), {
+          ...imported,
+          pictureRequests: requests,
+        })
+
+        const outcome = yield* repo.run(
+          Effect.gen(function* () {
+            const acceptance = yield* WebAcceptance.Service
+            const result = yield* acceptance.accept(withImport)
+            expect(yield* Effect.flatMap(AvatarStore.TestService, (s) => s.stored())).toEqual([])
+            return result
+          }),
+        )
+
+        expect(outcome).toEqual({ kind: "stale" })
+        expect(requests).toEqual([])
+      }),
+    )
+  })
+
+  /**
    * The coach's photo, which the page shows beside their name (#231).
    *
    * Authorised by the invitation and nothing else — there is no session on this
@@ -311,7 +513,7 @@ describe("WebAcceptance", () => {
         const without = yield* makeRepoHarness(lookup())
 
         const open = (harness: typeof withPhoto) =>
-          harness.run(Effect.flatMap(WebAcceptance.Service, (s) => s.open(TOKEN, "en")))
+          harness.run(Effect.flatMap(WebAcceptance.Service, (s) => s.open(TOKEN, "en", ORIGIN)))
 
         // A flag rather than a key, so no object key reaches the HTML — and rather
         // than letting the image 404, so a coach without a photo costs no request
@@ -332,7 +534,9 @@ describe("WebAcceptance", () => {
         // says who to ask, and the confirmation is the one that reads as a
         // continuation of their conversation.
         expect(
-          yield* spent.run(Effect.flatMap(WebAcceptance.Service, (s) => s.open(TOKEN, "en"))),
+          yield* spent.run(
+            Effect.flatMap(WebAcceptance.Service, (s) => s.open(TOKEN, "en", ORIGIN)),
+          ),
         ).toMatchObject({ kind: "already-accepted", coachHasPhoto: true })
         expect(
           yield* open.run(Effect.flatMap(WebAcceptance.Service, (s) => s.accept(acceptInput()))),

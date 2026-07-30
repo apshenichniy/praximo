@@ -166,3 +166,22 @@ describe("AvatarStore.testLayer", () => {
     }).pipe(Effect.provide(AvatarStore.testLayer)),
   )
 })
+
+/**
+ * No bucket bound — what `vite dev` runs on, since it is not workerd and has no
+ * bindings to offer (#59).
+ */
+describe("the unwired layer", () => {
+  it.effect("refuses rather than pretending the object landed", () =>
+    Effect.gen(function* () {
+      const service = yield* AvatarStore.Service
+
+      const outcome = yield* Effect.result(service.store(coachPhoto))
+
+      expect(Result.isFailure(outcome)).toBe(true)
+      // A key handed back here would be written to a column and would name an
+      // object that does not exist — a broken avatar on every surface, forever.
+      if (Result.isFailure(outcome)) expect(outcome.failure.reason).toBe("write-failed")
+    }).pipe(Effect.provide(AvatarStore.unwiredLayer)),
+  )
+})

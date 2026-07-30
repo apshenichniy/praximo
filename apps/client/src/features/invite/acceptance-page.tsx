@@ -12,11 +12,13 @@ import {
   ItemTitle,
 } from "@praximo/ui/components/item"
 import { Label } from "@praximo/ui/components/label"
-import { useId, useState } from "react"
+import { useEffect, useId, useState } from "react"
 
 import { inviteCopy } from "@/features/i18n/invite-copy.ts"
 import { CoachBadge } from "@/features/invite/coach-badge.tsx"
 import { ConsentPane } from "@/features/invite/consent-pane.tsx"
+import { GoogleButton, GoogleOutcome, GoogleRule } from "@/features/invite/google-button.tsx"
+import type { InviteDraft } from "@/features/invite/invite-draft.ts"
 import type { SessionSummary } from "@/features/invite/session-summary.ts"
 import { useConsentGate } from "@/features/invite/use-consent-gate.ts"
 
@@ -42,6 +44,60 @@ export interface AcceptanceFormState {
   readonly email: string
 }
 
+/**
+ * What a Google import filled in, and it is only ever these two (#59).
+ *
+ * The `sub` and the picture never come near the page: they are sealed in a cookie
+ * the browser cannot read and are read again, server-side, by the commit. An
+ * attestation somebody's page could choose would attest to nothing.
+ */
+export interface GoogleImported {
+  readonly name?: string
+  readonly email?: string
+  /** `false` when a non-Google domain is attached to the account (#28). */
+  readonly emailVerified: boolean
+}
+
+/**
+ * The draft, as a port rather than as `sessionStorage` reached for directly.
+ *
+ * The page owns the two fields, so the page is the only thing that can save them
+ * before the redirect fallback navigates away — and a port is what lets that be
+ * exercised in Node, where this app's suite runs.
+ */
+export interface DraftStore {
+  readonly read: () => InviteDraft | undefined
+  readonly write: (draft: InviteDraft) => void
+}
+
+/**
+ * The import fills what the client did not write, and never overwrites what they
+ * did.
+ *
+ * The button sits above the fields precisely so an import cannot cost the client
+ * what they already wrote, and the same rule has to hold when they do it the
+ * other way round: type first, then press. A client who wants Google's name
+ * instead of their own clears the field, which is one keystroke; a client whose
+ * typing was silently replaced has lost something and was never asked.
+ *
+ * **`suggested` is what makes that rule mean "typed" rather than "non-empty".**
+ * The address field arrives pre-filled for every emailed invitation (#58), and
+ * treating that as the client's own writing would mean Google's address silently
+ * never landed for exactly the clients the invitation reached by email — while
+ * the line above the fields told them it had. A value nobody typed is a
+ * suggestion, and an import is a better-sourced one.
+ *
+ * An updater rather than a value, so it composes with `setState` and so the rule
+ * is one testable line rather than a branch inside an effect.
+ */
+export const keepTyped =
+  (incoming: string | undefined, suggested?: string) =>
+  (current: string): string => {
+    if (incoming === undefined) return current
+    if (current.length === 0) return incoming
+    return suggested !== undefined && current === suggested ? incoming : current
+  }
+
 export function AcceptancePage({
   locale,
   coachName,
@@ -52,6 +108,12 @@ export function AcceptancePage({
   submitting,
   error,
   onSubmit,
+  googleAvailable = false,
+  googleBusy = false,
+  googleFailed = false,
+  imported,
+  onGoogleImport,
+  draft,
 }: {
   readonly locale: CoachLanguage
   readonly coachName: string
@@ -77,14 +139,55 @@ export function AcceptancePage({
   readonly submitting: boolean
   readonly error?: string
   readonly onSubmit: (state: AcceptanceFormState) => void
+  /**
+   * Whether there is a Google import to offer at all (#59) — false on a stage
+   * with no OAuth client, and on an origin Google has not been told about.
+   *
+   * The button is then **absent, not disabled**. A dead control on a legally
+   * operative page is the placeholder-reads-as-a-promise failure this whole
+   * design refuses, and the column reads as finished without it, which is what
+   * #57 shipped.
+   */
+  readonly googleAvailable?: boolean
+  /** The popup is open, or its exchange is still in flight. */
+  readonly googleBusy?: boolean
+  readonly googleFailed?: boolean
+  readonly imported?: GoogleImported
+  readonly onGoogleImport?: () => void
+  readonly draft?: DraftStore
 }) {
   const copy = inviteCopy(locale)
   const consentCopy = copy.consent
   const nameId = useId()
   const emailId = useId()
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState(suggestedEmail ?? "")
+  /**
+   * Restored on the way in, so a client coming back from the full-page fallback
+   * meets what they typed rather than an empty form.
+   *
+   * **Lazy initialisers, both of them.** A plain `useState(draft.read())` reads
+   * storage on every render and throws all but the first away; the read is
+   * synchronous and belongs to mount alone. On the server there is no storage at
+   * all, so this is a no-op there and the document renders the same empty form it
+   * always did.
+   */
+  const [name, setName] = useState(() => draft?.read()?.name ?? "")
+  // A draft, where there is one, wins over the invitation's own address: it is
+  // the more recent truth, including when the client deliberately cleared the
+  // field before pressing the button. A draft of two empty strings is not a
+  // draft, so restoring one can never blank a pre-filled address.
+  const [email, setEmail] = useState(() => {
+    const restored = draft?.read()
+    return restored === undefined ? (suggestedEmail ?? "") : restored.email
+  })
   const { unlocked, sentinelRef } = useConsentGate()
+
+  /** The rule itself is `keepTyped`'s; this is only where it is applied. */
+  useEffect(() => {
+    if (imported === undefined) return
+    setName(keepTyped(imported.name))
+    // The suggestion is handed in so the import may replace it: see `keepTyped`.
+    setEmail(keepTyped(imported.email, suggestedEmail))
+  }, [imported, suggestedEmail])
 
   /**
    * An identity, which on this page means both fields.
@@ -143,19 +246,50 @@ export function AcceptancePage({
 
                 <div className="grid gap-[18px]">
                   {/*
-                   * **Continue with Google is not here yet, deliberately.**
+                   * **Continue with Google sits above the fields, and that is a
+                   * finding rather than a layout preference** (#59, validated in
+                   * prototype #28). Below them, an import either discards what the
+                   * client has already typed or has to negotiate with it; above
+                   * them, the natural order is press-then-check and there is
+                   * nothing to discard.
                    *
-                   * It belongs above these fields — an import placed below them
-                   * discards what the client already typed, validated in
-                   * prototype #28 — but it is #59's, and shipping it disabled
-                   * would put a dead control on a legally operative page. That is
-                   * the placeholder-reads-as-a-promise failure this whole ticket
-                   * is built on refusing.
-                   *
-                   * So the column is finished **without** it today, which is half
-                   * of what the ticket asks; #59 adds the button and the «или»
-                   * rule above `nameId` and owes the other half.
+                   * It is **absent** rather than disabled when the stage has no
+                   * OAuth client or the origin is one Google has not been told
+                   * about. A dead control on a legally operative page is exactly
+                   * what #57 refused to ship, and the column reads as finished
+                   * without it — which is why it could be finished without it.
                    */}
+                  {googleAvailable && onGoogleImport !== undefined ? (
+                    <div className="grid gap-[18px]">
+                      <div className="grid gap-2">
+                        {imported === undefined ? (
+                          <GoogleButton
+                            locale={locale}
+                            busy={googleBusy}
+                            onPress={() => {
+                              // Saved *before* the handler runs, because the
+                              // fallback inside it navigates away from this page.
+                              draft?.write({ name, email })
+                              onGoogleImport()
+                            }}
+                          />
+                        ) : null}
+                        {imported === undefined && !googleFailed ? null : (
+                          <GoogleOutcome
+                            locale={locale}
+                            outcome={
+                              imported === undefined
+                                ? "failed"
+                                : imported.emailVerified
+                                  ? "done"
+                                  : "unverified"
+                            }
+                          />
+                        )}
+                      </div>
+                      <GoogleRule locale={locale} />
+                    </div>
+                  ) : null}
                   <Field
                     id={nameId}
                     label={copy.form.nameLabel}

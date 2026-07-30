@@ -17,6 +17,7 @@ import * as Neon from "alchemy/Neon"
 import * as Config from "effect/Config"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
+import * as Redacted from "effect/Redacted"
 
 const compatibility = { date: "2026-07-19", flags: ["nodejs_compat"] }
 const canonicalDevelopmentStage = "dev_apshenichniy"
@@ -55,6 +56,23 @@ export default Alchemy.Stack(
     const configuredCoachMiniAppUrl = Config.string("COACH_MINI_APP_URL")
     const defaultCoachBotAvatarR2Key = Config.string("DEFAULT_COACH_BOT_AVATAR_R2_KEY")
     const telegramEnv = Config.string("TELEGRAM_ENV").pipe(Config.withDefault("production"))
+
+    /**
+     * The Google profile import on the Acceptance Page (#59).
+     *
+     * All three default to empty rather than being required, and that is the
+     * difference between a stage without Google and a stage that is broken: the
+     * Client Worker reports the import unavailable and the page renders finished
+     * without the button, exactly as it has since #57. A required value here
+     * would make a stage undeployable over an optional convenience.
+     */
+    const googleClientId = Config.string("GOOGLE_CLIENT_ID").pipe(Config.withDefault(""))
+    const googleClientSecret = Config.redacted("GOOGLE_CLIENT_SECRET").pipe(
+      Config.withDefault(Redacted.make("")),
+    )
+    const googleRedirectOrigins = Config.string("GOOGLE_REDIRECT_ORIGINS").pipe(
+      Config.withDefault(""),
+    )
 
     /**
      * The sending subdomain for every product email (#58).
@@ -126,11 +144,20 @@ export default Alchemy.Stack(
       ...(canonical ? { domain: canonicalDomains.client } : {}),
       env: {
         DATABASE_URL: branch.connectionUri,
-        // The coach's photo on the Acceptance Page (#231). An R2 binding carries no
-        // scope of its own, so this is the whole bucket: what keeps this Worker to
-        // reading is that it holds only `AvatarReader`, whose interface is `get`.
-        // #59 gives it a writer too, for the Google picture it imports.
+        // The coach's photo on the Acceptance Page (#231) and, since #59, the
+        // Google picture this Worker imports. An R2 binding carries no scope of
+        // its own, so this is the whole bucket; the containment is that the
+        // Worker holds exactly two narrow interfaces over it — `AvatarReader`'s
+        // `get` and `AvatarStore`'s `put` — and no object key ever appears in a
+        // URL it serves.
         UPLOADS: bucket,
+        // The Google profile import (#59). The id and the origin list are public
+        // configuration; the secret is the only one this Worker has, and it is
+        // spent server-side on one code exchange. An empty id is how a stage says
+        // "no import here" — see the comment on the config above.
+        GOOGLE_CLIENT_ID: googleClientId,
+        GOOGLE_CLIENT_SECRET: googleClientSecret,
+        GOOGLE_REDIRECT_ORIGINS: googleRedirectOrigins,
         INVITE_LOOKUP: Cloudflare.RateLimit("INVITE_LOOKUP", {
           namespaceId: 1001,
           simple: { limit: 20, period: 60 },
