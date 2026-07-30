@@ -3,6 +3,7 @@ import { Effect, Schema } from "effect"
 import { CoachOnboardingInviteCodeAlphabet } from "./coach-onboarding.ts"
 import {
   ClientInviteDeliveryKind,
+  ClientInviteStatus,
   ClientInviteStartPrefix,
   ClientInviteTokenAlphabet,
   ClientInviteTokenLength,
@@ -14,6 +15,7 @@ import {
   CreateClientInput,
   InviteAttentionWindowMillis,
   inviteNeedsAttention,
+  inviteStanding,
   parseClientInviteStartParameter,
 } from "./client-onboarding.ts"
 
@@ -68,6 +70,30 @@ describe("needs attention", () => {
 
   it("never asks anything of a client who is already in", () => {
     expect(inviteNeedsAttention("accepted", inDays(-9), NOW)).toBe(false)
+  })
+})
+
+describe("invite standing", () => {
+  const NOW = new Date("2026-07-30T09:00:00.000Z").getTime()
+  const windows = [
+    ["open", NOW + 1],
+    ["closed", NOW],
+  ] as const
+  const expected = {
+    pending: { open: "open", closed: "lapsed" },
+    accepted: { open: "accepted", closed: "accepted" },
+    expired: { open: "superseded", closed: "superseded" },
+  } as const satisfies Record<
+    ClientInviteStatus,
+    Record<(typeof windows)[number][0], "open" | "accepted" | "superseded" | "lapsed">
+  >
+
+  it("exhausts every stored status on both sides of the time boundary", () => {
+    for (const status of ClientInviteStatus.literals) {
+      for (const [window, expiresAt] of windows) {
+        expect(inviteStanding(status, expiresAt, NOW)).toBe(expected[status][window])
+      }
+    }
   })
 })
 

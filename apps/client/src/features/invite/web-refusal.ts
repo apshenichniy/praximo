@@ -1,3 +1,5 @@
+import { type ClientInviteStatus, inviteStanding } from "@praximo/domain"
+
 /**
  * Why a link did not open a door, in the four ways that differ to the person
  * holding it (#57).
@@ -29,10 +31,17 @@ export type WebRefusal =
   | "expired"
 
 export interface WebRefusalInput {
-  readonly status: "pending" | "accepted" | "expired"
+  readonly status: ClientInviteStatus
   readonly expiresAt: Date
   readonly now: Date
 }
+
+const refusalByStanding = {
+  open: undefined,
+  accepted: "already-accepted",
+  superseded: "superseded",
+  lapsed: "expired",
+} as const satisfies Record<ReturnType<typeof inviteStanding>, WebRefusal | undefined>
 
 /**
  * `undefined` means the door is open — the caller renders the page.
@@ -43,10 +52,6 @@ export interface WebRefusalInput {
  * tell each other apart by what the page says.
  */
 export const webRefusal = (input: WebRefusalInput): WebRefusal | undefined => {
-  // Acceptance is checked first and beats the clock. A link walked through a
-  // fortnight ago is *done*, and telling its owner it has expired would send
-  // them to their coach for a replacement they do not need.
-  if (input.status === "accepted") return "already-accepted"
-  if (input.status === "expired") return "superseded"
-  return input.expiresAt.getTime() <= input.now.getTime() ? "expired" : undefined
+  const standing = inviteStanding(input.status, input.expiresAt.getTime(), input.now.getTime())
+  return refusalByStanding[standing]
 }

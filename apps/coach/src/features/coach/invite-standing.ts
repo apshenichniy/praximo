@@ -1,4 +1,4 @@
-import { type ClientInviteDoor, isClientInviteDeliveryKind } from "@praximo/domain"
+import type { ClientInviteDeliveryKind, ClientInviteDoor } from "@praximo/domain"
 
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 
@@ -19,7 +19,7 @@ import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 export interface InviteStanding {
   readonly state: "invited" | "expired" | "accepted"
   /** Absent until the coach's first successful share or copy. */
-  readonly delivered?: { readonly at: string; readonly kind: string }
+  readonly delivered?: { readonly at: string; readonly kind: ClientInviteDeliveryKind }
 }
 
 /**
@@ -41,9 +41,8 @@ export const stateWord = (copy: ClientsCopy, client: InviteStanding): string =>
         : copy.stateInvited
 
 /**
- * How it travelled, or `undefined` for a kind this deploy has no word for — the
- * same refusal `coach-clients.ts` makes on the way out, because a raw identifier
- * in the middle of a sentence is worse than a quieter row.
+ * How it travelled. The server has already narrowed the database string to the
+ * domain vocabulary, so the browser only renames that trusted kind.
  *
  * Since #58 that includes `email`, which used to leave here as `undefined` while
  * the service-sent invitation was unbuilt. The words are keyed by *delivery
@@ -51,8 +50,10 @@ export const stateWord = (copy: ClientsCopy, client: InviteStanding): string =>
  * coach can press, and reading `copy.doors[kind]` would have forced it to be
  * declared one.
  */
-export const sentVia = (copy: ClientsCopy, kind: string | undefined): string | undefined =>
-  isClientInviteDeliveryKind(kind) ? copy.sentVia[kind] : undefined
+export const sentVia = (
+  copy: ClientsCopy,
+  kind: ClientInviteDeliveryKind | undefined,
+): string | undefined => (kind === undefined ? undefined : copy.sentVia[kind])
 
 /**
  * Which door the client's screen should open on, given how the invitation last
@@ -66,5 +67,5 @@ export const sentVia = (copy: ClientsCopy, kind: string | undefined): string | u
  * since `email` is not one — would sit a Telegram control set under «отправлено
  * письмом», exactly the drift #224 opened this default to prevent.
  */
-export const doorFor = (kind: string | undefined): ClientInviteDoor =>
+export const doorFor = (kind: ClientInviteDeliveryKind | undefined): ClientInviteDoor =>
   kind === "email" || kind === "link" ? "link" : "telegram"

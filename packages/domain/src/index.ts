@@ -22,6 +22,7 @@ export {
   CreateClientInput,
   InviteAttentionWindowMillis,
   inviteNeedsAttention,
+  inviteStanding,
   isClientInviteDeliveryKind,
   isClientInviteDoor,
   parseClientInviteStartParameter,

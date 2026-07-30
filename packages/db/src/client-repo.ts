@@ -1,6 +1,11 @@
-import type { ClientInviteDeliveryKind, CoachLanguage } from "@praximo/domain"
+import {
+  type ClientInviteDeliveryKind,
+  ClientInviteStatus,
+  type CoachLanguage,
+  inviteStanding,
+} from "@praximo/domain"
 import { and, asc, eq, gte, sql } from "drizzle-orm"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Option, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import { isoColumn, readDate, readLanguage } from "./row-readers.ts"
 import * as schema from "./schema.ts"
@@ -45,7 +50,7 @@ export interface ClientListRow {
 export interface ClientInviteRow {
   readonly id: string
   readonly token: string
-  readonly status: "pending" | "accepted" | "expired"
+  readonly status: ClientInviteStatus
   readonly expiresAt: Date
   /** The language the invitation was *written* in — never the client's own. */
   readonly language: CoachLanguage
@@ -186,16 +191,38 @@ export class Service extends Context.Service<Service, Interface>()("@praximo/db/
  * column says, which is why no cron writes that status. The one writer of the
  * stored `expired` is a reissue, and it means "this link was replaced".
  */
-const clientState = (
-  status: string | undefined,
+const stateByStanding = {
+  open: "invited",
+  accepted: "accepted",
+  superseded: "expired",
+  lapsed: "expired",
+} as const satisfies Record<ReturnType<typeof inviteStanding>, ClientState>
+
+type ClientStandingInput =
+  | { readonly status: "accepted" | "expired" }
+  | { readonly status: "pending"; readonly expiresAt: Date }
+
+const standingInput = (
+  status: ClientInviteStatus | undefined,
   expiresAt: Date | undefined,
-  now: Date,
-): ClientState => {
-  if (status === "accepted") return "accepted"
-  if (status === "expired") return "expired"
-  if (expiresAt !== undefined && expiresAt.getTime() <= now.getTime()) return "expired"
-  return "invited"
+): ClientStandingInput | undefined =>
+  status === "accepted" || status === "expired"
+    ? { status }
+    : expiresAt === undefined
+      ? undefined
+      : { status: "pending", expiresAt }
+
+const clientState = (input: ClientStandingInput | undefined, now: Date): ClientState => {
+  if (input === undefined) return "invited"
+  const nowMillis = now.getTime()
+  const expiresAt = input.status === "pending" ? input.expiresAt.getTime() : nowMillis
+  return stateByStanding[inviteStanding(input.status, expiresAt, nowMillis)]
 }
+
+const decodeInviteStatus = Schema.decodeUnknownOption(ClientInviteStatus)
+
+const readInviteStatus = (value: unknown): ClientInviteStatus | undefined =>
+  Option.getOrUndefined(decodeInviteStatus(value))
 
 /**
  * The delivery record, read as the pair it is (#224).
@@ -292,6 +319,7 @@ export const layer = Layer.effect(
         const record = row as Record<string, unknown>
         const acceptedAt = readDate(record.accepted_at)
         const expiresAt = readDate(record.expires_at) ?? now
+        const inviteStatus = readInviteStatus(record.invite_status)
         const delivered = deliveryOf(
           record.delivered_at,
           record.delivery as { readonly kind?: string } | null,
@@ -300,8 +328,7 @@ export const layer = Layer.effect(
           id: String(record.id),
           name: String(record.name),
           state: clientState(
-            acceptedAt === undefined ? (record.invite_status as string | undefined) : "accepted",
-            expiresAt,
+            standingInput(acceptedAt === undefined ? inviteStatus : "accepted", expiresAt),
             now,
           ),
           invitedAt: readDate(record.invited_at) ?? now,
@@ -397,7 +424,7 @@ export const layer = Layer.effect(
       })
 
       const acceptedAt = readDate(record.accepted_at)
-      const inviteStatus = record.invite_status as ClientInviteRow["status"] | undefined
+      const inviteStatus = readInviteStatus(record.invite_status)
       const expiresAt = readDate(record.expires_at)
       const clientLanguage = readLanguage(record.language)
       const consentGrantedAt = readDate(record.consent_granted_at)
@@ -415,7 +442,10 @@ export const layer = Layer.effect(
       return {
         id: String(record.id),
         name: String(record.name),
-        state: clientState(acceptedAt === undefined ? inviteStatus : "accepted", expiresAt, now),
+        state: clientState(
+          standingInput(acceptedAt === undefined ? inviteStatus : "accepted", expiresAt),
+          now,
+        ),
         ...(clientLanguage === undefined ? {} : { language: clientLanguage }),
         createdAt: readDate(record.created_at) ?? now,
         ...(record.invite_id === null || record.invite_id === undefined || expiresAt === undefined

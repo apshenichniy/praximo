@@ -12,6 +12,7 @@ import {
   CreateClientInput,
   type DayWindow,
   isSchedulableStart,
+  isClientInviteDeliveryKind,
   isSupportedTimeZone,
   MinutesInDay,
   nextSlotStart,
@@ -451,9 +452,6 @@ const identifier = (prefix: string): string =>
 
 const iso = (value: Date): string => value.toISOString()
 
-const isDeliveryKind = (value: string): value is ClientInviteDeliveryKind =>
-  ClientInviteDeliveryKind.literals.some((literal) => literal === value)
-
 /**
  * The delivery record on its way to a screen (#224), as the optional field it
  * lands in.
@@ -467,7 +465,7 @@ const isDeliveryKind = (value: string): value is ClientInviteDeliveryKind =>
 const delivered = (
   record: { readonly at: Date; readonly kind: string } | undefined,
 ): { readonly delivered?: InviteDelivery } =>
-  record === undefined || !isDeliveryKind(record.kind)
+  record === undefined || !isClientInviteDeliveryKind(record.kind)
     ? {}
     : { delivered: { at: iso(record.at), kind: record.kind } }
 
