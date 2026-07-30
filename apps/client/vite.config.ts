@@ -8,6 +8,9 @@ import { defineConfig } from "vite"
 // (alchemy.run.ts), which injects its own Cloudflare Vite plugin and targets
 // workerd for the deploy build. Adding one here would need a wrangler config the
 // repo doesn't keep (Alchemy owns all infra) and would break `vite dev`.
+/** Tests beside the routes they cover, as `apps/coach/vite.config.ts` explains. */
+const routerConfig = { routeFileIgnorePattern: "\\.test\\.tsx?$" } as const
+
 export default defineConfig({
   build: {
     rolldownOptions: {
@@ -21,5 +24,5 @@ export default defineConfig({
   ssr: {
     external: ["cloudflare:workers"],
   },
-  plugins: [tailwindcss(), tanstackStart(), viteReact()],
+  plugins: [tailwindcss(), tanstackStart({ router: routerConfig }), viteReact()],
 })
