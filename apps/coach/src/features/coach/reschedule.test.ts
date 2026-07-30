@@ -74,31 +74,40 @@ describe("withoutOwnSlot", () => {
 })
 
 describe("reschedulePrefill", () => {
+  /** 09:00 in the coach's own day, so "earlier today" has something to mean. */
+  const today = { date: "2026-07-27", minutes: 9 * 60 }
+
   it("opens a session still ahead on itself", () => {
     expect(
-      reschedulePrefill(
-        { date: "2026-07-29", startMinutes: 600, durationMinutes: 60 },
-        "2026-07-27",
-      ),
+      reschedulePrefill({ date: "2026-07-29", startMinutes: 600, durationMinutes: 60 }, today),
     ).toEqual({ date: "2026-07-29", startMinutes: 600, durationMinutes: 60 })
   })
 
-  it("opens today's session on itself", () => {
+  it("opens a session later today on itself", () => {
     expect(
-      reschedulePrefill(
-        { date: "2026-07-27", startMinutes: 600, durationMinutes: 60 },
-        "2026-07-27",
-      ),
+      reschedulePrefill({ date: "2026-07-27", startMinutes: 600, durationMinutes: 60 }, today),
     ).toEqual({ date: "2026-07-27", startMinutes: 600, durationMinutes: 60 })
   })
 
-  /** A stale booking opens on today with nothing picked — its own start cannot be booked. */
-  it("opens a session already past on today, with no time chosen", () => {
+  /**
+   * Today, but already gone by: the day is still where the coach is working, and
+   * arming the button on a start the server answers `past` for is the one thing
+   * this must not do.
+   */
+  it("keeps today but drops a start that has already passed", () => {
     expect(
-      reschedulePrefill(
-        { date: "2026-07-20", startMinutes: 600, durationMinutes: 45 },
-        "2026-07-27",
-      ),
+      reschedulePrefill({ date: "2026-07-27", startMinutes: 8 * 60, durationMinutes: 60 }, today),
+    ).toEqual({ date: "2026-07-27", durationMinutes: 60 })
+    // The current minute itself is gone too — the grid only offers strictly ahead.
+    expect(
+      reschedulePrefill({ date: "2026-07-27", startMinutes: 9 * 60, durationMinutes: 60 }, today),
+    ).toEqual({ date: "2026-07-27", durationMinutes: 60 })
+  })
+
+  /** A stale booking moves the day to today, with nothing picked. */
+  it("opens a session from an earlier day on today, with no time chosen", () => {
+    expect(
+      reschedulePrefill({ date: "2026-07-20", startMinutes: 600, durationMinutes: 45 }, today),
     ).toEqual({ date: "2026-07-27", durationMinutes: 45 })
   })
 
@@ -109,10 +118,7 @@ describe("reschedulePrefill", () => {
    */
   it("keeps the day but drops a start that is not on the grid", () => {
     expect(
-      reschedulePrefill(
-        { date: "2026-07-29", startMinutes: 707, durationMinutes: 60 },
-        "2026-07-27",
-      ),
+      reschedulePrefill({ date: "2026-07-29", startMinutes: 707, durationMinutes: 60 }, today),
     ).toEqual({ date: "2026-07-29", durationMinutes: 60 })
   })
 
@@ -121,7 +127,7 @@ describe("reschedulePrefill", () => {
     expect(
       reschedulePrefill(
         { date: "2026-07-29", startMinutes: 23 * 60 + 45, durationMinutes: 60 },
-        "2026-07-27",
+        today,
       ),
     ).toEqual({ date: "2026-07-29", durationMinutes: 60 })
   })

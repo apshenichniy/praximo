@@ -31,7 +31,7 @@ import type { CoachSessions } from "@/server/coach-sessions.ts"
  * ordinary screen — and for `in_progress`, whose whole story is happening in the
  * room right now and belongs to #42 rather than to a past-tense line.
  */
-export const stateSentence = (
+const stateSentence = (
   copy: SessionsCopy,
   state: CoachSessions.SessionDetail["state"],
   reason: SessionCancelReason | undefined,

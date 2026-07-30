@@ -1,5 +1,5 @@
 import { LiveSessionStates, type SessionCancelReason, type SessionState } from "@praximo/domain"
-import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm"
+import { and, asc, eq, gte, inArray, lt, type SQL, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
@@ -127,6 +127,46 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@praximo/db/SessionRepo") {}
 
 /**
+ * The window a session would occupy, and whether anything live already sits in
+ * it — the one guard both writes depend on, written once.
+ *
+ * A `not exists` fragment rather than two hand-copied ones. It is the only rule
+ * in this file that has to be evaluated *by the statement that writes*, and the
+ * copies had already begun to drift: the state list was spelled out in SQL while
+ * the query builder read `LiveSessionStates`, so extending that constant would
+ * have silently missed both guards.
+ *
+ * `owner` names the row the outer statement is working on, so tenancy is read
+ * from it rather than passed again. `exclude` is the session being *moved*,
+ * which is not an obstacle to itself.
+ */
+const freeOf = (input: {
+  readonly owner: SQL
+  readonly scheduledAt: Date
+  readonly durationMinutes: number
+  readonly exclude?: SQL
+}): SQL => sql`
+  not exists (
+    select 1 from "session" as "s"
+    where
+      "s"."workspace_id" = ${input.owner}."workspace_id"
+      and "s"."state" in ${liveStates}
+      ${input.exclude === undefined ? sql`` : sql`and "s"."id" <> ${input.exclude}."id"`}
+      and "s"."scheduled_at" < ${new Date(
+        input.scheduledAt.getTime() + input.durationMinutes * 60_000,
+      )}
+      and "s"."scheduled_at" + make_interval(mins => "s"."duration_minutes")
+          > ${input.scheduledAt}
+  )
+`
+
+/** The live states as SQL, from the same constant the query builder reads. */
+const liveStates = sql`(${sql.join(
+  LiveSessionStates.map((state) => sql`${state}`),
+  sql`, `,
+)})`
+
+/**
  * One joined row as every listing screen reads it. The channel is selected as an
  * id so that its *absence* is the answer: no Channel, no accepted invitation, no
  * way to send a join link.
@@ -187,17 +227,11 @@ export const layer = Layer.effect(
             where
               "c"."id" = ${input.clientId}
               and "c"."workspace_id" = ${input.workspaceId}
-              and not exists (
-                select 1 from "session" as "s"
-                where
-                  "s"."workspace_id" = "c"."workspace_id"
-                  and "s"."state" in ('scheduled', 'in_progress')
-                  and "s"."scheduled_at" < ${new Date(
-                    input.scheduledAt.getTime() + input.durationMinutes * 60_000,
-                  )}
-                  and "s"."scheduled_at" + make_interval(mins => "s"."duration_minutes")
-                      > ${input.scheduledAt}
-              )
+              and ${freeOf({
+                owner: sql`"c"`,
+                scheduledAt: input.scheduledAt,
+                durationMinutes: input.durationMinutes,
+              })}
             returning "id"
           `),
         catch: (cause) => new QueryFailed({ operation: "session.schedule", cause }),
@@ -365,18 +399,12 @@ export const layer = Layer.effect(
               "target"."id" = ${input.sessionId}
               and "target"."workspace_id" = ${input.workspaceId}
               and "target"."state" = 'scheduled'
-              and not exists (
-                select 1 from "session" as "s"
-                where
-                  "s"."workspace_id" = "target"."workspace_id"
-                  and "s"."id" <> "target"."id"
-                  and "s"."state" in ('scheduled', 'in_progress')
-                  and "s"."scheduled_at" < ${new Date(
-                    input.scheduledAt.getTime() + input.durationMinutes * 60_000,
-                  )}
-                  and "s"."scheduled_at" + make_interval(mins => "s"."duration_minutes")
-                      > ${input.scheduledAt}
-              )
+              and ${freeOf({
+                owner: sql`"target"`,
+                scheduledAt: input.scheduledAt,
+                durationMinutes: input.durationMinutes,
+                exclude: sql`"target"`,
+              })}
             returning "target"."id"
           `),
         catch: (cause) => new QueryFailed({ operation: "session.reschedule", cause }),

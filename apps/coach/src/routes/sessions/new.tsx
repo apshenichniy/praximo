@@ -13,6 +13,7 @@ import {
   primeDayRange,
   UnknownDaySchedule,
 } from "@/features/coach/day-schedule-queries.ts"
+import { schedulingRefusal } from "@/features/coach/scheduling-refusal.ts"
 import { bookedDates } from "@/features/coach/session-days.ts"
 import { notifyHaptic } from "@/mini-app.tsx"
 import {
@@ -174,15 +175,7 @@ function NewSessionRoute() {
           }
           const reason = result.ok && !result.outcome.scheduled ? result.outcome.reason : "failed"
           notifyHaptic("error")
-          setError(
-            reason === "overlap"
-              ? copy.clients.overlapError
-              : reason === "past"
-                ? copy.clients.pastError
-                : reason === "invalid"
-                  ? copy.clients.invalidError
-                  : copy.common.failed,
-          )
+          setError(schedulingRefusal(copy, reason === "unknown-client" ? "failed" : reason))
         } catch {
           notifyHaptic("error")
           setError(copy.common.failed)

@@ -11,19 +11,28 @@ import { Field } from "./field.tsx"
  * being asked to leave it alone, they are not being asked at all. A disabled
  * control in the middle of a form is a question with no answer.
  */
+export interface IntakeSwitch {
+  /** Whether this client has no Sessions in Praximo yet — a fact, not a choice. */
+  readonly firstSession: boolean
+  readonly kind: SessionKind
+  readonly onChange: (checked: boolean) => void
+}
+
 export function SessionControls({
   copy,
-  firstSession,
-  kind,
+  intake,
   durationMinutes,
-  onFirstSessionChange,
   onDurationChange,
 }: {
   readonly copy: ClientsCopy
-  readonly firstSession?: boolean
-  readonly kind?: SessionKind
+  /**
+   * The switch, or nothing at all. One optional object rather than three
+   * optional props: a `firstSession` with no handler is a control that renders
+   * and does nothing, and the whole reason the caller passes a discriminated
+   * purpose is that half-configured states should not typecheck.
+   */
+  readonly intake?: IntakeSwitch
   readonly durationMinutes: number
-  readonly onFirstSessionChange?: (checked: boolean) => void
   readonly onDurationChange: (minutes: number) => void
 }) {
   return (
@@ -32,7 +41,7 @@ export function SessionControls({
         The switch's own label is the label: another uppercase caption would put
         back the visual weight this control replaced.
       */}
-      {firstSession === undefined || onFirstSessionChange === undefined ? null : (
+      {intake === undefined ? null : (
         <div className="mt-5 flex items-center gap-4">
           <label htmlFor="first-session" className="flex min-h-11 flex-1 flex-col justify-center">
             <span className="text-base leading-relaxed font-semibold">
@@ -42,7 +51,7 @@ export function SessionControls({
               A stable fact about the client, so it never appears or disappears as
               the switch moves and never shifts the duration row under a thumb.
             */}
-            {firstSession ? (
+            {intake.firstSession ? (
               <span className="text-muted-foreground mt-0.5 text-xs leading-normal">
                 {copy.firstSessionHint}
               </span>
@@ -50,8 +59,8 @@ export function SessionControls({
           </label>
           <Switch
             id="first-session"
-            checked={kind === "intake"}
-            onCheckedChange={onFirstSessionChange}
+            checked={intake.kind === "intake"}
+            onCheckedChange={intake.onChange}
           />
         </div>
       )}

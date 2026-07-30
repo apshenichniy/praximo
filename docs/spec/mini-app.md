@@ -90,10 +90,12 @@ drill-in with a back affordance. Screen inventory:
 - **Session detail** — client, time, lifecycle actions, artifact list. Route
   `/sessions/$sessionId`. #61 shipped it as a deliberate **stub** — the facts and no actions —
   so the list rows and Today's cards led somewhere complete-looking;
-  [#62](https://github.com/apshenichniy/praximo/issues/62) made it the real screen. It carries
-  the state only when the session is **not** `scheduled`, by the same rule the invitation row
-  follows: an ordinary session says nothing about itself, or the eye stops reading the line
-  that matters. The artifact list is #44's.
+  [#62](https://github.com/apshenichniy/praximo/issues/62) made it the real screen. It states
+  what became of a session only once something has — `completed`, or `cancelled` with its
+  reason in words — by the same rule the invitation row follows: an ordinary session says
+  nothing about itself, or the eye stops reading the line that matters. `scheduled` and
+  `in_progress` are both silent, the second because a running session's story belongs to the
+  room rather than to a past-tense line. The artifact list is #44's.
 - **Clients list** — all clients with invite status. Route `/clients`.
 - **Client detail** — profile (channel, language, consent), invite banner,
   session history.
@@ -233,10 +235,10 @@ for a first session: "no history yet").
   heading on the commonest action there leaves none of its weight for Reset and Delete on the
   client route. Both actions are ordinary rows in a card of their own; the host's fixed bottom
   slot stays free for **Join**.
-- **Both are silent to the client.** Nothing is sent on a move or a cancellation, and the
-  session screen says so where it asks — telling the client is still the coach's to do.
-  Reminders and re-delivery after a move are
-  [#41](https://github.com/apshenichniy/praximo/issues/41)'s.
+- **Both are silent to the client.** Nothing is sent on a move or a cancellation; the
+  cancellation sheet says so where it asks, because that is the one of the two a coach cannot
+  take back. Telling the client is still theirs to do. Reminders and re-delivery after a move
+  are [#41](https://github.com/apshenichniy/praximo/issues/41)'s.
 - **Join** — visible only while the join window is open.
 - **Reissue join links** — token rotation per
   [client-onboarding-auth.md](client-onboarding-auth.md) §Web-room access.

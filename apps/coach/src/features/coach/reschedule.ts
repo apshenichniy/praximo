@@ -69,21 +69,29 @@ export const withoutOwnSlot = (
  * The day the screen opens on, and whether it opens with a time already picked.
  *
  * A session still ahead opens on itself, so the coach sees where it is before
- * choosing where it goes. Two starts are dropped instead, and for the same
- * reason — a screen must never open on a submit the server is bound to refuse:
+ * choosing where it goes. Everything else opens with the day but **no time**,
+ * under one rule: a screen must never arm a submit the server is bound to
+ * refuse. Three ways that happens:
  *
- * - **a session already in the past.** Nothing writes a terminal state before
- *   #42, so stale bookings accumulate, and moving one forward is exactly the
- *   errand.
- * - **a start that is not on the grid.** No screen can produce one, but the
- *   demo seed does (its offsets are minutes from the run) and so would any row
- *   written by hand — and a session sitting at 11:47 would open on a button
- *   that answers `invalid`.
+ * - **a session on an earlier day.** Nothing writes a terminal state before #42,
+ *   so stale bookings accumulate, and moving one forward is exactly the errand.
+ *   The day moves to today with it; there is nothing to see back there.
+ * - **a session earlier *today*.** The day is still worth opening on — the
+ *   coach is probably moving it a few hours — but its own start has gone by and
+ *   the server would answer `past`.
+ * - **a start that is not on the grid.** No screen can produce one, but the demo
+ *   seed does (its offsets are minutes from the run) and so would any row
+ *   written by hand — a session sitting at 11:47 would answer `invalid`.
  */
 export const reschedulePrefill = (
   own: OwnSlot,
-  todayDate: string,
-): { readonly date: string; readonly startMinutes?: number; readonly durationMinutes: number } =>
-  own.date < todayDate || !isSchedulableStart(own.startMinutes, own.durationMinutes)
-    ? { date: own.date < todayDate ? todayDate : own.date, durationMinutes: own.durationMinutes }
-    : { date: own.date, startMinutes: own.startMinutes, durationMinutes: own.durationMinutes }
+  today: { readonly date: string; readonly minutes: number },
+): { readonly date: string; readonly startMinutes?: number; readonly durationMinutes: number } => {
+  const day = own.date < today.date ? today.date : own.date
+  const gone =
+    own.date < today.date || (own.date === today.date && own.startMinutes <= today.minutes)
+  const offerable = !gone && isSchedulableStart(own.startMinutes, own.durationMinutes)
+  return offerable
+    ? { date: day, startMinutes: own.startMinutes, durationMinutes: own.durationMinutes }
+    : { date: day, durationMinutes: own.durationMinutes }
+}

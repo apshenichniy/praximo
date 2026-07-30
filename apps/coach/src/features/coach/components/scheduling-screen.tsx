@@ -250,9 +250,7 @@ export function SchedulingScreen({
           copy={copy}
           {...(purpose.kind === "new"
             ? {
-                firstSession: purpose.firstSession,
-                kind,
-                onFirstSessionChange: toggleFirstSession,
+                intake: { firstSession: purpose.firstSession, kind, onChange: toggleFirstSession },
               }
             : {})}
           durationMinutes={durationMinutes}

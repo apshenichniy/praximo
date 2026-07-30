@@ -13,6 +13,7 @@ import {
   UnknownDaySchedule,
 } from "@/features/coach/day-schedule-queries.ts"
 import { ownSlot, reschedulePrefill, withoutOwnSlot } from "@/features/coach/reschedule.ts"
+import { schedulingRefusal } from "@/features/coach/scheduling-refusal.ts"
 import {
   calendarDate,
   type SchedulingDraft,
@@ -85,7 +86,7 @@ function RescheduleRoute() {
     () =>
       own === undefined || session === undefined
         ? undefined
-        : reschedulePrefill(own, localParts(new Date(), session.timezone).date),
+        : reschedulePrefill(own, localParts(new Date(), session.timezone)),
     [own, session],
   )
 
@@ -149,20 +150,24 @@ function RescheduleRoute() {
           notifyHaptic("error")
           const reason = result.ok && !result.outcome.rescheduled ? result.outcome.reason : "failed"
           if (reason === "gone") {
-            // The session moved on underneath the coach. The screen that says so
-            // is the one this came from, and it is a re-read away.
-            setError(copy.sessions.notFound)
+            /**
+             * The session moved on underneath the coach — cancelled on another
+             * device, or started. Re-reading *this* route would only turn the
+             * form into a dead end, so the answer is the session screen, which
+             * says what it moved on to. That is what «`gone` re-reads» means.
+             */
             await router.invalidate()
+            await navigate({
+              to: "/sessions/$sessionId",
+              params: { sessionId: session.id },
+              replace: true,
+            })
             return
           }
           setError(
             reason === "overlap"
               ? copy.sessions.rescheduleOverlap
-              : reason === "past"
-                ? copy.clients.pastError
-                : reason === "invalid"
-                  ? copy.clients.invalidError
-                  : copy.common.failed,
+              : schedulingRefusal(copy, reason),
           )
         } catch {
           notifyHaptic("error")

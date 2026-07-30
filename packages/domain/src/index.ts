@@ -59,9 +59,9 @@ export {
 } from "./scheduling.ts"
 export {
   LiveSessionStates,
-  SessionCancelReason,
+  type SessionCancelReason,
   SessionCancelReasons,
-  SessionState,
+  type SessionState,
   SessionStates,
 } from "./session-lifecycle.ts"
 export {

@@ -408,7 +408,7 @@ const en: ClientsCopy = {
   nextDay: "Try the next day",
   pickTime: "Pick a time",
   scheduleSubmit: "Schedule",
-  rescheduleSubmit: "Move it",
+  rescheduleSubmit: "Move",
   footnotePendingTail: " will see it in your zone, ",
   footnoteReadyTail: " will see ",
   footnoteFirstSession: "Marked as a first session.",
