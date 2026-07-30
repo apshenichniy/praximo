@@ -6,10 +6,9 @@ import { MiniAppShell } from "@/components/mini-app-shell.tsx"
 import { HostFullscreen } from "@/presentation-host"
 import { ClientScreen } from "@/features/coach/components/client-screen.tsx"
 import { WifiDisconnected01Icon } from "@hugeicons/core-free-icons"
+import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
-import { resolveLaunchCredential } from "@/features/entry/launch-credential.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { impactHaptic, notifyHaptic, shareViaSystem } from "@/presentation-host"
@@ -23,7 +22,6 @@ import {
   sendInviteEmail,
   resetInvite,
 } from "@/server/coach-clients.functions.ts"
-import { loadCoachEntry } from "@/server/coach.functions.ts"
 
 /**
  * One client's route (#56 §Client route). Identical immediately after creation
@@ -36,27 +34,23 @@ export const Route = createFileRoute("/clients/$clientId")({
   pendingMinMs: 200,
   pendingComponent: EntryLoading,
   loader: async ({ params }) => {
-    const [entry, detail, credential] = await Promise.all([
-      loadCoachEntry().catch(() => ({ ok: false, error: "server" }) as const),
-      getClient({ data: { clientId: params.clientId } }).catch(
-        () => ({ ok: false, error: "server" }) as const,
-      ),
-      resolveLaunchCredential(),
+    const [launch, detail] = await Promise.all([
+      coachLaunch(),
+      orServerFailure(getClient({ data: { clientId: params.clientId } })),
     ])
-    return { entry, detail, launchLanguage: launchLocale(credential.initData) }
+    return { ...launch, detail }
   },
   component: ClientRoute,
 })
 
 function ClientRoute() {
-  const { entry, detail, launchLanguage } = Route.useLoaderData()
+  const { entry, language, detail } = Route.useLoaderData()
   const navigate = useNavigate()
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string>()
   const inFlight = useRef(false)
 
-  const language = entry.ok && entry.entry.kind === "home" ? entry.entry.language : launchLanguage
   // A coach can land here straight from the client-accepted push, without ever
   // passing through the home route.
   useCoachTimezone(entry.ok && entry.entry.kind === "home")

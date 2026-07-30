@@ -1,18 +1,9 @@
 import { notFound } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
+import { Effect } from "effect"
+import { AdminSurface } from "./admin-surface.ts"
 import { type LaunchCredential, launchCredential } from "./launch-credential.ts"
-import {
-  createAdminWorkspace,
-  deleteAdminWorkspace,
-  getAdminWorkspace,
-  getAdminWorkspaceDeletion,
-  listAdminWorkspaces,
-  prepareAdminInviteShareMessage,
-  recordAdminInviteShare,
-  reissueAdminWorkspaceInvite as reissueAdminWorkspaceInviteRuntime,
-  renameAdminWorkspace as renameAdminWorkspaceRuntime,
-} from "./runtime.server.ts"
-import type { AdminSurface } from "./admin-surface.ts"
+import { runAdmin } from "./runtime.server.ts"
 
 /**
  * Every admin transport answers a missing credential the way it answers a
@@ -29,7 +20,9 @@ export const loadAdminWorkspaces = createServerFn({ method: "POST" })
   .middleware([launchCredential])
   .handler(async ({ context }) => {
     try {
-      return await listAdminWorkspaces(requireCredential(context))
+      return await runAdmin(
+        Effect.flatMap(AdminSurface.Service, (s) => s.listWorkspaces(requireCredential(context))),
+      )
     } catch {
       throw notFound()
     }
@@ -62,7 +55,11 @@ export const createAdminCoachInvite = createServerFn({ method: "POST" })
     try {
       return {
         ok: true,
-        value: await createAdminWorkspace(requireCredential(context), data.input, data.delivery),
+        value: await runAdmin(
+          Effect.flatMap(AdminSurface.Service, (s) =>
+            s.createWorkspace(requireCredential(context), data.input, data.delivery),
+          ),
+        ),
       }
     } catch (error) {
       if (typeof error !== "object" || error === null || !("_tag" in error)) {
@@ -110,10 +107,10 @@ export const prepareAdminCoachInviteShare = createServerFn({ method: "POST" })
     try {
       return {
         ok: true,
-        value: await prepareAdminInviteShareMessage(
-          requireCredential(context),
-          data.inviteId,
-          data.language,
+        value: await runAdmin(
+          Effect.flatMap(AdminSurface.Service, (s) =>
+            s.prepareInviteShareMessage(requireCredential(context), data.inviteId, data.language),
+          ),
         ),
       }
     } catch (error) {
@@ -146,7 +143,11 @@ export const recordAdminCoachInviteShare = createServerFn({ method: "POST" })
   .validator(validatePrepareShare)
   .handler(async ({ context, data }): Promise<RecordShareTransportResult> => {
     try {
-      await recordAdminInviteShare(requireCredential(context), data.inviteId, data.language)
+      await runAdmin(
+        Effect.flatMap(AdminSurface.Service, (s) =>
+          s.recordInviteShare(requireCredential(context), data.inviteId, data.language),
+        ),
+      )
       return { ok: true }
     } catch (error) {
       if (
@@ -179,7 +180,11 @@ export const loadAdminWorkspace = createServerFn({ method: "POST" })
   .validator(validateWorkspaceRequest)
   .handler(async ({ context, data }) => {
     try {
-      return await getAdminWorkspace(requireCredential(context), data.workspaceId)
+      return await runAdmin(
+        Effect.flatMap(AdminSurface.Service, (s) =>
+          s.getWorkspace(requireCredential(context), data.workspaceId),
+        ),
+      )
     } catch {
       throw notFound()
     }
@@ -207,10 +212,10 @@ export const renameAdminWorkspace = createServerFn({ method: "POST" })
     try {
       return {
         ok: true,
-        value: await renameAdminWorkspaceRuntime(
-          requireCredential(context),
-          data.workspaceId,
-          data.input,
+        value: await runAdmin(
+          Effect.flatMap(AdminSurface.Service, (s) =>
+            s.renameWorkspace(requireCredential(context), data.workspaceId, data.input),
+          ),
         ),
       }
     } catch (error) {
@@ -262,11 +267,15 @@ export const reissueAdminWorkspaceInvite = createServerFn({ method: "POST" })
     try {
       return {
         ok: true,
-        value: await reissueAdminWorkspaceInviteRuntime(
-          requireCredential(context),
-          data.workspaceId,
-          data.expectedInviteId,
-          data.requestId,
+        value: await runAdmin(
+          Effect.flatMap(AdminSurface.Service, (s) =>
+            s.reissueWorkspaceInvite(
+              requireCredential(context),
+              data.workspaceId,
+              data.expectedInviteId,
+              data.requestId,
+            ),
+          ),
         ),
       }
     } catch (error) {
@@ -318,9 +327,13 @@ export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
     try {
       return {
         ok: true,
-        value: await deleteAdminWorkspace(requireCredential(context), data.workspaceId, {
-          requestId: data.requestId,
-        }),
+        value: await runAdmin(
+          Effect.flatMap(AdminSurface.Service, (s) =>
+            s.deleteWorkspace(requireCredential(context), data.workspaceId, {
+              requestId: data.requestId,
+            }),
+          ),
+        ),
       }
     } catch (error) {
       if (typeof error !== "object" || error === null || !("_tag" in error)) {
@@ -355,7 +368,13 @@ export const loadAdminWorkspaceDeletion = createServerFn({ method: "POST" })
   .validator(validateWorkspaceRequest)
   .handler(async ({ context, data }): Promise<AdminSurface.DeletionProgress | null> => {
     try {
-      return (await getAdminWorkspaceDeletion(requireCredential(context), data.workspaceId)) ?? null
+      return (
+        (await runAdmin(
+          Effect.flatMap(AdminSurface.Service, (s) =>
+            s.getWorkspaceDeletion(requireCredential(context), data.workspaceId),
+          ),
+        )) ?? null
+      )
     } catch {
       throw notFound()
     }

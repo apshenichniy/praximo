@@ -1,10 +1,11 @@
 import { ClientInviteTokenPattern, type CoachLanguage, narrowCoachLanguage } from "@praximo/domain"
 import { createServerFn } from "@tanstack/react-start"
 import { getRequestHeaders } from "@tanstack/react-start/server"
+import { Effect } from "effect"
 
-import { acceptInvitation, inviteLimiters, openInvitation } from "./runtime.server.ts"
+import { inviteLimiters, runAcceptance } from "./runtime.server.ts"
 import { connectingIp, throttle } from "./throttle.ts"
-import type { WebAcceptance } from "./web-acceptance.ts"
+import { WebAcceptance } from "./web-acceptance.ts"
 
 /**
  * This app's first server functions (#57). Until now it had none — `start.ts`
@@ -57,12 +58,13 @@ export const openInvite = createServerFn({ method: "POST" })
   .validator((input: unknown) => ({ token: readToken((input as { token?: unknown })?.token) }))
   .handler(async ({ data }): Promise<WebAcceptance.AcceptanceOutcome> => {
     const language = preferredLanguage(getRequestHeaders().get("accept-language"))
-    if (data.token === undefined) return { kind: "unknown", language }
+    const token = data.token
+    if (token === undefined) return { kind: "unknown", language }
     // A throttled request and a token nobody issued get the same answer, on
     // purpose: a person with a typo and a script working through the keyspace
     // must not be able to tell each other apart by what the page says.
     if (await overLimit("lookup")) return { kind: "unknown", language }
-    return openInvitation(data.token, language)
+    return runAcceptance(Effect.flatMap(WebAcceptance.Service, (s) => s.open(token, language)))
   })
 
 interface AcceptPayload {
@@ -87,12 +89,17 @@ export const acceptInvite = createServerFn({ method: "POST" })
     }
   })
   .handler(async ({ data }): Promise<WebAcceptance.AcceptOutcome> => {
-    if (data.token === undefined) return { kind: "stale" }
+    const token = data.token
+    if (token === undefined) return { kind: "stale" }
     if (await overLimit("commit")) return { kind: "stale" }
-    return acceptInvitation({
-      token: data.token,
-      name: data.name,
-      email: data.email,
-      language: data.language,
-    })
+    return runAcceptance(
+      Effect.flatMap(WebAcceptance.Service, (s) =>
+        s.accept({
+          token,
+          name: data.name,
+          email: data.email,
+          language: data.language,
+        }),
+      ),
+    )
   })

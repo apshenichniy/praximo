@@ -1,6 +1,5 @@
 import { ClientAcceptanceRepo, Database } from "@praximo/db"
-import type { CoachLanguage } from "@praximo/domain"
-import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
+import { ConfigProvider, type Effect, Layer, ManagedRuntime } from "effect"
 
 import type { Limiter } from "./throttle.ts"
 import { WebAcceptance } from "./web-acceptance.ts"
@@ -87,23 +86,11 @@ export const inviteLimiters = async (): Promise<{
   return { lookup: env.INVITE_LOOKUP, commit: env.INVITE_COMMIT }
 }
 
-/** What a token opens: the page, a refusal, or nothing at all. */
-export const openInvitation = async (
-  token: string,
-  fallbackLanguage: CoachLanguage,
-): Promise<WebAcceptance.AcceptanceOutcome> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(WebAcceptance.Service, (service) => service.open(token, fallbackLanguage)),
-  )
-}
-
-/** The commit, and the only write this Worker performs. */
-export const acceptInvitation = async (
-  input: WebAcceptance.AcceptInput,
-): Promise<WebAcceptance.AcceptOutcome> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(WebAcceptance.Service, (service) => service.accept(input)),
-  )
-}
+/**
+ * The one entry into this Worker's runtime, and the whole of it — the coach
+ * tree's `runCoach` under this app's name (#234). Two wrappers stood here and
+ * neither added anything to the line below it.
+ */
+export const runAcceptance = async <A, E>(
+  effect: Effect.Effect<A, E, WebAcceptance.Service>,
+): Promise<A> => (await getRuntime()).runPromise(effect)

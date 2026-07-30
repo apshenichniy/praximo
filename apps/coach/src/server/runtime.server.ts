@@ -1,14 +1,13 @@
 import { CoachInitData, CoachOnboardingToken } from "@praximo/auth"
 import { ClientRepo, Database, MemberRepo, SessionRepo, WorkspaceRepo } from "@praximo/db"
-import type { WorkingHours } from "@praximo/domain"
 import { EmailChannel, type SendBinding } from "@praximo/email"
 import { BotRegistry } from "@praximo/telegram"
-import { ConfigProvider, Effect, Layer, ManagedRuntime } from "effect"
+import { ConfigProvider, Layer, ManagedRuntime } from "effect"
 import { CoachClients } from "./coach-clients.ts"
+import { type CoachRunner, coachConveyor } from "./coach-operation.ts"
 import { CoachSession } from "./coach-session.ts"
 import { CoachSessions } from "./coach-sessions.ts"
 import { CoachSurface } from "./coach-surface.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
 import { canUseLocalProcessEnvironment } from "./runtime-environment.ts"
 
 /**
@@ -148,230 +147,27 @@ let runtimePromise: Promise<ReturnType<typeof runtimeFromEnv>> | undefined
 
 const getRuntime = () => (runtimePromise ??= resolveEnv().then(runtimeFromEnv))
 
-/** The coach Mini App's entry (#54) — the one call every coach launch makes. */
-export const openCoachApp = async (
-  credential: LaunchCredential,
-): Promise<CoachSurface.CoachEntry> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachSurface.Service, (service) => service.openApp(credential)),
-  )
-}
+/**
+ * The one entry into this Worker's runtime, and the whole of it.
+ *
+ * It replaced 22 exported wrappers (#234) whose bodies were this line with a
+ * service name pasted into it. Not one of them added a default, a retry, a log or
+ * a narrowing — they only gave each operation a second and a third name on the
+ * way down, and one of them arrived at the service under a different word than it
+ * left the browser with.
+ *
+ * ADR 0002's "one runtime per Worker entrypoint" is what this preserves: the
+ * mandate is one *runtime*, and it is `getRuntime` above — never one export per
+ * operation.
+ */
+export const runCoach: CoachRunner = async (effect) => (await getRuntime()).runPromise(effect)
 
-export const acceptCoachTerms = async (
-  credential: LaunchCredential,
-  version: unknown,
-): Promise<CoachSurface.CoachEntry> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachSurface.Service, (service) => service.acceptTerms(credential, version)),
-  )
-}
-
-/** The coach's own choice of the language Praximo speaks to them (#130). */
-export const chooseCoachLanguage = async (
-  credential: LaunchCredential,
-  language: unknown,
-): Promise<CoachSurface.CoachEntry> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachSurface.Service, (service) => service.chooseLanguage(credential, language)),
-  )
-}
-
-/** The coach's own practice — the list, one client, and everything they do to it (#56). */
-export const loadCoachClients = async (
-  credential: LaunchCredential,
-): Promise<CoachClients.CoachClientsHome> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.home(credential)),
-  )
-}
-
-export const loadCoachClientDetail = async (
-  credential: LaunchCredential,
-  clientId: string,
-): Promise<CoachClients.ClientDetail | undefined> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.detail(credential, clientId)),
-  )
-}
-
-export const createCoachClient = async (
-  credential: LaunchCredential,
-  input: unknown,
-): Promise<{ readonly clientId: string }> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.create(credential, input)),
-  )
-}
-
-export const loadCoachDaySchedule = async (
-  credential: LaunchCredential,
-  date: string,
-): Promise<CoachClients.DaySchedule> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.daySchedule(credential, date)),
-  )
-}
-
-export const loadCoachRangeSchedule = async (
-  credential: LaunchCredential,
-  from: string,
-  days: number,
-): Promise<ReadonlyArray<CoachClients.DatedDaySchedule>> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) =>
-      service.rangeSchedule(credential, from, days),
-    ),
-  )
-}
-
-export const scheduleCoachSession = async (
-  credential: LaunchCredential,
-  input: CoachClients.ScheduleSessionInput,
-): Promise<CoachClients.ScheduleOutcome> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.schedule(credential, input)),
-  )
-}
-
-export const removeCoachClient = async (
-  credential: LaunchCredential,
-  clientId: string,
-): Promise<{ readonly deleted: boolean }> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.remove(credential, clientId)),
-  )
-}
-
-export const resetCoachClientInvite = async (
-  credential: LaunchCredential,
-  clientId: string,
-): Promise<CoachClients.ClientDetail | undefined> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.resetInvite(credential, clientId)),
-  )
-}
-
-export const resendCoachClientInvite = async (
-  credential: LaunchCredential,
-  clientId: string,
-): Promise<CoachClients.ResendOutcome> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.resendInvite(credential, clientId)),
-  )
-}
-
-/** The coach's day and their calendar (#61) — Today, the list, and one session. */
-export const loadCoachToday = async (
-  credential: LaunchCredential,
-): Promise<CoachSessions.TodayView> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachSessions.Service, (service) => service.today(credential)),
-  )
-}
-
-export const loadCoachUpcomingSessions = async (
-  credential: LaunchCredential,
-): Promise<CoachSessions.UpcomingSessions> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachSessions.Service, (service) => service.upcoming(credential)),
-  )
-}
-
-export const loadCoachSessionDetail = async (
-  credential: LaunchCredential,
-  sessionId: string,
-): Promise<CoachSessions.SessionDetail | undefined> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachSessions.Service, (service) => service.detail(credential, sessionId)),
-  )
-}
-
-export const prepareCoachInviteCard = async (
-  credential: LaunchCredential,
-  clientId: string,
-): Promise<CoachClients.PreparedInviteCard | undefined> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) =>
-      service.prepareInviteCard(credential, clientId),
-    ),
-  )
-}
-
-export const recordCoachInviteDelivery = async (
-  credential: LaunchCredential,
-  clientId: string,
-  kind: unknown,
-): Promise<{ readonly recorded: boolean }> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) =>
-      service.recordDelivery(credential, clientId, kind),
-    ),
-  )
-}
-
-/** The invitation the service sends itself (#58) — the only email this Worker sends. */
-export const sendCoachInviteEmail = async (
-  credential: LaunchCredential,
-  clientId: string,
-  address: unknown,
-): Promise<CoachClients.SendInviteEmailOutcome> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) =>
-      service.sendInviteEmail(credential, clientId, address),
-    ),
-  )
-}
-
-export const saveCoachTimezone = async (
-  credential: LaunchCredential,
-  timezone: string,
-): Promise<void> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.saveTimezone(credential, timezone)),
-  )
-}
-
-export const hideCoachMainMiniAppHint = async (credential: LaunchCredential): Promise<void> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.hideMainMiniAppHint(credential)),
-  )
-}
-
-export const loadCoachWorkingHours = async (
-  credential: LaunchCredential,
-): Promise<WorkingHours> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.workingHours(credential)),
-  )
-}
-
-export const saveCoachWorkingHours = async (
-  credential: LaunchCredential,
-  input: unknown,
-): Promise<{ readonly saved: boolean }> => {
-  const appRuntime = await getRuntime()
-  return appRuntime.runPromise(
-    Effect.flatMap(CoachClients.Service, (service) => service.saveWorkingHours(credential, input)),
-  )
-}
+/**
+ * The conveyor every coach server function is built by, bound to that runtime.
+ *
+ * The builder itself lives in `coach-operation.ts` and knows nothing about a
+ * runtime; this is the one line that introduces them, and the only reason a
+ * `.functions.ts` module imports this file at all.
+ */
+export const { operation: coachOperation, acknowledgement: coachAcknowledgement } =
+  coachConveyor(runCoach)
