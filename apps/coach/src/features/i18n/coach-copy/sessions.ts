@@ -1,8 +1,9 @@
 import type { CoachLanguage } from "@praximo/domain"
+import { plural } from "@praximo/i18n"
 
 /**
- * The sessions list, the session screen, and the client picker that precedes a
- * booking made from Today (#61).
+ * The sessions list and its two views (#61, #232), the session screen, and the
+ * client picker that precedes a booking made from Today.
  *
  * Kind and duration are deliberately **not** here: they are already in the
  * clients catalogue, said by the client route and by the scheduling sheet, and a
@@ -17,6 +18,32 @@ export interface SessionsCopy {
   readonly tomorrow: string
   /** The row's own warning — short, because the session screen says the rest. */
   readonly rowUnaccepted: string
+
+  /**
+   * The two views of the list (#232), as one word each.
+   *
+   * A segment, not a heading: it changes what the page below is showing and
+   * writes nothing, so it stays short enough that both fit side by side on the
+   * narrowest phone in all three languages.
+   */
+  readonly viewUpcoming: string
+  readonly viewPast: string
+  /** What the segment is choosing between, for a reader who cannot see it. */
+  readonly viewLabel: string
+  /**
+   * Nothing behind yet — and a sentence rather than a blank, because the coach
+   * chose to open this view and an empty panel reads as a screen that failed.
+   */
+  readonly pastEmpty: string
+  /**
+   * The bound, said out loud when the read hit it (#232).
+   *
+   * A practice has no ceiling on what it has already done, so Past is a window
+   * — and a window the screen does not admit to is a list that quietly stops
+   * being true. Absent entirely while everything fits, which is every coach for
+   * a long time.
+   */
+  readonly pastBounded: (count: number) => string
 
   readonly detailTitle: string
   readonly detailClient: string
@@ -67,6 +94,16 @@ const en: SessionsCopy = {
   tomorrow: "Tomorrow",
   rowUnaccepted: "Invitation not accepted",
 
+  viewUpcoming: "Upcoming",
+  viewPast: "Past",
+  viewLabel: "Which sessions",
+  pastEmpty: "Nothing behind you yet.",
+  pastBounded: (count) =>
+    plural("en", count, {
+      one: "Showing the most recent session.",
+      other: "Showing the {count} most recent sessions.",
+    }),
+
   detailTitle: "Session",
   detailClient: "Client",
   detailKind: "Kind",
@@ -98,6 +135,18 @@ const uk: SessionsCopy = {
   tomorrow: "Завтра",
   rowUnaccepted: "Запрошення не прийнято",
 
+  viewUpcoming: "Попереду",
+  viewPast: "Минулі",
+  viewLabel: "Які сесії",
+  pastEmpty: "Позаду ще нічого немає.",
+  pastBounded: (count) =>
+    plural("uk", count, {
+      one: "Показано {count} останню сесію.",
+      few: "Показано {count} останні сесії.",
+      many: "Показано {count} останніх сесій.",
+      other: "Показано {count} останньої сесії.",
+    }),
+
   detailTitle: "Сесія",
   detailClient: "Клієнт",
   detailKind: "Тип",
@@ -128,6 +177,18 @@ const ru: SessionsCopy = {
   today: "Сегодня",
   tomorrow: "Завтра",
   rowUnaccepted: "Приглашение не принято",
+
+  viewUpcoming: "Впереди",
+  viewPast: "Прошедшие",
+  viewLabel: "Какие сессии",
+  pastEmpty: "Позади пока ничего нет.",
+  pastBounded: (count) =>
+    plural("ru", count, {
+      one: "Показана {count} последняя сессия.",
+      few: "Показаны {count} последние сессии.",
+      many: "Показаны {count} последних сессий.",
+      other: "Показано {count} последней сессии.",
+    }),
 
   detailTitle: "Сессия",
   detailClient: "Клиент",

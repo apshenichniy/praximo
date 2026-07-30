@@ -133,6 +133,7 @@ const run = <A, E>(
       schedule: unused,
       between: unused,
       scheduled: unused,
+      past: unused,
       find: unused,
       reschedule: unused,
       cancel: unused,

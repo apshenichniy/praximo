@@ -14,7 +14,7 @@ import {
   UnknownDaySchedule,
 } from "@/features/coach/day-schedule-queries.ts"
 import { schedulingRefusal } from "@/features/coach/scheduling-refusal.ts"
-import { bookedDates } from "@/features/coach/session-days.ts"
+import { bookedDates, firstSessionFor } from "@/features/coach/session-days.ts"
 import { notifyHaptic } from "@/mini-app.tsx"
 import {
   calendarDate,
@@ -237,7 +237,7 @@ function NewSessionRoute() {
             clientName={chosen.name}
             purpose={{
               kind: "new",
-              firstSession: chosen.sessions.length === 0,
+              firstSession: firstSessionFor(chosen),
               onSubmit: schedule,
             }}
             bookedDates={bookedDates(chosen)}

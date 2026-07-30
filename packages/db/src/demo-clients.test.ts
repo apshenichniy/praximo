@@ -79,6 +79,24 @@ describe("demo client fixture contract", () => {
   })
 
   /**
+   * The returning client (#232): history, and nothing on the calendar. It is the
+   * one state that used to lie — the scheduling screen read them as somebody the
+   * coach had never met — and it is the only client route whose sessions section
+   * is history and nothing else.
+   */
+  it("seeds a client whose sessions are all behind them", () => {
+    expect(
+      demoClients.some(
+        (demo) =>
+          demo.sessions.length > 0 &&
+          demo.sessions.every(
+            (session) => session.state !== "scheduled" && session.startsInMinutes < 0,
+          ),
+      ),
+    ).toBe(true)
+  })
+
+  /**
    * Every sentence the session screen prints for a cancellation (#62) has a row
    * behind it. Two of the three reasons are the reconciler's (ADR 0005) and it
    * does not exist until #42, so without these fixtures those words could not be

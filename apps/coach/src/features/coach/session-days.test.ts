@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { groupByDay, sessionClock } from "@/features/coach/session-days.ts"
+import { firstSessionFor, groupByDay, sessionClock } from "@/features/coach/session-days.ts"
 
 /**
  * The list is grouped by *the coach's* day, which is not the UTC one and not
@@ -86,8 +86,74 @@ describe("groupByDay", () => {
     expect(days[0]?.heading).toContain("четвер")
   })
 
+  /**
+   * Past is the first list that can walk out of the current year (#232), and
+   * «Monday 3 August» with no year is a date the coach cannot place. The year
+   * appears only where it earns its keep — this year's headings are unchanged.
+   */
+  it("dates a day outside this year with its year, and leaves this year's alone", () => {
+    const days = groupByDay([at("2026-07-30T10:00:00.000Z"), at("2025-08-04T10:00:00.000Z")], {
+      timezone: "Europe/Kyiv",
+      language: "en",
+      now: NOW,
+      words,
+    })
+
+    expect(days.map((day) => day.heading)).toEqual(["Thursday 30 July", "Monday 4 August 2025"])
+  })
+
+  /**
+   * The year is the *coach's*, so a session at 01:30 Kyiv time on 1 January is
+   * this year even though it is still 31 December in UTC.
+   */
+  it("decides the year in the coach's own zone", () => {
+    const days = groupByDay([at("2026-12-31T23:30:00.000Z")], {
+      timezone: "Europe/Kyiv",
+      language: "en",
+      now: new Date("2027-01-02T09:00:00.000Z"),
+      words,
+    })
+
+    expect(days[0]?.date).toBe("2027-01-01")
+    expect(days[0]?.heading).toBe("Friday 1 January")
+  })
+
+  /** A history reads newest first, and grouping has to survive that. */
+  it("groups a descending list without repeating a day", () => {
+    const days = groupByDay(
+      [
+        at("2026-07-27T14:00:00.000Z"),
+        at("2026-07-27T10:00:00.000Z"),
+        at("2026-07-24T10:00:00.000Z"),
+      ],
+      { timezone: "Europe/Kyiv", language: "en", now: NOW, words },
+    )
+
+    expect(days.map((day) => day.date)).toEqual(["2026-07-27", "2026-07-24"])
+    expect(days[0]?.sessions).toHaveLength(2)
+  })
+
   it("has nothing to say about an empty list", () => {
     expect(groupByDay([], { timezone: "Europe/Kyiv", language: "en", now: NOW, words })).toEqual([])
+  })
+})
+
+/**
+ * The intake switch reads a client's *whole* calendar (#232). Asking only what
+ * is booked ahead is how a client seen weekly for a year, rebooking after a gap,
+ * opened the scheduling screen labelled «Первая сессия».
+ */
+describe("firstSessionFor", () => {
+  it("is a first session only when nothing is booked and nothing has happened", () => {
+    expect(firstSessionFor({ sessions: [], past: [] })).toBe(true)
+  })
+
+  it("is not a first session for a returning client with nothing booked", () => {
+    expect(firstSessionFor({ sessions: [], past: [{}] })).toBe(false)
+  })
+
+  it("is not a first session while one is already on the calendar", () => {
+    expect(firstSessionFor({ sessions: [{}], past: [] })).toBe(false)
   })
 })
 

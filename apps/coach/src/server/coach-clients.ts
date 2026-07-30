@@ -19,7 +19,10 @@ import {
   readEmailAddress,
   readMemberSettings,
   readWorkingHours,
+  type SessionCancelReason,
   SessionKind,
+  type SessionState,
+  sessionStillAhead,
   windowForWeekday,
   type WorkingHours,
   type WorkspaceId,
@@ -141,6 +144,20 @@ export interface ClientSessionSummary {
   readonly kind: string
 }
 
+/**
+ * A session this client and coach have already had, or already called off
+ * (#232).
+ *
+ * The state is what makes the row worth showing: an entry in a history that
+ * does not say whether it happened is a date the coach has to remember for
+ * themselves.
+ */
+export interface PastClientSession extends ClientSessionSummary {
+  readonly state: SessionState
+  /** Absent on every state but `cancelled`. */
+  readonly cancelReason?: SessionCancelReason
+}
+
 export interface ClientDetail {
   readonly id: string
   readonly name: string
@@ -181,7 +198,18 @@ export interface ClientDetail {
   }
   readonly acceptedAt?: string
   readonly consentGrantedAt?: string
+  /**
+   * What is still ahead of this client, soonest first — and **only** that.
+   *
+   * The field keeps its meaning from #56 because two things read it and both
+   * mean «live, ahead»: the scheduling screen dots its month with these days so
+   * the coach can place a rhythm, and a past day is not bookable; and the intake
+   * switch asks whether this is a first session, which `past` now answers the
+   * other half of.
+   */
   readonly sessions: ReadonlyArray<ClientSessionSummary>
+  /** Everything else, newest first — the history the route shows below (#232). */
+  readonly past: ReadonlyArray<PastClientSession>
   readonly canDelete: boolean
   /** The zone every time on this screen is written in — the coach's own. */
   readonly timezone: string
@@ -482,6 +510,61 @@ const delivered = (
 const failed = (operation: string) => () => new CoachSession.LoadFailed({ operation })
 
 /**
+ * One client's calendar, cut into the two fields the route reads (#232).
+ *
+ * The repository hands over the whole thing newest first, and the cut is made
+ * here with `sessionStillAhead` — the same predicate the sessions list is cut
+ * along — so the two surfaces cannot come to disagree about what «past» means.
+ *
+ * The floor is **the start of the coach's own day**, the same instant the flat
+ * list is cut at. An earlier draft cut here at *this minute* — the month's dots
+ * are for days the coach can still book into, and a morning that has gone is not
+ * one. It was wrong for the reason above: a session running right now, or one
+ * that finished at eleven, would sit under «Прошедшие сессии» while `/sessions`
+ * still had it under Upcoming, and a session in progress is not history. Today
+ * *is* bookable — the grid offers its later slots — so a dot on it is a fact
+ * rather than noise.
+ *
+ * Ahead comes back ascending — the repository's order reversed — because that
+ * list is read as «what happens next», while a history is read from the most
+ * recent thing backwards.
+ *
+ * Pure and exported for the same reason `attentionFor` is: it is the whole of
+ * what the two fields mean, and the layer around it is one repository read.
+ */
+export const splitSessions = (
+  rows: ReadonlyArray<ClientRepo.ClientSessionRow>,
+  floor: Date,
+): {
+  readonly sessions: ReadonlyArray<ClientSessionSummary>
+  readonly past: ReadonlyArray<PastClientSession>
+} => {
+  const ahead: Array<ClientSessionSummary> = []
+  const behind: Array<PastClientSession> = []
+  for (const entry of rows) {
+    const summary = {
+      id: entry.id,
+      scheduledAt: iso(entry.scheduledAt),
+      durationMinutes: entry.durationMinutes,
+      kind: entry.kind,
+    }
+    if (sessionStillAhead(entry.state, entry.scheduledAt, floor)) {
+      ahead.push(summary)
+      continue
+    }
+    behind.push({
+      ...summary,
+      state: entry.state,
+      ...(entry.cancelReason === undefined ? {} : { cancelReason: entry.cancelReason }),
+    })
+  }
+  // In-place is safe and intended: the array was built two lines up and nothing
+  // else holds it, and the ES2022 target has no `toReversed` to build it again.
+  // oxlint-disable-next-line unicorn/no-array-reverse
+  return { sessions: ahead.reverse(), past: behind }
+}
+
+/**
  * The hours a coach works on one of their own calendar dates (#210).
  *
  * A date whose weekday cannot be read falls back on the shared window rather
@@ -632,12 +715,13 @@ export const layer = Layer.effect(
         ...(row.consentGrantedAt === undefined
           ? {}
           : { consentGrantedAt: iso(row.consentGrantedAt) }),
-        sessions: row.sessions.map((entry) => ({
-          id: entry.id,
-          scheduledAt: iso(entry.scheduledAt),
-          durationMinutes: entry.durationMinutes,
-          kind: entry.kind,
-        })),
+        // The coach's own day, not this minute — see `splitSessions`. `now` is
+        // the fallback for a zone the runtime cannot resolve, exactly as the
+        // sessions list does it.
+        ...splitSessions(
+          row.sessions,
+          instantOf(localParts(now, zoneOf(principal)).date, 0, zoneOf(principal)) ?? now,
+        ),
         canDelete: row.canDelete,
         timezone: zoneOf(principal),
       } satisfies ClientDetail

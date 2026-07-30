@@ -121,6 +121,7 @@ const run = <A, E>(
         ),
       ),
       scheduled: unused,
+      past: unused,
       find: unused,
       reschedule: unused,
       cancel: unused,

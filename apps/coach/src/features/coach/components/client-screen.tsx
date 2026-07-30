@@ -7,9 +7,11 @@ import {
   ClientInviteDoor as InviteDoors,
 } from "@praximo/domain"
 import { localeTag } from "@praximo/i18n"
+import { Link } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 
 import { HostBackButton, isIosHost } from "@/mini-app.tsx"
+import { localParts } from "@/lib/coach-calendar.ts"
 import { Heading, Section, SectionTitle, SegmentedChoice, Text } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
@@ -27,6 +29,7 @@ import {
   TimestampValue,
 } from "@/features/mini-app/components/detail-card.tsx"
 import { useClientPhoto } from "@/features/coach/use-client-photo.ts"
+import { stateSentence } from "@/features/coach/session-standing.ts"
 import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
 import { doorFor, isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
 import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
@@ -95,10 +98,79 @@ const doorOffers: Record<
   link: { card: false, shareSheet: true, email: true, lead: "email", icon: Link02Icon },
 }
 
+/**
+ * One session of this client's, ahead or behind (#232).
+ *
+ * **A link, both ways round.** A past session is otherwise a dead end: it is on
+ * neither Today nor the Upcoming list, and reschedule, cancel and — later — the
+ * artifact list all live on its own screen. Making only the upcoming rows lead
+ * somewhere would put the coach's whole history behind a row that looks like the
+ * others and does nothing.
+ *
+ * `standing` is what became of it, and it is absent on everything still ahead:
+ * an ordinary session says nothing about itself.
+ */
+function ClientSessionLink({
+  copy,
+  moment,
+  session,
+  standing,
+}: {
+  readonly copy: CoachCopy
+  /** The screen's own writer — see `writeMoment` for why it carries a year. */
+  readonly moment: (scheduledAt: string) => string
+  readonly session: {
+    readonly id: string
+    readonly scheduledAt: string
+    readonly kind: string
+    readonly durationMinutes: number
+  }
+  readonly standing?: string | undefined
+}) {
+  return (
+    <li>
+      <Link
+        to="/sessions/$sessionId"
+        params={{ sessionId: session.id }}
+        className="transition-colors duration-100 active:bg-muted flex min-h-11 items-center gap-3 px-5 py-4 text-left"
+      >
+        {/*
+          Kind is a word with a glyph and no colour of its own: amber / sky /
+          emerald / rose already mean invite and session *state*, and a second
+          colour vocabulary makes both harder to read.
+        */}
+        <HugeiconsIcon
+          icon={session.kind === "intake" ? FlagIcon : Calendar03Icon}
+          size={16}
+          strokeWidth={2}
+          className="text-muted-foreground shrink-0"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-base leading-relaxed tabular-nums">
+            {moment(session.scheduledAt)}
+          </span>
+          {standing === undefined ? null : (
+            <span className="text-muted-foreground mt-0.5 block truncate text-xs leading-normal">
+              {standing}
+            </span>
+          )}
+        </span>
+        <span className="text-muted-foreground shrink-0 text-xs leading-normal">
+          {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
+          {" · "}
+          {session.durationMinutes}
+          {copy.clients.durationSuffix}
+        </span>
+      </Link>
+    </li>
+  )
+}
+
 export function ClientScreen({
   copy,
   language,
   client,
+  now,
   onSchedule,
   onShare,
   onShareSheet,
@@ -112,6 +184,12 @@ export function ClientScreen({
   readonly copy: CoachCopy
   readonly language: CoachLanguage
   readonly client: CoachClients.ClientDetail
+  /**
+   * Passed in rather than read here, exactly as the sessions list does it: the
+   * only thing this screen asks of the present is which year it is, and a
+   * screen that reads the clock itself cannot be looked at from another one.
+   */
+  readonly now: Date
   readonly onSchedule: () => void
   readonly onShare: () => void
   /** The system share sheet, offered on iOS only — see `isIosHost`. */
@@ -192,19 +270,36 @@ export function ClientScreen({
   const recordThisDoor = () => onDelivered(door)
   const copyMessage = useCopyLink(invitation?.message, recordThisDoor)
 
-  const sessionFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(localeTag(language), {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: client.timezone,
-      }),
-    [client.timezone, language],
-  )
+  /**
+   * When a session was, in the coach's zone — **with its year once it is not
+   * this one** (#232).
+   *
+   * Upcoming never needed a year: a coach books months ahead, not years. The
+   * history below is bounded by a count rather than by a date, so a weekly
+   * client's list reaches back through several — and «сб, 20 июл., 08:00» in a
+   * list that spans them is a date nobody can place. Two formatters rather than
+   * one with the year always on, because a year the reader already knows is
+   * noise on every row above.
+   */
+  const writeMoment = useMemo(() => {
+    const shape = {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: client.timezone,
+    } as const
+    const near = new Intl.DateTimeFormat(localeTag(language), shape)
+    const far = new Intl.DateTimeFormat(localeTag(language), { ...shape, year: "numeric" })
+    const thisYear = localParts(now, client.timezone).date.slice(0, 4)
+    return (scheduledAt: string): string => {
+      const at = new Date(scheduledAt)
+      const year = localParts(at, client.timezone).date.slice(0, 4)
+      return (year === thisYear ? near : far).format(at)
+    }
+  }, [client.timezone, language, now])
 
   /**
    * The state, and since #224 the honest version of it: an invitation nobody has
@@ -474,28 +569,12 @@ export function ClientScreen({
               </li>
             ) : (
               client.sessions.map((session) => (
-                <li key={session.id} className="flex items-center gap-3 px-5 py-4">
-                  {/*
-                    Kind is a word with a glyph and no colour of its own: amber /
-                    sky / emerald / rose already mean invite and session *state*,
-                    and a second colour vocabulary makes both harder to read.
-                  */}
-                  <HugeiconsIcon
-                    icon={session.kind === "intake" ? FlagIcon : Calendar03Icon}
-                    size={16}
-                    strokeWidth={2}
-                    className="text-muted-foreground"
-                  />
-                  <span className="flex-1 text-base leading-relaxed tabular-nums">
-                    {sessionFormat.format(new Date(session.scheduledAt))}
-                  </span>
-                  <span className="text-muted-foreground text-xs leading-normal">
-                    {session.kind === "intake" ? copy.clients.kindIntake : copy.clients.kindRegular}
-                    {" · "}
-                    {session.durationMinutes}
-                    {copy.clients.durationSuffix}
-                  </span>
-                </li>
+                <ClientSessionLink
+                  key={session.id}
+                  copy={copy}
+                  moment={writeMoment}
+                  session={session}
+                />
               ))
             )}
             <li>
@@ -516,6 +595,35 @@ export function ClientScreen({
           </ul>
         </Card>
       </Section>
+
+      {/*
+        The history, and **absent rather than present-and-empty** (#232).
+        `mini-app.md`'s rule applies here and not to the sessions list's segment:
+        this is a block on a page the coach opened to read about a person, so a
+        heading over «пока ничего» promises something they then hunt for. The
+        segment is navigation they chose, which is the opposite case.
+
+        Below the upcoming sessions rather than above them: this screen is read
+        top-down and what happens next outranks what already did.
+      */}
+      {client.past.length === 0 ? null : (
+        <Section>
+          <SectionTitle>{copy.clients.pastSessionsTitle}</SectionTitle>
+          <Card className="mt-4 gap-0 overflow-hidden py-0">
+            <ul className="divide-border divide-y">
+              {client.past.map((session) => (
+                <ClientSessionLink
+                  key={session.id}
+                  copy={copy}
+                  moment={writeMoment}
+                  session={session}
+                  standing={stateSentence(copy.sessions, session.state, session.cancelReason)}
+                />
+              ))}
+            </ul>
+          </Card>
+        </Section>
+      )}
 
       <Section>
         <SectionTitle>{copy.clients.profileTitle}</SectionTitle>

@@ -1,17 +1,19 @@
 import { LiveSessionStates, type SessionCancelReason, type SessionState } from "@praximo/domain"
-import { and, asc, eq, gte, inArray, lt, type SQL, sql } from "drizzle-orm"
+import { and, asc, desc, eq, gte, inArray, lt, notInArray, or, type SQL, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
 
 /**
  * Scheduling, the day's bookings the sheet draws its grid from (#56), the
- * sessions Today and the sessions list are built out of (#61), and the two
- * lifecycle writes a coach can make (#62).
+ * sessions Today and the sessions list are built out of (#61), the two
+ * lifecycle writes a coach can make (#62), and the history behind them (#232).
  *
  * `LiveSessionStates` is the pair that holds a slot: a cancelled session
  * releases the time it was holding, and a completed one is in the past by
- * definition — only these two can be in the coach's way.
+ * definition — only these two can be in the coach's way. It is also what cuts
+ * the calendar in two: `scheduled` and `past` are complements over it, so a
+ * session is on exactly one of the list's two views.
  */
 
 /** What a booking commits. */
@@ -95,6 +97,22 @@ export interface ScheduledQuery {
   readonly limit: number
 }
 
+/**
+ * Everything the coach's calendar has already finished with (#232).
+ *
+ * `before` is the same instant `ScheduledQuery.from` carries, and that is the
+ * whole design: this read is the **exact complement** of `scheduled` over one
+ * workspace, so no session can fall between the two views of the list. A row is
+ * here when its state no longer holds a slot *or* it starts before the floor —
+ * which is how a session left `scheduled` after its hour, the state every
+ * conducted session is in until #42, reaches a screen at all.
+ */
+export interface PastQuery {
+  readonly workspaceId: string
+  readonly before: Date
+  readonly limit: number
+}
+
 export interface Interface {
   readonly schedule: (input: ScheduleInput) => Effect.Effect<ScheduleOutcome, QueryFailed>
   readonly between: (
@@ -105,6 +123,10 @@ export interface Interface {
   /** Live sessions in a window, earliest first — Today's day and the flat list. */
   readonly scheduled: (
     query: ScheduledQuery,
+  ) => Effect.Effect<ReadonlyArray<ScheduledSessionRow>, QueryFailed>
+  /** Its complement, latest first — the sessions list's Past view (#232). */
+  readonly past: (
+    query: PastQuery,
   ) => Effect.Effect<ReadonlyArray<ScheduledSessionRow>, QueryFailed>
   /** One session, in whatever state it is in — the session screen's own read. */
   readonly find: (
@@ -349,6 +371,42 @@ export const layer = Layer.effect(
     })
 
     /**
+     * Everything the calendar has finished with, newest first (#232).
+     *
+     * The `where` is deliberately the **negation** of the one above, written out
+     * of the same constant rather than as a list of terminal states: `state not
+     * in (live) or scheduled_at < before` is `not (state in (live) and
+     * scheduled_at >= before)` by De Morgan, so the two reads partition the
+     * workspace's sessions and adding a fifth state to `LiveSessionStates` moves
+     * it in both at once. `sessionStillAhead` is the same rule in TypeScript,
+     * for the callers that hold rows rather than issue statements.
+     *
+     * Bounded like the flat list, and for a stronger reason: a practice has a
+     * ceiling on what it can book ahead and none at all on what it has already
+     * done, so the caller states the window and the screen says it is looking
+     * through one.
+     */
+    const past = Effect.fn("SessionRepo.past")(function* (query: PastQuery) {
+      const rows = yield* Effect.tryPromise({
+        try: () =>
+          listing()
+            .where(
+              and(
+                eq(schema.session.workspaceId, query.workspaceId),
+                or(
+                  notInArray(schema.session.state, [...LiveSessionStates]),
+                  lt(schema.session.scheduledAt, query.before),
+                ),
+              ),
+            )
+            .orderBy(desc(schema.session.scheduledAt))
+            .limit(query.limit),
+        catch: (cause) => new QueryFailed({ operation: "session.past", cause }),
+      })
+      return rows.map(readListing)
+    })
+
+    /**
      * One session, whatever state it is in.
      *
      * Deliberately not filtered by state: the screen this feeds says what the
@@ -466,7 +524,7 @@ export const layer = Layer.effect(
       return { cancelled: updated.length > 0 }
     })
 
-    return Service.of({ schedule, between, scheduled, find, reschedule, cancel })
+    return Service.of({ schedule, between, scheduled, past, find, reschedule, cancel })
   }),
 )
 

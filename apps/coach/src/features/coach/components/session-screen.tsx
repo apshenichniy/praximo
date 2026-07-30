@@ -1,4 +1,4 @@
-import type { CoachLanguage, SessionCancelReason } from "@praximo/domain"
+import type { CoachLanguage } from "@praximo/domain"
 import { sessionMoment } from "@praximo/i18n"
 import { Link } from "@tanstack/react-router"
 import { useState } from "react"
@@ -7,8 +7,8 @@ import { HostBackButton } from "@/mini-app.tsx"
 import { Card } from "@praximo/ui/components/card"
 import { Heading, Section, Text } from "@praximo/ui"
 import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
+import { stateSentence } from "@/features/coach/session-standing.ts"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
-import type { SessionsCopy } from "@/features/i18n/coach-copy/sessions.ts"
 import { ConfirmSheet } from "@/features/mini-app/components/confirm-sheet.tsx"
 import { DetailCard, DetailRow } from "@/features/mini-app/components/detail-card.tsx"
 import type { CoachSessions } from "@/server/coach-sessions.ts"
@@ -23,28 +23,6 @@ import type { CoachSessions } from "@/server/coach-sessions.ts"
  * So the state speaks only when the session is not `scheduled`, and the actions
  * disappear at exactly the moment they stop meaning anything.
  */
-
-/**
- * What became of the session, as a sentence.
- *
- * `undefined` for a session still scheduled — which is what keeps the row off an
- * ordinary screen — and for `in_progress`, whose whole story is happening in the
- * room right now and belongs to #42 rather than to a past-tense line.
- */
-const stateSentence = (
-  copy: SessionsCopy,
-  state: CoachSessions.SessionDetail["state"],
-  reason: SessionCancelReason | undefined,
-): string | undefined => {
-  if (state === "completed") return copy.stateCompleted
-  if (state !== "cancelled") return undefined
-  // A cancellation with no reason on file cannot exist — every writer sets one —
-  // but reading an unknown one as the reconciler's would put words in its mouth,
-  // so anything else falls back to the coach's own.
-  if (reason === "no_show") return copy.stateCancelledNoShow
-  if (reason === "room_unavailable") return copy.stateCancelledRoom
-  return copy.stateCancelledByCoach
-}
 
 export function SessionScreen({
   copy,

@@ -63,6 +63,7 @@ export {
   SessionCancelReasons,
   type SessionState,
   SessionStates,
+  sessionStillAhead,
 } from "./session-lifecycle.ts"
 export {
   applyWindowToAll,

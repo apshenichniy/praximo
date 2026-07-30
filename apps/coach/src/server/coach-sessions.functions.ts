@@ -18,16 +18,15 @@ export const loadToday = createServerFn({ method: "POST" })
     }),
   )
 
-export type UpcomingSessionsResult = CoachResult<{
-  readonly upcoming: CoachSessions.UpcomingSessions
-}>
+/** Both views of the list in one answer — the segment switches, it does not fetch (#232). */
+export type SessionsListResult = CoachResult<{ readonly list: CoachSessions.SessionsList }>
 
-export const listUpcomingSessions = createServerFn({ method: "POST" })
+export const listSessions = createServerFn({ method: "POST" })
   .middleware([launchCredential])
   .handler(
     coachOperation({
-      run: (credential) => Effect.flatMap(CoachSessions.Service, (s) => s.upcoming(credential)),
-      answer: (upcoming): UpcomingSessionsResult => ({ ok: true, upcoming }),
+      run: (credential) => Effect.flatMap(CoachSessions.Service, (s) => s.list(credential)),
+      answer: (list): SessionsListResult => ({ ok: true, list }),
     }),
   )
 

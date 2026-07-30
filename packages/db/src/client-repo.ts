@@ -3,8 +3,10 @@ import {
   ClientInviteStatus,
   type CoachLanguage,
   inviteStanding,
+  type SessionCancelReason,
+  type SessionState,
 } from "@praximo/domain"
-import { and, asc, eq, gte, sql } from "drizzle-orm"
+import { desc, eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import { isoColumn, readDate, readLanguage } from "./row-readers.ts"
@@ -87,12 +89,22 @@ export interface ClientChannelRow {
   readonly telegramUsername?: string
 }
 
+/**
+ * One session of this client's, in whatever state it is in (#232).
+ *
+ * Unfiltered on purpose: the route shows what is ahead *and* what already
+ * happened, and which of the two a row belongs to is `sessionStillAhead`'s
+ * answer rather than a second `where` clause that could disagree with the
+ * sessions list's.
+ */
 export interface ClientSessionRow {
   readonly id: string
   readonly scheduledAt: Date
   readonly durationMinutes: number
   readonly kind: string
-  readonly state: string
+  readonly state: SessionState
+  /** Absent on every state but `cancelled` — the words the screen prints (#62). */
+  readonly cancelReason?: SessionCancelReason
 }
 
 export interface ClientDetailRow extends ClientAvatarPresence {
@@ -105,6 +117,7 @@ export interface ClientDetailRow extends ClientAvatarPresence {
   readonly channel?: ClientChannelRow
   readonly acceptedAt?: Date
   readonly consentGrantedAt?: Date
+  /** This client's whole calendar, newest first and bounded (#232). */
   readonly sessions: ReadonlyArray<ClientSessionRow>
   /**
    * Whether "undo the creation" is still available: nothing accepted, nothing
@@ -113,6 +126,33 @@ export interface ClientDetailRow extends ClientAvatarPresence {
    */
   readonly canDelete: boolean
 }
+
+/**
+ * How far back one client's route will read.
+ *
+ * The same kind of bound `UpcomingSessionsLimit` is — far past a weekly client's
+ * decade rather than a page size — and **newest first**, so what it can cut is
+ * only the oldest end. Nothing ahead is ever lost to it, which is what lets the
+ * scheduling screen keep reading this list.
+ */
+export const ClientSessionsLimit = 200
+
+/** One of this client's sessions, with the reason absent rather than null. */
+const readClientSession = (row: {
+  readonly id: string
+  readonly scheduledAt: Date
+  readonly durationMinutes: number
+  readonly kind: string
+  readonly state: SessionState
+  readonly cancelReason: SessionCancelReason | null
+}): ClientSessionRow => ({
+  id: row.id,
+  scheduledAt: row.scheduledAt,
+  durationMinutes: row.durationMinutes,
+  kind: row.kind,
+  state: row.state,
+  ...(row.cancelReason === null ? {} : { cancelReason: row.cancelReason }),
+})
 
 export interface CreateWithInviteInput {
   readonly workspaceId: string
@@ -361,6 +401,13 @@ export const layer = Layer.effect(
      * are a list on the screen, they carry typed timestamps through the query
      * builder, and folding them into the row above would trade clarity for a
      * round trip nobody is counting on this screen.
+     *
+     * Since #232 that query is **unfiltered**. It used to ask for the live and
+     * future ones only, which is what the scheduling screen wants — and which
+     * meant a client's history did not exist as far as this route was concerned,
+     * so a returning client read as somebody with no sessions at all. Cutting
+     * the list in two is the service's job, done with the same predicate the
+     * sessions list is cut along.
      */
     const find = Effect.fn("ClientRepo.find")(function* (
       workspaceId: string,
@@ -425,16 +472,12 @@ export const layer = Layer.effect(
               durationMinutes: schema.session.durationMinutes,
               kind: schema.session.kind,
               state: schema.session.state,
+              cancelReason: schema.session.cancelReason,
             })
             .from(schema.session)
-            .where(
-              and(
-                eq(schema.session.clientId, clientId),
-                eq(schema.session.state, "scheduled"),
-                gte(schema.session.scheduledAt, now),
-              ),
-            )
-            .orderBy(asc(schema.session.scheduledAt)),
+            .where(eq(schema.session.clientId, clientId))
+            .orderBy(desc(schema.session.scheduledAt))
+            .limit(ClientSessionsLimit),
         catch: (cause) => new QueryFailed({ operation: "client.find.sessions", cause }),
       })
 
@@ -497,7 +540,7 @@ export const layer = Layer.effect(
             }),
         ...(acceptedAt === undefined ? {} : { acceptedAt }),
         ...(consentGrantedAt === undefined ? {} : { consentGrantedAt }),
-        sessions,
+        sessions: sessions.map(readClientSession),
         canDelete: inviteStatus !== "accepted" && record.has_sessions !== true,
       } satisfies ClientDetailRow
     })

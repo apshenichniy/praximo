@@ -345,6 +345,86 @@ describe.skipIf(skipWithoutDatabase)("SessionRepo (dev Neon branch)", () => {
   )
 
   /**
+   * Past is the **complement** of the flat list (#232), and this is the whole of
+   * that rule at the database.
+   *
+   * Four sessions, one per corner of the partition, and the assertion is not
+   * only that each lands in the right view but that the two views together are
+   * every row and share none: a session the calendar has finished with must
+   * reach a screen whether it ended in a terminal state or simply went by while
+   * still `scheduled` — which, until #42's reconciler exists, is what every
+   * conducted session looks like.
+   */
+  it.effect("reads everything the flat list leaves behind, newest first", () =>
+    Effect.gen(function* () {
+      const made = yield* fixture()
+      const floor = new Date("2026-07-27T00:00:00.000Z")
+      const ahead = `se_ahead_${made.suffix}`
+      const stale = `se_stale_${made.suffix}`
+      const done = `se_done_${made.suffix}`
+      const calledOff = `se_off_${made.suffix}`
+
+      yield* schedule(made, { sessionId: ahead, scheduledAt: MONDAY_TEN })
+      yield* schedule(made, { sessionId: stale, scheduledAt: new Date("2026-07-24T10:00:00.000Z") })
+      yield* schedule(made, { sessionId: done, scheduledAt: new Date("2026-07-25T10:00:00.000Z") })
+      yield* schedule(made, {
+        sessionId: calledOff,
+        scheduledAt: new Date("2026-07-29T10:00:00.000Z"),
+      })
+      yield* forceState(done, "completed")
+
+      const repo = yield* SessionRepo.Service
+      // Cancelled through the repository rather than forced, so the reason the
+      // screen prints is the one a real cancellation writes.
+      yield* repo.cancel(made.workspaceId, calledOff, NOW)
+
+      const upcoming = yield* repo.scheduled({
+        workspaceId: made.workspaceId,
+        from: floor,
+        limit: 50,
+      })
+      const behind = yield* repo.past({ workspaceId: made.workspaceId, before: floor, limit: 50 })
+
+      expect(upcoming.map((row) => row.id)).toEqual([ahead])
+      // Newest first, and a cancellation booked for *next week* is history too:
+      // it is what happened, and it will not happen.
+      expect(behind.map((row) => row.id)).toEqual([calledOff, done, stale])
+      expect(behind[0]?.cancelReason).toBe("coach_cancelled")
+      // The partition itself: every row once, and no row twice.
+      const seen = [...upcoming, ...behind].map((row) => row.id)
+      expect(seen).toHaveLength(4)
+      expect(new Set(seen)).toEqual(new Set([ahead, stale, done, calledOff]))
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  it.effect("shows the newest window of a history it does not fit, and only this workspace's", () =>
+    Effect.gen(function* () {
+      const made = yield* fixture()
+      const other = yield* fixture()
+      const floor = new Date("2026-07-27T00:00:00.000Z")
+      const days = ["2026-07-22", "2026-07-23", "2026-07-24"]
+      for (const [index, day] of days.entries()) {
+        yield* schedule(made, {
+          sessionId: `se_hist_${index}_${made.suffix}`,
+          scheduledAt: new Date(`${day}T10:00:00.000Z`),
+        })
+      }
+
+      const repo = yield* SessionRepo.Service
+      const window = yield* repo.past({ workspaceId: made.workspaceId, before: floor, limit: 2 })
+
+      // The bound keeps the *recent* end, which is the end a coach is looking for.
+      expect(window.map((row) => row.id)).toEqual([
+        `se_hist_2_${made.suffix}`,
+        `se_hist_1_${made.suffix}`,
+      ])
+      expect(
+        yield* repo.past({ workspaceId: other.workspaceId, before: floor, limit: 50 }),
+      ).toEqual([])
+    }).pipe(Effect.provide(appLayer)),
+  )
+
+  /**
    * Reschedule and cancel (#62) — the two lifecycle transitions a coach writes.
    *
    * Both are one conditional `UPDATE` for the same reason `schedule` is one
