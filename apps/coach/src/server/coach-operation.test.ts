@@ -11,6 +11,7 @@ import {
 } from "./coach-operation.ts"
 import { CoachSession } from "./coach-session.ts"
 import { CoachSurface } from "./coach-surface.ts"
+import type { CoachResult } from "./coach-transport.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
 const CREDENTIAL: LaunchCredential = { initData: "signed", botId: "9100777" }
@@ -36,11 +37,15 @@ const watched = (answer: () => Promise<unknown>) => {
 const succeeding = (value: unknown) => watched(() => Promise.resolve(value))
 const failing = (error: unknown) => watched(() => Promise.reject(error))
 
+/** The wire shapes, declared the way a real operation declares them. */
+type EntryResult = CoachResult<{ readonly entry: CoachSurface.CoachEntry }>
+type StaleEntryResult = CoachResult<{ readonly entry: CoachSurface.CoachEntry }, "stale">
+
 /** One operation over whichever runtime the case handed it. */
 const entry = (conveyor: ReturnType<typeof watched>) =>
   conveyor.operation({
     run: (credential) => Effect.flatMap(CoachSurface.Service, (s) => s.openApp(credential)),
-    answer: (value) => ({ ok: true as const, entry: value }),
+    answer: (value): EntryResult => ({ ok: true, entry: value }),
   })
 
 const acknowledged = (conveyor: ReturnType<typeof watched>) =>
@@ -50,12 +55,19 @@ const acknowledged = (conveyor: ReturnType<typeof watched>) =>
     acknowledged: () => true,
   })
 
-/** An operation that names a failure of its own, beside the two it cannot rename. */
+/**
+ * An operation that names a failure of its own, beside the two it cannot rename.
+ *
+ * `"stale"` is spelled twice on purpose — once in the result type and once in the
+ * map — because that is the pairing the builder now enforces: a word in the map
+ * that the result type does not declare is a compile error, so this helper is also
+ * the standing proof that the constraint is wired up.
+ */
 const named = (conveyor: ReturnType<typeof watched>) =>
   conveyor.operation({
     failures: { "CoachSurface.StaleTermsVersion": "stale" },
     run: (credential) => Effect.flatMap(CoachSurface.Service, (s) => s.openApp(credential)),
-    answer: (value) => ({ ok: true as const, entry: value }),
+    answer: (value): StaleEntryResult => ({ ok: true, entry: value }),
   })
 
 const recorded = (conveyor: ReturnType<typeof watched>) =>

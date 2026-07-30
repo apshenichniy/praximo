@@ -2,7 +2,12 @@ import { Effect, Exit, Option, Schema } from "effect"
 import type { CoachClients } from "./coach-clients.ts"
 import type { CoachSessions } from "./coach-sessions.ts"
 import type { CoachSurface } from "./coach-surface.ts"
-import { type CoachTransportError, coachFailure } from "./coach-transport.ts"
+import {
+  type CoachFailureMap,
+  coachFailure,
+  type CoachRefusal,
+  type CoachRefusalWord,
+} from "./coach-transport.ts"
 import type { LaunchCredential } from "./launch-credential.ts"
 
 /**
@@ -13,15 +18,20 @@ import type { LaunchCredential } from "./launch-credential.ts"
  * empty-credential refusal, the `try/catch`, and the error-mapping rule — and
  * the reading of whatever the browser sent. What it deliberately does *not* own:
  *
- * - **The `createServerFn` chain.** The Start compiler extracts a handler by
- *   finding `createServerFn(...).handler(...)` assigned to a variable and names
- *   the RPC after that variable, so a helper that called `createServerFn` itself
- *   would collapse every operation onto one endpoint. The chain stays at each
- *   call site; what {@link coachConveyor} hands back is the handler to give it.
+ * - **The `createServerFn` chain — including `.middleware([launchCredential])`.**
+ *   #234 asked for the middleware attachment to live here too, and it cannot: the
+ *   Start compiler extracts a handler by finding `createServerFn(...).handler(...)`
+ *   assigned to a variable and names the RPC after that variable, so a helper that
+ *   called `createServerFn` itself would collapse every operation onto one
+ *   endpoint — and `.middleware` is a link in that same chain, not a separable
+ *   step. The chain stays at each call site; what {@link coachConveyor} hands back
+ *   is the handler to give it.
  * - **The credential.** It is read from headers by the `launchCredential`
  *   middleware and nothing else (ADR 0006, property 1). The handlers built here
  *   *require* a `context.credential`, so an operation that forgot the middleware
- *   does not typecheck — the pairing is enforced rather than remembered.
+ *   does not typecheck. That is what the attachment being one line per operation
+ *   costs us and what it does not: a forgotten middleware is a compile error, not
+ *   an unauthenticated endpoint.
  * - **The `auth_date` window.** Twenty-four hours for a read, fifteen minutes for
  *   a write, chosen per operation inside the service (ADR 0006). A default here
  *   would be a security decision made by the layer with the least idea which
@@ -68,7 +78,14 @@ const readable = <T>(schema: Schema.Codec<T, T>, absent: T) =>
 /** A string, or the empty one — which no identifier, date, name or address is. */
 export const TransportString = readable(Schema.String, "")
 
-/** A finite number, or the one the operation treats as "nothing usable". */
+/**
+ * A finite number, or the one the operation treats as "nothing usable".
+ *
+ * `Finite` rather than `Number`, which unifies a disagreement the hand-written
+ * validators had with each other: the range read excluded `NaN` and the schedule
+ * write forwarded it. Neither `NaN` nor `Infinity` is a minute or a day count, so
+ * the service refused them anyway — this only decides which layer says so.
+ */
 export const TransportNumber = (absent: number) => readable(Schema.Finite, absent)
 
 /**
@@ -98,8 +115,15 @@ export const coachInput = <Input>(shape: Schema.ConstraintDecoder<Input>) => {
     Exit.match(read(input), { onFailure: () => absent, onSuccess: (data) => data })
 }
 
-/** The `_tag` of a service failure, mapped onto one word this operation may say. */
-type NamedFailures = Readonly<Record<string, string>>
+/**
+ * A launch that carried no credential at all.
+ *
+ * Refused before the runtime is touched, and *not* by the verifier: this is not a
+ * coach whose credential failed, it is a request from somewhere that never had
+ * one, and it must not cost a database round trip. Named here because both exits
+ * below owe the same answer to it.
+ */
+const blank = (credential: LaunchCredential): boolean => credential.initData.length === 0
 
 /**
  * The conveyor, bound to one way into the runtime.
@@ -110,34 +134,35 @@ export const coachConveyor = (run: CoachRunner) => {
   /**
    * One coach operation: a credential, an effect, and a tagged result.
    *
-   * Adding an operation is this call and the `Interface` entry it names —
-   * nothing else.
+   * Adding an operation is one `Interface` entry and one of these calls. The
+   * `createServerFn` chain and the input shape are still written out beside it —
+   * see the note at the top of this file for why they cannot move — so this is
+   * fewer *decisions* per operation rather than fewer lines.
    */
   const operation =
     <
       A,
       E,
       Data,
-      Result extends { readonly ok: true } | { readonly ok: false },
-      const Failures extends NamedFailures = Record<never, never>,
+      Result extends { readonly ok: true } | CoachRefusal<string>,
+      const Failures extends CoachFailureMap<CoachRefusalWord<Result>> = CoachFailureMap<never>,
     >(spec: {
       readonly run: (credential: LaunchCredential, data: Data) => Effect.Effect<A, E, CoachServices>
       /** What a success is on the wire. Annotate it with the operation's result type. */
       readonly answer: (value: A) => Result
-      /** The service tags this operation answers with a word of its own. */
+      /**
+       * The service tags this operation answers with a word of its own.
+       *
+       * Constrained to the words `answer`'s own result type declares, so a
+       * misspelled one cannot quietly widen what this operation says on the wire.
+       */
       readonly failures?: Failures
     }) =>
     async ({
       context,
       data,
-    }: CoachHandlerContext<Data>): Promise<
-      | Result
-      | { readonly ok: false; readonly error: CoachTransportError | Failures[keyof Failures] }
-    > => {
-      // Refused here rather than by the verifier, and refused *before* the
-      // runtime is touched: a launch with no credential at all is not a coach
-      // whose credential failed, and it must not cost a database round trip.
-      if (context.credential.initData.length === 0) return { ok: false, error: "unauthenticated" }
+    }: CoachHandlerContext<Data>): Promise<Result | CoachRefusal<Failures[keyof Failures]>> => {
+      if (blank(context.credential)) return { ok: false, error: "unauthenticated" }
       try {
         return spec.answer(await run(spec.run(context.credential, data)))
       } catch (error) {
@@ -149,13 +174,17 @@ export const coachConveyor = (run: CoachRunner) => {
    * An operation that answers `{ ok }` and nothing else.
    *
    * Kept as its own exit rather than folded into {@link operation} — reviewed and
-   * decided in #234, not inherited. Four operations answer this way
+   * decided in #234, not inherited. **Four** operations answer this way
    * (`recordInviteDelivery`, `saveTimezone`, `hideMainMiniAppHint`,
-   * `saveWorkingHours`), and for all four *which* refusal they hit is not a
-   * distinction the screen can act on: the delivery has already happened, or the
-   * next launch writes the value again, and the screen re-reads itself either
-   * way. Giving them the tagged result would put a word on the wire that no
-   * caller reads and that a caller could start reading.
+   * `saveWorkingHours`); #234 says six because it counted `return { ok: false }`
+   * statements, and each of the four had two — the credential guard and the
+   * `catch`. Both are now here, once.
+   *
+   * For all four, *which* refusal they hit is not a distinction the screen can
+   * act on: the delivery has already happened, or the next launch writes the
+   * value again, and the screen re-reads itself either way. Giving them the
+   * tagged result would put a word on the wire that no caller reads and that a
+   * caller could start reading.
    *
    * It is not "best effort" in the sense of swallowing anything that matters:
    * `ok` still carries whether the write landed.
@@ -166,7 +195,7 @@ export const coachConveyor = (run: CoachRunner) => {
       readonly acknowledged: (value: A) => boolean
     }) =>
     async ({ context, data }: CoachHandlerContext<Data>): Promise<{ readonly ok: boolean }> => {
-      if (context.credential.initData.length === 0) return { ok: false }
+      if (blank(context.credential)) return { ok: false }
       try {
         return { ok: spec.acknowledged(await run(spec.run(context.credential, data))) }
       } catch {

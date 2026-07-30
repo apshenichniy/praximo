@@ -1,6 +1,7 @@
 import type { CoachLanguage } from "@praximo/domain"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { type CoachEntryTransportResult, loadCoachEntry } from "@/server/coach-surface.functions.ts"
+import type { CoachRefusal } from "@/server/coach-transport.ts"
 import { resolveLaunchCredential } from "./launch-credential.ts"
 
 /**
@@ -11,10 +12,8 @@ import { resolveLaunchCredential } from "./launch-credential.ts"
  * so a rejected promise becoming `server` is honesty rather than laziness — the
  * one thing the screen must not do is throw and lose the launch with it.
  */
-export const orServerFailure = <A>(
-  read: Promise<A>,
-): Promise<A | { readonly ok: false; readonly error: "server" }> =>
-  read.catch(() => ({ ok: false, error: "server" }) as const)
+export const orServerFailure = <A>(read: Promise<A>): Promise<A | CoachRefusal> =>
+  read.catch((): CoachRefusal => ({ ok: false, error: "server" }))
 
 /**
  * What every coach route resolves before it can draw anything (#234).

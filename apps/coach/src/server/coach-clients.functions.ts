@@ -16,7 +16,7 @@ import { coachAcknowledgement, coachOperation } from "./runtime.server.ts"
  */
 
 /** The one shape read on both sides of every client operation. */
-const clientId = Schema.Struct({ clientId: TransportString })
+const clientIdInput = Schema.Struct({ clientId: TransportString })
 
 export type CoachClientsResult = CoachResult<{
   readonly home: CoachClients.CoachClientsHome
@@ -37,10 +37,10 @@ export type ClientDetailResult = CoachResult<{
 
 export const getClient = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(coachInput(clientId))
+  .validator(coachInput(clientIdInput))
   .handler(
     coachOperation({
-      run: (credential, data: typeof clientId.Type) =>
+      run: (credential, data: typeof clientIdInput.Type) =>
         Effect.flatMap(CoachClients.Service, (s) => s.detail(credential, data.clientId)),
       answer: (client): ClientDetailResult => ({ ok: true, client }),
     }),
@@ -136,10 +136,10 @@ export type DeleteClientResult = CoachResult<{ readonly deleted: boolean }>
 
 export const deleteClient = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(coachInput(clientId))
+  .validator(coachInput(clientIdInput))
   .handler(
     coachOperation({
-      run: (credential, data: typeof clientId.Type) =>
+      run: (credential, data: typeof clientIdInput.Type) =>
         Effect.flatMap(CoachClients.Service, (s) => s.remove(credential, data.clientId)),
       answer: ({ deleted }): DeleteClientResult => ({ ok: true, deleted }),
     }),
@@ -147,10 +147,10 @@ export const deleteClient = createServerFn({ method: "POST" })
 
 export const resetInvite = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(coachInput(clientId))
+  .validator(coachInput(clientIdInput))
   .handler(
     coachOperation({
-      run: (credential, data: typeof clientId.Type) =>
+      run: (credential, data: typeof clientIdInput.Type) =>
         Effect.flatMap(CoachClients.Service, (s) => s.resetInvite(credential, data.clientId)),
       answer: (client): ClientDetailResult => ({ ok: true, client }),
     }),
@@ -168,10 +168,10 @@ export type ResendInviteResult = CoachResult<{ readonly outcome: CoachClients.Re
  */
 export const resendInvite = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(coachInput(clientId))
+  .validator(coachInput(clientIdInput))
   .handler(
     coachOperation({
-      run: (credential, data: typeof clientId.Type) =>
+      run: (credential, data: typeof clientIdInput.Type) =>
         Effect.flatMap(CoachClients.Service, (s) => s.resendInvite(credential, data.clientId)),
       answer: (outcome): ResendInviteResult => ({ ok: true, outcome }),
     }),
@@ -196,11 +196,11 @@ export type PrepareInviteCardResult = CoachResult<
  */
 export const prepareInviteCard = createServerFn({ method: "POST" })
   .middleware([launchCredential])
-  .validator(coachInput(clientId))
+  .validator(coachInput(clientIdInput))
   .handler(
     coachOperation({
       failures: { "CoachClients.CardPreparationFailed": "failed" },
-      run: (credential, data: typeof clientId.Type) =>
+      run: (credential, data: typeof clientIdInput.Type) =>
         Effect.flatMap(CoachClients.Service, (s) => s.prepareInviteCard(credential, data.clientId)),
       answer: (card): PrepareInviteCardResult =>
         card === undefined ? { ok: false, error: "gone" } : { ok: true, card },

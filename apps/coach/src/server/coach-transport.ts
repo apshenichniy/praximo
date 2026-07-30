@@ -28,7 +28,30 @@ export type CoachTransportError = "unauthenticated" | "server"
  */
 export type CoachResult<Payload, Extra extends string = never> =
   | ({ readonly ok: true } & Payload)
-  | { readonly ok: false; readonly error: CoachTransportError | Extra }
+  | CoachRefusal<Extra>
+
+/** A refusal on its own — the half the conveyor answers with, named so it is written once. */
+export interface CoachRefusal<Extra extends string = never> {
+  readonly ok: false
+  readonly error: CoachTransportError | Extra
+}
+
+/**
+ * Every word a given result is allowed to refuse with.
+ *
+ * This is what stops an operation widening its own vocabulary by accident: the
+ * builder constrains its failure map against it, so a `_tag` mapped onto a word
+ * the result type never declared is a type error rather than a new word on the
+ * wire.
+ */
+export type CoachRefusalWord<Result> = [Extract<Result, { readonly ok: false }>] extends [never]
+  ? never
+  : Extract<Result, { readonly ok: false }> extends { readonly error: infer Word extends string }
+    ? Word
+    : never
+
+/** The `_tag` of a service failure, mapped onto one word an operation may say. */
+export type CoachFailureMap<Word extends string = string> = Readonly<Record<string, Word>>
 
 /**
  * Which typed failure crossed the runtime boundary. The tag is all that survives
@@ -52,7 +75,7 @@ const transportError = (error: unknown): CoachTransportError =>
  * operation can add a word it can act on without ever being able to *subtract*
  * the undifferentiated `unauthenticated`.
  */
-export const coachFailure = <Named extends Readonly<Record<string, string>>>(
+export const coachFailure = <Named extends CoachFailureMap>(
   error: unknown,
   named: Named | undefined,
 ): CoachTransportError | Named[keyof Named] => {
