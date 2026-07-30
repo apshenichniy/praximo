@@ -16,17 +16,73 @@ import { TimeField } from "@/features/coach/components/scheduling/time-field.tsx
 
 export { calendarDate }
 
+/**
+ * A `YYYY-MM-DD` back as the local `Date` the calendar works in.
+ *
+ * Parsed by parts rather than by `new Date(string)`, which reads a bare date as
+ * UTC midnight and lands the day before wherever the offset is negative. An
+ * unreadable value falls back to today: the coach is choosing a new day anyway,
+ * and an `Invalid Date` would take the whole screen down.
+ */
+const dayOf = (date: string, fallback: Date): Date => {
+  const [year, month, day] = date.split("-").map(Number)
+  if (year === undefined || month === undefined || day === undefined) return fallback
+  const parsed = new Date(year, month - 1, day)
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed
+}
+
+/** When a session is being put — the whole of what this screen decides. */
 export interface SchedulingDraft {
   readonly date: string
   readonly startMinutes: number
   readonly durationMinutes: number
+}
+
+/** A booking also decides the kind; a move never does. */
+export interface NewSessionDraft extends SchedulingDraft {
   readonly kind: SessionKind
 }
 
 /**
- * Date, first-session override, duration, and time for a new Session.
+ * What this screen is for, as one prop rather than as a handful of flags (#62).
  *
- * The screen owns the booking draft. Extracted pieces own only self-contained
+ * A discriminated union because the two errands disagree about three things at
+ * once — whether the intake switch means anything, whether there is a slot to
+ * open on, and what the submit produces — and three independent booleans would
+ * make «a reschedule that is also a first session» a state somebody has to
+ * remember is nonsense. Here it does not typecheck.
+ */
+export type SchedulingPurpose =
+  | {
+      readonly kind: "new"
+      /**
+       * Whether this client has no Sessions in Praximo yet, which turns the
+       * intake switch on and is the only thing that ever does so on the coach's
+       * behalf.
+       */
+      readonly firstSession: boolean
+      readonly onSubmit: (draft: NewSessionDraft) => void
+    }
+  | {
+      readonly kind: "reschedule"
+      /**
+       * Where the session is now. `startMinutes` is absent when that start is no
+       * longer offerable — a session in the past, which nothing writes a
+       * terminal state for before #42.
+       */
+      readonly from: {
+        readonly date: string
+        readonly startMinutes?: number
+        readonly durationMinutes: number
+      }
+      readonly onSubmit: (draft: SchedulingDraft) => void
+    }
+
+/**
+ * Date, first-session override, duration, and time — for a new Session, or for
+ * one being moved (#62).
+ *
+ * The screen owns the draft. Extracted pieces own only self-contained
  * presentation state: the strip/month choreography and reveal rendering.
  */
 export function SchedulingScreen({
@@ -34,12 +90,11 @@ export function SchedulingScreen({
   backLabel,
   language,
   clientName,
-  firstSession,
+  purpose,
   bookedDates,
   schedule,
   onDateChange,
   onDaysVisible,
-  onSubmit,
   pending,
   error,
 }: {
@@ -47,26 +102,30 @@ export function SchedulingScreen({
   readonly backLabel: string
   readonly language: CoachLanguage
   readonly clientName: string
-  /** Whether this client has no Sessions in Praximo yet. */
-  readonly firstSession: boolean
+  readonly purpose: SchedulingPurpose
   /** `YYYY-MM-DD` for days that already carry a Session with this client. */
   readonly bookedDates: ReadonlyArray<string>
   readonly schedule: DayScheduleData | undefined
   readonly onDateChange: (date: string) => void
   readonly onDaysVisible: (from: string, days: number) => void
-  readonly onSubmit: (draft: SchedulingDraft) => void
   readonly pending: boolean
   readonly error: string | undefined
 }) {
+  const moving = purpose.kind === "reschedule" ? purpose.from : undefined
   const today = useMemo(() => new Date(), [])
-  const openingKind: SessionKind = firstSession ? "intake" : "regular"
+  const openingKind: SessionKind =
+    purpose.kind === "new" && purpose.firstSession ? "intake" : "regular"
   const [kind, setKind] = useState<SessionKind>(openingKind)
-  const [durationTouched, setDurationTouched] = useState(false)
+  // A move opens on the length the session already has, so the chips are
+  // already the coach's answer rather than a default about to overwrite it.
+  const [durationTouched, setDurationTouched] = useState(moving !== undefined)
   const [durationMinutes, setDurationMinutes] = useState<number>(
-    defaultDurationForKind(openingKind),
+    moving?.durationMinutes ?? defaultDurationForKind(openingKind),
   )
-  const [selectedDay, setSelectedDay] = useState<Date>(today)
-  const [startMinutes, setStartMinutes] = useState<number>()
+  const [selectedDay, setSelectedDay] = useState<Date>(() =>
+    moving === undefined ? today : dayOf(moving.date, today),
+  )
+  const [startMinutes, setStartMinutes] = useState<number | undefined>(moving?.startMinutes)
   /**
    * Kept across day changes: a coach looking outside their hours is usually
    * looking across more than one day. The keyed screen resets it per booking.
@@ -144,8 +203,10 @@ export function SchedulingScreen({
 
   const submit = useCallback(() => {
     if (startMinutes === undefined) return
-    onSubmit({ date, startMinutes, durationMinutes, kind })
-  }, [date, durationMinutes, kind, onSubmit, startMinutes])
+    const draft = { date, startMinutes, durationMinutes }
+    if (purpose.kind === "new") purpose.onSubmit({ ...draft, kind })
+    else purpose.onSubmit(draft)
+  }, [date, durationMinutes, kind, purpose, startMinutes])
 
   useLayoutEffect(() => {
     if (schedule === undefined) return
@@ -153,17 +214,18 @@ export function SchedulingScreen({
     if (node !== null) lastTimeHeight.current = node.offsetHeight
   }, [durationMinutes, schedule])
 
+  const submitWord = moving === undefined ? copy.scheduleSubmit : copy.rescheduleSubmit
   const label =
     startMinutes === undefined
       ? copy.pickTime
-      : `${copy.scheduleSubmit} · ${shortDayFormat.format(selectedDay)}, ${clock(startMinutes)}`
+      : `${submitWord} · ${shortDayFormat.format(selectedDay)}, ${clock(startMinutes)}`
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-28">
       <HostBackButton label={backLabel} />
 
       <Heading as="h1" role="page-title" className="mt-2">
-        {copy.sheetTitle}
+        {moving === undefined ? copy.sheetTitle : copy.rescheduleTitle}
       </Heading>
 
       <div className="mt-6">
@@ -179,12 +241,21 @@ export function SchedulingScreen({
           onDaysVisible={onDaysVisible}
         />
 
+        {/*
+          A move never asks about the kind: whether this is a client's first
+          session is a fact about their history, not about the slot it is being
+          put in, and the session keeps the kind it already has.
+        */}
         <SessionControls
           copy={copy}
-          firstSession={firstSession}
-          kind={kind}
+          {...(purpose.kind === "new"
+            ? {
+                firstSession: purpose.firstSession,
+                kind,
+                onFirstSessionChange: toggleFirstSession,
+              }
+            : {})}
           durationMinutes={durationMinutes}
-          onFirstSessionChange={toggleFirstSession}
           onDurationChange={chooseDuration}
         />
 

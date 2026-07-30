@@ -17,7 +17,7 @@ import { bookedDates } from "@/features/coach/session-days.ts"
 import { notifyHaptic } from "@/mini-app.tsx"
 import {
   calendarDate,
-  type SchedulingDraft,
+  type NewSessionDraft,
   SchedulingScreen,
 } from "@/features/coach/components/scheduling-screen.tsx"
 import { validateSchedulingSearch } from "@/features/coach/scheduling-search.ts"
@@ -136,7 +136,7 @@ function NewSessionRoute() {
   )
 
   const schedule = useCallback(
-    (draft: SchedulingDraft) => {
+    (draft: NewSessionDraft) => {
       if (chosen === undefined) return
       acceptOnce(inFlight, async () => {
         setPending(true)
@@ -242,12 +242,15 @@ function NewSessionRoute() {
             backLabel={copy.common.back}
             language={language}
             clientName={chosen.name}
-            firstSession={chosen.sessions.length === 0}
+            purpose={{
+              kind: "new",
+              firstSession: chosen.sessions.length === 0,
+              onSubmit: schedule,
+            }}
             bookedDates={bookedDates(chosen)}
             schedule={day}
             onDateChange={setDate}
             onDaysVisible={readDays}
-            onSubmit={schedule}
             pending={pending}
             error={error}
           />

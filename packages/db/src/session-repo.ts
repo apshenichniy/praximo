@@ -1,18 +1,20 @@
+import { LiveSessionStates, type SessionCancelReason, type SessionState } from "@praximo/domain"
 import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database, QueryFailed } from "./client.ts"
 import * as schema from "./schema.ts"
 
 /**
- * Scheduling, the day's bookings the sheet draws its grid from (#56), and the
- * sessions Today and the sessions list are built out of (#61).
+ * Scheduling, the day's bookings the sheet draws its grid from (#56), the
+ * sessions Today and the sessions list are built out of (#61), and the two
+ * lifecycle writes a coach can make (#62).
  *
- * The states that hold a slot. A cancelled session releases the time it was
- * holding, and a completed one is in the past by definition — only these two can
- * be in the coach's way.
+ * `LiveSessionStates` is the pair that holds a slot: a cancelled session
+ * releases the time it was holding, and a completed one is in the past by
+ * definition — only these two can be in the coach's way.
  */
-const LiveStates = ["scheduled", "in_progress"] as const
 
+/** What a booking commits. */
 export interface ScheduleInput {
   readonly workspaceId: string
   readonly clientId: string
@@ -37,6 +39,27 @@ export interface BusySession {
   readonly durationMinutes: number
 }
 
+/** Where a session is being moved to. Its client and kind do not change (#62). */
+export interface RescheduleInput {
+  readonly workspaceId: string
+  readonly sessionId: string
+  readonly scheduledAt: Date
+  readonly durationMinutes: number
+  readonly now: Date
+}
+
+/**
+ * Why a move did not happen, in the two ways it can fail at the database.
+ *
+ * `gone` covers every reason the row was not there to move — cancelled, running,
+ * never existed, or another workspace's. They are one word on purpose: the
+ * screen's answer to all four is the same, and telling them apart would let a
+ * coach learn that a session id exists in a practice that is not theirs.
+ */
+export type RescheduleOutcome =
+  | { readonly rescheduled: true }
+  | { readonly rescheduled: false; readonly reason: "overlap" | "gone" }
+
 /**
  * A session as every screen that lists one needs it (#61): the facts of the
  * booking, the client it belongs to, and the one thing that can be wrong with an
@@ -49,7 +72,12 @@ export interface ScheduledSessionRow {
   readonly scheduledAt: Date
   readonly durationMinutes: number
   readonly kind: string
-  readonly state: string
+  readonly state: SessionState
+  /**
+   * Why it stopped being scheduled — absent on every state but `cancelled`, and
+   * the difference between «the coach called it off» and «nobody came» (#62).
+   */
+  readonly cancelReason?: SessionCancelReason
   /**
    * Whether the client ever walked through the door. A Channel exists only after
    * acceptance, and the join link travels through it — so a session for a client
@@ -83,6 +111,17 @@ export interface Interface {
     workspaceId: string,
     sessionId: string,
   ) => Effect.Effect<ScheduledSessionRow | undefined, QueryFailed>
+  /** Move a scheduled session; its id, client and kind are untouched (#62). */
+  readonly reschedule: (input: RescheduleInput) => Effect.Effect<RescheduleOutcome, QueryFailed>
+  /**
+   * The coach's own cancellation. `false` means the row was not `scheduled` for
+   * this workspace — already cancelled, already running, or not theirs.
+   */
+  readonly cancel: (
+    workspaceId: string,
+    sessionId: string,
+    now: Date,
+  ) => Effect.Effect<{ readonly cancelled: boolean }, QueryFailed>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@praximo/db/SessionRepo") {}
@@ -99,7 +138,8 @@ const readListing = (row: {
   readonly scheduledAt: Date
   readonly durationMinutes: number
   readonly kind: string
-  readonly state: string
+  readonly state: SessionState
+  readonly cancelReason: SessionCancelReason | null
   readonly channelId: string | null
 }): ScheduledSessionRow => ({
   id: row.id,
@@ -109,6 +149,7 @@ const readListing = (row: {
   durationMinutes: row.durationMinutes,
   kind: row.kind,
   state: row.state,
+  ...(row.cancelReason === null ? {} : { cancelReason: row.cancelReason }),
   clientAccepted: row.channelId !== null,
 })
 
@@ -209,7 +250,7 @@ export const layer = Layer.effect(
             .where(
               and(
                 eq(schema.session.workspaceId, workspaceId),
-                inArray(schema.session.state, [...LiveStates]),
+                inArray(schema.session.state, [...LiveSessionStates]),
                 gte(schema.session.scheduledAt, from),
                 lt(schema.session.scheduledAt, to),
               ),
@@ -236,6 +277,7 @@ export const layer = Layer.effect(
           durationMinutes: schema.session.durationMinutes,
           kind: schema.session.kind,
           state: schema.session.state,
+          cancelReason: schema.session.cancelReason,
           channelId: schema.channel.id,
         })
         .from(schema.session)
@@ -260,7 +302,7 @@ export const layer = Layer.effect(
             .where(
               and(
                 eq(schema.session.workspaceId, query.workspaceId),
-                inArray(schema.session.state, [...LiveStates]),
+                inArray(schema.session.state, [...LiveSessionStates]),
                 gte(schema.session.scheduledAt, query.from),
                 ...(query.to === undefined ? [] : [lt(schema.session.scheduledAt, query.to)]),
               ),
@@ -293,7 +335,110 @@ export const layer = Layer.effect(
       return row === undefined ? undefined : readListing(row)
     })
 
-    return Service.of({ schedule, between, scheduled, find })
+    /**
+     * The move, gated and guarded by the one statement that performs it.
+     *
+     * Three conditions, and each is here rather than in the caller for a
+     * different reason. `workspace_id` is tenancy, which the repository owes
+     * whatever the caller remembered. `state = 'scheduled'` is the gate: a
+     * session the reconciler took, or one the coach cancelled on another device,
+     * must not be quietly resurrected into a new slot. And the overlap guard is
+     * the race — the same one `schedule` refuses, minus **this session**, which
+     * would otherwise collide with itself and refuse every move that stays
+     * inside the hour it already holds.
+     *
+     * The two refusals are told apart by a cheap probe on the failing path, as
+     * `schedule` does: they mean different things to the screen, and `gone`
+     * deliberately covers "not this workspace's" so that a session id cannot be
+     * probed for existence across practices.
+     */
+    const reschedule = Effect.fn("SessionRepo.reschedule")(function* (input: RescheduleInput) {
+      const updated = yield* Effect.tryPromise({
+        try: () =>
+          client.execute(sql`
+            update "session" as "target"
+            set
+              "scheduled_at" = ${input.scheduledAt},
+              "duration_minutes" = ${input.durationMinutes},
+              "updated_at" = ${input.now}
+            where
+              "target"."id" = ${input.sessionId}
+              and "target"."workspace_id" = ${input.workspaceId}
+              and "target"."state" = 'scheduled'
+              and not exists (
+                select 1 from "session" as "s"
+                where
+                  "s"."workspace_id" = "target"."workspace_id"
+                  and "s"."id" <> "target"."id"
+                  and "s"."state" in ('scheduled', 'in_progress')
+                  and "s"."scheduled_at" < ${new Date(
+                    input.scheduledAt.getTime() + input.durationMinutes * 60_000,
+                  )}
+                  and "s"."scheduled_at" + make_interval(mins => "s"."duration_minutes")
+                      > ${input.scheduledAt}
+              )
+            returning "target"."id"
+          `),
+        catch: (cause) => new QueryFailed({ operation: "session.reschedule", cause }),
+      })
+
+      if (updated.rows.length > 0) return { rescheduled: true } as const
+
+      const movable = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .select({ id: schema.session.id })
+            .from(schema.session)
+            .where(
+              and(
+                eq(schema.session.id, input.sessionId),
+                eq(schema.session.workspaceId, input.workspaceId),
+                eq(schema.session.state, "scheduled"),
+              ),
+            )
+            .limit(1),
+        catch: (cause) => new QueryFailed({ operation: "session.reschedule.probe", cause }),
+      })
+
+      return {
+        rescheduled: false,
+        reason: movable.length > 0 ? ("overlap" as const) : ("gone" as const),
+      } as const
+    })
+
+    /**
+     * The coach's cancellation, conditional on the session still being theirs to
+     * cancel.
+     *
+     * `coach_cancelled` is written here rather than passed in: it is the only
+     * reason a human writes, and a reason parameter is how a «mark no-show»
+     * button gets added later without anyone having to argue for it (ADR 0005).
+     */
+    const cancel = Effect.fn("SessionRepo.cancel")(function* (
+      workspaceId: string,
+      sessionId: string,
+      now: Date,
+    ) {
+      const updated = yield* Effect.tryPromise({
+        try: () =>
+          client
+            .update(schema.session)
+            .set({ state: "cancelled", cancelReason: "coach_cancelled", updatedAt: now })
+            .where(
+              and(
+                eq(schema.session.id, sessionId),
+                eq(schema.session.workspaceId, workspaceId),
+                eq(schema.session.state, "scheduled"),
+              ),
+            )
+            .returning({ id: schema.session.id }),
+        catch: (cause) => new QueryFailed({ operation: "session.cancel", cause }),
+      })
+
+      return { cancelled: updated.length > 0 }
+    })
+
+    return Service.of({ schedule, between, scheduled, find, reschedule, cancel })
   }),
 )
 

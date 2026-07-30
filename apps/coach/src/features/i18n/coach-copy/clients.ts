@@ -203,6 +203,14 @@ export interface ClientsCopy {
   readonly cancel: string
 
   readonly sheetTitle: string
+  /**
+   * The same screen, moving a session that already exists (#62).
+   *
+   * Two words rather than a second catalogue: the scheduling vocabulary is one
+   * screen's, and a reschedule differs from a booking in what the heading and
+   * the button say, not in what a duration chip is called.
+   */
+  readonly rescheduleTitle: string
   readonly dateLabel: string
   /** Opens the full month behind the day strip. */
   readonly monthLabel: string
@@ -267,6 +275,7 @@ export interface ClientsCopy {
   readonly nextDay: string
   readonly pickTime: string
   readonly scheduleSubmit: string
+  readonly rescheduleSubmit: string
   /** name · " will see it as " · offset · ", your zone, in the bot's message." */
   readonly footnotePendingTail: string
   readonly footnoteReadyTail: string
@@ -378,6 +387,7 @@ const en: ClientsCopy = {
   cancel: "Cancel",
 
   sheetTitle: "New session",
+  rescheduleTitle: "New time",
   dateLabel: "Date",
   monthLabel: "Month",
   today: "Today",
@@ -398,6 +408,7 @@ const en: ClientsCopy = {
   nextDay: "Try the next day",
   pickTime: "Pick a time",
   scheduleSubmit: "Schedule",
+  rescheduleSubmit: "Move it",
   footnotePendingTail: " will see it in your zone, ",
   footnoteReadyTail: " will see ",
   footnoteFirstSession: "Marked as a first session.",
@@ -502,6 +513,7 @@ const uk: ClientsCopy = {
   cancel: "Скасувати",
 
   sheetTitle: "Нова сесія",
+  rescheduleTitle: "Новий час",
   dateLabel: "Дата",
   monthLabel: "Місяць",
   today: "Сьогодні",
@@ -522,6 +534,7 @@ const uk: ClientsCopy = {
   nextDay: "Спробувати наступний день",
   pickTime: "Оберіть час",
   scheduleSubmit: "Запланувати",
+  rescheduleSubmit: "Перенести",
   footnotePendingTail: " побачить час у вашій зоні, ",
   footnoteReadyTail: " побачить ",
   footnoteFirstSession: "Позначена як перша.",
@@ -626,6 +639,7 @@ const ru: ClientsCopy = {
   cancel: "Отмена",
 
   sheetTitle: "Новая сессия",
+  rescheduleTitle: "Новое время",
   dateLabel: "Дата",
   monthLabel: "Месяц",
   today: "Сегодня",
@@ -646,6 +660,7 @@ const ru: ClientsCopy = {
   nextDay: "Попробовать следующий день",
   pickTime: "Выберите время",
   scheduleSubmit: "Запланировать",
+  rescheduleSubmit: "Перенести",
   footnotePendingTail: " увидит время в вашей зоне, ",
   footnoteReadyTail: " увидит ",
   footnoteFirstSession: "Отмечена как первая.",

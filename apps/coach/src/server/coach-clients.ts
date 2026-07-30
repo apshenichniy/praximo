@@ -11,13 +11,11 @@ import {
   type CoachLanguage,
   CreateClientInput,
   type DayWindow,
-  isSchedulableStart,
   isClientInviteDeliveryKind,
   isSupportedTimeZone,
   MinutesInDay,
   nextSlotStart,
   parseWorkingHours,
-  PlannedDurations,
   readEmailAddress,
   readMemberSettings,
   readWorkingHours,
@@ -33,6 +31,7 @@ import { Clock, Config, Context, Effect, Layer, Schema } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import { localParts, nextDate } from "@/lib/coach-calendar.ts"
 import { busyByDate, instantOf, weekdayOfDate, zoneOf } from "./coach-day.ts"
+import { sessionDraft } from "./session-draft.ts"
 import type { LaunchCredential } from "@/launch-credential.ts"
 
 /**
@@ -782,27 +781,27 @@ export const layer = Layer.effect(
       const kind = yield* Schema.decodeUnknownEffect(SessionKind)(input.kind).pipe(
         Effect.orElseSucceed(() => undefined),
       )
-      if (
-        kind === undefined ||
-        !PlannedDurations.includes(input.durationMinutes as never) ||
-        !isSchedulableStart(input.startMinutes, input.durationMinutes)
-      ) {
-        return { scheduled: false, reason: "invalid" } as const
-      }
-
-      const timezone = zoneOf(principal)
-      const scheduledAt = instantOf(input.date, input.startMinutes, timezone)
-      if (scheduledAt === undefined) return { scheduled: false, reason: "invalid" } as const
+      if (kind === undefined) return { scheduled: false, reason: "invalid" } as const
 
       const now = yield* Clock.currentTimeMillis
-      if (scheduledAt.getTime() <= now) return { scheduled: false, reason: "past" } as const
+      // The three questions a single draft can answer on its own, shared with
+      // the reschedule write so `invalid` and `past` cannot come to mean two
+      // different things on two screens (#62).
+      const draft = sessionDraft({
+        date: input.date,
+        startMinutes: input.startMinutes,
+        durationMinutes: input.durationMinutes,
+        timezone: zoneOf(principal),
+        nowMillis: now,
+      })
+      if (!draft.ok) return { scheduled: false, reason: draft.reason } as const
 
       const outcome = yield* sessions
         .schedule({
           workspaceId: principal.workspaceId,
           clientId: input.clientId,
           sessionId: identifier("se"),
-          scheduledAt,
+          scheduledAt: draft.at,
           durationMinutes: input.durationMinutes,
           kind,
           now: new Date(now),

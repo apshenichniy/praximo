@@ -122,6 +122,8 @@ const run = <A, E>(
       ),
       scheduled: unused,
       find: unused,
+      reschedule: unused,
+      cancel: unused,
     }),
   )
   const clients = Layer.succeed(

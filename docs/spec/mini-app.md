@@ -84,20 +84,35 @@ drill-in with a back affordance. Screen inventory:
   shipped with the list ([#61](https://github.com/apshenichniy/praximo/issues/61)) rather than
   after it: three to five sessions a day appear in the first week, and adding grouping to a
   flat list afterwards means rewriting it. **Past is not there yet** — no session can be
-  `completed` before #42, so #62 brings history with the rest of the session screen.
+  `completed` before #42, and history on both this list and the client route is
+  [#232](https://github.com/apshenichniy/praximo/issues/232), split out of #62 so the two
+  lifecycle writes could ship without it.
 - **Session detail** — client, time, lifecycle actions, artifact list. Route
-  `/sessions/$sessionId`. #61 ships it as a deliberate **stub** — the facts and no actions — so
-  the list rows and Today's cards lead somewhere complete-looking; #62 is the named creditor.
+  `/sessions/$sessionId`. #61 shipped it as a deliberate **stub** — the facts and no actions —
+  so the list rows and Today's cards led somewhere complete-looking;
+  [#62](https://github.com/apshenichniy/praximo/issues/62) made it the real screen. It carries
+  the state only when the session is **not** `scheduled`, by the same rule the invitation row
+  follows: an ordinary session says nothing about itself, or the eye stops reading the line
+  that matters. The artifact list is #44's.
 - **Clients list** — all clients with invite status. Route `/clients`.
 - **Client detail** — profile (channel, language, consent), invite banner,
   session history.
 - **Artifact reader** — full-screen render of one artifact version.
 - **New session** — client picker + date/time. Route `/sessions/new`. Scheduling for a client
-  the coach is *already looking at* does not go through it: that is a sheet on the client
-  route ([#56](https://github.com/apshenichniy/praximo/issues/56)). This screen
-  arrives with Today, for the case where the client still has to be chosen. The sheet is the
-  same component from both entrances, so duration and kind cannot drift apart, and its month
-  dots the days that already carry a session with the client being scheduled.
+  the coach is *already looking at* skips the picker by naming them in the URL
+  (`?client=`), so both entrances are the same route and the same screen. **Amended by
+  [#186](https://github.com/apshenichniy/praximo/issues/186)**, which replaced #56's drawer:
+  a sheet was local state, so Telegram's BackButton and a swipe down disagreed about what
+  "back" meant, and a mis-swipe cost the whole draft. One screen from both entrances is what
+  keeps duration and kind from drifting apart, and its month dots the days that already carry
+  a session with the client being scheduled.
+- **Reschedule** — route `/sessions/$sessionId/reschedule`
+  ([#62](https://github.com/apshenichniy/praximo/issues/62)): the same scheduling screen,
+  opened on a session that already exists. It asks for date, time and length and **not** for
+  the kind — whether this is a client's first session is a fact about their history, not about
+  the slot it is being moved into. Its own hour is not drawn as busy, or the commonest move
+  there is — fifteen minutes later — would be refused by the screen the server would have
+  accepted it from.
 - **Main Mini App setup** — route `/main-mini-app`: the four @BotFather steps, this coach's own
   Mini App address, and the **Hide** control for the hint row on Today
   ([#61](https://github.com/apshenichniy/praximo/issues/61)). It exists because no Bot API can
@@ -210,8 +225,18 @@ for a first session: "no history yet").
 - **Schedule** — the New session screen (client + date/time). Clients with a
   pending invite are schedulable (consent blocks only after revocation, per
   [client-onboarding-auth.md](client-onboarding-auth.md)).
-- **Reschedule** — mutates `scheduled_at` in place; no history.
-- **Cancel** — coach cancellation (`coach_cancelled`).
+- **Reschedule** — mutates `scheduled_at` and the length in place; no history. Only a
+  `scheduled` session moves: a running one is the room's, and a terminal one is a record.
+- **Cancel** — coach cancellation (`coach_cancelled`), behind a confirmation, and **not in the
+  danger zone** ([#62](https://github.com/apshenichniy/praximo/issues/62)). It is a routine
+  part of running a practice — clients move, coaches fall ill — and spending the destructive
+  heading on the commonest action there leaves none of its weight for Reset and Delete on the
+  client route. Both actions are ordinary rows in a card of their own; the host's fixed bottom
+  slot stays free for **Join**.
+- **Both are silent to the client.** Nothing is sent on a move or a cancellation, and the
+  session screen says so where it asks — telling the client is still the coach's to do.
+  Reminders and re-delivery after a move are
+  [#41](https://github.com/apshenichniy/praximo/issues/41)'s.
 - **Join** — visible only while the join window is open.
 - **Reissue join links** — token rotation per
   [client-onboarding-auth.md](client-onboarding-auth.md) §Web-room access.

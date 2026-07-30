@@ -1,60 +1,24 @@
+import type { SessionRepo } from "@praximo/db"
 import { DefaultWorkingHours } from "@praximo/domain"
-import {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  RouterProvider,
-} from "@tanstack/react-router"
-import type { ReactNode } from "react"
-import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 
 import { ClientPickerScreen } from "@/features/coach/components/client-picker-screen.tsx"
 import { ClientsScreen } from "@/features/coach/components/clients-screen.tsx"
-import { SessionScreen } from "@/features/coach/components/session-screen.tsx"
 import { SessionsScreen } from "@/features/coach/components/sessions-screen.tsx"
 import { TodayScreen } from "@/features/coach/components/today-screen.tsx"
 import { coachCatalog, coachCopy } from "@/features/i18n/coach-copy.ts"
-import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
-import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
-import { MiniAppProvider } from "@/mini-app.tsx"
 import { attentionFor, type CoachSessions, orderAttention } from "@/server/coach-sessions.ts"
 import { bookedDates } from "@/features/coach/session-days.ts"
+import { renderScreen as render, renderWithFormat as withFormat } from "./render-screen.tsx"
 
 /**
  * What each screen of #61 actually puts on the page, and — as much as the
  * ticket's rules are about absence — what it does not.
  */
-const render = async (node: ReactNode): Promise<string> => {
-  const rootRoute = createRootRoute({
-    component: () => <MiniAppProvider>{node}</MiniAppProvider>,
-  })
-  const routeTree = rootRoute.addChildren([
-    createRoute({ getParentRoute: () => rootRoute, path: "/clients" }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/clients/new" }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/clients/$clientId" }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/sessions" }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/sessions/$sessionId" }),
-    createRoute({ getParentRoute: () => rootRoute, path: "/main-mini-app" }),
-  ])
-  const router = createRouter({
-    routeTree,
-    history: createMemoryHistory({ initialEntries: ["/"] }),
-  })
-  await router.load()
-  return renderToStaticMarkup(<RouterProvider router={router as never} />)
-}
-
-const withFormat = (node: ReactNode, locale: "en" | "uk" | "ru" = "en") =>
-  render(
-    <TimestampFormatProvider value={coachTimestampFormat(locale)}>{node}</TimestampFormatProvider>,
-  )
-
 const NOW = new Date("2026-07-27T09:00:00.000Z")
 
 /** A row of today's calendar, as the repository hands it over. */
-const booked = (clientId: string) => ({
+const booked = (clientId: string): SessionRepo.ScheduledSessionRow => ({
   id: `se_${clientId}`,
   clientId,
   clientName: clientId.toUpperCase(),
@@ -450,49 +414,6 @@ describe("sessions list", () => {
       />,
     )
     expect(html).toContain(coachCatalog.en.sessions.empty)
-  })
-})
-
-describe("session screen", () => {
-  it("renders the facts and no actions", async () => {
-    const html = await render(
-      <SessionScreen
-        copy={coachCopy("en")}
-        language="en"
-        session={{ ...session(), timezone: "Europe/Kyiv" }}
-      />,
-    )
-
-    expect(html).toContain("Maria K.")
-    expect(html).toContain("14:00")
-    expect(html).toContain(coachCatalog.en.clients.kindRegular)
-    expect(html).toContain("60")
-    expect(html).toContain("/clients/cl_1")
-    // #62 owns every one of these; a stub that offered them would be a lie.
-    for (const absent of ["Reschedule", "Cancel", "Join"]) {
-      expect(html).not.toContain(absent)
-    }
-    expect(html).not.toContain("<button")
-  })
-
-  it("names the invitation only when it is a problem", async () => {
-    const healthy = await render(
-      <SessionScreen
-        copy={coachCopy("en")}
-        language="en"
-        session={{ ...session(), timezone: "Europe/Kyiv" }}
-      />,
-    )
-    expect(healthy).not.toContain(coachCatalog.en.sessions.detailInvitation)
-
-    const broken = await render(
-      <SessionScreen
-        copy={coachCopy("en")}
-        language="en"
-        session={{ ...session(), clientAccepted: false, timezone: "Europe/Kyiv" }}
-      />,
-    )
-    expect(broken).toContain(coachCatalog.en.sessions.detailUnaccepted)
   })
 })
 

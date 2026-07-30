@@ -58,6 +58,13 @@ export {
   SessionKinds,
 } from "./scheduling.ts"
 export {
+  LiveSessionStates,
+  SessionCancelReason,
+  SessionCancelReasons,
+  SessionState,
+  SessionStates,
+} from "./session-lifecycle.ts"
+export {
   applyWindowToAll,
   DefaultWorkingDayEndMinutes,
   DefaultWorkingDayStartMinutes,

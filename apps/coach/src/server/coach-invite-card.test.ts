@@ -128,7 +128,14 @@ const run = <A, E>(
   )
   const sessions = Layer.succeed(
     SessionRepo.Service,
-    SessionRepo.Service.of({ schedule: unused, between: unused, scheduled: unused, find: unused }),
+    SessionRepo.Service.of({
+      schedule: unused,
+      between: unused,
+      scheduled: unused,
+      find: unused,
+      reschedule: unused,
+      cancel: unused,
+    }),
   )
   const workspaces = Layer.succeed(
     WorkspaceRepo.Service,

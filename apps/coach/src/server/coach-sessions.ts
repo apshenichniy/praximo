@@ -4,12 +4,15 @@ import {
   MinutesInDay,
   readMemberSettings,
   readWorkingHours,
+  type SessionCancelReason,
+  type SessionState,
   type WorkingHours,
 } from "@praximo/domain"
 import { Clock, Context, Effect, Layer } from "effect"
-import { CoachSession, READ_WINDOW_MILLIS } from "./coach-session.ts"
+import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import { localParts } from "@/lib/coach-calendar.ts"
 import { instantOf, zoneOf } from "./coach-day.ts"
+import { sessionDraft } from "./session-draft.ts"
 import type { LaunchCredential } from "@/launch-credential.ts"
 
 /**
@@ -85,16 +88,41 @@ export interface UpcomingSessions {
 }
 
 /**
- * One session's facts, and nothing about its lifecycle.
+ * One session's facts, and — since #62 — what became of it.
  *
- * `state` is deliberately **not** carried across this boundary. The stub screen
- * has no way to say "cancelled" that is not a lifecycle claim, and no session
- * can reach a terminal state before #42 writes one — so shipping the column now
- * would be a field with no reader. #62 adds it with the screen that acts on it.
+ * `state` and `cancelReason` arrive with the screen that acts on them. Until
+ * then they were deliberately absent: a stub screen has no way to say
+ * "cancelled" that is not a lifecycle claim, and a column with no reader is a
+ * field that drifts.
  */
 export interface SessionDetail extends SessionSummary {
   readonly timezone: string
+  readonly state: SessionState
+  /** Absent on every state but `cancelled`. */
+  readonly cancelReason?: SessionCancelReason
 }
+
+/** Where a session is being moved to. Its client and kind do not change (#62). */
+export interface RescheduleSessionInput {
+  /** `YYYY-MM-DD`, in the coach's own calendar. */
+  readonly date: string
+  readonly startMinutes: number
+  readonly durationMinutes: number
+}
+
+/**
+ * The four ways a move is refused, and the screen acts on each one differently.
+ *
+ * `invalid` and `past` are decided from the draft alone and never reach the
+ * database; `overlap` asks for another time; `gone` means the session moved on
+ * underneath the coach, so the screen re-reads rather than only complaining.
+ */
+export type RescheduleOutcome =
+  | { readonly rescheduled: true }
+  | {
+      readonly rescheduled: false
+      readonly reason: "invalid" | "past" | "overlap" | "gone"
+    }
 
 /**
  * How many sessions ahead the flat list will draw.
@@ -120,6 +148,17 @@ export interface Interface {
     sessionId: string,
   ) => Effect.Effect<
     SessionDetail | undefined,
+    CoachSession.Unauthenticated | CoachSession.LoadFailed
+  >
+  readonly reschedule: (
+    credential: LaunchCredential,
+    input: RescheduleSessionInput & { readonly sessionId: string },
+  ) => Effect.Effect<RescheduleOutcome, CoachSession.Unauthenticated | CoachSession.LoadFailed>
+  readonly cancel: (
+    credential: LaunchCredential,
+    sessionId: string,
+  ) => Effect.Effect<
+    { readonly cancelled: boolean },
     CoachSession.Unauthenticated | CoachSession.LoadFailed
   >
 }
@@ -283,10 +322,66 @@ export const layer = Layer.effect(
       return {
         ...summarise(row),
         timezone: zoneOf(principal),
+        state: row.state,
+        ...(row.cancelReason === undefined ? {} : { cancelReason: row.cancelReason }),
       } satisfies SessionDetail
     })
 
-    return Service.of({ today, upcoming, detail })
+    /**
+     * The move: a draft decided here, an overlap decided by the statement.
+     *
+     * The split is the same one `CoachClients.schedule` makes, through the same
+     * `sessionDraft` — so a start off the grid is `invalid` on both screens and
+     * a time that has gone by is `past` on both. What is left for the database
+     * is the pair only it can answer: is anything else in the way, and is this
+     * session still the coach's to move.
+     */
+    const reschedule = Effect.fn("CoachSessions.reschedule")(function* (
+      credential: LaunchCredential,
+      input: RescheduleSessionInput & { readonly sessionId: string },
+    ) {
+      const principal = yield* session.requireOnboardedCoach(credential, WRITE_WINDOW_MILLIS)
+      const now = yield* Clock.currentTimeMillis
+      const draft = sessionDraft({
+        date: input.date,
+        startMinutes: input.startMinutes,
+        durationMinutes: input.durationMinutes,
+        timezone: zoneOf(principal),
+        nowMillis: now,
+      })
+      if (!draft.ok) return { rescheduled: false, reason: draft.reason } as const
+
+      const outcome = yield* sessions
+        .reschedule({
+          workspaceId: principal.workspaceId,
+          sessionId: input.sessionId,
+          scheduledAt: draft.at,
+          durationMinutes: input.durationMinutes,
+          now: new Date(now),
+        })
+        .pipe(Effect.mapError(failed("sessions.reschedule")))
+
+      return outcome.rescheduled
+        ? ({ rescheduled: true } as const)
+        : ({ rescheduled: false, reason: outcome.reason } as const)
+    })
+
+    /**
+     * The coach's own cancellation, and nothing else about it: the reason is the
+     * repository's, and there is no parameter here for a second one (ADR 0005).
+     */
+    const cancel = Effect.fn("CoachSessions.cancel")(function* (
+      credential: LaunchCredential,
+      sessionId: string,
+    ) {
+      const principal = yield* session.requireOnboardedCoach(credential, WRITE_WINDOW_MILLIS)
+      const now = new Date(yield* Clock.currentTimeMillis)
+      return yield* sessions
+        .cancel(principal.workspaceId, sessionId, now)
+        .pipe(Effect.mapError(failed("sessions.cancel")))
+    })
+
+    return Service.of({ today, upcoming, detail, reschedule, cancel })
   }),
 )
 
