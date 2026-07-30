@@ -101,7 +101,7 @@ export function SessionsScreen({
   list,
   now,
   past,
-  onView,
+  onPast,
   onCreate,
 }: {
   readonly copy: CoachCopy
@@ -116,7 +116,7 @@ export function SessionsScreen({
    * a coach opening this screen is nearly always asking what happens next.
    */
   readonly past: boolean
-  readonly onView: (past: boolean) => void
+  readonly onPast: (past: boolean) => void
   /** Opens the client picker — a session is always somebody's. */
   readonly onCreate: () => void
 }) {
@@ -128,9 +128,14 @@ export function SessionsScreen({
         timezone: list.timezone,
         language,
         now,
-        words: { today: copy.sessions.today, tomorrow: copy.sessions.tomorrow },
+        // No «Tomorrow» behind a backwards list: a cancellation booked for next
+        // week is history, and in reverse chronology it heads the whole view.
+        words: {
+          today: copy.sessions.today,
+          ...(past ? {} : { tomorrow: copy.sessions.tomorrow }),
+        },
       }),
-    [copy, language, list.timezone, now, shown],
+    [copy, language, list.timezone, now, past, shown],
   )
 
   return (
@@ -150,10 +155,10 @@ export function SessionsScreen({
         with a sentence in it.
       */}
       <div role="group" aria-label={copy.sessions.viewLabel} className="mt-4 flex gap-0.5">
-        <SegmentedChoice selected={!past} onClick={() => onView(false)}>
+        <SegmentedChoice selected={!past} onClick={() => onPast(false)}>
           {copy.sessions.viewUpcoming}
         </SegmentedChoice>
-        <SegmentedChoice selected={past} onClick={() => onView(true)}>
+        <SegmentedChoice selected={past} onClick={() => onPast(true)}>
           {copy.sessions.viewPast}
         </SegmentedChoice>
       </div>

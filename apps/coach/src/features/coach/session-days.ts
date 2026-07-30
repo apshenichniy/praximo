@@ -23,7 +23,14 @@ export interface SessionDay<T> {
 
 export interface DayWords {
   readonly today: string
-  readonly tomorrow: string
+  /**
+   * Absent where a list runs backwards (#232). «Завтра» over a group of
+   * sessions that are *over* is a contradiction — a cancellation booked for
+   * next week is history the moment it is written, and in reverse chronology it
+   * sits at the very top. «Сегодня» has no such problem: a session called off
+   * this morning is still today's.
+   */
+  readonly tomorrow?: string
 }
 
 export interface GroupOptions {
@@ -117,9 +124,7 @@ export const groupByDay = <T extends { readonly scheduledAt: string }>(
       heading:
         date === todayDate
           ? options.words.today
-          : date === tomorrowDate
-            ? options.words.tomorrow
-            : dateHeading(at, date),
+          : ((date === tomorrowDate ? options.words.tomorrow : undefined) ?? dateHeading(at, date)),
       sessions: [session],
     })
   }

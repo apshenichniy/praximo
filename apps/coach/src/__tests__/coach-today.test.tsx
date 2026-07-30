@@ -357,7 +357,7 @@ describe("sessions list", () => {
         list={list(overrides)}
         now={NOW}
         past={past}
-        onView={() => {}}
+        onPast={() => {}}
         onCreate={() => {}}
       />,
     )
@@ -435,6 +435,36 @@ describe("sessions list", () => {
     // and everything a coach can do with it lives on its own screen.
     expect(html).toContain("/sessions/se_off")
     expect(html).toContain("/sessions/se_done")
+  })
+
+  /**
+   * A cancellation booked for next week is history, and reverse chronology puts
+   * it at the very top — under «Tomorrow», which is a contradiction in a list of
+   * what is over. «Today» keeps its place: a session called off this morning is
+   * still today's.
+   */
+  it("never heads a backwards list with «Tomorrow»", async () => {
+    const behind = [
+      {
+        ...session({ id: "se_off", scheduledAt: "2026-07-28T08:00:00.000Z" }),
+        state: "cancelled" as const,
+        cancelReason: "coach_cancelled" as const,
+      },
+      {
+        ...session({ id: "se_today", scheduledAt: "2026-07-27T05:00:00.000Z" }),
+        state: "completed" as const,
+      },
+    ]
+
+    const html = await screen({ past: behind }, true)
+    expect(html).not.toContain(coachCatalog.en.sessions.tomorrow)
+    expect(html).toContain("Tuesday 28 July")
+    expect(html).toContain(coachCatalog.en.sessions.today)
+
+    // And Upcoming keeps the word it was written for.
+    expect(
+      await screen({ upcoming: [session({ scheduledAt: "2026-07-28T08:00:00.000Z" })] }),
+    ).toContain(coachCatalog.en.sessions.tomorrow)
   })
 
   it("admits when the history it shows is a window rather than all of it", async () => {

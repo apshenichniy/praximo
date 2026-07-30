@@ -78,6 +78,7 @@ const screen = (detail: CoachClients.ClientDetail) =>
         copy={copy}
         language="ru"
         client={detail}
+        now={new Date("2026-07-27T09:00:00.000Z")}
         onSchedule={() => undefined}
         onShare={() => undefined}
         onShareSheet={() => undefined}

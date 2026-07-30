@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, useRouter } from "@tanstack/react-router"
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
@@ -56,6 +56,9 @@ function ClientRoute() {
   useCoachTimezone(entry.ok && entry.entry.kind === "home")
   const copy = coachCopy(language)
   const client = detail.ok ? detail.client : undefined
+  // Read once per render of the screen, as the sessions list does: every date on
+  // it is written against the same instant.
+  const now = useMemo(() => new Date(), [])
 
   const reset = useCallback(() => {
     if (client === undefined) return
@@ -269,6 +272,7 @@ function ClientRoute() {
           copy={copy}
           language={language}
           client={client}
+          now={now}
           // Scheduling is a route of its own (#186), entered with the client
           // already answered. `from` is what sends the booked session back
           // here rather than to the sessions list.

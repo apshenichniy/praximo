@@ -11,6 +11,7 @@ import { Link } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 
 import { HostBackButton, isIosHost } from "@/mini-app.tsx"
+import { localParts } from "@/lib/coach-calendar.ts"
 import { Heading, Section, SectionTitle, SegmentedChoice, Text } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
@@ -73,26 +74,51 @@ const stateTones: Record<CoachClients.ClientDetail["state"], StatusTone> = {
  *   card's header beside an eyebrow that already reads «Приглашение · Telegram»,
  *   so the glyph confirms the word rather than replacing it.
  */
+const doorOffers: Record<
+  ClientInviteDoor,
+  {
+    readonly card: boolean
+    readonly shareSheet: boolean
+    readonly email: boolean
+    /**
+     * Which of them is the filled button — one per door, and the rest are ghosts.
+     *
+     * It follows the channel model rather than the mechanism: a client is on
+     * Telegram or reachable by address, and this door exists because they are
+     * not on Telegram. So behind Link the canonical act is *us sending it to an
+     * address*, and a pasted link is the escape that avoids having to ask for
+     * one. Copy led here until #58's send had somewhere to go; leaving it in
+     * front made the exception the default.
+     */
+    readonly lead: "card" | "email"
+    readonly icon: typeof TelegramIcon
+  }
+> = {
+  telegram: { card: true, shareSheet: false, email: false, lead: "card", icon: TelegramIcon },
+  link: { card: false, shareSheet: true, email: true, lead: "email", icon: Link02Icon },
+}
+
 /**
  * One session of this client's, ahead or behind (#232).
  *
  * **A link, both ways round.** A past session is otherwise a dead end: it is on
- * neither Today nor the Upcoming list, and reschedule, cancel and — later —
- * the artifact list all live on its own screen. Making only the upcoming rows
- * lead somewhere would put the coach's whole history behind a row that looks
- * like the others and does nothing.
+ * neither Today nor the Upcoming list, and reschedule, cancel and — later — the
+ * artifact list all live on its own screen. Making only the upcoming rows lead
+ * somewhere would put the coach's whole history behind a row that looks like the
+ * others and does nothing.
  *
  * `standing` is what became of it, and it is absent on everything still ahead:
  * an ordinary session says nothing about itself.
  */
-function ClientSessionRow({
+function ClientSessionLink({
   copy,
-  format,
+  moment,
   session,
   standing,
 }: {
   readonly copy: CoachCopy
-  readonly format: Intl.DateTimeFormat
+  /** The screen's own writer — see `writeMoment` for why it carries a year. */
+  readonly moment: (scheduledAt: string) => string
   readonly session: {
     readonly id: string
     readonly scheduledAt: string
@@ -121,7 +147,7 @@ function ClientSessionRow({
         />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-base leading-relaxed tabular-nums">
-            {format.format(new Date(session.scheduledAt))}
+            {moment(session.scheduledAt)}
           </span>
           {standing === undefined ? null : (
             <span className="text-muted-foreground mt-0.5 block truncate text-xs leading-normal">
@@ -140,34 +166,11 @@ function ClientSessionRow({
   )
 }
 
-const doorOffers: Record<
-  ClientInviteDoor,
-  {
-    readonly card: boolean
-    readonly shareSheet: boolean
-    readonly email: boolean
-    /**
-     * Which of them is the filled button — one per door, and the rest are ghosts.
-     *
-     * It follows the channel model rather than the mechanism: a client is on
-     * Telegram or reachable by address, and this door exists because they are
-     * not on Telegram. So behind Link the canonical act is *us sending it to an
-     * address*, and a pasted link is the escape that avoids having to ask for
-     * one. Copy led here until #58's send had somewhere to go; leaving it in
-     * front made the exception the default.
-     */
-    readonly lead: "card" | "email"
-    readonly icon: typeof TelegramIcon
-  }
-> = {
-  telegram: { card: true, shareSheet: false, email: false, lead: "card", icon: TelegramIcon },
-  link: { card: false, shareSheet: true, email: true, lead: "email", icon: Link02Icon },
-}
-
 export function ClientScreen({
   copy,
   language,
   client,
+  now,
   onSchedule,
   onShare,
   onShareSheet,
@@ -181,6 +184,12 @@ export function ClientScreen({
   readonly copy: CoachCopy
   readonly language: CoachLanguage
   readonly client: CoachClients.ClientDetail
+  /**
+   * Passed in rather than read here, exactly as the sessions list does it: the
+   * only thing this screen asks of the present is which year it is, and a
+   * screen that reads the clock itself cannot be looked at from another one.
+   */
+  readonly now: Date
   readonly onSchedule: () => void
   readonly onShare: () => void
   /** The system share sheet, offered on iOS only — see `isIosHost`. */
@@ -261,19 +270,36 @@ export function ClientScreen({
   const recordThisDoor = () => onDelivered(door)
   const copyMessage = useCopyLink(invitation?.message, recordThisDoor)
 
-  const sessionFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(localeTag(language), {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-        timeZone: client.timezone,
-      }),
-    [client.timezone, language],
-  )
+  /**
+   * When a session was, in the coach's zone — **with its year once it is not
+   * this one** (#232).
+   *
+   * Upcoming never needed a year: a coach books months ahead, not years. The
+   * history below is bounded by a count rather than by a date, so a weekly
+   * client's list reaches back through several — and «сб, 20 июл., 08:00» in a
+   * list that spans them is a date nobody can place. Two formatters rather than
+   * one with the year always on, because a year the reader already knows is
+   * noise on every row above.
+   */
+  const writeMoment = useMemo(() => {
+    const shape = {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: client.timezone,
+    } as const
+    const near = new Intl.DateTimeFormat(localeTag(language), shape)
+    const far = new Intl.DateTimeFormat(localeTag(language), { ...shape, year: "numeric" })
+    const thisYear = localParts(now, client.timezone).date.slice(0, 4)
+    return (scheduledAt: string): string => {
+      const at = new Date(scheduledAt)
+      const year = localParts(at, client.timezone).date.slice(0, 4)
+      return (year === thisYear ? near : far).format(at)
+    }
+  }, [client.timezone, language, now])
 
   /**
    * The state, and since #224 the honest version of it: an invitation nobody has
@@ -543,10 +569,10 @@ export function ClientScreen({
               </li>
             ) : (
               client.sessions.map((session) => (
-                <ClientSessionRow
+                <ClientSessionLink
                   key={session.id}
                   copy={copy}
-                  format={sessionFormat}
+                  moment={writeMoment}
                   session={session}
                 />
               ))
@@ -586,10 +612,10 @@ export function ClientScreen({
           <Card className="mt-4 gap-0 overflow-hidden py-0">
             <ul className="divide-border divide-y">
               {client.past.map((session) => (
-                <ClientSessionRow
+                <ClientSessionLink
                   key={session.id}
                   copy={copy}
-                  format={sessionFormat}
+                  moment={writeMoment}
                   session={session}
                   standing={stateSentence(copy.sessions, session.state, session.cancelReason)}
                 />

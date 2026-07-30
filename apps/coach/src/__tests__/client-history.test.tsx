@@ -47,12 +47,15 @@ const behind = (
   ...overrides,
 })
 
+const NOW = new Date("2026-07-30T09:00:00.000Z")
+
 const screen = (detail: CoachClients.ClientDetail, language: "en" | "uk" | "ru" = "en") =>
   withFormat(
     <ClientScreen
       copy={coachCopy(language)}
       language={language}
       client={detail}
+      now={NOW}
       onSchedule={() => undefined}
       onShare={() => undefined}
       onShareSheet={() => undefined}
@@ -140,6 +143,25 @@ describe("client route history", () => {
 
     expect(html).toContain('href="/sessions/se_next"')
     expect(html).toContain('href="/sessions/se_done"')
+  })
+
+  /**
+   * The history is bounded by a count rather than by a date, so a weekly client's
+   * list reaches back through years — and a row with no year in it is a date
+   * nobody can place. This year's rows keep theirs off.
+   */
+  it("dates a session from another year with its year, and this year's without", async () => {
+    const html = await screen(
+      client({
+        past: [behind(), behind({ id: "se_old", scheduledAt: "2024-07-20T08:00:00.000Z" })],
+      }),
+    )
+
+    // The rows themselves, not the page: the profile card prints a full date for
+    // the moment the client accepted, and it carries a year by right.
+    const moments = [...html.matchAll(/tabular-nums">([^<]*)</g)].map((match) => match[1] ?? "")
+    expect(moments.some((moment) => moment.includes("2024"))).toBe(true)
+    expect(moments.some((moment) => moment.includes("2026"))).toBe(false)
   })
 
   it("writes the state in each of the three languages", async () => {

@@ -61,7 +61,7 @@ function SessionsRoute() {
           list={sessions.list}
           now={now}
           past={past}
-          onView={setPast}
+          onPast={setPast}
           onCreate={() => void navigate({ to: "/sessions/new" })}
         />
       ) : (
