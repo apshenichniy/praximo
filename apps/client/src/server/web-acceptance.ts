@@ -1,4 +1,4 @@
-import { ClientAcceptanceRepo } from "@praximo/db"
+import { AvatarRepo, ClientAcceptanceRepo } from "@praximo/db"
 import {
   ClientName,
   type CoachLanguage,
@@ -6,6 +6,7 @@ import {
   readEmailAddress,
 } from "@praximo/domain"
 import { clientConsentVersion } from "@praximo/i18n"
+import { AvatarReader, type ServedAvatar } from "@praximo/storage"
 import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
 
 import type { SessionSummary } from "@/features/invite/session-summary.ts"
@@ -46,6 +47,16 @@ export interface AcceptanceView {
   readonly consentVersion: string
   readonly session?: SessionSummary
   readonly coachTimezone?: string
+  /**
+   * Whether there is a photo of the coach to put beside their name (#231).
+   *
+   * Presence, never a key: the page renders an `<img>` at a URL keyed by the token
+   * it is already at, and the route behind it resolves the object itself. What the
+   * flag buys over simply letting that image 404 is the two things a client would
+   * otherwise get — a wasted request per view for the many coaches who have no
+   * photo, and initials replaced by a picture a beat after the page settled.
+   */
+  readonly coachHasPhoto: boolean
 }
 
 /**
@@ -68,6 +79,8 @@ export type AcceptanceOutcome =
       readonly kind: WebRefusal
       readonly coachName: string
       readonly language: CoachLanguage
+      /** The refusals that name a coach show their face too — see {@link AcceptanceView}. */
+      readonly coachHasPhoto: boolean
     }
 
 export interface AcceptInput {
@@ -94,6 +107,8 @@ export type AcceptOutcome =
 
 export interface ConfirmationView {
   readonly coachName: string
+  /** The confirmation shows the coach as well; see {@link AcceptanceView}. */
+  readonly coachHasPhoto: boolean
   /**
    * Echoed back on the result screen so a typo is catchable while the client is
    * still looking at the page. This is the whole of the email verification in
@@ -117,6 +132,21 @@ export interface Interface {
     fallbackLanguage: CoachLanguage,
   ) => Effect.Effect<AcceptanceOutcome>
   readonly accept: (input: AcceptInput) => Effect.Effect<AcceptOutcome>
+  /**
+   * The coach's photo, for the `<img>` this page renders beside their name (#231).
+   *
+   * **Keyed by the token, because that is all this surface has.** There is no
+   * session and nobody signed in — the whole premise of the page — so the
+   * invitation is the authorisation, exactly as it is for `open`. It discloses no
+   * more than the page already does, which says whose practice this is in its first
+   * sentence, and it answers for a spent or expired invitation too: those screens
+   * still name the coach to ask.
+   *
+   * No R2 key appears in the URL, so "who else can hold this address, and for how
+   * long" is a question this design never has to answer — the address is the
+   * invitation's, and it dies with it.
+   */
+  readonly coachPhoto: (token: string, ifNoneMatch: string | null) => Effect.Effect<ServedAvatar>
 }
 
 export class Service extends Context.Service<Service, Interface>()(
@@ -156,6 +186,8 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const repo = yield* ClientAcceptanceRepo.Service
+    const avatars = yield* AvatarRepo.Service
+    const reader = yield* AvatarReader.Service
 
     /**
      * Reading the invitation never writes, and never fails loudly: a repository
@@ -184,6 +216,7 @@ export const layer = Layer.effect(
           kind: refusal,
           coachName: lookup.coachName,
           language: lookup.inviteLanguage,
+          coachHasPhoto: lookup.coachHasPhoto,
         } as const
       }
 
@@ -193,6 +226,7 @@ export const layer = Layer.effect(
         language: lookup.inviteLanguage,
         ...(lookup.inviteAddress === undefined ? {} : { suggestedEmail: lookup.inviteAddress }),
         consentVersion: clientConsentVersion(lookup.inviteLanguage),
+        coachHasPhoto: lookup.coachHasPhoto,
         ...sessionDetails(lookup),
       } as const satisfies AcceptanceView
     })
@@ -255,13 +289,34 @@ export const layer = Layer.effect(
         kind: "accepted",
         view: {
           coachName: lookup.coachName,
+          coachHasPhoto: lookup.coachHasPhoto,
           email,
           ...sessionDetails(lookup),
         },
       } as const
     })
 
-    return Service.of({ open, accept })
+    /**
+     * Reading the photo never fails loudly, for the reason `open` does not: a
+     * repository that cannot answer becomes "no photo", the client sees the
+     * initials that are the specified fallback anyway, and nothing about a database
+     * hiccup reaches a page somebody was handed.
+     *
+     * The key is resolved here rather than carried on the page's payload — that is
+     * what keeps an object key out of the HTML and out of anything a browser could
+     * quote back.
+     */
+    const coachPhoto = Effect.fn("WebAcceptance.coachPhoto")(function* (
+      token: string,
+      ifNoneMatch: string | null,
+    ) {
+      const key = yield* avatars
+        .coachAvatarKeyForInvite(token)
+        .pipe(Effect.orElseSucceed(() => undefined))
+      return yield* reader.serve({ key, ifNoneMatch })
+    })
+
+    return Service.of({ open, accept, coachPhoto })
   }),
 )
 

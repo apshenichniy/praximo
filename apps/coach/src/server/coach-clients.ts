@@ -65,6 +65,15 @@ export interface InviteDelivery {
 export interface ClientSummary {
   readonly id: string
   readonly name: string
+  /**
+   * Whether to ask this row's avatar route for bytes, or draw initials (#231).
+   *
+   * Presence and never the key: the route resolves that itself, workspace-scoped, so
+   * no object key reaches a payload. And a flag rather than letting every disc try
+   * and 404 — a roster is mostly people with no photo, and that would be a request
+   * per row to learn nothing.
+   */
+  readonly hasAvatar: boolean
   readonly state: "invited" | "expired" | "accepted"
   /** ISO strings, because this crosses a server-function boundary. */
   readonly invitedAt: string
@@ -135,6 +144,8 @@ export interface ClientSessionSummary {
 export interface ClientDetail {
   readonly id: string
   readonly name: string
+  /** See {@link ClientSummary.hasAvatar}. */
+  readonly hasAvatar: boolean
   readonly state: "invited" | "expired" | "accepted"
   readonly language?: CoachLanguage
   readonly createdAt: string
@@ -528,6 +539,7 @@ export const layer = Layer.effect(
         clients: rows.map((row) => ({
           id: row.id,
           name: row.name,
+          hasAvatar: row.hasAvatar,
           state: row.state,
           invitedAt: iso(row.invitedAt),
           inviteExpiresAt: iso(row.inviteExpiresAt),
@@ -585,6 +597,7 @@ export const layer = Layer.effect(
       return {
         id: row.id,
         name: row.name,
+        hasAvatar: row.hasAvatar,
         state: row.state,
         ...(row.language === undefined ? {} : { language: row.language }),
         createdAt: iso(row.createdAt),

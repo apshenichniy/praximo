@@ -1,8 +1,11 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ClientAcceptanceRepo } from "@praximo/db"
-import { CoachLanguages } from "@praximo/domain"
+import { CoachLanguages, TelegramId, WorkspaceId } from "@praximo/domain"
 import { clientConsentText, clientCopy } from "@praximo/i18n"
+import { AvatarStore } from "@praximo/storage"
 import { Effect, Layer, Ref } from "effect"
+import { clientAvatarRepoStub } from "./__tests__/telegram-photo.ts"
+import { captureClientPhotoQuietly } from "./client-photo.ts"
 import {
   AcceptCallbackPrefix,
   acceptInvitation,
@@ -24,6 +27,10 @@ const NOW = new Date("2026-07-26T09:00:00.000Z")
 
 const unsupported = () => Effect.die(new Error("unsupported test operation"))
 
+/** A Telegram that answers nothing useful — the failure the client must never see. */
+const refusingTelegram: typeof globalThis.fetch = () =>
+  Promise.resolve(Response.json({ ok: false, error_code: 400 }, { status: 400 }))
+
 const lookup = (
   overrides: Partial<ClientAcceptanceRepo.InviteLookup> = {},
 ): ClientAcceptanceRepo.InviteLookup => ({
@@ -35,6 +42,8 @@ const lookup = (
   expiresAt: new Date("2026-08-02T09:00:00.000Z"),
   inviteLanguage: "uk",
   coachName: "Ada Coaching",
+  // The bot never renders the coach's photo — its conversation is *with* them.
+  coachHasPhoto: false,
   ...overrides,
 })
 
@@ -284,6 +293,64 @@ describe("accepting", () => {
       ])
     }),
   )
+
+  /**
+   * The pair the webhook handler runs, in the order it runs them (#231).
+   *
+   * The handler itself is two lines of wiring around this composition, and what
+   * those two lines have to get right is the order: the commit that carries the
+   * consent happens first, the confirmation is edited onto the client's screen, and
+   * only then is anything of theirs fetched. So the property worth pinning is that
+   * the capture is downstream of the acceptance in every sense — it cannot reach
+   * back and undo it, and its failure is invisible to the client.
+   */
+  describe("and then, separately, the photo", () => {
+    const accept = (repo: { readonly layer: Layer.Layer<ClientAcceptanceRepo.Service> }) =>
+      acceptInvitation({
+        token: TOKEN,
+        language: "ru",
+        telegramBotId: BOT_ID,
+        telegramUserId: CLIENT_ID,
+        telegramName: "Maria",
+        telegramUsername: "maria",
+      }).pipe(Effect.provide(repo.layer))
+
+    it.effect("names who walked in, so the capture has somebody to ask about", () =>
+      Effect.gen(function* () {
+        const repo = yield* repoLayer(lookup({ workspaceId: "ws_ada", clientId: "cl_maria" }))
+
+        const outcome = yield* accept(repo)
+
+        // Both ids, and only on this branch: the token resolved them, and nothing
+        // downstream of the callback has a second way to ask.
+        expect(outcome._tag === "Accepted" && outcome.accepted).toEqual({
+          workspaceId: "ws_ada",
+          clientId: "cl_maria",
+        })
+      }),
+    )
+
+    it.effect("leaves the confirmation standing when the photo cannot be fetched", () =>
+      Effect.gen(function* () {
+        const repo = yield* repoLayer(lookup())
+        const outcome = yield* accept(repo)
+        // Exactly what the handler does after `editForward`, and it must be
+        // unremarkable: the client is already set up and has already been told so.
+        yield* captureClientPhotoQuietly({
+          workspaceId: WorkspaceId.make("ws_ada"),
+          clientId: "cl_maria",
+          clientTelegramId: TelegramId.make(CLIENT_ID),
+          coachBotToken: "9100777:coach-bot-token",
+          fetch: refusingTelegram,
+        }).pipe(Effect.provide(clientAvatarRepoStub().layer), Effect.provide(AvatarStore.testLayer))
+
+        expect(outcome._tag).toBe("Accepted")
+        expect(outcome._tag === "Accepted" && outcome.message.text).toContain("Ada Coaching")
+        // The claim happened once, before any of this, and nothing above reopened it.
+        expect(yield* Ref.get(repo.calls)).toHaveLength(1)
+      }),
+    )
+  })
 
   // Zero rows updated is a losing double tap, and the honest thing to say is
   // that they are already set up — which is true.

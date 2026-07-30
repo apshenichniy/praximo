@@ -1,4 +1,5 @@
-import { ClientAcceptanceRepo, Database } from "@praximo/db"
+import { AvatarRepo, ClientAcceptanceRepo, Database } from "@praximo/db"
+import { AvatarReader } from "@praximo/storage"
 import { ConfigProvider, type Effect, Layer, ManagedRuntime } from "effect"
 
 import type { Limiter } from "./throttle.ts"
@@ -14,7 +15,8 @@ import { WebAcceptance } from "./web-acceptance.ts"
  *
  * Deliberately thinner than the coach's equivalent. There is no credential to
  * verify — nobody is signed in, which is the whole premise of the surface — no
- * Telegram runtime, and no bot binding. One repository over one connection.
+ * Telegram runtime, and no bot binding. Two repositories, one bucket, one
+ * connection.
  */
 
 interface Env {
@@ -29,12 +31,24 @@ interface Env {
    */
   readonly INVITE_LOOKUP?: Limiter
   readonly INVITE_COMMIT?: Limiter
+  /**
+   * The shared avatar bucket (#231), optional for the same reason the limits are
+   * and with a different consequence: absent, `AvatarReader.unwiredLayer` answers
+   * every avatar route with 404 and the Acceptance Page renders the initials that
+   * are the specified design anyway. So a local run is not *wrong*, it is only
+   * photoless — which is exactly why the ticket's own verification is a live one.
+   */
+  readonly UPLOADS?: AvatarReader.ReadableBucket
 }
 
 const runtimeFromEnv = (env: Env) => {
   const app = WebAcceptance.layer.pipe(
     Layer.provide(ClientAcceptanceRepo.layer),
+    Layer.provide(AvatarRepo.layer),
     Layer.provide(Database.layer),
+    Layer.provide(
+      env.UPLOADS === undefined ? AvatarReader.unwiredLayer : AvatarReader.layer(env.UPLOADS),
+    ),
   )
   return ManagedRuntime.make(
     Layer.provide(app, ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
@@ -51,6 +65,11 @@ const requireString = (value: unknown, name: keyof Env): string => {
 const asLimiter = (value: unknown): Limiter | undefined =>
   typeof value === "object" && value !== null && "limit" in value ? (value as Limiter) : undefined
 
+const asUploads = (value: unknown): AvatarReader.ReadableBucket | undefined =>
+  typeof value === "object" && value !== null && "get" in value
+    ? (value as AvatarReader.ReadableBucket)
+    : undefined
+
 const resolveEnv = async (): Promise<Env> => {
   // The same two-source shape the coach Worker uses: `process.env` under Vite,
   // the Worker's own bindings otherwise. Keyed on the one binding that is
@@ -64,10 +83,12 @@ const resolveEnv = async (): Promise<Env> => {
   const workerEnv = env as unknown as Record<string, unknown>
   const lookup = asLimiter(workerEnv.INVITE_LOOKUP)
   const commit = asLimiter(workerEnv.INVITE_COMMIT)
+  const uploads = asUploads(workerEnv.UPLOADS)
   return {
     DATABASE_URL: requireString(workerEnv.DATABASE_URL, "DATABASE_URL"),
     ...(lookup === undefined ? {} : { INVITE_LOOKUP: lookup }),
     ...(commit === undefined ? {} : { INVITE_COMMIT: commit }),
+    ...(uploads === undefined ? {} : { UPLOADS: uploads }),
   }
 }
 

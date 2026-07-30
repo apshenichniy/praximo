@@ -36,7 +36,19 @@ export interface InviteDeliveryRow {
   readonly kind: string
 }
 
-export interface ClientListRow {
+/**
+ * Whether this client has a photo — never the key (#231).
+ *
+ * The screens need to know which discs to ask for and which are initials, and
+ * that is all they need: the key is resolved again, workspace-scoped, by the route
+ * that serves the bytes. A boolean here is what keeps an object key out of a
+ * payload, out of the HTML, and out of anything a browser could quote back.
+ */
+export interface ClientAvatarPresence {
+  readonly hasAvatar: boolean
+}
+
+export interface ClientListRow extends ClientAvatarPresence {
   readonly id: string
   readonly name: string
   readonly state: ClientState
@@ -83,7 +95,7 @@ export interface ClientSessionRow {
   readonly state: string
 }
 
-export interface ClientDetailRow {
+export interface ClientDetailRow extends ClientAvatarPresence {
   readonly id: string
   readonly name: string
   readonly state: ClientState
@@ -293,6 +305,7 @@ export const layer = Layer.effect(
             select
               "c"."id" as "id",
               "c"."name" as "name",
+              "c"."avatar_r2_key" is not null as "has_avatar",
               "i"."status" as "invite_status",
               "i"."delivery" as "delivery",
               ${isoColumn('"i"."delivered_at"')} as "delivered_at",
@@ -327,6 +340,7 @@ export const layer = Layer.effect(
         return {
           id: String(record.id),
           name: String(record.name),
+          hasAvatar: record.has_avatar === true,
           state: clientState(
             standingInput(acceptedAt === undefined ? inviteStatus : "accepted", expiresAt),
             now,
@@ -360,6 +374,7 @@ export const layer = Layer.effect(
               "c"."id" as "id",
               "c"."name" as "name",
               "c"."language" as "language",
+              "c"."avatar_r2_key" is not null as "has_avatar",
               ${isoColumn('"c"."created_at"')} as "created_at",
               "i"."id" as "invite_id",
               "i"."token" as "token",
@@ -442,6 +457,7 @@ export const layer = Layer.effect(
       return {
         id: String(record.id),
         name: String(record.name),
+        hasAvatar: record.has_avatar === true,
         state: clientState(
           standingInput(acceptedAt === undefined ? inviteStatus : "accepted", expiresAt),
           now,

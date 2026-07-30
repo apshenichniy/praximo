@@ -1,6 +1,5 @@
 import { Avatar, AvatarFallback } from "@praximo/ui/components/avatar"
-import { initials } from "@/features/admin/formatting.ts"
-import { cn } from "@praximo/ui"
+import { cn, initials } from "@praximo/ui"
 
 /**
  * Workspace identity mark: a branded initials gradient, everywhere and always.

@@ -36,6 +36,7 @@ import {
   showConsent,
 } from "./client-acceptance.ts"
 import { clientLanguage, type Copy, messages } from "./messages.ts"
+import { captureClientPhotoQuietly } from "./client-photo.ts"
 import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import {
   coachMiniAppUrl,
@@ -590,6 +591,29 @@ const coachBotFor = async (
       )
       if (outcome._tag === "Unknown") return
       await editForward(ctx, outcome.message)
+      if (outcome._tag !== "Accepted") return
+      /**
+       * The client's photo, **after** the confirmation is on their screen (#231).
+       *
+       * Both halves of that placement are load-bearing. The acceptance commit
+       * carries the consent, so nothing of this person is stored until they have
+       * agreed — and it is atomic, so it must not wait on Telegram's file endpoint
+       * or be undone by it. Everything past this line is a courtesy: the client is
+       * already set up and has been told so.
+       *
+       * The credential is the one this route already resolved, rather than a second
+       * decryption through the registry — and it is the one bot that can see this
+       * client at all, because they messaged it.
+       */
+      await getRuntime(env).runPromise(
+        captureClientPhotoQuietly({
+          workspaceId: outcome.accepted.workspaceId,
+          clientId: outcome.accepted.clientId,
+          clientTelegramId: TelegramId.make(String(sender.id)),
+          coachBotToken: installation.success.token,
+          fetch: runtimeFetch ?? globalThis.fetch,
+        }),
+      )
     })
 
     coachBots.set(botId, bot)

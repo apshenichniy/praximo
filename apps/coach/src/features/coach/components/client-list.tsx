@@ -4,8 +4,10 @@ import { Link } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 
 import { Card } from "@praximo/ui/components/card"
+import { PersonAvatar } from "@praximo/ui/custom/person-avatar"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
 import { isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
+import { useClientPhoto } from "@/features/coach/use-client-photo.ts"
 import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
 import { cn } from "@praximo/ui"
 import type { CoachClients } from "@/server/coach-clients.ts"
@@ -27,14 +29,6 @@ const stateStyles: Record<CoachClients.ClientSummary["state"], string> = {
   expired: "text-destructive",
   accepted: "text-success",
 }
-
-const initials = (name: string): string =>
-  name
-    .split(/\s+/)
-    .filter((part) => part.length > 0)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
 
 export function ClientList({
   copy,
@@ -105,6 +99,26 @@ export function ClientList({
   )
 }
 
+/**
+ * The face on a row: their photo when the platform has one, their initials when it
+ * does not (#231).
+ *
+ * Initials are not a placeholder here. Most clients will never have a photo — nobody
+ * is asked to upload one — so the fallback is the ordinary case, and it renders on the
+ * first paint rather than after an empty disc.
+ */
+function ClientDisc({ client }: { readonly client: CoachClients.ClientSummary }) {
+  const photo = useClientPhoto(client.id, client.hasAvatar)
+
+  return (
+    <PersonAvatar
+      name={client.name}
+      {...(photo === undefined ? {} : { photoSrc: photo })}
+      size="row"
+    />
+  )
+}
+
 /** The row itself, as a destination or as a choice — the same face either way. */
 function ClientRow({
   copy,
@@ -118,9 +132,7 @@ function ClientRow({
 }) {
   const body: ReactNode = (
     <>
-      <span className="bg-muted text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-xs leading-normal font-semibold">
-        {initials(client.name)}
-      </span>
+      <ClientDisc client={client} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-base leading-relaxed font-medium">{client.name}</span>
         <ClientStateLine copy={copy} client={client} />

@@ -13,6 +13,7 @@ import { HostBackButton, isIosHost } from "@/mini-app.tsx"
 import { Heading, Section, SectionTitle, SegmentedChoice, Text } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"
+import { PersonAvatar } from "@praximo/ui/custom/person-avatar"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { languageNames } from "@/features/i18n/coach-copy.ts"
 import { InviteEmailSheet } from "@/features/coach/components/invite-email-sheet.tsx"
@@ -25,6 +26,7 @@ import {
   PlaceholderValue,
   TimestampValue,
 } from "@/features/mini-app/components/detail-card.tsx"
+import { useClientPhoto } from "@/features/coach/use-client-photo.ts"
 import { useCopyLink } from "@/features/mini-app/hooks/use-copy-link.ts"
 import { doorFor, isNotSent, sentVia, stateWord } from "@/features/coach/invite-standing.ts"
 import { useTimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
@@ -93,14 +95,6 @@ const doorOffers: Record<
   link: { card: false, shareSheet: true, email: true, lead: "email", icon: Link02Icon },
 }
 
-const initials = (name: string): string =>
-  name
-    .split(/\s+/)
-    .filter((part) => part.length > 0)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
-
 export function ClientScreen({
   copy,
   language,
@@ -134,6 +128,7 @@ export function ClientScreen({
   readonly pending: boolean
   readonly error: string | undefined
 }) {
+  const photo = useClientPhoto(client.id, client.hasAvatar)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [emailSheet, setEmailSheet] = useState(false)
@@ -250,9 +245,16 @@ export function ClientScreen({
       <HostBackButton label={copy.common.back} fallbackTo="/clients" />
 
       <header className="flex flex-col items-center gap-2 text-center">
-        <span className="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-full text-xl leading-tight font-semibold">
-          {initials(client.name)}
-        </span>
+        {/*
+          The same disc as the roster's rows, at the size a header wants: the client's
+          own photo where the platform captured one at acceptance (#231), and their
+          initials — which is the ordinary case, and the design — where it did not.
+        */}
+        <PersonAvatar
+          name={client.name}
+          {...(photo === undefined ? {} : { photoSrc: photo })}
+          size="page"
+        />
         <Heading as="h1" role="page-title">
           {client.name}
         </Heading>

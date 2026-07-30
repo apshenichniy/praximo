@@ -8,14 +8,6 @@ import type { TimestampFormat } from "@/features/mini-app/timestamp-format.tsx"
 // stays here is the choice of language, and the English words around them.
 const english = formatters("en")
 
-export const initials = (name: string): string =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("")
-
 export const formatTimestamp = (value: string | undefined, empty: string): string =>
   value === undefined ? empty : english.timestamp(value)
 

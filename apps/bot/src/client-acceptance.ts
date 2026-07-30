@@ -6,6 +6,7 @@ import {
   inviteStanding,
   narrowCoachLanguage,
   parseClientInviteStartParameter,
+  WorkspaceId,
 } from "@praximo/domain"
 import {
   clientCopy,
@@ -263,12 +264,25 @@ export const refusalText = (
 export const privacyUrl = (clientAppUrl: string, language: CoachLanguage): string =>
   legalUrl(clientAppUrl, "privacy", language)
 
+/**
+ * Who just walked in, for the one thing that happens *after* the confirmation is
+ * on screen: their profile photo (#231).
+ *
+ * It rides on the outcome because the acceptance is the only place both ids are
+ * known — the token resolved them, and nothing downstream of the callback has a
+ * second way to ask.
+ */
+export interface AcceptedClient {
+  readonly workspaceId: WorkspaceId
+  readonly clientId: string
+}
+
 export type AcceptanceOutcome =
   | { readonly _tag: "Unknown" }
   | { readonly _tag: "Refused"; readonly refusal: Refusal; readonly message: BotMessage }
   | { readonly _tag: "Language"; readonly message: BotMessage }
   | { readonly _tag: "Consent"; readonly message: BotMessage }
-  | { readonly _tag: "Accepted"; readonly message: BotMessage }
+  | { readonly _tag: "Accepted"; readonly message: BotMessage; readonly accepted: AcceptedClient }
 
 /**
  * Resolve a token presented to one bot, and say what the client should see.
@@ -431,5 +445,12 @@ export const acceptInvitation = Effect.fn("ClientAcceptance.acceptInvitation")(f
       coachTimezone: lookup.coachTimezone,
       session: lookup.nextSession,
     }),
+    // Only on the branch that actually wrote something. A refused acceptance has
+    // no client to capture a photo for, and a losing double tap must not capture
+    // one twice.
+    accepted: {
+      workspaceId: WorkspaceId.make(lookup.workspaceId),
+      clientId: lookup.clientId,
+    },
   } as const
 })

@@ -81,6 +81,15 @@ function AcceptanceRoute() {
   // because nothing else was to hand".
   const locale: CoachLanguage = lang ?? outcome.language
 
+  /**
+   * Where the coach's photo lives, when there is one (#231).
+   *
+   * The invitation's own address — no object key in it, and nothing here has to
+   * know one: the route behind it resolves the key from this same token. Built once
+   * because all three screens below show the coach.
+   */
+  const coachPhotoSrc = `/i/${encodeURIComponent(params.token)}/coach-avatar`
+
   const [accepted, setAccepted] = useState<WebAcceptance.ConfirmationView>()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string>()
@@ -105,6 +114,7 @@ function AcceptanceRoute() {
       <ConfirmationScreen
         locale={locale}
         coachName={accepted.coachName}
+        {...(accepted.coachHasPhoto ? { coachPhotoSrc } : {})}
         email={accepted.email}
         {...(accepted.session === undefined ? {} : { session: accepted.session })}
         {...(accepted.coachTimezone === undefined ? {} : { coachTimezone: accepted.coachTimezone })}
@@ -118,6 +128,7 @@ function AcceptanceRoute() {
         locale={locale}
         kind={outcome.kind}
         {...(outcome.kind === "unknown" ? {} : { coachName: outcome.coachName })}
+        {...(outcome.kind !== "unknown" && outcome.coachHasPhoto ? { coachPhotoSrc } : {})}
       />,
     )
   }
@@ -152,6 +163,7 @@ function AcceptanceRoute() {
     <AcceptancePage
       locale={locale}
       coachName={outcome.coachName}
+      {...(outcome.coachHasPhoto ? { coachPhotoSrc } : {})}
       {...(outcome.session === undefined ? {} : { session: outcome.session })}
       {...(outcome.coachTimezone === undefined ? {} : { coachTimezone: outcome.coachTimezone })}
       {...(outcome.suggestedEmail === undefined ? {} : { suggestedEmail: outcome.suggestedEmail })}

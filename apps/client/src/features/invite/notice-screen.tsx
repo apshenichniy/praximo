@@ -18,12 +18,15 @@ import type { WebRefusal } from "@/features/invite/web-refusal.ts"
 export function ConfirmationScreen({
   locale,
   coachName,
+  coachPhotoSrc,
   email,
   session,
   coachTimezone,
 }: {
   readonly locale: CoachLanguage
   readonly coachName: string
+  /** The coach's photo, when the platform has one to serve (#231). */
+  readonly coachPhotoSrc?: string
   readonly email: string
   readonly session?: SessionSummary
   readonly coachTimezone?: string
@@ -36,7 +39,11 @@ export function ConfirmationScreen({
 
   return (
     <Centred>
-      <CoachBadge locale={locale} coachName={coachName} />
+      <CoachBadge
+        locale={locale}
+        coachName={coachName}
+        {...(coachPhotoSrc === undefined ? {} : { photoSrc: coachPhotoSrc })}
+      />
       <b className="text-2xl font-[640] tracking-[-0.025em]">{copy.done.title}</b>
       {moment === undefined || session === undefined ? (
         <p className="text-muted-foreground text-[15px] leading-[1.65]">
@@ -118,11 +125,14 @@ const NOTICES: Record<
 
 export function RefusalScreen({
   locale,
+  coachPhotoSrc,
   kind,
   coachName,
 }: {
   readonly locale: CoachLanguage
   readonly kind: NoticeKind
+  /** See {@link ConfirmationScreen}; absent for an `unknown` token, which names nobody. */
+  readonly coachPhotoSrc?: string
   /** Absent for `unknown`, and absent by construction — there is no invitation. */
   readonly coachName?: string
 }) {
@@ -132,7 +142,14 @@ export function RefusalScreen({
 
   return (
     <Centred>
-      {named ? <CoachBadge locale={locale} coachName={coachName} withName /> : null}
+      {named ? (
+        <CoachBadge
+          locale={locale}
+          coachName={coachName}
+          withName
+          {...(coachPhotoSrc === undefined ? {} : { photoSrc: coachPhotoSrc })}
+        />
+      ) : null}
       {notice.settled ? (
         <span className="bg-success-surface text-success grid size-[52px] place-items-center rounded-full text-[22px] font-bold">
           ✓

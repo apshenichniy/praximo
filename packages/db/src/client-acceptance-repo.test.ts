@@ -327,6 +327,44 @@ describe.skipIf(skipWithoutDatabase)("ClientAcceptanceRepo (dev Neon branch)", (
       }).pipe(Effect.provide(appLayer)),
     )
 
+    it.effect("says whether the coach has a photo, in the order the practice wins", () =>
+      Effect.gen(function* () {
+        const repo = yield* ClientAcceptanceRepo.Service
+        const { client } = yield* Database.Service
+        const made = yield* fixture()
+
+        // Nobody has captured one yet: the page renders initials and asks for
+        // nothing (#231).
+        expect((yield* repo.findByWebToken(made.token))?.coachHasPhoto).toBe(false)
+        expect((yield* repo.findByToken(made.token, made.telegramBotId))?.coachHasPhoto).toBe(false)
+
+        yield* Effect.promise(() =>
+          client
+            .update(schema.member)
+            .set({ avatarR2Key: `avatars/coach/${made.workspaceId}/photo.jpg` })
+            .where(eq(schema.member.workspaceId, made.workspaceId)),
+        )
+        expect((yield* repo.findByWebToken(made.token))?.coachHasPhoto).toBe(true)
+
+        // The practice photo overrides it, and the flag has to follow the same
+        // order the serving route reads in — otherwise a workspace with a practice
+        // photo and no coach photo would render initials over a stored image.
+        yield* Effect.promise(() =>
+          client
+            .update(schema.member)
+            .set({ avatarR2Key: null })
+            .where(eq(schema.member.workspaceId, made.workspaceId)),
+        )
+        yield* Effect.promise(() =>
+          client
+            .update(schema.workspace)
+            .set({ avatarR2Key: `workspace-branding/${made.workspaceId}.png` })
+            .where(eq(schema.workspace.id, made.workspaceId)),
+        )
+        expect((yield* repo.findByWebToken(made.token))?.coachHasPhoto).toBe(true)
+      }).pipe(Effect.provide(appLayer)),
+    )
+
     // A link already walked through on Telegram cannot be walked through again on
     // the web, and the reverse: one invite, one door, whichever it turns out to be.
     it.effect("refuses a token the Telegram door already spent", () =>

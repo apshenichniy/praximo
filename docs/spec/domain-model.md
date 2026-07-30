@@ -41,7 +41,7 @@ A coached person, scoped to one workspace. No account, no credentials.
 
 - `workspace_id`, `name` (the coach sets only the name at creation; the client may edit it on the web acceptance page)
 - `language`: `en | uk | ru` — chosen by the **client** during invite acceptance (pre-selected from Telegram's `language_code`, or from the invite's language on the web page); the language of messages to the client, and the STT fallback hint
-- `avatar`: R2 object — Telegram profile photo captured at invite acceptance, or uploaded / imported from Google on the web acceptance page (the displayed avatar lives on the person); shown in the web room, initials when absent
+- `avatar`: R2 object — the Telegram profile photo snapshotted **immediately after** the acceptance commit, through the coach's own bot, which is the only one that can see this client ([#231](https://github.com/apshenichniy/praximo/issues/231)); or the Google `picture` imported on the web acceptance page ([#59](https://github.com/apshenichniy/praximo/issues/59)). The displayed avatar lives on the person. **No refresh and no backfill**: unlike the coach's, a client's photo is a snapshot of who walked in, there is no per-client sweep to hang a refresh on, and clients who accepted before this shipped keep their initials. The client is never asked to upload one. Shown on the coach's roster, on the client's own route and in the web room; initials when absent, which is the ordinary case rather than a placeholder
 - `google_sub`: optional — captured when the client used **Continue with Google** on the web acceptance page; no OAuth token is stored
 - **Identity keys, dormant:** the Telegram channel's user id, the email channel's address, and `google_sub` are the durable keys a post-MVP client portal matches against to attach Better-Auth accounts additively ([client-onboarding-auth.md](client-onboarding-auth.md) §Principles)
 
@@ -51,7 +51,7 @@ How a client is reached.
 
 - `client_id`, `kind`: `telegram | email` (MVP) — open set
 - kind-specific address: Telegram user/chat id, or email address — always present, which is the point of the kind set
-- `telegram` carries the profile snapshot captured at acceptance: name, username, avatar (R2 object)
+- `telegram` carries the profile snapshot captured at acceptance: name, username, and — a moment later, with the same statement that writes `Client.avatar` — the avatar's R2 key. The snapshot is the record of the identity that walked in, so it keeps the name and username even when the avatar is cleared
 - exactly one primary channel per client; reminders and join links are delivered to it, and there is no branch where they are delivered to somebody else instead ([client-onboarding-auth.md](client-onboarding-auth.md))
 
 ### Invite

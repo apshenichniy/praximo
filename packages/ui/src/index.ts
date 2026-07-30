@@ -12,6 +12,7 @@ export {
   type FeedbackAdapter,
   type FeedbackEvent,
 } from "./lib/feedback.ts"
+export { initials } from "./lib/initials.ts"
 export { prefersReducedMotion, type ReducedMotionPreference } from "./lib/motion.ts"
 export {
   interfaceTypographyRoles,

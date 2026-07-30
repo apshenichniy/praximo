@@ -13,6 +13,7 @@ import { Route as HealthRouteImport } from './routes/health'
 import { Route as ITokenRouteImport } from './routes/i.$token'
 import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as LegalTermsRouteImport } from './routes/legal/terms'
+import { Route as ITokenCoachAvatarRouteImport } from './routes/i.$token_.coach-avatar'
 
 const HealthRoute = HealthRouteImport.update({
   id: '/health',
@@ -34,18 +35,25 @@ const LegalTermsRoute = LegalTermsRouteImport.update({
   path: '/legal/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ITokenCoachAvatarRoute = ITokenCoachAvatarRouteImport.update({
+  id: '/i/$token_/coach-avatar',
+  path: '/i/$token/coach-avatar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/health': typeof HealthRoute
   '/i/$token': typeof ITokenRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/i/$token/coach-avatar': typeof ITokenCoachAvatarRoute
 }
 export interface FileRoutesByTo {
   '/health': typeof HealthRoute
   '/i/$token': typeof ITokenRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/i/$token/coach-avatar': typeof ITokenCoachAvatarRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,30 @@ export interface FileRoutesById {
   '/i/$token': typeof ITokenRoute
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/i/$token_/coach-avatar': typeof ITokenCoachAvatarRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/health' | '/i/$token' | '/legal/privacy' | '/legal/terms'
+  fullPaths:
+    | '/health'
+    | '/i/$token'
+    | '/legal/privacy'
+    | '/legal/terms'
+    | '/i/$token/coach-avatar'
   fileRoutesByTo: FileRoutesByTo
-  to: '/health' | '/i/$token' | '/legal/privacy' | '/legal/terms'
-  id: '__root__' | '/health' | '/i/$token' | '/legal/privacy' | '/legal/terms'
+  to:
+    | '/health'
+    | '/i/$token'
+    | '/legal/privacy'
+    | '/legal/terms'
+    | '/i/$token/coach-avatar'
+  id:
+    | '__root__'
+    | '/health'
+    | '/i/$token'
+    | '/legal/privacy'
+    | '/legal/terms'
+    | '/i/$token_/coach-avatar'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +92,7 @@ export interface RootRouteChildren {
   ITokenRoute: typeof ITokenRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalTermsRoute: typeof LegalTermsRoute
+  ITokenCoachAvatarRoute: typeof ITokenCoachAvatarRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -99,6 +125,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalTermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/i/$token_/coach-avatar': {
+      id: '/i/$token_/coach-avatar'
+      path: '/i/$token/coach-avatar'
+      fullPath: '/i/$token/coach-avatar'
+      preLoaderRoute: typeof ITokenCoachAvatarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,6 +140,7 @@ const rootRouteChildren: RootRouteChildren = {
   ITokenRoute: ITokenRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalTermsRoute: LegalTermsRoute,
+  ITokenCoachAvatarRoute: ITokenCoachAvatarRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

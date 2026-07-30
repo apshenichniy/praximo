@@ -11,7 +11,7 @@ import {
   type PhotoFixture,
   type PhotoRouteOptions,
   telegramPhotoRoutes,
-} from "./__tests__/coach-photo.ts"
+} from "./__tests__/telegram-photo.ts"
 import { BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
 import { refreshCoachPhoto } from "./coach-photo.ts"
@@ -75,6 +75,9 @@ const refresh = (telegram: TelegramStub, repo: AvatarRepoStub) =>
 
 /** What the store accepted, in order. */
 const stored = Effect.flatMap(AvatarStore.TestService, (store) => store.stored())
+
+/** A method no test here reaches; a double that answered would let that pass. */
+const unreachable = () => Effect.die(new Error("must not be reached"))
 
 const keyFor = (photo: PhotoFixture): string | undefined =>
   avatarKey({
@@ -247,7 +250,10 @@ describe("importing the coach's Telegram photo", () => {
         AvatarRepo.Service.of({
           coachAvatarKey: () =>
             Effect.fail(new QueryFailed({ operation: "AvatarRepo.coachAvatarKey", cause: "down" })),
-          setCoachAvatar: () => Effect.die(new Error("must not be reached")),
+          setCoachAvatar: unreachable,
+          clientAvatarKey: unreachable,
+          setClientAvatar: unreachable,
+          coachAvatarKeyForInvite: unreachable,
         }),
       )
 
@@ -271,7 +277,10 @@ describe("importing the coach's Telegram photo", () => {
         AvatarRepo.Service,
         AvatarRepo.Service.of({
           coachAvatarKey: () => Effect.succeed(undefined),
-          setCoachAvatar: () => Effect.succeed({ outcome: "no-owner" }),
+          setCoachAvatar: () => Effect.succeed({ outcome: "no-row" }),
+          clientAvatarKey: unreachable,
+          setClientAvatar: unreachable,
+          coachAvatarKeyForInvite: unreachable,
         }),
       )
 

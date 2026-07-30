@@ -67,6 +67,9 @@ export const unusedAvatarRepo = Layer.succeed(
   AvatarRepo.Service.of({
     coachAvatarKey: () => Effect.succeed(undefined),
     setCoachAvatar: unsupported,
+    clientAvatarKey: unsupported,
+    setClientAvatar: unsupported,
+    coachAvatarKeyForInvite: unsupported,
   }),
 )
 

@@ -2,6 +2,7 @@ import type { CoachLanguage } from "@praximo/domain"
 import { clientConsentVersion } from "@praximo/i18n"
 import { eq, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
+import { coachAvatarKeyColumn } from "./avatar-repo.ts"
 import { Database, QueryFailed } from "./client.ts"
 import { CoachNotification } from "./coach-notification.ts"
 import { isoColumn, readDate, readLanguage } from "./row-readers.ts"
@@ -37,6 +38,16 @@ export interface InviteLookup {
   readonly inviteAddress?: string
   /** What the client is told they are joining: their coach's practice. */
   readonly coachName: string
+  /**
+   * Whether that coach has a photo to show beside the name (#231).
+   *
+   * Presence and never the key: the page renders an `<img>` at a URL keyed by
+   * this same token, and the route behind it resolves the key itself. What the
+   * flag buys over letting the image 404 is the two things a client would
+   * otherwise see — a request per view for the many coaches who have no photo,
+   * and initials replaced by a picture a beat after the page settled.
+   */
+  readonly coachHasPhoto: boolean
   /**
    * The Telegram identity that already walked through, when one has. It is what
    * separates "you are already set up" from "this link has been used" — the
@@ -144,6 +155,7 @@ export const layer = Layer.effect(
           "c"."name" as "client_name",
           "w"."id" as "workspace_id",
           "w"."name" as "coach_name",
+          ${coachAvatarKeyColumn('"w"', '"m"')} is not null as "coach_has_photo",
           "m"."timezone" as "coach_timezone",
           "ch"."address" as "accepted_by",
           ${isoColumn('"s"."scheduled_at"')} as "session_at",
@@ -195,6 +207,7 @@ export const layer = Layer.effect(
           ? { inviteAddress: delivery.address }
           : {}),
         coachName: String(record.coach_name),
+        coachHasPhoto: record.coach_has_photo === true,
         ...(record.accepted_by === null || record.accepted_by === undefined
           ? {}
           : { acceptedByTelegramId: String(record.accepted_by) }),
