@@ -1,7 +1,9 @@
 import { ClientAcceptanceRepo } from "@praximo/db"
 import {
+  type ClientInviteStatus,
   type CoachLanguage,
   CoachLanguages,
+  inviteStanding,
   narrowCoachLanguage,
   parseClientInviteStartParameter,
 } from "@praximo/domain"
@@ -216,22 +218,25 @@ export const confirmation = (input: ConfirmationInput): BotMessage => {
  */
 export type Refusal = "already-set-up" | "link-used" | "link-expired"
 
+const refusalByStanding = {
+  open: undefined,
+  accepted: undefined,
+  superseded: "link-expired",
+  lapsed: "link-expired",
+} as const satisfies Record<ReturnType<typeof inviteStanding>, Refusal | undefined>
+
 export const refusalFor = (input: {
-  readonly status: "pending" | "accepted" | "expired"
+  readonly status: ClientInviteStatus
   readonly expiresAt: Date
   readonly acceptedByTelegramId: string | undefined
   readonly telegramUserId: string
   readonly now: Date
 }): Refusal | undefined => {
-  if (input.status === "accepted") {
+  const standing = inviteStanding(input.status, input.expiresAt.getTime(), input.now.getTime())
+  if (standing === "accepted") {
     return input.acceptedByTelegramId === input.telegramUserId ? "already-set-up" : "link-used"
   }
-  // Expiry by time is decided at read time; the stored `expired` means the
-  // coach reissued, and reads the same to the client either way.
-  if (input.status === "expired" || input.expiresAt.getTime() <= input.now.getTime()) {
-    return "link-expired"
-  }
-  return undefined
+  return refusalByStanding[standing]
 }
 
 export const refusalText = (

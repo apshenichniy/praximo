@@ -180,7 +180,7 @@ describe("refusals", () => {
     now: NOW,
   }
 
-  it("tells the client who came back apart from the stranger who followed the link", () => {
+  it("keeps the Telegram-only identity split for an accepted invitation", () => {
     expect(refusalFor({ ...base, status: "accepted", acceptedByTelegramId: CLIENT_ID })).toBe(
       "already-set-up",
     )
@@ -189,7 +189,13 @@ describe("refusals", () => {
     )
   })
 
-  it("reads a closed window as expired whatever the column says", () => {
+  it("maps every other domain standing into the bot's vocabulary", () => {
+    expect(
+      refusalFor({ ...base, status: "pending", acceptedByTelegramId: undefined }),
+    ).toBeUndefined()
+    expect(refusalFor({ ...base, status: "expired", acceptedByTelegramId: undefined })).toBe(
+      "link-expired",
+    )
     expect(
       refusalFor({
         ...base,
@@ -198,15 +204,6 @@ describe("refusals", () => {
         expiresAt: new Date("2026-07-01T09:00:00.000Z"),
       }),
     ).toBe("link-expired")
-    expect(refusalFor({ ...base, status: "expired", acceptedByTelegramId: undefined })).toBe(
-      "link-expired",
-    )
-  })
-
-  it("lets a live invitation through", () => {
-    expect(
-      refusalFor({ ...base, status: "pending", acceptedByTelegramId: undefined }),
-    ).toBeUndefined()
   })
 })
 

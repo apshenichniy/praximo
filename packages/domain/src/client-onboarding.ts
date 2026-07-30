@@ -84,6 +84,23 @@ export const inviteNeedsAttention = (
 export const ClientInviteStatus = Schema.Literals(["pending", "accepted", "expired"])
 export type ClientInviteStatus = typeof ClientInviteStatus.Type
 
+/**
+ * What an invitation is, given its stored status and the clock.
+ *
+ * Acceptance wins over time because a used invitation is done, not late. A
+ * stored `expired` is a different fact from time elapsing: it is the marker a
+ * reissue writes when a newer invitation supersedes this one.
+ */
+export const inviteStanding = (
+  status: ClientInviteStatus,
+  expiresAt: number,
+  now: number,
+): "open" | "accepted" | "superseded" | "lapsed" => {
+  if (status === "accepted") return "accepted"
+  if (status === "expired") return "superseded"
+  return expiresAt <= now ? "lapsed" : "open"
+}
+
 /** The `?start=` payload carried by the client's deep link into the coach's bot. */
 export const ClientInviteStartPrefix = "inv_"
 

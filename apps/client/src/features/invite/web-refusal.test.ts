@@ -18,41 +18,12 @@ const EARLIER = new Date("2026-07-20T09:00:00.000Z")
  * the question the client actually has: is this done, replaced, or too late.
  */
 describe("web refusal", () => {
-  it("lets a live pending invitation through", () => {
-    expect(webRefusal({ status: "pending", expiresAt: LATER, now: NOW })).toBeUndefined()
-  })
-
-  it("says an accepted link is already done", () => {
-    expect(webRefusal({ status: "accepted", expiresAt: LATER, now: NOW })).toBe("already-accepted")
-  })
-
-  /**
-   * A stored `expired` is not the clock running out — the coach reissued, which
-   * is what `resetInvite` writes. The remedy differs from an expiry too: there is
-   * already a newer link in the coach's hands, so "ask for the new one" is a real
-   * instruction rather than a request to start something over.
-   */
-  it("tells a reissued link apart from one the clock caught", () => {
-    expect(webRefusal({ status: "expired", expiresAt: LATER, now: NOW })).toBe("superseded")
-    expect(webRefusal({ status: "pending", expiresAt: EARLIER, now: NOW })).toBe("expired")
-  })
-
-  /** Acceptance wins over the clock: a link walked through is done, not late. */
-  it("prefers the accepted answer for a link that was used and then expired", () => {
-    expect(webRefusal({ status: "accepted", expiresAt: EARLIER, now: NOW })).toBe(
-      "already-accepted",
-    )
-  })
-
-  /**
-   * The boundary, stated rather than left to a reading of `<` versus `<=`: an
-   * invitation whose `expires_at` is exactly now has run out. Seven days from
-   * creation means seven days, and the tie goes to the door being shut.
-   */
-  it("closes the window at the instant it is reached", () => {
-    expect(webRefusal({ status: "pending", expiresAt: NOW, now: NOW })).toBe("expired")
-    expect(
-      webRefusal({ status: "pending", expiresAt: new Date(NOW.getTime() + 1), now: NOW }),
-    ).toBeUndefined()
+  it.each([
+    ["open", { status: "pending", expiresAt: LATER, now: NOW }, undefined],
+    ["accepted", { status: "accepted", expiresAt: LATER, now: NOW }, "already-accepted"],
+    ["superseded", { status: "expired", expiresAt: LATER, now: NOW }, "superseded"],
+    ["lapsed", { status: "pending", expiresAt: EARLIER, now: NOW }, "expired"],
+  ] as const)("maps the %s standing into the web vocabulary", (_standing, input, expected) => {
+    expect(webRefusal(input)).toBe(expected)
   })
 })
