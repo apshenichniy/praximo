@@ -71,6 +71,7 @@
         "@praximo/db": "workspace:*",
         "@praximo/domain": "workspace:*",
         "@praximo/i18n": "workspace:*",
+        "@praximo/storage": "workspace:*",
         "@praximo/telegram": "workspace:*",
         "effect": "catalog:",
         "grammy": "catalog:",
@@ -313,6 +314,19 @@
         "react-dom": "catalog:",
         "typescript": "catalog:",
         "vite": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
+    "packages/storage": {
+      "name": "@praximo/storage",
+      "version": "0.0.0",
+      "dependencies": {
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "@praximo/tooling": "workspace:*",
+        "typescript": "catalog:",
         "vitest": "catalog:",
       },
     },
@@ -1047,6 +1061,8 @@
     "@praximo/mini-app": ["@praximo/mini-app@workspace:packages/mini-app"],
 
     "@praximo/pipeline": ["@praximo/pipeline@workspace:apps/pipeline"],
+
+    "@praximo/storage": ["@praximo/storage@workspace:packages/storage"],
 
     "@praximo/telegram": ["@praximo/telegram@workspace:packages/telegram"],
 

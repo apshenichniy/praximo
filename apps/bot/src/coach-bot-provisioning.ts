@@ -1,5 +1,11 @@
-import { ClientAcceptanceRepo, CoachBotHealthRepo, CoachBotProvisioningRepo } from "@praximo/db"
+import {
+  AvatarRepo,
+  ClientAcceptanceRepo,
+  CoachBotHealthRepo,
+  CoachBotProvisioningRepo,
+} from "@praximo/db"
 import type { TelegramId } from "@praximo/domain"
+import { AvatarStore } from "@praximo/storage"
 import { BotRegistry, CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import type { Update, User } from "grammy/types"
 import { Context, Effect, Layer } from "effect"
@@ -23,6 +29,8 @@ type OperationalServices =
   | CoachBotProvisioningRepo.Service
   | CoachBotHealthRepo.Service
   | ClientAcceptanceRepo.Service
+  | AvatarRepo.Service
+  | AvatarStore.Service
   | CoachBotCredential.Service
   | BotRegistry.Service
   | ManagerBotSender.Service

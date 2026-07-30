@@ -5,7 +5,7 @@ import type { Api } from "grammy"
 import { Effect, Layer, Result } from "effect"
 import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
 import { classifyCoachBotFailure, repairCoachBot } from "./coach-bot-health.ts"
-import { apiFor } from "./provisioning.ts"
+import { apiFor } from "./telegram-api.ts"
 
 /**
  * The live layer for the seam every outbound coach-bot operation goes through

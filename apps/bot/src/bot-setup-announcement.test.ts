@@ -1,16 +1,25 @@
 import { describe, expect, it } from "@effect/vitest"
-import { CoachBotProvisioningRepo } from "@praximo/db"
+import { AvatarRepo, CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, CoachOnboardingInviteId, TelegramId, WorkspaceId } from "@praximo/domain"
+import { AvatarStore, avatarKey } from "@praximo/storage"
 import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
 import { ConfigProvider, Effect, Layer, Logger } from "effect"
 import { GrammyError } from "grammy"
 import {
+  unusedAvatarRepo,
+  unusedAvatarStore,
   unusedClientAcceptanceRepo,
   unusedHealthRepo,
   unusedManagerSender,
   unusedRegistry,
 } from "./__tests__/coach-bot-provisioning.ts"
+import {
+  avatarRepoStub,
+  COACH_PHOTO,
+  type PhotoFixture,
+  telegramPhotoRoutes,
+} from "./__tests__/coach-photo.ts"
 import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import { messages } from "./messages.ts"
 import { announcementFailure } from "./provisioning.ts"
@@ -121,11 +130,20 @@ interface TelegramStub {
  * it — the shape of "the coach has not tapped Start yet".
  */
 const telegramStub = (
-  options: { readonly failing?: ReadonlyArray<string>; readonly unopenedChat?: boolean } = {},
+  options: {
+    readonly failing?: ReadonlyArray<string>
+    readonly unopenedChat?: boolean
+    /** What the coach's Telegram profile shows; nothing, in almost every test here. */
+    readonly photo?: PhotoFixture | "none"
+  } = {},
 ): TelegramStub => {
+  // A coach with no profile photo by default, so the tail of provisioning has
+  // nothing to import and this suite stays about what it is about (#225).
+  const photos = telegramPhotoRoutes(options.photo ?? "none")
   const calls: Array<TelegramCall> = []
   const fetch: typeof globalThis.fetch = async (input, init) => {
-    const [, credential = "", method = ""] = new URL(input.toString()).pathname.split("/")
+    const url = input.toString()
+    const [, credential = "", method = ""] = new URL(url).pathname.split("/")
     const raw = init?.body
     calls.push({
       method,
@@ -164,12 +182,19 @@ const telegramStub = (
         },
       })
     }
-    return Response.json({ ok: true, result: true })
+    // The provisioning tail asks about the coach's profile photo (#225); a coach
+    // without one is the shape that leaves every assertion here about the
+    // messages rather than about a picture.
+    return photos(url) ?? Response.json({ ok: true, result: true })
   }
   return { fetch, calls }
 }
 
-const provision = (telegram: TelegramStub) =>
+const provision = (
+  telegram: TelegramStub,
+  avatars: Layer.Layer<AvatarRepo.Service> = unusedAvatarRepo,
+  store: Layer.Layer<AvatarStore.Service> = unusedAvatarStore,
+) =>
   Effect.flatMap(CoachBotProvisioning.Service, (service) =>
     service.provisionManagedBot(user, managedBot, "https://bot.praximo.test"),
   ).pipe(
@@ -183,6 +208,8 @@ const provision = (telegram: TelegramStub) =>
             unusedClientAcceptanceRepo,
             unusedRegistry,
             unusedManagerSender,
+            avatars,
+            store,
           ),
         ),
       ),
@@ -421,4 +448,56 @@ describe("why a setup announcement did not land", () => {
     expect(announcementFailure(new Error("fetch failed"))).toBe("undelivered")
     expect(announcementFailure(undefined)).toBe("undelivered")
   })
+})
+
+/**
+ * The coach's own photo, on the tail of the one-tap path (#225).
+ *
+ * It runs after the webhook is armed, which is what these two tests are really
+ * about: the picture lands, and nothing about it can reach back and cost the
+ * coach the bot they were just given.
+ */
+describe("the coach's photo at provisioning", () => {
+  it.effect("stores it and writes the key, after the bot is already connected", () =>
+    Effect.gen(function* () {
+      const telegram = telegramStub({ photo: COACH_PHOTO })
+      const avatars = avatarRepoStub()
+
+      const outcome = yield* provision(telegram, avatars.layer, AvatarStore.testLayer)
+
+      expect(outcome._tag).toBe("Connected")
+      expect(avatars.key()).toBe(
+        avatarKey({
+          subject: "coach",
+          subjectId: workspaceId,
+          sourceId: COACH_PHOTO.fileUniqueId,
+          contentType: "image/jpeg",
+        }),
+      )
+      // Last of all: the coach was greeted and the webhook armed before Telegram
+      // was ever asked about a picture.
+      const methods = telegram.calls.map((call) => call.method)
+      expect(methods.indexOf("getUserProfilePhotos")).toBeGreaterThan(methods.indexOf("setWebhook"))
+    }),
+  )
+
+  it.effect("connects the bot anyway when the photo cannot be imported", () =>
+    Effect.gen(function* () {
+      // Telegram answers the photo call with something that is not a photo list
+      // at all — the shape no `tryPromise` is watching for, and the one that used
+      // to raise straight through provisioning.
+      const telegram = telegramStub()
+      const malformed: TelegramStub = {
+        calls: telegram.calls,
+        fetch: async (input, init) =>
+          new URL(input.toString()).pathname.endsWith("/getUserProfilePhotos")
+            ? Response.json({ ok: true, result: true })
+            : telegram.fetch(input, init),
+      }
+
+      const outcome = yield* provision(malformed, avatarRepoStub().layer, AvatarStore.testLayer)
+
+      expect(outcome._tag).toBe("Connected")
+    }),
+  )
 })

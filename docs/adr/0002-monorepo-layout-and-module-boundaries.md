@@ -1,7 +1,7 @@
 # ADR 0002: Monorepo layout and module boundaries
 
 - **Status**: accepted
-- **Date**: 2026-07-19; amended 2026-07-28 by #215 and 2026-07-30 by #238
+- **Date**: 2026-07-19; amended 2026-07-28 by #215 and 2026-07-30 by #238 and #225
 - **Ticket**: [#12](https://github.com/apshenichniy/praximo/issues/12)
 
 ## Context
@@ -85,6 +85,7 @@ npm scope **`@praximo/*`**, all private:
 | `@praximo/analysis` | Prompts + Vercel AI SDK for Brief / Debrief / Mentor Review. |
 | `@praximo/telegram` | Shared grammY client, bot registry, message sending (used by `bot`; `pipeline` delivers through the `pipeline → bot` service binding and shares only the types). |
 | `@praximo/email` | Transactional email over the Cloudflare `send_email` binding: the `EmailChannel` service, its typed failures, and the React Email templates with their tri-lingual copy. Unlike `telegram`, it owns the **words** as well as the wire — the email *is* the surface, where the bot merely says the bot's words. One operation per email the product sends, so rendering, locale and subject never leak into an app. |
+| `@praximo/storage` | Writing to the shared R2 bucket: the avatar key vocabulary and the `AvatarStore` writer. Its own package because two Workers write the same objects for unrelated reasons — `bot` snapshots a coach's Telegram profile photo ([#225](https://github.com/apshenichniy/praximo/issues/225)), `client` snapshots a Google `picture` on the Acceptance Page ([#59](https://github.com/apshenichniy/praximo/issues/59)) — and the key layout, the content types an avatar may be, and the size it may not exceed must be one decision rather than two. No Drizzle and no Telegram; the bucket binding arrives as a structurally narrowed interface, so the package does not depend on the runtime it deploys to. Deleting objects stays with `object_cleanup_job` and the Pipeline's `ObjectCleanup`. |
 | `@praximo/auth` | Telegram Mini App credential verification — manager HMAC for Admin, Ed25519 `validate3rd` for Coach (ADR 0006) — plus the coach onboarding deep-link token. Pure crypto and config; each application owns its composition. |
 | `@praximo/i18n` | The i18n **mechanism** shared by Coach, Client, and Bot: gap filling, plural forms, locale-aware formatters, and content digests. Catalogues remain surface-owned except texts whose accepted version is recorded. |
 | `@praximo/ui` | Shared Maia theme, semantic interface typography, source-owned shadcn primitives, utilities, motion/reduced-motion foundation, host-neutral feedback contract, and UI Lab. No Telegram, router, TanStack application, or business/domain imports. |

@@ -13,6 +13,7 @@
     "@praximo/db": "workspace:*",
     "@praximo/domain": "workspace:*",
     "@praximo/i18n": "workspace:*",
+    "@praximo/storage": "workspace:*",
     "@praximo/telegram": "workspace:*",
     "effect": "catalog:",
     "grammy": "catalog:"

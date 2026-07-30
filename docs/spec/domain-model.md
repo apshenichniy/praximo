@@ -32,7 +32,7 @@ A person inside a workspace, with a role.
 - `terms_accepted_at` / `terms_version`, `last_login_at`, `last_activity_at`, and `credentials_valid_from` — the revocation floor an `auth_date` must clear
 - `role`: `owner` only in MVP; open set (`assistant`, `co_coach` reserved for group coaching)
 - `language`: `en | uk | ru` — chosen at coach onboarding; the language of the coach's UI and of all artifacts delivered to them
-- `avatar`: R2 object — Telegram profile photo, captured/refreshed at each Mini App login; shown in the web room
+- `avatar`: R2 object — the coach's Telegram profile photo, captured at bot provisioning and refreshed by the daily health sweep, which is already asking Telegram about that bot ([#225](https://github.com/apshenichniy/praximo/issues/225)). The stored key is derived from the photo's `file_unique_id`, so an unchanged photo is decided by comparing a key and downloads nothing; a photo the coach removes or hides from bots is dropped, and initials are the fallback everywhere. Distinct from the *bot's* own picture, which is one stage-wide branding object (`DEFAULT_COACH_BOT_AVATAR_R2_KEY`, [ADR 0004](../adr/0004-bot-per-coach-provisioning.md)). `Workspace.avatar` — a practice photo — overrides this one once it has a writer.
 - One coach = one workspace in MVP; the membership table is the extension point, not a promise of multi-workspace support.
 
 ### Client

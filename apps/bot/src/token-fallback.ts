@@ -6,8 +6,8 @@ import type { Update } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
 import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
 import { clientLanguage, messages } from "./messages.ts"
+import { refreshCoachPhotoQuietly } from "./coach-photo.ts"
 import {
-  apiFor,
   armCoachBotWebhook,
   coachDisplayName,
   coachMiniAppUrl,
@@ -16,9 +16,9 @@ import {
   setCoachBotMenuButton,
   settleCreationPrompt,
   sha256,
-  telegram,
   webhookSecret,
 } from "./provisioning.ts"
+import { apiFor, telegram } from "./telegram-api.ts"
 
 /**
  * The manual @BotFather fallback (#95): a coach who already owns a bot, or whose
@@ -278,6 +278,14 @@ export const completeOwnershipProof = Effect.fn("BotWorker.completeOwnershipProo
       ),
     }),
   ).pipe(Effect.result)
+
+  // Same place as on the one-tap path, and for the same reason: last, after the
+  // coach has been told their bot is ready, because a profile photo is a courtesy
+  // on top of a workspace that is already connected (#225).
+  yield* refreshCoachPhotoQuietly({
+    workspaceId: activation.workspaceId,
+    coachTelegramId: candidate.coachTelegramId,
+  })
 
   return { _tag: "Activated", username: candidate.botUsername } as const
 })

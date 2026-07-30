@@ -1,4 +1,10 @@
-import { ClientAcceptanceRepo, CoachBotHealthRepo, CoachBotProvisioningRepo } from "@praximo/db"
+import {
+  AvatarRepo,
+  ClientAcceptanceRepo,
+  CoachBotHealthRepo,
+  CoachBotProvisioningRepo,
+} from "@praximo/db"
+import { AvatarStore } from "@praximo/storage"
 import { BotRegistry, CoachBotCredential, ManagerBotSender } from "@praximo/telegram"
 import { Effect, Layer } from "effect"
 
@@ -45,6 +51,28 @@ export const unusedClientAcceptanceRepo = Layer.succeed(
     findAcceptedClient: unsupported,
     claim: unsupported,
   }),
+)
+
+/**
+ * A coach whose photo is nobody's business in this suite.
+ *
+ * `coachAvatarKey` answers rather than dying, deliberately: the photo refresh
+ * runs on the tail of every provisioning path (#225), so a suite about webhooks
+ * or greetings would otherwise have to know about it. Answering "no photo held"
+ * and then failing loudly on any *write* keeps that quiet while still catching a
+ * suite that stores one by accident.
+ */
+export const unusedAvatarRepo = Layer.succeed(
+  AvatarRepo.Service,
+  AvatarRepo.Service.of({
+    coachAvatarKey: () => Effect.succeed(undefined),
+    setCoachAvatar: unsupported,
+  }),
+)
+
+export const unusedAvatarStore = Layer.succeed(
+  AvatarStore.Service,
+  AvatarStore.Service.of({ store: unsupported }),
 )
 
 export const unusedCredential = Layer.succeed(

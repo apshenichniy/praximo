@@ -3,7 +3,12 @@ import { ClientAcceptanceRepo, CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, TelegramId, WorkspaceId } from "@praximo/domain"
 import { BotRegistry, ManagerBotSender } from "@praximo/telegram"
 import { ConfigProvider, Effect, Layer, Ref } from "effect"
-import { unusedCredential, unusedHealthRepo } from "./__tests__/coach-bot-provisioning.ts"
+import {
+  unusedAvatarRepo,
+  unusedAvatarStore,
+  unusedCredential,
+  unusedHealthRepo,
+} from "./__tests__/coach-bot-provisioning.ts"
 import { uploadsStub } from "./__tests__/uploads.ts"
 import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 
@@ -91,6 +96,8 @@ const run = (queued: ReadonlyArray<CoachBotProvisioningRepo.PendingNotification>
       repo,
       clientsLayer,
       unusedHealthRepo,
+      unusedAvatarRepo,
+      unusedAvatarStore,
       unusedCredential,
       ManagerBotSender.testLayer,
       BotRegistry.testLayer,

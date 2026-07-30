@@ -5,6 +5,8 @@ import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
 import { ConfigProvider, Effect, Layer } from "effect"
 import {
+  unusedAvatarRepo,
+  unusedAvatarStore,
   unusedClientAcceptanceRepo,
   unusedHealthRepo,
   unusedManagerSender,
@@ -118,6 +120,8 @@ const provision = (repo: RepoStub) =>
             unusedClientAcceptanceRepo,
             unusedRegistry,
             unusedManagerSender,
+            unusedAvatarRepo,
+            unusedAvatarStore,
           ),
         ),
       ),
