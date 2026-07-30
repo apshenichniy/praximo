@@ -34,25 +34,17 @@ import {
   showConsent,
 } from "./client-acceptance.ts"
 import { clientLanguage, type Copy, messages } from "./messages.ts"
+import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
 import {
   coachMiniAppUrl,
   constantTimeEqual,
-  deliverCoachNotifications,
   HaveBotCallbackPrefix,
   type ManagedBotOutcome,
-  offerBotCreation,
   prepareOnboarding,
   prepareRelink,
-  provisionManagedBot,
 } from "./provisioning.ts"
-import { sweepCoachBotHealth } from "./coach-bot-health.ts"
 import * as BotRegistryLive from "./bot-registry.ts"
-import {
-  authenticateProof,
-  botFatherToken,
-  completeOwnershipProof,
-  ingestBotFatherToken,
-} from "./token-fallback.ts"
+import { authenticateProof, botFatherToken } from "./token-fallback.ts"
 import { refusalFor, refusalStatus, UndecidedRefusalStatus } from "./coach-webhook-refusal.ts"
 import * as CoachBotReleaseLive from "./coach-bot-release.ts"
 
@@ -90,36 +82,58 @@ const DbLive = Layer.mergeAll(
   ClientAcceptanceRepo.layer,
 ).pipe(Layer.provide(Database.layer))
 const CoachBotDataLive = Layer.mergeAll(DbLive, CoachBotCredential.layer)
-const appLive = (env: Env) =>
-  Layer.mergeAll(
-    Layer.provideMerge(
-      // The registry's live layer is the one thing here that needs the bindings
-      // themselves rather than only the config they carry: a repair reads the
-      // stage's avatar out of R2 (#55).
-      Layer.mergeAll(CoachBotReleaseLive.layer, BotRegistryLive.layer(env)),
-      CoachBotDataLive,
-    ),
-    ManagerBotSender.layer,
-    CoachOnboardingToken.layer,
-  )
+const appLive = (env: Env, fetch: typeof globalThis.fetch) => {
+  const registry = (
+    fetch === globalThis.fetch
+      ? BotRegistryLive.layer(env.UPLOADS)
+      : BotRegistryLive.layerWithFetch(env.UPLOADS, fetch)
+  ).pipe(Layer.provide(CoachBotDataLive))
+  const core = Layer.mergeAll(CoachBotDataLive, registry, ManagerBotSender.layer)
+  const provisioning = (
+    fetch === globalThis.fetch
+      ? CoachBotProvisioning.layer(env.UPLOADS)
+      : CoachBotProvisioning.testLayer(env.UPLOADS, fetch)
+  ).pipe(Layer.provide(core))
+  const release = (
+    fetch === globalThis.fetch
+      ? CoachBotReleaseLive.layer
+      : CoachBotReleaseLive.layerWithFetch(fetch)
+  ).pipe(Layer.provide(CoachBotDataLive))
 
-const runtimeFromEnv = (env: Env) =>
+  return Layer.mergeAll(core, provisioning, release, CoachOnboardingToken.layer)
+}
+
+const runtimeFromEnv = (env: Env, fetch: typeof globalThis.fetch) =>
   ManagedRuntime.make(
-    Layer.provide(appLive(env), ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
+    Layer.provide(appLive(env, fetch), ConfigProvider.layer(ConfigProvider.fromUnknown(env))),
   )
 
 /** Exactly one runtime per Worker isolate (ADR 0002), built from `env` once. */
 let runtime: ReturnType<typeof runtimeFromEnv> | undefined
+let runtimeFetch: typeof globalThis.fetch | undefined
 let managerBot: Bot | undefined
 let managerBotInitialization: Promise<Bot> | undefined
 const coachBots = new Map<string, Bot>()
 
-const getRuntime = (env: Env) => (runtime ??= runtimeFromEnv(env))
+const getRuntime = (
+  env: Env,
+  fetch: typeof globalThis.fetch = runtimeFetch ?? globalThis.fetch,
+) => {
+  if (runtime === undefined || runtimeFetch !== fetch) {
+    runtime = runtimeFromEnv(env, fetch)
+    runtimeFetch = fetch
+    managerBot = undefined
+    managerBotInitialization = undefined
+    coachBots.clear()
+  }
+  return runtime
+}
 
 const health = Effect.gen(function* () {
   yield* WorkspaceRepo.Service
   yield* BotRegistry.Service
   yield* ManagerBotSender.Service
+  yield* CoachBotProvisioning.Service
   yield* CoachBotProvisioningRepo.Service
   yield* CoachBotCredential.Service
   return { app: "bot", status: "ok" } as const
@@ -229,12 +243,10 @@ const editForward = async (
 const coachOfBot = (botId: string) =>
   Effect.flatMap(ClientAcceptanceRepo.Service, (repo) => repo.findBotOwner(botId))
 
-const makeManagerBot = (
-  env: Env,
-  telegramFetch: typeof globalThis.fetch,
-  webhookOrigin: string,
-): Bot => {
-  const bot = new Bot(env.MANAGER_BOT_TOKEN, { client: { fetch: telegramFetch } })
+const makeManagerBot = (env: Env, webhookOrigin: string): Bot => {
+  const bot = new Bot(env.MANAGER_BOT_TOKEN, {
+    client: { fetch: runtimeFetch ?? globalThis.fetch },
+  })
 
   bot.command("start", async (ctx) => {
     const language = clientLanguage(ctx.from?.language_code)
@@ -257,7 +269,11 @@ const makeManagerBot = (
         await ctx.reply(messages(language).openLinkFirst, Html)
         return
       }
-      await getRuntime(env).runPromise(offerBotCreation(env, relink, "relink", telegramFetch))
+      await getRuntime(env).runPromise(
+        Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+          service.offerBotCreation(relink, "relink"),
+        ),
+      )
       return
     }
     // The claim seeds the coach's language from the sender's own Telegram
@@ -283,7 +299,11 @@ const makeManagerBot = (
     // The prompt's whole lifecycle — disarm the previous button, send the new
     // one, record it — is one operation, because the invariant it holds spans all
     // three (#134).
-    await getRuntime(env).runPromise(offerBotCreation(env, setup, "invitation", telegramFetch))
+    await getRuntime(env).runPromise(
+      Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+        service.offerBotCreation(setup, "invitation"),
+      ),
+    )
   })
 
   /**
@@ -303,11 +323,8 @@ const makeManagerBot = (
       () => false,
     )
     const outcome = await getRuntime(env).runPromise(
-      ingestBotFatherToken(
-        TelegramId.make(String(ctx.from.id)),
-        token,
-        webhookOrigin,
-        telegramFetch,
+      Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+        service.ingestBotFatherToken(TelegramId.make(String(ctx.from.id)), token, webhookOrigin),
       ).pipe(Effect.result),
     )
     if (Result.isSuccess(outcome)) {
@@ -360,14 +377,10 @@ const makeManagerBot = (
   return bot
 }
 
-const managerBotFor = (
-  env: Env,
-  telegramFetch: typeof globalThis.fetch,
-  webhookOrigin: string,
-): Promise<Bot> => {
+const managerBotFor = (env: Env, webhookOrigin: string): Promise<Bot> => {
   if (managerBot !== undefined) return Promise.resolve(managerBot)
   managerBotInitialization ??= (async () => {
-    const bot = makeManagerBot(env, telegramFetch, webhookOrigin)
+    const bot = makeManagerBot(env, webhookOrigin)
     await bot.init()
     managerBot = bot
     return bot
@@ -417,11 +430,7 @@ export const managedBotReply = async (
   return new Response(null, { status: 200 })
 }
 
-const handleManagerWebhook = async (
-  request: Request,
-  env: Env,
-  telegramFetch: typeof globalThis.fetch,
-): Promise<Response> => {
+const handleManagerWebhook = async (request: Request, env: Env): Promise<Response> => {
   const received = request.headers.get("x-telegram-bot-api-secret-token") ?? ""
   if (!constantTimeEqual(received, env.MANAGER_BOT_WEBHOOK_SECRET)) {
     return new Response(null, { status: 401 })
@@ -433,20 +442,17 @@ const handleManagerWebhook = async (
   // The webhook's public origin is the canonical endpoint installed on every
   // coach bot. Attach it to this dispatch without persisting another secret.
   const webhookOrigin = new URL(request.url).origin
-  const bot = await managerBotFor(env, telegramFetch, webhookOrigin)
-  if (update.managed_bot !== undefined) {
+  const bot = await managerBotFor(env, webhookOrigin)
+  const managed = update.managed_bot
+  if (managed !== undefined) {
     const result = await getRuntime(env).runPromise(
-      provisionManagedBot(
-        env,
-        update.managed_bot.user,
-        update.managed_bot.bot,
-        webhookOrigin,
-        telegramFetch,
+      Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+        service.provisionManagedBot(managed.user, managed.bot, webhookOrigin),
       ).pipe(Effect.result),
     )
     if (result._tag === "Failure") return new Response(null, { status: 500 })
-    if (result.success._tag === "Connected") coachBots.delete(String(update.managed_bot.bot.id))
-    return managedBotReply(result.success, update.managed_bot.user, (chatId, text, other) =>
+    if (result.success._tag === "Connected") coachBots.delete(String(managed.bot.id))
+    return managedBotReply(result.success, managed.user, (chatId, text, other) =>
       bot.api.sendMessage(chatId, text, other),
     )
   }
@@ -579,16 +585,11 @@ const coachBotFor = async (
   return { bot, webhookSecretHash: installation.success.installed.webhookSecretHash }
 }
 
-const handleCoachWebhook = async (
-  request: Request,
-  env: Env,
-  botId: string,
-  telegramFetch: typeof globalThis.fetch,
-): Promise<Response> => {
+const handleCoachWebhook = async (request: Request, env: Env, botId: string): Promise<Response> => {
   const received = request.headers.get("x-telegram-bot-api-secret-token") ?? ""
   const installed = await coachBotFor(env, botId)
   if (installed === undefined) {
-    return handleOwnershipProof(request, env, botId, received, telegramFetch)
+    return handleOwnershipProof(request, env, botId, received)
   }
   const receivedHash = createHash("sha256").update(received).digest("hex")
   if (!constantTimeEqual(receivedHash, installed.webhookSecretHash)) {
@@ -614,7 +615,6 @@ const handleOwnershipProof = async (
   env: Env,
   botId: string,
   secretToken: string,
-  telegramFetch: typeof globalThis.fetch,
 ): Promise<Response> => {
   const candidate = await getRuntime(env).runPromise(
     authenticateProof(botId, secretToken).pipe(
@@ -639,14 +639,17 @@ const handleOwnershipProof = async (
     )
     return new Response(null, { status: refusal })
   }
+  const authenticatedCandidate = candidate.success
+  const update = (await request.json()) as Update
   const outcome = await getRuntime(env).runPromise(
-    completeOwnershipProof(env, {
-      candidate: candidate.success,
-      secretToken,
-      update: (await request.json()) as Update,
-      webhookOrigin: new URL(request.url).origin,
-      telegramFetch,
-    }).pipe(Effect.result),
+    Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+      service.completeOwnershipProof({
+        candidate: authenticatedCandidate,
+        secretToken,
+        update,
+        webhookOrigin: new URL(request.url).origin,
+      }),
+    ).pipe(Effect.result),
   )
   if (Result.isFailure(outcome)) return new Response(null, { status: 500 })
   if (outcome.success._tag === "Activated") coachBots.delete(botId)
@@ -726,14 +729,15 @@ export const releaseCoachBot = Effect.fn("BotWorker.releaseCoachBot")(function* 
 export const handleRequest = async (
   request: Request,
   env: Env,
-  telegramFetch: typeof globalThis.fetch = globalThis.fetch,
+  fetch: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<Response> => {
   const pathname = new URL(request.url).pathname
-  if (pathname === "/health") return Response.json(await getRuntime(env).runPromise(health))
+  const activeRuntime = getRuntime(env, fetch)
+  if (pathname === "/health") return Response.json(await activeRuntime.runPromise(health))
   if (request.method !== "POST") return new Response(null, { status: 404 })
-  if (pathname === "/telegram/manager") return handleManagerWebhook(request, env, telegramFetch)
+  if (pathname === "/telegram/manager") return handleManagerWebhook(request, env)
   const match = /^\/telegram\/coach\/([0-9]+)$/.exec(pathname)
-  if (match?.[1] !== undefined) return handleCoachWebhook(request, env, match[1], telegramFetch)
+  if (match?.[1] !== undefined) return handleCoachWebhook(request, env, match[1])
   return new Response(null, { status: 404 })
 }
 
@@ -764,14 +768,16 @@ export const handleManagerInlineInviteRpc = (
 export const handleScheduled = async (env: Env): Promise<void> => {
   const tick = getRuntime(env)
   await tick.runPromise(
-    sweepCoachBotHealth(env).pipe(
+    Effect.flatMap(CoachBotProvisioning.Service, (service) => service.sweepCoachBotHealth()).pipe(
       Effect.tapError((failure) =>
         Effect.logWarning(`coach bot health sweep skipped this tick — ${failure.operation}`),
       ),
       Effect.ignore,
     ),
   )
-  await tick.runPromise(deliverCoachNotifications(env))
+  await tick.runPromise(
+    Effect.flatMap(CoachBotProvisioning.Service, (service) => service.deliverCoachNotifications()),
+  )
 }
 
 export const handleCoachBotReleaseRpc = (

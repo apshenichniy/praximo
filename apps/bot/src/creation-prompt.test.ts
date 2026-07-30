@@ -3,14 +3,16 @@ import { CoachBotProvisioningRepo, QueryFailed } from "@praximo/db"
 import { CoachLanguage, CoachOnboardingInviteId, TelegramId, WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
 import type { User } from "grammy/types"
-import { Effect, Layer } from "effect"
-import { messages } from "./messages.ts"
+import { ConfigProvider, Effect, Layer } from "effect"
 import {
-  createBotLink,
-  offerBotCreation,
-  provisionManagedBot,
-  suggestedBotName,
-} from "./provisioning.ts"
+  unusedClientAcceptanceRepo,
+  unusedHealthRepo,
+  unusedManagerSender,
+  unusedRegistry,
+} from "./__tests__/coach-bot-provisioning.ts"
+import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
+import { messages } from "./messages.ts"
+import { createBotLink, suggestedBotName } from "./provisioning.ts"
 import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 
 /**
@@ -202,6 +204,25 @@ const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
 const bodyOf = (telegram: TelegramStub, method: string): Record<string, unknown> | undefined =>
   telegram.calls.find((call) => call.method === method)?.body
 
+const configLayer = ConfigProvider.layer(ConfigProvider.fromUnknown(env))
+
+const serviceLayer = (
+  telegram: TelegramStub,
+  repo: Layer.Layer<CoachBotProvisioningRepo.Service>,
+) =>
+  CoachBotProvisioning.testLayer(env.UPLOADS, telegram.fetch).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        repo,
+        credentialLayer,
+        unusedHealthRepo,
+        unusedClientAcceptanceRepo,
+        unusedRegistry,
+        unusedManagerSender,
+      ),
+    ),
+  )
+
 describe("the creation deep link", () => {
   it("carries the manager bot and both suggestions", () => {
     expect(createBotLink("PraximoManagerBot", "ada_coaching_3pue_bot", "Ada Coaching")).toBe(
@@ -228,7 +249,9 @@ describe("the creation deep link", () => {
 
 describe("offering bot creation", () => {
   const offer = (repo: RepoStub, telegram: TelegramStub, setup = attempt()) =>
-    offerBotCreation(env, setup, "invitation", telegram.fetch).pipe(Effect.provide(repo.layer))
+    Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+      service.offerBotCreation(setup, "invitation"),
+    ).pipe(Effect.provide(serviceLayer(telegram, repo.layer)), Effect.provide(configLayer))
 
   it.effect("sends the link on an inline url button, and records the message", () =>
     Effect.gen(function* () {
@@ -277,9 +300,9 @@ describe("offering bot creation", () => {
       const repo = repoStub(attempt())
       const telegram = telegramStub()
 
-      yield* offerBotCreation(env, attempt(), "relink", telegram.fetch).pipe(
-        Effect.provide(repo.layer),
-      )
+      yield* Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+        service.offerBotCreation(attempt(), "relink"),
+      ).pipe(Effect.provide(serviceLayer(telegram, repo.layer)), Effect.provide(configLayer))
 
       // Nothing is being reserved for this coach a second time, and the
       // invitation this attempt still rides on was spent months ago (#55).
@@ -363,9 +386,9 @@ describe("offering bot creation", () => {
 
 describe("activation and the prompt", () => {
   const provision = (repo: RepoStub, telegram: TelegramStub) =>
-    provisionManagedBot(env, user, managedBot, "https://bot.praximo.test", telegram.fetch).pipe(
-      Effect.provide(Layer.mergeAll(repo.layer, credentialLayer)),
-    )
+    Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+      service.provisionManagedBot(user, managedBot, "https://bot.praximo.test"),
+    ).pipe(Effect.provide(serviceLayer(telegram, repo.layer)), Effect.provide(configLayer))
 
   it.effect("edits the prompt in place: keyboard gone, text confirms the bot", () =>
     Effect.gen(function* () {

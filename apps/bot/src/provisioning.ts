@@ -12,15 +12,9 @@ import { BotRegistry, CoachBotCredential, ManagerBotSender } from "@praximo/tele
 import { Api, GrammyError, InlineKeyboard, InputFile } from "grammy"
 import type { User } from "grammy/types"
 import { Clock, Effect, Result, Schema } from "effect"
+import { CoachBotProvisioningRuntime } from "./coach-bot-provisioning-runtime.ts"
 import { defaultBotDescription, defaultBotShortDescription } from "./default-branding.ts"
 import { messages } from "./messages.ts"
-
-export interface ProvisioningEnv {
-  readonly MANAGER_BOT_TOKEN: string
-  readonly DEFAULT_COACH_BOT_AVATAR_R2_KEY: string
-  readonly COACH_MINI_APP_URL: string
-  readonly UPLOADS: R2Bucket
-}
 
 export class TelegramSetupFailed extends Schema.TaggedErrorClass<TelegramSetupFailed>()(
   "BotWorker.TelegramSetupFailed",
@@ -151,12 +145,10 @@ export const sha256 = (value: string) =>
  * The bot's starting avatar, read from R2: one image per stage, swapped by
  * upload rather than by deploy (#138).
  */
-const loadAvatarObject = Effect.fn("BotWorker.loadAvatarObject")(function* (
-  env: ProvisioningEnv,
-  key: string,
-) {
+const loadAvatarObject = Effect.fn("BotWorker.loadAvatarObject")(function* (key: string) {
+  const runtime = yield* CoachBotProvisioningRuntime.Service
   const object = yield* Effect.tryPromise({
-    try: () => env.UPLOADS.get(key),
+    try: () => runtime.uploads.get(key),
     catch: () => new TelegramSetupFailed({ operation: "avatar.load" }),
   })
   if (object === null) return yield* new TelegramSetupFailed({ operation: "avatar.not-found" })
@@ -169,7 +161,6 @@ const loadAvatarObject = Effect.fn("BotWorker.loadAvatarObject")(function* (
 })
 
 export interface CoachBotConfiguration {
-  readonly env: ProvisioningEnv
   readonly token: string
   readonly botId: string
   readonly workspace: CoachBotProvisioningRepo.WorkspaceProfile
@@ -182,7 +173,6 @@ export interface CoachBotConfiguration {
    * the very retry a partial failure depends on. Omitted, a fresh one is minted.
    */
   readonly secret?: string
-  readonly telegramFetch?: typeof globalThis.fetch
 }
 
 /**
@@ -196,8 +186,8 @@ export interface CoachBotConfiguration {
  */
 export const CoachMenuButtonText = "Open"
 
-export const apiFor = (token: string, telegramFetch?: typeof globalThis.fetch): Api =>
-  new Api(token, telegramFetch === undefined ? undefined : { fetch: telegramFetch })
+export const apiFor = (token: string, fetch?: typeof globalThis.fetch): Api =>
+  new Api(token, fetch === undefined ? undefined : { fetch })
 
 /**
  * The coach Mini App URL for one specific bot: the configured base plus
@@ -228,13 +218,14 @@ export const coachMiniAppUrl = (baseUrl: string, botId: string): string => {
 export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(function* (
   input: CoachBotConfiguration,
 ) {
-  const { botId, coachName, env, token, workspace } = input
-  const api = apiFor(token, input.telegramFetch)
+  const { botId, coachName, token, workspace } = input
+  const runtime = yield* CoachBotProvisioningRuntime.Service
+  const api = apiFor(token, runtime.fetch)
   const botInfo = yield* telegram("getMe", () => api.getMe())
   // A workspace that still carries its own avatar key (from before manager-side
   // branding was removed, #108) keeps it; every other bot wears the stage's
   // platform image.
-  const avatarKey = workspace.avatarR2Key ?? env.DEFAULT_COACH_BOT_AVATAR_R2_KEY
+  const avatarKey = workspace.avatarR2Key ?? runtime.defaultCoachBotAvatarR2Key
   const secret = input.secret ?? webhookSecret()
 
   // The whole photo step is best-effort, on purpose (#138). Nothing about the
@@ -245,7 +236,7 @@ export const configureCoachBot = Effect.fn("BotWorker.configureCoachBot")(functi
   // photo is recoverable by the coach in @BotFather, so that is the way to fail.
   // The warning names the operation and the key, which is what an operator needs
   // to point `bun run branding:avatar:set` at.
-  const photo = yield* loadAvatarObject(env, avatarKey).pipe(
+  const photo = yield* loadAvatarObject(avatarKey).pipe(
     Effect.flatMap((bytes) =>
       telegram("setMyProfilePhoto", () =>
         api.setMyProfilePhoto({ type: "static", photo: new InputFile(bytes, "avatar.jpg") }),
@@ -299,18 +290,17 @@ export const setCoachBotMenuButton = Effect.fn("BotWorker.setCoachBotMenuButton"
     readonly botId: string
     /** The coach's Telegram id, which in their private chat is also the chat id. */
     readonly coachChatId: TelegramId
-    readonly miniAppBaseUrl: string
-    readonly telegramFetch?: typeof globalThis.fetch
   }) {
+    const runtime = yield* CoachBotProvisioningRuntime.Service
     const miniAppUrl = yield* Effect.try({
       try: () => {
-        const url = new URL(input.miniAppBaseUrl)
+        const url = new URL(runtime.coachMiniAppUrl)
         if (url.protocol !== "https:") throw new Error("Mini App URL must use HTTPS")
         return coachMiniAppUrl(url.toString(), input.botId)
       },
       catch: () => new TelegramSetupFailed({ operation: "miniAppUrl.validate" }),
     })
-    const api = apiFor(input.token, input.telegramFetch)
+    const api = apiFor(input.token, runtime.fetch)
     const menuButton = {
       type: "web_app",
       text: CoachMenuButtonText,
@@ -364,9 +354,9 @@ export const armCoachBotWebhook = Effect.fn("BotWorker.armCoachBotWebhook")(func
    * the BotFather path, where a queued update may be the proof handshake itself.
    */
   readonly dropPendingUpdates?: boolean
-  readonly telegramFetch?: typeof globalThis.fetch
 }) {
-  const api = apiFor(input.token, input.telegramFetch)
+  const runtime = yield* CoachBotProvisioningRuntime.Service
+  const api = apiFor(input.token, runtime.fetch)
   yield* telegram("setWebhook", () =>
     api.setWebhook(`${input.webhookOrigin}/telegram/coach/${input.botId}`, {
       secret_token: input.secret,
@@ -377,7 +367,6 @@ export const armCoachBotWebhook = Effect.fn("BotWorker.armCoachBotWebhook")(func
 })
 
 export interface CoachBotReconfiguration {
-  readonly env: ProvisioningEnv
   readonly token: string
   readonly botId: string
   readonly workspace: CoachBotProvisioningRepo.WorkspaceProfile
@@ -394,7 +383,6 @@ export interface CoachBotReconfiguration {
    * must not record a secret Telegram has never seen (ADR 0004).
    */
   readonly webhookOrigin?: string
-  readonly telegramFetch?: typeof globalThis.fetch
 }
 
 /**
@@ -415,8 +403,6 @@ export interface CoachBotReconfiguration {
 export const reconfigureCoachBot = Effect.fn("BotWorker.reconfigureCoachBot")(function* (
   input: CoachBotReconfiguration,
 ) {
-  const injectedFetch =
-    input.telegramFetch === undefined ? {} : { telegramFetch: input.telegramFetch }
   // The coach's own chat first: a client caches the menu button when it opens
   // the chat, and a default is the one thing Telegram never pushes (#156).
   if (input.coachChatId !== undefined) {
@@ -424,17 +410,13 @@ export const reconfigureCoachBot = Effect.fn("BotWorker.reconfigureCoachBot")(fu
       token: input.token,
       botId: input.botId,
       coachChatId: input.coachChatId,
-      miniAppBaseUrl: input.env.COACH_MINI_APP_URL,
-      ...injectedFetch,
     })
   }
   const configured = yield* configureCoachBot({
-    env: input.env,
     token: input.token,
     botId: input.botId,
     workspace: input.workspace,
     coachName: input.coachName,
-    ...injectedFetch,
   })
   // No `dropPendingUpdates`, deliberately: this bot has been listening for a
   // while, so its queue is the coach's and their clients' ordinary messages.
@@ -445,7 +427,6 @@ export const reconfigureCoachBot = Effect.fn("BotWorker.reconfigureCoachBot")(fu
       botId: input.botId,
       secret: configured.secret,
       webhookOrigin: input.webhookOrigin,
-      ...injectedFetch,
     })
   }
   return { ...configured, armed: input.webhookOrigin !== undefined }
@@ -493,9 +474,9 @@ export const announceCoachBotSetup = Effect.fn("BotWorker.announceCoachBotSetup"
     readonly botId: string
     readonly chatId: TelegramId
     readonly language: CoachLanguage
-    readonly telegramFetch?: typeof globalThis.fetch
   }) {
-    const api = apiFor(input.token, input.telegramFetch)
+    const runtime = yield* CoachBotProvisioningRuntime.Service
+    const api = apiFor(input.token, runtime.fetch)
     // Deliberately not `telegram()`, which drops the cause: this is the one place
     // that has to tell "the coach is not in the chat" from "the send did not
     // land", and only the Bot API error code says which.
@@ -546,15 +527,14 @@ export const greetCoachOnBotReady = Effect.fn("BotWorker.greetCoachOnBotReady")(
   readonly chatId: TelegramId
   readonly language: CoachLanguage
   readonly botId: string
-  readonly miniAppBaseUrl: string
   readonly announcementMessageId?: number
-  readonly telegramFetch?: typeof globalThis.fetch
 }) {
-  const api = apiFor(input.token, input.telegramFetch)
+  const runtime = yield* CoachBotProvisioningRuntime.Service
+  const api = apiFor(input.token, runtime.fetch)
   const copy = messages(input.language)
   const keyboard = new InlineKeyboard().webApp(
     copy.openButton,
-    coachMiniAppUrl(input.miniAppBaseUrl, input.botId),
+    coachMiniAppUrl(runtime.coachMiniAppUrl, input.botId),
   )
   const announced = input.announcementMessageId
   const delivery =
@@ -627,16 +607,6 @@ export const prepareRelink = Effect.fn("BotWorker.prepareRelink")(function* (
     new Date(yield* Clock.currentTimeMillis),
   )
 })
-
-/** What it takes to reach the coach's manager chat at all. */
-export interface ManagerBotEnv {
-  readonly MANAGER_BOT_TOKEN: string
-}
-
-/** …plus the name the creation deep link has to carry. */
-export interface CreationPromptEnv extends ManagerBotEnv {
-  readonly MANAGER_BOT_USERNAME: string
-}
 
 /**
  * A step whose failure must not cost the coach their onboarding: run it, and on
@@ -732,7 +702,6 @@ export const createBotLink = (
  * still what survives the error that happens anyway.
  */
 export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function* (
-  env: CreationPromptEnv,
   setup: CoachBotProvisioningRepo.Provisioning,
   /**
    * Which sentence opens the prompt. `relink` is a coach coming back to a
@@ -741,10 +710,10 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
    * rides on is long spent, so saying otherwise would be a lie.
    */
   intent: "invitation" | "relink" = "invitation",
-  telegramFetch?: typeof globalThis.fetch,
 ) {
   const repo = yield* CoachBotProvisioningRepo.Service
-  const api = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
+  const runtime = yield* CoachBotProvisioningRuntime.Service
+  const api = apiFor(runtime.managerBotToken, runtime.fetch)
   // The prompt lives in the coach's private conversation with the manager bot,
   // so their Telegram id *is* the chat id — passed through as the id string the
   // row holds, exactly as `ManagerBotSender` addresses the same chat.
@@ -779,7 +748,7 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
         .url(
           copy.createBotButton,
           createBotLink(
-            env.MANAGER_BOT_USERNAME,
+            runtime.managerBotUsername,
             suggested,
             suggestedBotName(setup.workspace.name),
           ),
@@ -815,7 +784,6 @@ export const offerBotCreation = Effect.fn("BotWorker.offerBotCreation")(function
  * message the coach deleted may undo that.
  */
 export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(function* (
-  env: ManagerBotEnv,
   prompt: CoachBotProvisioningRepo.Provisioning,
   botUsername: string,
   /**
@@ -824,11 +792,11 @@ export const settleCreationPrompt = Effect.fn("BotWorker.settleCreationPrompt")(
    * sentence for a workspace that was set up months ago and has just come back.
    */
   outcome: "connected" | "reconnected" = "connected",
-  telegramFetch?: typeof globalThis.fetch,
 ) {
   const messageId = prompt.promptMessageId
   if (messageId === undefined) return
-  const api = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
+  const runtime = yield* CoachBotProvisioningRuntime.Service
+  const api = apiFor(runtime.managerBotToken, runtime.fetch)
   const copy = messages(prompt.coachLanguage)
   yield* bestEffort(
     telegram("editMessageText", () =>
@@ -863,22 +831,18 @@ export type ManagedBotOutcome =
   | { readonly _tag: "NoOpenAttempt"; readonly botUsername: string }
 
 export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(function* (
-  env: ProvisioningEnv,
   user: User,
   managedBot: User,
   webhookOrigin: string,
-  telegramFetch?: typeof globalThis.fetch,
 ) {
   if (managedBot.username === undefined) {
     return yield* new TelegramSetupFailed({ operation: "managedBot.username" })
   }
   const repo = yield* CoachBotProvisioningRepo.Service
   const credentials = yield* CoachBotCredential.Service
+  const runtime = yield* CoachBotProvisioningRuntime.Service
   const now = new Date(yield* Clock.currentTimeMillis)
-  const managerApi = apiFor(env.MANAGER_BOT_TOKEN, telegramFetch)
-  // `exactOptionalPropertyTypes` refuses an explicit `undefined` here, and both
-  // configuration branches need the same seam.
-  const injectedFetch = telegramFetch === undefined ? {} : { telegramFetch }
+  const managerApi = apiFor(runtime.managerBotToken, runtime.fetch)
 
   const existing = yield* repo.findByBotId(String(managedBot.id)).pipe(Effect.result)
   if (Result.isSuccess(existing)) {
@@ -900,14 +864,12 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     // That whole order lives in `reconfigureCoachBot`, which the health repair
     // shares (#55).
     const configured = yield* reconfigureCoachBot({
-      env,
       token,
       botId: existing.success.telegramBotId,
       workspace: profile,
       coachName: coachDisplayName(user, profile.name),
       coachChatId: TelegramId.make(String(user.id)),
       webhookOrigin,
-      ...injectedFetch,
     })
     return {
       _tag: "Connected",
@@ -973,8 +935,6 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     token,
     botId: String(managedBot.id),
     coachChatId: provisioning.coachTelegramId,
-    miniAppBaseUrl: env.COACH_MINI_APP_URL,
-    ...injectedFetch,
   })
   // Then the message that has to beat the coach's own thumb: Telegram has already
   // offered them **Start bot**, and everything below — an avatar upload, two
@@ -985,15 +945,12 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     botId: String(managedBot.id),
     chatId: provisioning.coachTelegramId,
     language: provisioning.coachLanguage,
-    ...injectedFetch,
   })
   const configured = yield* configureCoachBot({
-    env,
     token,
     botId: String(managedBot.id),
     workspace: provisioning.workspace,
     coachName: coachDisplayName(user, provisioning.workspace.name),
-    ...injectedFetch,
   })
   const installation = yield* repo.complete({
     provisioningId: provisioning.id,
@@ -1011,11 +968,9 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
   // now fail *after* the workspace is connected, and the coach must not be left
   // looking at a live creation button for a bot they already have.
   yield* settleCreationPrompt(
-    env,
     provisioning,
     installation.username,
     installation.reconnected ? "reconnected" : "connected",
-    telegramFetch,
   )
   // The end of the sentence the announcement started, in the same message — and
   // *before* the webhook is armed, which is what makes "greeted once" true rather
@@ -1028,9 +983,7 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     chatId: provisioning.coachTelegramId,
     language: provisioning.coachLanguage,
     botId: String(managedBot.id),
-    miniAppBaseUrl: env.COACH_MINI_APP_URL,
     ...(announcement === undefined ? {} : { announcementMessageId: announcement }),
-    ...injectedFetch,
   })
   // Last, so no update can reach the bot's route before the row that serves it
   // exists (#150).
@@ -1053,7 +1006,6 @@ export const provisionManagedBot = Effect.fn("BotWorker.provisionManagedBot")(fu
     secret: configured.secret,
     webhookOrigin,
     dropPendingUpdates: greeted,
-    ...injectedFetch,
   })
   return { _tag: "Connected", installation } as const
 })
@@ -1128,7 +1080,6 @@ export const acceptedClientId = (dedupeKey: string): string | undefined => {
  * is a question best answered by the screen about them.
  */
 const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(function* (
-  env: { readonly COACH_MINI_APP_URL: string },
   notification: CoachBotProvisioningRepo.PendingNotification,
 ) {
   const clientId = acceptedClientId(notification.dedupeKey)
@@ -1140,6 +1091,7 @@ const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(funct
   if (client === undefined) return false
 
   const registry = yield* BotRegistry.Service
+  const runtime = yield* CoachBotProvisioningRuntime.Service
   const copy = messages(notification.coachLanguage)
   // The coach reads their own zone; the *client's* copy of this moment is the
   // bot's confirmation, which prints an offset instead.
@@ -1149,7 +1101,7 @@ const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(funct
       : formatters(notification.coachLanguage).timestamp(client.nextSessionAt)
   // A path, not a hash: the Mini App is path-routed, and `#/clients/…` would
   // open the home screen with a fragment nothing reads.
-  const route = new URL(env.COACH_MINI_APP_URL)
+  const route = new URL(runtime.coachMiniAppUrl)
   route.pathname = `/clients/${clientId}`
 
   const sent = yield* registry
@@ -1175,7 +1127,7 @@ const deliverClientAccepted = Effect.fn("BotWorker.deliverClientAccepted")(funct
 })
 
 export const deliverCoachNotifications = Effect.fn("BotWorker.deliverCoachNotifications")(
-  function* (env: { readonly COACH_MINI_APP_URL: string }) {
+  function* () {
     const repo = yield* CoachBotProvisioningRepo.Service
     const sender = yield* ManagerBotSender.Service
     const now = new Date(yield* Clock.currentTimeMillis)
@@ -1184,7 +1136,7 @@ export const deliverCoachNotifications = Effect.fn("BotWorker.deliverCoachNotifi
       notifications,
       (notification) => {
         if (notification.kind === CoachNotification.Kind.ClientAccepted) {
-          return deliverClientAccepted(env, notification).pipe(
+          return deliverClientAccepted(notification).pipe(
             Effect.flatMap((delivered) =>
               delivered
                 ? repo.markNotificationDelivered(notification.id, now)

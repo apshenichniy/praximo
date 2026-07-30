@@ -4,14 +4,16 @@ import { CoachBotProvisioningRepo } from "@praximo/db"
 import { CoachLanguage, CoachOnboardingInviteId, TelegramId, WorkspaceId } from "@praximo/domain"
 import { CoachBotCredential } from "@praximo/telegram"
 import type { Update } from "grammy/types"
-import { Effect, Layer } from "effect"
-import { messages as messagesFor } from "./messages.ts"
+import { ConfigProvider, Effect, Layer } from "effect"
 import {
-  authenticateProof,
-  botFatherToken,
-  completeOwnershipProof,
-  ingestBotFatherToken,
-} from "./token-fallback.ts"
+  unusedClientAcceptanceRepo,
+  unusedHealthRepo,
+  unusedManagerSender,
+  unusedRegistry,
+} from "./__tests__/coach-bot-provisioning.ts"
+import { CoachBotProvisioning } from "./coach-bot-provisioning.ts"
+import { messages as messagesFor } from "./messages.ts"
+import { authenticateProof, botFatherToken } from "./token-fallback.ts"
 import { BRANDING_AVATAR_BYTES, BRANDING_AVATAR_KEY, uploadsStub } from "./__tests__/uploads.ts"
 
 const TOKEN = "9100777:AAHkq2Lb8fN1sQx3TzVpYr7WcJd4MgEuKvB"
@@ -31,6 +33,7 @@ const SECRET_HASH = sha256Hex(SECRET)
 
 const env = {
   MANAGER_BOT_TOKEN: "manager-token",
+  MANAGER_BOT_USERNAME: "PraximoManagerBot",
   DEFAULT_COACH_BOT_AVATAR_R2_KEY: BRANDING_AVATAR_KEY,
   COACH_MINI_APP_URL: "https://coach.praximo.io/",
   CLIENT_APP_URL: "https://me.praximo.io",
@@ -219,6 +222,29 @@ const telegramStub = (failing: ReadonlyArray<string> = []): TelegramStub => {
   return { fetch, calls, messages, edits }
 }
 
+const configLayer = ConfigProvider.layer(ConfigProvider.fromUnknown(env))
+
+const runIngestion = (repo: RepoStub, telegram: TelegramStub) =>
+  Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+    service.ingestBotFatherToken(coach, TOKEN, "https://bot.praximo.test"),
+  ).pipe(
+    Effect.provide(
+      CoachBotProvisioning.testLayer(env.UPLOADS, telegram.fetch).pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            repo.layer,
+            credentialLayer,
+            unusedHealthRepo,
+            unusedClientAcceptanceRepo,
+            unusedRegistry,
+            unusedManagerSender,
+          ),
+        ),
+      ),
+    ),
+    Effect.provide(configLayer),
+  )
+
 const proofUpdate = (text: string, fromId: string): Update =>
   ({
     update_id: 1,
@@ -248,12 +274,7 @@ describe("BotFather token fallback", () => {
       const repo = repoStub()
       const telegram = telegramStub()
 
-      const ingested = yield* ingestBotFatherToken(
-        coach,
-        TOKEN,
-        "https://bot.praximo.test",
-        telegram.fetch,
-      ).pipe(Effect.provide(Layer.mergeAll(repo.layer, credentialLayer)))
+      const ingested = yield* runIngestion(repo, telegram)
 
       expect(ingested.username).toBe(BOT_USERNAME)
       expect(ingested.coachLanguage).toBe("uk")
@@ -285,11 +306,7 @@ describe("BotFather token fallback", () => {
       const repo = repoStub()
       const telegram = telegramStub(["getMe"])
 
-      const failure = yield* Effect.flip(
-        ingestBotFatherToken(coach, TOKEN, "https://bot.praximo.test", telegram.fetch).pipe(
-          Effect.provide(Layer.mergeAll(repo.layer, credentialLayer)),
-        ),
-      )
+      const failure = yield* Effect.flip(runIngestion(repo, telegram))
 
       expect(failure).toMatchObject({
         _tag: "BotWorker.TokenIngestionFailed",
@@ -306,11 +323,7 @@ describe("BotFather token fallback", () => {
       const repo = repoStub({ installed: installation })
       const telegram = telegramStub()
 
-      const failure = yield* Effect.flip(
-        ingestBotFatherToken(coach, TOKEN, "https://bot.praximo.test", telegram.fetch).pipe(
-          Effect.provide(Layer.mergeAll(repo.layer, credentialLayer)),
-        ),
-      )
+      const failure = yield* Effect.flip(runIngestion(repo, telegram))
 
       expect(failure).toMatchObject({ _tag: "BotWorker.TokenIngestionFailed", reason: "bot-taken" })
       expect(repo.ingested).toHaveLength(0)
@@ -324,11 +337,7 @@ describe("BotFather token fallback", () => {
       const repo = repoStub()
       const telegram = telegramStub(["setWebhook"])
 
-      const failure = yield* Effect.flip(
-        ingestBotFatherToken(coach, TOKEN, "https://bot.praximo.test", telegram.fetch).pipe(
-          Effect.provide(Layer.mergeAll(repo.layer, credentialLayer)),
-        ),
-      )
+      const failure = yield* Effect.flip(runIngestion(repo, telegram))
 
       expect(failure).toMatchObject({
         _tag: "BotWorker.TelegramSetupFailed",
@@ -361,13 +370,30 @@ describe("BotFather token fallback", () => {
   )
 
   const proofOf = (repo: RepoStub, telegram: TelegramStub, update: Update, parked = candidate()) =>
-    completeOwnershipProof(env, {
-      candidate: parked,
-      secretToken: SECRET,
-      update,
-      webhookOrigin: "https://bot.praximo.test",
-      telegramFetch: telegram.fetch,
-    }).pipe(Effect.provide(Layer.mergeAll(repo.layer, credentialLayer)))
+    Effect.flatMap(CoachBotProvisioning.Service, (service) =>
+      service.completeOwnershipProof({
+        candidate: parked,
+        secretToken: SECRET,
+        update,
+        webhookOrigin: "https://bot.praximo.test",
+      }),
+    ).pipe(
+      Effect.provide(
+        CoachBotProvisioning.testLayer(env.UPLOADS, telegram.fetch).pipe(
+          Layer.provide(
+            Layer.mergeAll(
+              repo.layer,
+              credentialLayer,
+              unusedHealthRepo,
+              unusedClientAcceptanceRepo,
+              unusedRegistry,
+              unusedManagerSender,
+            ),
+          ),
+        ),
+      ),
+      Effect.provide(configLayer),
+    )
 
   it.effect("refuses the coach's own nonce presented by another account", () =>
     Effect.gen(function* () {
