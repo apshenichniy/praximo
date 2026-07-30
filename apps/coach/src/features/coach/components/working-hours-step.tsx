@@ -1,7 +1,7 @@
 import {
   type CoachLanguage,
-  type DayWindow,
-  type Weekday,
+  setSharedWindow,
+  toggleWeekday,
   windowForWeekday,
   type WorkingHours,
 } from "@praximo/domain"
@@ -57,18 +57,6 @@ export function WorkingHoursStep({
   /** Which end of the window is being edited, if either. */
   const [picking, setPicking] = useState<WindowField>()
 
-  const toggleDay = (weekday: Weekday) => {
-    setHours((was) => ({
-      ...was,
-      days: { ...was.days, [weekday]: was.days[weekday] === "off" ? "window" : "off" },
-    }))
-  }
-
-  const setWindow = (window: DayWindow) => {
-    setPicking(undefined)
-    setHours((was) => ({ ...was, window }))
-  }
-
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-28">
       <Heading as="h1" role="page-title">
@@ -86,7 +74,15 @@ export function WorkingHoursStep({
       </div>
 
       {picking === undefined ? null : (
-        <TimeWindowPicker window={hours.window} field={picking} copy={copy} onDone={setWindow} />
+        <TimeWindowPicker
+          window={hours.window}
+          field={picking}
+          copy={copy}
+          onDone={(window) => {
+            setPicking(undefined)
+            setHours((was) => setSharedWindow(was, window))
+          }}
+        />
       )}
 
       <p className="text-muted-foreground mt-8 text-xs leading-normal font-semibold tracking-wide uppercase">
@@ -100,7 +96,7 @@ export function WorkingHoursStep({
       <WeekChips
         language={language}
         windowFor={(weekday) => windowForWeekday(hours, weekday)}
-        onToggle={toggleDay}
+        onToggle={(weekday) => setHours((was) => toggleWeekday(was, weekday))}
       />
 
       {error === undefined ? null : (

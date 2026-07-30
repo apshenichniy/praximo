@@ -1,7 +1,7 @@
 import {
   type CoachLanguage,
-  type DayWindow,
-  type Weekday,
+  setSharedWindow,
+  toggleWeekday,
   windowForWeekday,
   type WorkingHours,
 } from "@praximo/domain"
@@ -61,24 +61,6 @@ export function WorkingHoursScreen({
   const [picking, setPicking] = useState<WindowField>()
   const summary = summariseWorkingHours(hours)
 
-  const toggleDay = (weekday: Weekday) => {
-    const day = hours.days[weekday]
-    onChange({
-      ...hours,
-      // Switching a day back on returns it to the shared window rather than to
-      // the hours it used to keep: the coach turned it off, and a resurrected
-      // exception nobody asked for is worse than one they set again.
-      days: { ...hours.days, [weekday]: day === "off" ? "window" : "off" },
-    })
-  }
-
-  const setWindow = (window: DayWindow) => {
-    setPicking(undefined)
-    // Every day that has not been given its own hours follows the window. That
-    // propagation is the whole idea of the screen.
-    onChange({ ...hours, window })
-  }
-
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-14 pb-16">
       <HostBackButton label={common.back} />
@@ -100,7 +82,15 @@ export function WorkingHoursScreen({
       />
 
       {picking === undefined ? null : (
-        <TimeWindowPicker window={hours.window} field={picking} copy={copy} onDone={setWindow} />
+        <TimeWindowPicker
+          window={hours.window}
+          field={picking}
+          copy={copy}
+          onDone={(window) => {
+            setPicking(undefined)
+            onChange(setSharedWindow(hours, window))
+          }}
+        />
       )}
 
       <p className="text-muted-foreground mt-8 text-xs leading-normal font-semibold tracking-wide uppercase">
@@ -110,7 +100,7 @@ export function WorkingHoursScreen({
       <WeekChips
         language={language}
         windowFor={(weekday) => windowForWeekday(hours, weekday)}
-        onToggle={toggleDay}
+        onToggle={(weekday) => onChange(toggleWeekday(hours, weekday))}
       />
 
       <button

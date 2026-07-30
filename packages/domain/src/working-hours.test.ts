@@ -1,14 +1,145 @@
 import { describe, expect, it } from "@effect/vitest"
 import {
+  applyWindowToAll,
   DefaultWorkingHours,
   parseWorkingHours,
   readWorkingHours,
+  setDayWindow,
+  setSharedWindow,
+  toggleWeekday,
   Weekdays,
   windowForWeekday,
   type WorkingHours,
 } from "./working-hours.ts"
 
 const at = (hours: number, minutes = 0) => hours * 60 + minutes
+
+describe("toggleWeekday", () => {
+  it.each(Weekdays)("switches %s off and restores it to the shared window", (weekday) => {
+    const switchedOff = toggleWeekday(DefaultWorkingHours, weekday)
+    expect(switchedOff.days[weekday]).toBe("off")
+
+    const restored = toggleWeekday(switchedOff, weekday)
+    expect(restored.days[weekday]).toBe("window")
+    expect(restored.window).toEqual(DefaultWorkingHours.window)
+  })
+
+  it.each([
+    ["shared", "window", "off"],
+    ["off", "off", "window"],
+    ["own hours", { startMinutes: at(12), endMinutes: at(20) }, "off"],
+  ] as const)("toggles a day with %s", (_label, day, expected) => {
+    const hours: WorkingHours = {
+      ...DefaultWorkingHours,
+      days: { ...DefaultWorkingHours.days, wed: day },
+    }
+
+    expect(toggleWeekday(hours, "wed").days.wed).toEqual(expected)
+    expect(hours.days.wed).toEqual(day)
+  })
+})
+
+describe("setSharedWindow", () => {
+  it.each([
+    ["later", { startMinutes: at(9), endMinutes: at(20) }],
+    ["shorter", { startMinutes: at(10), endMinutes: at(18) }],
+  ] as const)("moves the shared window %s without changing day declarations", (_label, window) => {
+    const hours: WorkingHours = {
+      window: { startMinutes: at(8), endMinutes: at(22) },
+      days: {
+        mon: "window",
+        tue: "off",
+        wed: { startMinutes: at(12), endMinutes: at(20) },
+        thu: "window",
+        fri: "window",
+        sat: "off",
+        sun: "window",
+      },
+    }
+
+    const changed = setSharedWindow(hours, window)
+
+    expect(changed).toEqual({ ...hours, window })
+    expect(windowForWeekday(changed, "mon")).toEqual(window)
+    expect(windowForWeekday(changed, "tue")).toBeUndefined()
+    expect(windowForWeekday(changed, "wed")).toEqual({
+      startMinutes: at(12),
+      endMinutes: at(20),
+    })
+    expect(hours.window).toEqual({ startMinutes: at(8), endMinutes: at(22) })
+  })
+})
+
+describe("setDayWindow", () => {
+  it.each([
+    ["the shared window", { startMinutes: at(9), endMinutes: at(19) }, "window"],
+    [
+      "its own later start",
+      { startMinutes: at(10), endMinutes: at(19) },
+      { startMinutes: at(10), endMinutes: at(19) },
+    ],
+    [
+      "its own later end",
+      { startMinutes: at(9), endMinutes: at(20) },
+      { startMinutes: at(9), endMinutes: at(20) },
+    ],
+  ] as const)("sets a day to %s", (_label, window, expected) => {
+    const hours: WorkingHours = {
+      ...DefaultWorkingHours,
+      window: { startMinutes: at(9), endMinutes: at(19) },
+      days: { ...DefaultWorkingHours.days, sun: "off" },
+    }
+
+    const changed = setDayWindow(hours, "sun", window)
+
+    expect(changed.days.sun).toEqual(expected)
+    expect(changed.days.mon).toBe("window")
+    expect(hours.days.sun).toBe("off")
+  })
+})
+
+describe("applyWindowToAll", () => {
+  it.each([
+    [
+      "mixed week",
+      {
+        mon: "window",
+        tue: "off",
+        wed: { startMinutes: at(12), endMinutes: at(20) },
+        thu: { startMinutes: at(10), endMinutes: at(18) },
+        fri: "window",
+        sat: "off",
+        sun: "window",
+      },
+      ["window", "off", "window", "window", "window", "off", "window"],
+    ],
+    [
+      "week of exceptions",
+      {
+        mon: { startMinutes: at(10), endMinutes: at(18) },
+        tue: { startMinutes: at(11), endMinutes: at(19) },
+        wed: { startMinutes: at(12), endMinutes: at(20) },
+        thu: { startMinutes: at(10), endMinutes: at(18) },
+        fri: { startMinutes: at(11), endMinutes: at(19) },
+        sat: { startMinutes: at(12), endMinutes: at(20) },
+        sun: { startMinutes: at(10), endMinutes: at(18) },
+      },
+      ["window", "window", "window", "window", "window", "window", "window"],
+    ],
+  ] as const)("moves every working day in a %s onto one window", (_label, days, expectedDays) => {
+    const hours: WorkingHours = {
+      window: { startMinutes: at(9), endMinutes: at(19) },
+      days,
+    }
+    const window = { startMinutes: at(12), endMinutes: at(20) }
+
+    const changed = applyWindowToAll(hours, window)
+
+    expect(changed.window).toEqual(window)
+    expect(Weekdays.map((weekday) => changed.days[weekday])).toEqual(expectedDays)
+    expect(hours.days).toEqual(days)
+  })
+})
 
 describe("readWorkingHours", () => {
   // The blob predates the key and will outlive it, so nothing here is worth

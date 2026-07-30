@@ -58,11 +58,15 @@ export {
   SessionKinds,
 } from "./scheduling.ts"
 export {
+  applyWindowToAll,
   DefaultWorkingDayEndMinutes,
   DefaultWorkingDayStartMinutes,
   DefaultWorkingHours,
   parseWorkingHours,
   readWorkingHours,
+  setDayWindow,
+  setSharedWindow,
+  toggleWeekday,
   type Weekday,
   Weekdays,
   weekdayOfIndex,
