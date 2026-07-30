@@ -9,14 +9,20 @@
  * the presets below are where Praximo chooses what it leaves open (#223).
  */
 @import "./typeset.css";
-@import "@fontsource-variable/inter";
+/*
+ * The interface sans is Ficus, not the preset's Inter — the one deliberate
+ * departure from the resolved shadcn baseline, decided in #255 and held by the
+ * foundation contract test. Vendored because it has no package; the provenance
+ * and the reason the weight range is written out live in the file itself.
+ */
+@import "./fonts/ficus.css";
 @import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: "Inter Variable", sans-serif;
+  --font-sans: "Ficus", sans-serif;
   --font-mono: "Geist Mono Variable", monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);

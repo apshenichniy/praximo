@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
 import { describe, expect, it } from "vitest"
@@ -15,6 +15,7 @@ import {
 const packageRoot = fileURLToPath(new URL("../..", import.meta.url))
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8")
 const typeset = readFileSync(new URL("../typeset.css", import.meta.url), "utf8")
+const ficus = readFileSync(new URL("../fonts/ficus.css", import.meta.url), "utf8")
 const componentSources = Object.fromEntries(
   readdirSync(new URL("../components/ui/", import.meta.url))
     .filter((file) => file.endsWith(".tsx"))
@@ -221,11 +222,46 @@ describe("@praximo/ui public foundation", () => {
   })
 
   it("publishes the clean Maia fonts without the retired private type scale", () => {
-    expect(styles).toContain('@import "@fontsource-variable/inter"')
+    expect(styles).toContain('@import "./fonts/ficus.css"')
     expect(styles).toContain('@import "@fontsource-variable/geist-mono"')
     expect(styles).not.toMatch(/--text-(caption|body|emphasis|heading|title|display):/)
     expect(styles).not.toContain("--brand")
     expect(styles).not.toContain("--pressed")
+  })
+
+  /*
+   * The one recorded departure from the resolved preset (#255). The baseline
+   * rule in `docs/agents/ui-development.md` buys an exception with a human
+   * decision and a focused test; this is the test, and it holds the parts that
+   * break silently rather than loudly.
+   */
+  it("carries Ficus as the recorded exception to the preset's Inter", () => {
+    expect(styles).not.toContain("Inter Variable")
+    expect(styles).not.toContain("@fontsource-variable/inter")
+    expect(packageJson.dependencies).not.toHaveProperty("@fontsource-variable/inter")
+
+    for (const file of ["Ficus-variable.woff2", "Ficus-Italic-variable.woff2", "OFL.txt"]) {
+      expect(existsSync(new URL(`../fonts/${file}`, import.meta.url)), `vendored ${file}`).toBe(
+        true,
+      )
+    }
+    // Vendored source with no package to name its version: the tag and commit
+    // in the stylesheet are the only record of what these bytes are.
+    expect(ficus).toMatch(/v1\.1\.0/)
+    expect(ficus).toMatch(/[0-9a-f]{40}/)
+
+    const faces = ficus.match(/@font-face\s*{[^}]*}/g) ?? []
+    expect(faces).toHaveLength(2)
+    for (const face of faces) {
+      expect(face).toContain('font-family: "Ficus"')
+      // The file's own default instance is Light. Without the declared range a
+      // weight-less element renders at 300 and the whole interface goes thin —
+      // a regression that looks like a design choice rather than a bug.
+      expect(face).toContain("font-weight: 300 900")
+      expect(face).toMatch(/format\("woff2-variations"\)/)
+    }
+    expect(faces.filter((face) => face.includes("font-style: normal"))).toHaveLength(1)
+    expect(faces.filter((face) => face.includes("font-style: italic"))).toHaveLength(1)
   })
 
   it("keeps product motion tokens additive without rewriting primitive motion", () => {
@@ -371,8 +407,8 @@ describe("@praximo/ui public foundation", () => {
         ]),
       )
 
-      // Inter Variable and Geist Mono by way of the shared theme, not the
-      // Geist the Typeset builder emits by default.
+      // Ficus and Geist Mono by way of the shared theme, not the Geist the
+      // Typeset builder emits by default.
       expect(declarations["--typeset-font-body"]).toBe("var(--font-sans)")
       expect(declarations["--typeset-font-heading"]).toBe("var(--font-heading)")
       expect(declarations["--typeset-font-mono"]).toBe("var(--font-mono)")
@@ -384,10 +420,10 @@ describe("@praximo/ui public foundation", () => {
     // The whole chain, not just its first link: a preset points at a theme
     // variable, the variable names a face, and the face is actually loaded.
     // Where it resolves is checked in the browser; that it can is checked here.
-    expect(styles).toMatch(/--font-sans:\s*"Inter Variable"/)
+    expect(styles).toMatch(/--font-sans:\s*"Ficus"/)
     expect(styles).toMatch(/--font-mono:\s*"Geist Mono Variable"/)
     expect(styles).toMatch(/--font-heading:\s*var\(--font-sans\)/)
-    expect(styles).toContain('@import "@fontsource-variable/inter"')
+    expect(styles).toContain('@import "./fonts/ficus.css"')
     expect(styles).toContain('@import "@fontsource-variable/geist-mono"')
   })
 })

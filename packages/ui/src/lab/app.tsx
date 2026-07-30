@@ -1267,8 +1267,9 @@ export function UiLab() {
               Pure shadcn
             </Heading>
             <Text className="max-w-3xl text-muted-foreground">
-              Live Maia primitives with the Violet theme, Base UI, Hugeicons, and Inter. No Praximo
-              typography, motion, feedback, or color overrides are applied inside these primitives.
+              Live Maia primitives with the Violet theme, Base UI, Hugeicons, and Ficus — the one
+              recorded departure from the preset, which ships Inter (#255). No Praximo typography,
+              motion, feedback, or color overrides are applied inside these primitives.
             </Text>
           </div>
 

@@ -30,6 +30,12 @@ describe("global application theme", () => {
     expect(appCss).not.toMatch(/:root\s*{/)
     expect(appCss).not.toMatch(/\.dark\s*{/)
     expect(root).toContain("background:${APP_BACKGROUND_COLOR.light}")
+    // The pre-stylesheet paint names the interface sans literally, so it is the
+    // one place the shared token cannot reach and the one that drifts in
+    // silence: the first paint would land in the fallback and then swap, which
+    // is the exact flash this declaration exists to prevent (#255).
+    expect(root).toContain(`font-family:"Ficus"`)
+    expect(root).not.toContain("Inter Variable")
     expect(root).toContain("color:${APP_FOREGROUND_COLOR.dark}")
     expect(APP_BACKGROUND_COLOR.light).toMatch(/^#[0-9a-f]{6}$/)
     expect(APP_FOREGROUND_COLOR.dark).toMatch(/^#[0-9a-f]{6}$/)

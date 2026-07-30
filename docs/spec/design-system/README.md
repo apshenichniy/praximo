@@ -9,8 +9,9 @@ Status: **accepted** by implementation issue
 Coach, Client, WWW React islands, and UI Lab:
 
 - the clean shadcn preset `bcB3Gj2` — Maia, Base UI, Zinc/Violet, Inter, and
-  HugeIcons;
-- Geist Mono;
+  HugeIcons, with one recorded exception: the interface sans is **Ficus**
+  (#255);
+- Ficus, vendored under `packages/ui/src/fonts/`, and Geist Mono;
 - light and dark semantic CSS tokens;
 - the union of shadcn primitives actually consumed by the applications;
 - `cn` with standard `tailwind-merge`;
@@ -61,6 +62,30 @@ typography round starts from the accepted pure baseline, chooses the semantic
 vocabulary and values deliberately, and migrates application composition only
 after that choice.
 
+## Interface sans
+
+Status: **accepted** by implementation issue
+[#255](https://github.com/apshenichniy/praximo/issues/255).
+
+`--font-sans` is [Ficus](https://github.com/apshenichniy/ficus-font): Erik
+Kennedy's Figtree 2.001 extended with Cyrillic — ru, uk, be, plus ₽ ₴ № and the
+quote marks those languages set with — variable 300–900, upright and italic, SIL
+OFL. It replaced Inter, which is the one departure from the resolved preset that
+the baseline rule allows and this document records. `--font-mono` stays Geist
+Mono and `--font-heading` still resolves through `--font-sans`.
+
+It is **vendored, not installed**: the font publishes no package, so the two
+variable `woff2` files (33 KB and 34 KB), the licence, and a hand-written
+`@font-face` stylesheet live in `packages/ui/src/fonts/`, pinned to a release
+tag and commit recorded in `fonts/ficus.css`. The Vite asset pipeline emits and
+hashes them exactly as it does the Fontsource files.
+
+Ficus is not metrically compatible with Inter — Figtree's x-height is smaller
+and its letterforms wider — so the same `font-size` reads slightly smaller and
+sets slightly longer. Any size response to that is a separate typography
+decision, made in UI Lab against ru and uk text, not a tweak folded into a font
+swap.
+
 ## Prose
 
 Status: **accepted** by implementation issue
@@ -86,8 +111,8 @@ it. It is deliberately not `@tailwindcss/typography`, which ships its own scale
 and colours.
 
 The presets are the product decision and live in the Praximo extension layer of
-`styles.css`. Each repoints the fonts at Inter Variable and Geist Mono — the
-builder defaults to Geist — and sets nothing but the six variables:
+`styles.css`. Each repoints the fonts at Ficus and Geist Mono — the builder
+defaults to Geist — and sets nothing but the six variables:
 
 | Preset              | Size | Leading | Flow     | Used by                              |
 | ------------------- | ---- | ------- | -------- | ------------------------------------ |

@@ -9,7 +9,9 @@ components.
 
 1. `packages/ui/src/components/ui/**` contains the registry-owned shadcn
    primitives. The live registry and resolved preset `bcB3Gj2` — Maia, Base UI,
-   Zinc/Violet, Inter, and HugeIcons — are the baseline.
+   Zinc/Violet, Inter, and HugeIcons — are the baseline, with **one recorded
+   exception: the interface sans is Ficus, not Inter** (#255, and Interface
+   sans below).
 2. `packages/ui/src/components/**`, excluding `components/ui/**`, contains
    Praximo-owned wrappers and shared composites built above those primitives.
 3. Application feature directories contain product and domain composition that
@@ -65,6 +67,28 @@ Semantic interface typography is intentionally deferred after the #215 reset.
 The current `Heading`, `Text`, and `typographyRecipe` exports are transitional
 compatibility scaffolding, not an accepted hierarchy. Do not inject them into
 shadcn primitives or treat their current roles and values as design decisions.
+
+## Interface sans
+
+`--font-sans` is **Ficus** — [ficus-font](https://github.com/apshenichniy/ficus-font),
+Figtree 2.001 extended with Cyrillic for ru, uk and be. It replaced the preset's
+Inter in #255, which is the human decision the Baseline rule asks for; the
+foundation contract test is the other half. `--font-mono` is unchanged.
+
+It is vendored, not installed — the font publishes no package, so
+`packages/ui/src/fonts/` holds the two variable `woff2` files, the licence, and
+the `@font-face` stylesheet `styles.css` imports. Re-vendor from a release tag
+and update the tag and commit recorded in `fonts/ficus.css`; never copy from a
+branch and never hand-edit a font file.
+
+Two things about it are easy to break quietly:
+
+- The font's own default instance is **Light**. `@font-face` declares
+  `font-weight: 300 900` so an unstyled element lands on 400. Drop the range and
+  the whole interface renders thin — and it will look like a design choice.
+- The **critical CSS in each app's `__root.tsx` names the family literally**,
+  because it paints before the stylesheet arrives. It cannot read `--font-sans`,
+  so it is the one copy that has to be changed by hand.
 
 ## Prose
 
