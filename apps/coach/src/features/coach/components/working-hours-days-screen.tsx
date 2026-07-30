@@ -1,9 +1,11 @@
 import {
+  applyWindowToAll,
   type CoachLanguage,
-  type DayWindow,
+  setDayWindow,
+  toggleWeekday,
   type Weekday,
   Weekdays,
-  type WorkingDay,
+  windowForWeekday,
   type WorkingHours,
 } from "@praximo/domain"
 import { Switch } from "@praximo/ui/components/switch"
@@ -30,10 +32,6 @@ import { HostBackButton, selectionHaptic } from "@/mini-app.tsx"
  * of them are chips on a window.
  */
 
-/** What a day is offering right now, whichever way it says it. */
-const hoursOf = (hours: WorkingHours, day: WorkingDay): DayWindow | undefined =>
-  day === "off" ? undefined : day === "window" ? hours.window : day
-
 export function WorkingHoursDaysScreen({
   copy,
   common,
@@ -55,39 +53,7 @@ export function WorkingHoursDaysScreen({
     selectionHaptic()
     const day = hours.days[weekday]
     if (day !== "off" && open === weekday) setOpen(undefined)
-    onChange({
-      ...hours,
-      days: { ...hours.days, [weekday]: day === "off" ? "window" : "off" },
-    })
-  }
-
-  const setDay = (weekday: Weekday, window: DayWindow) => {
-    setOpen(undefined)
-    // A day set back to exactly the shared window stops being an exception. The
-    // alternative — storing an interval identical to the window — would leave
-    // the chip on the screen before this one claiming a difference nobody can
-    // see.
-    const same =
-      window.startMinutes === hours.window.startMinutes &&
-      window.endMinutes === hours.window.endMinutes
-    onChange({ ...hours, days: { ...hours.days, [weekday]: same ? "window" : window } })
-  }
-
-  /**
-   * Every working day onto one set of hours — the row that makes this list
-   * cheap. It moves the *shared window* rather than writing the same interval
-   * onto seven days, so the week comes back to one truth instead of seven copies
-   * of it.
-   */
-  const applyToAll = (from: DayWindow) => {
-    selectionHaptic()
-    setOpen(undefined)
-    onChange({
-      window: from,
-      days: Object.fromEntries(
-        Weekdays.map((weekday) => [weekday, hours.days[weekday] === "off" ? "off" : "window"]),
-      ) as Record<Weekday, WorkingDay>,
-    })
+    onChange(toggleWeekday(hours, weekday))
   }
 
   const firstWorking = Weekdays.find((weekday) => hours.days[weekday] !== "off")
@@ -108,7 +74,7 @@ export function WorkingHoursDaysScreen({
       <div className="border-border mt-6 overflow-hidden rounded-2xl border">
         {Weekdays.map((weekday, index) => {
           const day = hours.days[weekday]
-          const window = hoursOf(hours, day)
+          const window = windowForWeekday(hours, weekday)
           return (
             <div key={weekday} className={cn(index > 0 && "border-border border-t")}>
               <div className="flex min-h-14 items-center gap-3 px-4 py-2">
@@ -149,7 +115,10 @@ export function WorkingHoursDaysScreen({
                     // picker opens where reading it left off.
                     field="start"
                     copy={copy}
-                    onDone={(next) => setDay(weekday, next)}
+                    onDone={(next) => {
+                      setOpen(undefined)
+                      onChange(setDayWindow(hours, weekday, next))
+                    }}
                   />
                 </div>
               ) : null}
@@ -162,8 +131,12 @@ export function WorkingHoursDaysScreen({
         <button
           type="button"
           onClick={() => {
-            const from = hoursOf(hours, hours.days[firstWorking])
-            if (from !== undefined) applyToAll(from)
+            const from = windowForWeekday(hours, firstWorking)
+            if (from !== undefined) {
+              selectionHaptic()
+              setOpen(undefined)
+              onChange(applyWindowToAll(hours, from))
+            }
           }}
           className="border-border active:bg-muted mt-4 flex min-h-14 w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors duration-100"
         >
@@ -172,7 +145,7 @@ export function WorkingHoursDaysScreen({
           </span>
           <span className="text-muted-foreground shrink-0 text-sm leading-normal tabular-nums">
             {(() => {
-              const from = hoursOf(hours, hours.days[firstWorking])
+              const from = windowForWeekday(hours, firstWorking)
               return from === undefined
                 ? ""
                 : `${clock(from.startMinutes)}–${clock(from.endMinutes)}`

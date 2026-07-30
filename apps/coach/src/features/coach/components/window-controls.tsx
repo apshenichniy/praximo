@@ -1,4 +1,11 @@
-import { type CoachLanguage, type DayWindow, type Weekday, Weekdays } from "@praximo/domain"
+import {
+  type CoachLanguage,
+  type DayWindow,
+  RevealFromMinutes,
+  RevealUntilMinutes,
+  type Weekday,
+  Weekdays,
+} from "@praximo/domain"
 import { cn } from "@praximo/ui"
 
 import { clock } from "@/features/coach/clock.ts"
@@ -95,13 +102,10 @@ export function WindowRow({
  * webview already means something to the host, and the interval is set by the
  * picker above or on the per-day screen.
  */
-const ScaleFromMinutes = 6 * 60
-const ScaleToMinutes = 23 * 60
-
 const positionOn = (minutes: number): number =>
   Math.min(
     100,
-    Math.max(0, ((minutes - ScaleFromMinutes) / (ScaleToMinutes - ScaleFromMinutes)) * 100),
+    Math.max(0, ((minutes - RevealFromMinutes) / (RevealUntilMinutes - RevealFromMinutes)) * 100),
   )
 
 export function DayChip({

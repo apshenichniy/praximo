@@ -57,6 +57,54 @@ export const DefaultWorkingHours: WorkingHours = {
   },
 }
 
+export const toggleWeekday = (hours: WorkingHours, weekday: Weekday): WorkingHours => {
+  const day = hours.days[weekday]
+  return {
+    ...hours,
+    // Switching a day back on returns it to the shared window rather than to
+    // the hours it used to keep: the coach turned it off, and a resurrected
+    // exception nobody asked for is worse than one they set again.
+    days: { ...hours.days, [weekday]: day === "off" ? "window" : "off" },
+  }
+}
+
+export const setSharedWindow = (hours: WorkingHours, window: DayWindow): WorkingHours => ({
+  ...hours,
+  // Every day that has not been given its own hours follows the window. That
+  // propagation is the whole idea of the shared-window screen.
+  window,
+})
+
+export const setDayWindow = (
+  hours: WorkingHours,
+  weekday: Weekday,
+  window: DayWindow,
+): WorkingHours => {
+  // A day set back to exactly the shared window stops being an exception. The
+  // alternative — storing an interval identical to the window — would leave
+  // the shared-window screen claiming a difference nobody can see.
+  const same =
+    window.startMinutes === hours.window.startMinutes &&
+    window.endMinutes === hours.window.endMinutes
+  return {
+    ...hours,
+    days: { ...hours.days, [weekday]: same ? "window" : window },
+  }
+}
+
+/**
+ * Every working day onto one set of hours.
+ *
+ * This moves the *shared window* rather than writing the same interval onto
+ * seven days, so the week comes back to one truth instead of seven copies of it.
+ */
+export const applyWindowToAll = (hours: WorkingHours, window: DayWindow): WorkingHours => ({
+  window,
+  days: Object.fromEntries(
+    Weekdays.map((weekday) => [weekday, hours.days[weekday] === "off" ? "off" : "window"]),
+  ) as Record<Weekday, WorkingDay>,
+})
+
 const readDay = (value: unknown): WorkingDay => {
   if (value === "off") return "off"
   if (isDayWindow(value)) return value
