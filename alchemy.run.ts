@@ -221,6 +221,27 @@ export default Alchemy.Stack(
       cwd: "./apps/www",
       command: "bun run build",
       outdir: "dist",
+      /*
+       * Rebuild on every deploy, and this is not a preference (#257).
+       *
+       * `Command.Build` memoizes on "every non-gitignored file in `cwd`, plus
+       * the nearest lockfile" — and `cwd` here is `apps/www`. This site's
+       * stylesheet is `@praximo/ui`, one directory over and outside that hash,
+       * so a commit confined to the shared foundation left the input hash
+       * identical, skipped `astro build`, and shipped the previous `dist/`
+       * while the deploy reported success. There is no worse failure than one
+       * that reports `Done`.
+       *
+       * The three product Workers do not have this problem: they go through
+       * `Cloudflare.Website.Vite`, whose memo auto-detects workspaces and
+       * hashes them too. `Command.Build` has no equivalent, so the only honest
+       * settings are this one or a hand-written list of the workspaces WWW
+       * currently imports — a list that goes stale silently, which is the bug.
+       *
+       * The whole cost is one `astro build` per deploy: sub-second for a
+       * one-page static site.
+       */
+      memo: false,
       compatibility,
       ...(canonical ? { domain: canonicalDomains.www } : {}),
       assets: {

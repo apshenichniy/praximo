@@ -89,4 +89,27 @@ describe("application topology", () => {
     )
     expect(infrastructure).not.toContain('domain: "praximo.io"')
   })
+
+  /*
+   * Stated as an invariant over every `StaticSite` rather than as one app's
+   * setting, because the trap is structural (#257).
+   *
+   * `Command.Build` hashes `cwd` to decide whether to re-run, and every app in
+   * this monorepo builds from source that also lives outside its own directory
+   * — `@praximo/ui` at minimum. A memoized `StaticSite` therefore skips its
+   * build after a shared-package change and ships the previous output, while
+   * the deploy reports success. `Cloudflare.Website.Vite` is exempt: its memo
+   * auto-detects workspaces and hashes them.
+   */
+  it("never memoizes a StaticSite build on its own directory", () => {
+    const infrastructure = read("alchemy.run.ts")
+
+    const sites = [...infrastructure.matchAll(/StaticSite\((?:[^()]|\([^()]*\))*?\n {4}\}\)/gs)]
+    expect(sites.length, "StaticSite declarations found").toBeGreaterThan(0)
+
+    for (const [declaration] of sites) {
+      const name = /StaticSite\("([^"]+)"/.exec(declaration)?.[1] ?? "unknown"
+      expect(declaration, `${name} must rebuild on every deploy`).toMatch(/memo:\s*false/)
+    }
+  })
 })
