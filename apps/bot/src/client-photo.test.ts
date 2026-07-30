@@ -2,7 +2,8 @@ import { describe, expect, it } from "@effect/vitest"
 import { AvatarRepo, QueryFailed } from "@praximo/db"
 import { TelegramId, WorkspaceId } from "@praximo/domain"
 import { AvatarStore, avatarKey, MaxAvatarBytes } from "@praximo/storage"
-import { Effect, Layer } from "effect"
+import { Effect, Fiber, Layer } from "effect"
+import * as TestClock from "effect/testing/TestClock"
 import {
   type AvatarRepoStub,
   CLIENT_PHOTO,
@@ -12,6 +13,7 @@ import {
   telegramPhotoRoutes,
 } from "./__tests__/telegram-photo.ts"
 import { captureClientPhoto } from "./client-photo.ts"
+import { ImportTimeoutMillis } from "./telegram-photo.ts"
 
 /**
  * The client's photo, captured at the moment they accept (#231).
@@ -182,6 +184,44 @@ describe("capturing the client's Telegram photo", () => {
       expect(telegram.requests.some((path) => path.startsWith("/file/"))).toBe(false)
       expect(yield* stored).toEqual([])
       expect(repo.key()).toBeUndefined()
+    }).pipe(Effect.provide(AvatarStore.testLayer)),
+  )
+
+  it.effect("gives up rather than holding the webhook open on a hung download", () =>
+    Effect.gen(function* () {
+      const routes = telegramPhotoRoutes(CLIENT_PHOTO)
+      const requests: Array<string> = []
+      // A file endpoint that accepted the connection and then stopped answering.
+      // `fetch` has no timeout of its own, so without the import's own bound this
+      // never resolves — Telegram redelivers the acceptance, and the redelivery
+      // replaces the client's confirmation with "you are already set up".
+      const hanging: typeof globalThis.fetch = async (input) => {
+        const url = input.toString()
+        const { pathname } = new URL(url)
+        requests.push(pathname)
+        if (pathname.startsWith("/file/bot")) return new Promise<Response>(() => {})
+        return routes(url) ?? Response.json({ ok: true, result: true })
+      }
+      const repo = clientAvatarRepoStub()
+
+      // Forked and driven by the test clock rather than waited out: the assertion is
+      // that the bound exists and fires, not that ten real seconds pass.
+      const running = yield* Effect.forkChild(
+        captureClientPhoto({
+          workspaceId,
+          clientId,
+          clientTelegramId: client,
+          coachBotToken: COACH_BOT_TOKEN,
+          fetch: hanging,
+        }).pipe(Effect.provide(repo.layer)),
+      )
+      yield* TestClock.adjust(ImportTimeoutMillis)
+      const outcome = yield* Fiber.join(running)
+
+      expect(outcome).toBe("failed")
+      expect(requests.some((path) => path.startsWith("/file/"))).toBe(true)
+      expect(repo.writes).toEqual([])
+      expect(yield* stored).toEqual([])
     }).pipe(Effect.provide(AvatarStore.testLayer)),
   )
 

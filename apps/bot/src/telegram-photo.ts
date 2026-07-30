@@ -131,6 +131,22 @@ export interface PhotoImportInput {
 }
 
 /**
+ * The longest a whole import may take before it is abandoned.
+ *
+ * **Every caller runs inside a request Telegram is waiting on** — a webhook for the
+ * client's acceptance, another for a provisioning — and none of them may be held
+ * open by a file endpoint that stopped answering. `fetch` has no timeout of its own,
+ * so without this a single hung download would cost the webhook its 200; Telegram
+ * would redeliver, and on the acceptance path the redelivery would replace the
+ * client's confirmation with "you are already set up".
+ *
+ * Ten seconds is far beyond the few hundred milliseconds the three calls and a
+ * few tens of kilobytes actually take, so it never fires on a working import — it
+ * is a bound on the pathological case, not a performance budget.
+ */
+export const ImportTimeoutMillis = 10_000
+
+/**
  * Bring one subject's stored photo in step with the one their Telegram profile
  * currently shows.
  *
@@ -140,9 +156,7 @@ export interface PhotoImportInput {
  * and no bytes — which is what makes a daily sweep an affordable place to run this
  * from, and what makes a redelivered acceptance harmless.
  */
-export const importTelegramPhoto = Effect.fn("BotWorker.importTelegramPhoto")(function* (
-  input: PhotoImportInput,
-) {
+const runImport = Effect.fn("BotWorker.importTelegramPhoto")(function* (input: PhotoImportInput) {
   const store = yield* AvatarStore.Service
   const api = apiFor(input.token, input.fetch)
   // One prefix for both paths, and the runbook greps by it: the subject and the
@@ -215,4 +229,25 @@ export const importTelegramPhoto = Effect.fn("BotWorker.importTelegramPhoto")(fu
   if (Result.isFailure(stored)) return yield* abandon(`not stored — ${stored.failure.reason}`)
 
   return { _tag: "Stored", key: stored.success } as const satisfies PhotoImport
+})
+
+/**
+ * The import, bounded — see {@link ImportTimeoutMillis} for why the bound is not
+ * optional.
+ *
+ * A timeout resolves to `Failed`, which every caller already treats as "believe
+ * nothing about this photo, keep whatever you had". The subject names itself in the
+ * line for the same reason the rest of this module's warnings do.
+ */
+export const importTelegramPhoto = Effect.fn("BotWorker.importTelegramPhotoBounded")(function* (
+  input: PhotoImportInput,
+) {
+  const imported = yield* runImport(input).pipe(Effect.timeout(ImportTimeoutMillis), Effect.result)
+  if (Result.isFailure(imported)) {
+    yield* Effect.logWarning(
+      `${input.subject} photo for ${input.subjectId}: gave up after ${ImportTimeoutMillis}ms`,
+    )
+    return { _tag: "Failed" } as const satisfies PhotoImport
+  }
+  return imported.success
 })

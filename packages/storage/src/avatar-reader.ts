@@ -99,13 +99,22 @@ export class Service extends Context.Service<Service, Interface>()(
   "@praximo/storage/AvatarReader",
 ) {}
 
-const refusal = (status: number): ServedAvatar => ({
+/**
+ * A refusal, described the same way a served avatar is.
+ *
+ * Exported because the routes need it *before* they reach this service — a
+ * malformed token, a credential the Worker would not take — and a refusal each
+ * route shaped for itself is how one of them ends up cacheable. There is nothing
+ * here worth a browser remembering, so `no-store`: a 401 met during a launch that
+ * had not finished must not teach the cache that this client has no face.
+ */
+export const avatarRefusal = (status: number): ServedAvatar => ({
   status,
   headers: { "Cache-Control": NoStore },
 })
 
 /** No avatar, whatever the reason. The one answer a caller never has to branch on. */
-const Missing = refusal(404)
+const Missing = avatarRefusal(404)
 
 /**
  * The operation over whichever bucket it was handed, shared by the live layer and
@@ -138,7 +147,7 @@ const serveFrom = (bucket: ReadableBucket): Interface["serve"] =>
     )
     if (Result.isFailure(object)) {
       yield* Effect.logWarning(`avatar ${key}: the bucket did not answer`)
-      return refusal(503)
+      return avatarRefusal(503)
     }
     if (object.success === null) {
       // A row naming an object that is not there — the one shape that means the

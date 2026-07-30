@@ -36,12 +36,7 @@ export function CoachBadge({
   readonly withName?: boolean
 }) {
   const disc = (
-    <PersonAvatar
-      name={coachName}
-      {...(photoSrc === undefined ? {} : { photoSrc })}
-      className="ring-background outline-primary/45 size-[60px] ring-[3px] outline-[1.5px]"
-      fallbackClassName="bg-secondary text-secondary-foreground text-xl font-[620]"
-    />
+    <PersonAvatar name={coachName} {...(photoSrc === undefined ? {} : { photoSrc })} size="badge" />
   )
 
   if (!withName) return disc

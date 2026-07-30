@@ -24,27 +24,64 @@ import { cn } from "../lib/utils.ts"
  * renders nothing for an image that fails to load, leaving the initials underneath
  * showing through.
  */
+
+/**
+ * The three discs the product actually has, and the **only** place their colours and
+ * type scale are written.
+ *
+ * `docs/agents/ui-development.md` keeps product typography and colour out of
+ * `components/ui/**` and off a primitive's `className` — "`className` on a primitive
+ * is for caller layout. It must not override the primitive's colors or typography."
+ * A composite forwarding an opaque class string onto `AvatarFallback` would be that
+ * rule broken once per call site, so the variants live here, where Praximo-owned
+ * composition belongs, and a caller picks one by name.
+ */
+const discs = {
+  /** A roster row: small, and it must not shrink when the name beside it is long. */
+  row: {
+    root: "size-10 shrink-0",
+    fallback: "text-xs leading-normal font-semibold",
+  },
+  /** A client's own route, where the disc is the page's header. */
+  page: {
+    root: "size-16",
+    fallback: "text-xl leading-tight font-semibold",
+  },
+  /**
+   * The Acceptance Page's coach badge — the one disc with a ring and the brand
+   * tint, because it is the only one that has to read as *whose* page this is.
+   */
+  badge: {
+    root: "ring-background outline-primary/45 size-[60px] ring-[3px] outline-[1.5px]",
+    fallback: "bg-secondary text-secondary-foreground text-xl font-[620]",
+  },
+} as const
+
+export type PersonAvatarSize = keyof typeof discs
+
 export function PersonAvatar({
   name,
   photoSrc,
+  size,
   className,
-  fallbackClassName,
 }: {
   readonly name: string
   /** Absent whenever there is no photo to serve, which is the common case. */
   readonly photoSrc?: string
-  /** Caller layout — the size this surface wants the disc at, and nothing else. */
+  readonly size: PersonAvatarSize
+  /** Caller layout only — where the disc sits, never how it looks. */
   readonly className?: string
-  readonly fallbackClassName?: string
 }) {
+  const disc = discs[size]
+
   return (
-    <Avatar className={className}>
-      <AvatarFallback className={fallbackClassName}>{initials(name)}</AvatarFallback>
+    <Avatar className={cn(disc.root, className)}>
+      <AvatarFallback className={disc.fallback}>{initials(name)}</AvatarFallback>
       {photoSrc === undefined ? null : (
         <img
           src={photoSrc}
           alt=""
-          className={cn("absolute inset-0 size-full rounded-full object-cover")}
+          className="absolute inset-0 size-full rounded-full object-cover"
         />
       )}
     </Avatar>

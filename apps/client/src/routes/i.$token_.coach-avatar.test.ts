@@ -1,3 +1,4 @@
+import { avatarRefusal } from "@praximo/storage"
 import { describe, expect, it } from "vitest"
 
 import { avatarResponse } from "./i.$token_.coach-avatar.ts"
@@ -35,10 +36,10 @@ describe("avatarResponse", () => {
     expect(response.headers.get("etag")).toBe('"1a2b3c"')
   })
 
-  it("builds a bodiless refusal the same way", () => {
-    const response = avatarResponse({ status: 404, headers: { "Cache-Control": "no-store" } })
+  it("builds a refusal the storage package described", () => {
+    const response = avatarResponse(avatarRefusal(429))
 
-    expect(response.status).toBe(404)
+    expect(response.status).toBe(429)
     expect(response.headers.get("cache-control")).toBe("no-store")
   })
 })

@@ -32,6 +32,18 @@ export const AvatarExtensions = {
 export type AvatarContentType = keyof typeof AvatarExtensions
 
 /**
+ * The same closed set read the other way, for whoever holds a key and needs the type
+ * it promises. Derived rather than written twice, so a fourth shape cannot be added
+ * to one direction only.
+ */
+const AvatarTypesByExtension: Readonly<Record<string, AvatarContentType | undefined>> =
+  Object.fromEntries(
+    Object.entries(AvatarExtensions).map(
+      ([type, extension]) => [extension, type as AvatarContentType] as const,
+    ),
+  )
+
+/**
  * A content type as it arrives off a wire — cased however the server felt, and
  * possibly carrying parameters — reduced to the bare type.
  */
@@ -68,9 +80,9 @@ export const avatarExtension = (contentType: string): string | undefined =>
  * sniffing question.
  */
 export const avatarContentTypeForKey = (key: string): AvatarContentType | undefined => {
-  const extension = key.slice(key.lastIndexOf(".") + 1).toLowerCase()
-  const match = Object.entries(AvatarExtensions).find(([, value]) => value === extension)
-  return match?.[0] as AvatarContentType | undefined
+  const dot = key.lastIndexOf(".")
+  if (dot < 0) return undefined
+  return AvatarTypesByExtension[key.slice(dot + 1).toLowerCase()]
 }
 
 /**

@@ -19,9 +19,6 @@ import { WebAcceptance } from "./web-acceptance.ts"
  * connection.
  */
 
-/** What a Worker hands over for `UPLOADS`, narrowed to the one method used here. */
-type UploadsBinding = AvatarReader.ReadableBucket
-
 interface Env {
   readonly DATABASE_URL: string
   /**
@@ -41,7 +38,7 @@ interface Env {
    * are the specified design anyway. So a local run is not *wrong*, it is only
    * photoless — which is exactly why the ticket's own verification is a live one.
    */
-  readonly UPLOADS?: UploadsBinding
+  readonly UPLOADS?: AvatarReader.ReadableBucket
 }
 
 const runtimeFromEnv = (env: Env) => {
@@ -68,9 +65,9 @@ const requireString = (value: unknown, name: keyof Env): string => {
 const asLimiter = (value: unknown): Limiter | undefined =>
   typeof value === "object" && value !== null && "limit" in value ? (value as Limiter) : undefined
 
-const asUploads = (value: unknown): UploadsBinding | undefined =>
+const asUploads = (value: unknown): AvatarReader.ReadableBucket | undefined =>
   typeof value === "object" && value !== null && "get" in value
-    ? (value as UploadsBinding)
+    ? (value as AvatarReader.ReadableBucket)
     : undefined
 
 const resolveEnv = async (): Promise<Env> => {

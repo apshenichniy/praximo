@@ -29,7 +29,9 @@ import { resolveLaunchCredential } from "@/launch-credential.ts"
  * on unmount would mean re-downloading a face to go back one screen.
  *
  * Keyed by client id, and a promise rather than a value so two rows mounting in the
- * same tick share one request.
+ * same tick share one request. A request that came back with nothing is **dropped
+ * from the map**: a 503 from a bucket having a bad minute must not mean initials
+ * until the coach reloads the whole app.
  */
 const photos = new Map<string, Promise<string | undefined>>()
 
@@ -66,7 +68,14 @@ export const useClientPhoto = (clientId: string, hasAvatar: boolean): string | u
       return
     }
     let live = true
-    const pending = photos.get(clientId) ?? fetchPhoto(clientId)
+    const pending =
+      photos.get(clientId) ??
+      fetchPhoto(clientId).then((resolved) => {
+        // Only a photo is worth remembering. Forgetting the failures is what lets a
+        // return to this screen try again.
+        if (resolved === undefined) photos.delete(clientId)
+        return resolved
+      })
     photos.set(clientId, pending)
     void pending.then((resolved) => {
       if (live) setUrl(resolved)

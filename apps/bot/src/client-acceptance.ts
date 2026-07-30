@@ -6,6 +6,7 @@ import {
   inviteStanding,
   narrowCoachLanguage,
   parseClientInviteStartParameter,
+  WorkspaceId,
 } from "@praximo/domain"
 import {
   clientCopy,
@@ -272,7 +273,7 @@ export const privacyUrl = (clientAppUrl: string, language: CoachLanguage): strin
  * second way to ask.
  */
 export interface AcceptedClient {
-  readonly workspaceId: string
+  readonly workspaceId: WorkspaceId
   readonly clientId: string
 }
 
@@ -447,6 +448,9 @@ export const acceptInvitation = Effect.fn("ClientAcceptance.acceptInvitation")(f
     // Only on the branch that actually wrote something. A refused acceptance has
     // no client to capture a photo for, and a losing double tap must not capture
     // one twice.
-    accepted: { workspaceId: lookup.workspaceId, clientId: lookup.clientId },
+    accepted: {
+      workspaceId: WorkspaceId.make(lookup.workspaceId),
+      clientId: lookup.clientId,
+    },
   } as const
 })

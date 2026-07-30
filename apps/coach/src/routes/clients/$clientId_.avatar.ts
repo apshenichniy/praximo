@@ -1,5 +1,5 @@
 import { launchCredentialFromHeaders } from "@praximo/mini-app/launch-credential"
-import type { ServedAvatar } from "@praximo/storage"
+import { avatarRefusal, type ServedAvatar } from "@praximo/storage"
 import { createFileRoute } from "@tanstack/react-router"
 import { Effect, Result } from "effect"
 
@@ -33,10 +33,6 @@ import { runCoach } from "@/server/runtime.server.ts"
  * loader.
  */
 
-/** A refusal, and nothing about it worth a browser remembering. */
-const refusal = (status: number): Response =>
-  new Response(null, { status, headers: { "Cache-Control": "no-store" } })
-
 /**
  * The description the storage package hands back, as an actual response.
  *
@@ -46,11 +42,26 @@ const refusal = (status: number): Response =>
  * has one. The coalesce is load-bearing: `Response` throws on a body given with a
  * 304, which is the branch this design exists to reach.
  */
-const avatarResponse = (served: ServedAvatar): Response =>
+export const avatarResponse = (served: ServedAvatar): Response =>
   new Response((served.body ?? null) as BodyInit | null, {
     status: served.status,
     headers: served.headers,
   })
+
+/**
+ * What a failed read answers with.
+ *
+ * Read through `coachFailure` rather than an `isTagged` of this route's own, so it
+ * cannot drift from the one rule the rest of the Worker follows about telling an
+ * unknown bot from a stale credential (#234) — the distinction that would otherwise
+ * be an oracle for enumerating coaches.
+ *
+ * The **503** matters as much as the 401: a database that could not answer must not
+ * be reported as "this client has no photo", because a `no-store` 404 is what the
+ * disc would then cache for the rest of the page's life.
+ */
+export const refusalStatus = (failure: unknown): number =>
+  coachFailure(failure, undefined) === "unauthenticated" ? 401 : 503
 
 export const clientAvatarGet = async ({
   params,
@@ -65,12 +76,7 @@ export const clientAvatarGet = async ({
       service.clientPhoto(credential, params.clientId, request.headers.get("if-none-match")),
     ).pipe(Effect.result),
   )
-  if (Result.isFailure(served)) {
-    // Through `coachFailure` rather than an `isTagged` of its own, so this route
-    // cannot drift from the one rule the rest of the Worker follows about telling
-    // an unknown bot from a stale credential (#234).
-    return refusal(coachFailure(served.failure, undefined) === "unauthenticated" ? 401 : 503)
-  }
+  if (Result.isFailure(served)) return avatarResponse(avatarRefusal(refusalStatus(served.failure)))
   // A client id from another workspace lands here as a 404, indistinguishable from a
   // client who simply has no photo — the scope is in the statement, so there is
   // nothing for this route to check and nothing for it to leak.

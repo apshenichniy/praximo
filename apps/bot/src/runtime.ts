@@ -607,7 +607,7 @@ const coachBotFor = async (
        */
       await getRuntime(env).runPromise(
         captureClientPhotoQuietly({
-          workspaceId: WorkspaceId.make(outcome.accepted.workspaceId),
+          workspaceId: outcome.accepted.workspaceId,
           clientId: outcome.accepted.clientId,
           clientTelegramId: TelegramId.make(String(sender.id)),
           coachBotToken: installation.success.token,

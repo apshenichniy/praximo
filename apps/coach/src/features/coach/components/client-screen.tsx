@@ -253,8 +253,7 @@ export function ClientScreen({
         <PersonAvatar
           name={client.name}
           {...(photo === undefined ? {} : { photoSrc: photo })}
-          className="size-16"
-          fallbackClassName="text-xl leading-tight font-semibold"
+          size="page"
         />
         <Heading as="h1" role="page-title">
           {client.name}

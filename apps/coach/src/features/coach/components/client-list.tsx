@@ -114,8 +114,7 @@ function ClientDisc({ client }: { readonly client: CoachClients.ClientSummary })
     <PersonAvatar
       name={client.name}
       {...(photo === undefined ? {} : { photoSrc: photo })}
-      className="size-10 shrink-0"
-      fallbackClassName="text-xs leading-normal font-semibold"
+      size="row"
     />
   )
 }

@@ -126,9 +126,10 @@ export default Alchemy.Stack(
       ...(canonical ? { domain: canonicalDomains.client } : {}),
       env: {
         DATABASE_URL: branch.connectionUri,
-        // The coach's photo on the Acceptance Page (#231). Read-only here — this
-        // Worker serves an avatar the bot captured and, once #59 lands, writes the
-        // one it imports from Google.
+        // The coach's photo on the Acceptance Page (#231). An R2 binding carries no
+        // scope of its own, so this is the whole bucket: what keeps this Worker to
+        // reading is that it holds only `AvatarReader`, whose interface is `get`.
+        // #59 gives it a writer too, for the Google picture it imports.
         UPLOADS: bucket,
         INVITE_LOOKUP: Cloudflare.RateLimit("INVITE_LOOKUP", {
           namespaceId: 1001,
@@ -202,9 +203,11 @@ export default Alchemy.Stack(
         MANAGER_BOT_USERNAME: managerBotUsername,
         TELEGRAM_ENV: telegramEnv,
         CLIENT_APP_URL: clientAppUrl,
-        // A client's photo on their route and in the roster (#231). Read-only, and
-        // authorised per request by the launch credential — the bucket is not
-        // public and no object key ever appears in a URL this Worker serves.
+        // A client's photo on their route and in the roster (#231). An R2 binding
+        // carries no scope of its own, so this is the whole bucket; this Worker holds
+        // only `AvatarReader` and therefore only reads. Every read is authorised per
+        // request by the launch credential, the bucket is not public, and no object
+        // key ever appears in a URL it serves.
         UPLOADS: bucket,
         // The invitation email is sent from the coach's own tap (#58), so the
         // binding lives on the Worker that serves that screen. `CLIENT_APP_URL`

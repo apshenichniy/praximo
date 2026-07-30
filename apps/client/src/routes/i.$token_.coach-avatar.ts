@@ -1,5 +1,5 @@
 import { ClientInviteTokenPattern } from "@praximo/domain"
-import type { ServedAvatar } from "@praximo/storage"
+import { avatarRefusal, type ServedAvatar } from "@praximo/storage"
 import { createFileRoute } from "@tanstack/react-router"
 import { Effect } from "effect"
 
@@ -26,9 +26,6 @@ import { WebAcceptance } from "@/server/web-acceptance.ts"
  * child: it must not run that page's loader, which would spend an invitation
  * lookup to serve an image.
  */
-const refusal = (status: number): Response =>
-  new Response(null, { status, headers: { "Cache-Control": "no-store" } })
-
 /**
  * The description the storage package hands back, as an actual response.
  *
@@ -50,13 +47,14 @@ export const coachAvatarGet = async ({
 }): Promise<Response> => {
   // Shape-checked before it can become a query, exactly as the server functions
   // check it: a path segment from a random crawler never reaches the database.
-  if (!ClientInviteTokenPattern.test(params.token)) return refusal(404)
+  if (!ClientInviteTokenPattern.test(params.token)) return avatarResponse(avatarRefusal(404))
   // Counted against the *lookup* allowance, because that is what this is — one
   // more indexed read behind one more token. Sharing the bucket with `openInvite`
   // is deliberate: a loop that cannot spend the page's allowance must not be
   // handed a second one by an image route beside it.
   const limiters = await inviteLimiters()
-  if (!(await throttle(limiters.lookup, connectingIp(request.headers)))) return refusal(429)
+  if (!(await throttle(limiters.lookup, connectingIp(request.headers))))
+    return avatarResponse(avatarRefusal(429))
 
   const served = await runAcceptance(
     Effect.flatMap(WebAcceptance.Service, (service) =>

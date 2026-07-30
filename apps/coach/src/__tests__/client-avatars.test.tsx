@@ -91,7 +91,7 @@ describe("PersonAvatar", () => {
     // The reason this is a plain `<img>` and not `AvatarImage`: the Acceptance Page
     // is server-rendered, and the primitive renders nothing at all on the server.
     const html = renderToStaticMarkup(
-      <PersonAvatar name="Анна Ковальська" photoSrc="/clients/cl_anna/avatar" />,
+      <PersonAvatar name="Анна Ковальська" photoSrc="/clients/cl_anna/avatar" size="row" />,
     )
 
     expect(html).toContain('src="/clients/cl_anna/avatar"')
@@ -105,7 +105,7 @@ describe("PersonAvatar", () => {
   })
 
   it("is initials and nothing else without a photo", () => {
-    const html = renderToStaticMarkup(<PersonAvatar name="Анна Ковальська" />)
+    const html = renderToStaticMarkup(<PersonAvatar name="Анна Ковальська" size="row" />)
 
     expect(html).toContain("АК")
     expect(html).not.toContain("<img")
