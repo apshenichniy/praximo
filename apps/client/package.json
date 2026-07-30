@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/geist-mono": "catalog:",
+    "@fontsource-variable/inter": "catalog:",
     "@hugeicons-pro/core-stroke-rounded": "catalog:",
     "@hugeicons/react": "catalog:",
     "@praximo/db": "workspace:*",

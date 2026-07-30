@@ -9,9 +9,9 @@ Status: **accepted** by implementation issue
 Coach, Client, WWW React islands, and UI Lab:
 
 - the clean shadcn preset `bcB3Gj2` — Maia, Base UI, Zinc/Violet, Inter, and
-  HugeIcons, with one recorded exception: there is **no interface webfont**, the
-  sans is the host's own (#255);
-- Geist Mono, the one face this package still loads;
+  HugeIcons, with one recorded exception: the package ships **no webfont at
+  all**, and `--font-sans` / `--font-mono` are app-owned in the two web
+  applications (#255);
 - light and dark semantic CSS tokens;
 - the union of shadcn primitives actually consumed by the applications;
 - `cn` with standard `tailwind-merge`;
@@ -24,7 +24,9 @@ Coach, Client, WWW React islands, and UI Lab:
 
 Apps import the shared CSS and may add a local `src/styles/app.css` only for
 app-specific needs. They do not override shared base tokens or copy shared
-primitives. A need repeated across applications moves into `@praximo/ui`.
+primitives, with one named exception: `--font-sans` and `--font-mono` are owned
+by each of the two web applications (§Interface faces). A need repeated across
+applications moves into `@praximo/ui`.
 
 `@praximo/ui` never imports Telegram SDKs, TanStack application code, routers,
 or business/domain features. Admin and Coach adapt feedback to Telegram at
@@ -62,35 +64,60 @@ typography round starts from the accepted pure baseline, chooses the semantic
 vocabulary and values deliberately, and migrates application composition only
 after that choice.
 
-## Interface sans
+## Interface faces
 
 Status: **accepted** by implementation issue
 [#255](https://github.com/apshenichniy/praximo/issues/255).
 
-`--font-sans` is `system-ui, sans-serif`. The preset's Inter is dropped and
-nothing replaces it: Admin, Coach and Client are Telegram WebViews, and each
-renders the interface in its host's own UI face — SF on iOS, Roboto on Android,
-the shell's font on desktop. This is the one departure from the resolved preset
-that the baseline rule allows and this document records. `--font-heading` still
-resolves through `--font-sans`; `--font-mono` still loads Geist Mono, because a
-mono fallback is a coin flip rather than a typeface choice.
+The applications split in two, and both interface families follow the split:
 
-`system-ui` is the keyword that names the platform's interface face. Plain
-`sans-serif` would name the browser's default sans instead, which in the iOS
-WebView is Helvetica — the generic answer, not the native one. `sans-serif`
-remains as the trailing fallback.
+| Tier | Applications | `--font-sans` | `--font-mono` | Owned by |
+| --- | --- | --- | --- | --- |
+| Mini App | Admin, Coach | `system-ui, sans-serif` | `ui-monospace, monospace` | `@praximo/ui` |
+| Web app | WWW, Client | `"Inter Variable", sans-serif` | `"Geist Mono Variable", monospace` | the app's own `app.css` |
 
-What the product gives up is a single typographic identity: the interface now
-looks like its host and reads differently on iOS, on Android, and on desktop.
-What it gets back is the platform's own face, hinting and metrics on every
-device, no webfont on the critical path, and nothing to swap after first paint.
-Any size, weight, or leading decision therefore has to be checked on more than
-one host before it is accepted.
+A Mini App runs inside Telegram on someone's phone, one tap from the chat they
+were just in. It should look like it belongs to that phone: `system-ui` and
+`ui-monospace` resolve to SF on iOS, Roboto on Android, the shell's own faces on
+desktop. **A Mini App downloads no font at all.** A web page has no host to
+belong to — a visitor arrives cold, and WWW's entire job is to look like Praximo
+to someone who has never seen it — so those two carry their own.
 
-The contract test for this is written as an absence: no `@font-face` in the
-shared stylesheet, no vendored font directory, and `@fontsource-variable/geist-mono`
-as the only font dependency. An interface webfont is exactly the kind of thing
-that returns one `@import` at a time.
+`system-ui` and `ui-monospace` are the keywords that name the platform's own
+interface and monospace faces. Plain `sans-serif` and `monospace` would name the
+browser's defaults instead, which in the iOS WebView means Helvetica — the
+generic answer, not the native one. Both remain as trailing fallbacks.
+
+The mechanical line is the `@praximo/mini-app` dependency: an application that
+imports the Telegram host adapter takes the host's faces.
+
+This is the one departure from the resolved preset that the baseline rule allows
+and this document records, and it is the one carve-out from "apps do not
+override shared base tokens" — those two variables and nothing else.
+`--font-heading` still resolves through `--font-sans` in both tiers, so a web
+app's override carries the headings with it, and the prose presets resolve
+through all three, so `.typeset` follows its application's tier without knowing
+the tier exists.
+
+What the Mini Apps give up is a typographic identity of their own; what they get
+back is the platform's faces, hinting and metrics on every device, nothing on
+the critical path, and nothing to swap after first paint. Type therefore renders
+differently per host and per tier, and any size, weight, or leading decision has
+to be checked on more than one before it is accepted.
+
+The contract tests are split the same way. The shared one is written as an
+absence — no `@font-face`, no font `@import`, no vendored font directory, no
+`@fontsource-*` dependency — because a webfont is exactly the kind of thing that
+returns one `@import` at a time. Each Mini App asserts its own stylesheet does
+not reach for a face; each web app asserts that it does, since nothing upstream
+would supply one.
+
+### Open
+
+Which faces the web applications use. Inter and Geist Mono are the incumbents
+rather than chosen faces; the question closes when the design round settles. The
+tier boundary is what #255 decided — the faces on the web side of it are still a
+draft.
 
 ## Prose
 

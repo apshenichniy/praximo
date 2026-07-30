@@ -10,8 +10,9 @@ components.
 1. `packages/ui/src/components/ui/**` contains the registry-owned shadcn
    primitives. The live registry and resolved preset `bcB3Gj2` — Maia, Base UI,
    Zinc/Violet, Inter, and HugeIcons — are the baseline, with **one recorded
-   exception: there is no interface webfont** — the preset's Inter is dropped
-   and the sans is the host's own (#255, and Interface sans below).
+   exception: the shared package ships no webfont at all** — the Mini Apps take
+   their host's faces and the web applications set their own (#255, and
+   Interface faces below).
 2. `packages/ui/src/components/**`, excluding `components/ui/**`, contains
    Praximo-owned wrappers and shared composites built above those primitives.
 3. Application feature directories contain product and domain composition that
@@ -54,8 +55,9 @@ Use this order:
 
 `className` on a primitive is for caller layout. It must not override the
 primitive's colors or typography. Applications may have additive app-only CSS,
-but may not override shared base tokens or copy shared primitives. A need
-repeated across applications moves into `@praximo/ui`.
+but may not override shared base tokens or copy shared primitives — except
+`--font-sans` and `--font-mono`, which the two web applications own (see
+Interface faces). A need repeated across applications moves into `@praximo/ui`.
 
 Status families (`success`, `warning`, `error`, and `info`), host-neutral
 feedback, and product motion tokens are Praximo extensions. Keep them outside
@@ -68,36 +70,60 @@ The current `Heading`, `Text`, and `typographyRecipe` exports are transitional
 compatibility scaffolding, not an accepted hierarchy. Do not inject them into
 shadcn primitives or treat their current roles and values as design decisions.
 
-## Interface sans
+## Interface faces
 
-`--font-sans` is **`system-ui, sans-serif`**, and that is the whole declaration.
-The preset's Inter is dropped and no face replaces it: every product surface but
-WWW is a Telegram WebView, and each one renders in its host's own UI face — SF
-on iOS, Roboto on Android, the shell's font on desktop. That is the decision
-recorded in #255, which is what the Baseline rule asks for; the foundation
-contract test is the other half, and it is written as an absence because an
-absence is what has to hold.
+**The Mini Apps take the host's faces; the web applications set their own.**
+That is the decision recorded in #255, and it splits the applications in two:
 
-`system-ui` rather than plain `sans-serif`, and the difference is not
-cosmetic: `sans-serif` is the browser's *default sans*, which in the iOS WebView
-is Helvetica — not the face iOS actually dresses its own interfaces in.
-`sans-serif` stays on the end as the fallback for anything that does not know
-the keyword.
+| Tier | Applications | `--font-sans` | `--font-mono` | Owned by |
+| --- | --- | --- | --- | --- |
+| Mini App | `apps/admin`, `apps/coach` | `system-ui, sans-serif` | `ui-monospace, monospace` | `@praximo/ui` |
+| Web app | `apps/www`, `apps/client` | `"Inter Variable", sans-serif` | `"Geist Mono Variable", monospace` | the app's own `app.css` |
 
-`--font-mono` still loads Geist Mono. A mono fallback is not a typeface choice,
-it is a coin flip, so that one keeps a face.
+The split is not a preference, it is what the two situations are. A Mini App
+lives inside Telegram on someone's phone, one tap from the chat they just left;
+it should look like it belongs to that phone, which means SF on iOS, Roboto on
+Android, the shell's own faces on desktop. A web page has no host to belong to —
+a visitor lands on it cold, so it has to look like itself.
 
-Two consequences worth knowing before you touch type here:
+The line is the `@praximo/mini-app` dependency: an application that imports the
+Telegram host adapter is a Mini App and takes the host's faces.
 
-- **Do not add an interface webfont back.** Not an `@import`, not an
-  `@font-face`, not a `@fontsource-*` dependency, not a `<link>` in an app.
-  Reintroducing one is a design decision that reopens #255, not a fix.
-- **The critical CSS in each app's `__root.tsx` still declares the stack.** It
-  cannot read `--font-sans`, and it is not redundant: a document with no
-  `font-family` at all opens in the browser's standard font, which is a serif.
+### What each tier may do
 
-The corollary is that type now renders differently on every host. Any size,
-weight, or leading decision has to be looked at on more than one of them.
+- `@praximo/ui` ships **no webfont at all**, and its contract test is written as
+  an absence: no `@font-face`, no font `@import`, no vendored font directory, no
+  `@fontsource-*` dependency.
+- A **web app** loads its own faces and overrides `--font-sans` and
+  `--font-mono` in its own `app.css`. This is the single carve-out from "apps
+  may not override shared base tokens", and it is narrow: those two and nothing
+  else.
+- A **Mini App** may not. No `@import`, no `@font-face`, no `@fontsource-*`
+  dependency, no `<link>`. Its own suite fails if its `app.css` reaches for one.
+
+`system-ui` and `ui-monospace` rather than plain `sans-serif` and `monospace`,
+and the difference is not cosmetic: the generic families name the browser's
+*defaults*, which in the iOS WebView means Helvetica rather than the face iOS
+actually dresses its interfaces in. They stay on the end as the fallback for
+anything that does not know the keywords.
+
+### The critical CSS is a third copy
+
+Each app's `__root.tsx` paints before its stylesheet arrives, so it declares the
+family literally and cannot read `--font-sans`. It is not redundant — a document
+with no `font-family` at all opens in the browser's standard font, a serif — and
+it has to match its tier: the stack for a Mini App, the named face for a web
+app. Both suites hold their side.
+
+### Open
+
+Which faces the web applications use is open. Inter and Geist Mono are the
+incumbents, not chosen faces, and the question closes when the design round
+settles. The tier boundary is what this ticket decided; the faces on the web
+side of it are still a draft.
+
+The standing corollary: type now renders differently per host and per tier. Any
+size, weight, or leading decision has to be looked at on more than one of them.
 
 ## Prose
 

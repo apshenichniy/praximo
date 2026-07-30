@@ -1,5 +1,27 @@
 @import "@praximo/ui/styles.css";
 
+/*
+ * The interface faces, owned here rather than shared (#255).
+ *
+ * `@praximo/ui` ships no webfont at all, because Admin and Coach are Telegram
+ * Mini Apps and render entirely in their host's own faces. This application is
+ * not a Mini App — it is a page a client opens in their own browser, from a
+ * link, often having never heard of Praximo — so here it is the product that
+ * has to look like itself, not the phone.
+ *
+ * That makes this one of the two applications allowed to override `--font-sans`
+ * and `--font-mono` and load faces of its own. The mono is not decoration: the
+ * legal pages stamp their version in it and the consent pane sets its label in
+ * it. The rule and its boundary are in `docs/agents/ui-development.md`.
+ */
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/geist-mono";
+
+@theme inline {
+  --font-sans: "Inter Variable", sans-serif;
+  --font-mono: "Geist Mono Variable", monospace;
+}
+
 @source "../../../../packages/ui/src";
 @source "../";
 

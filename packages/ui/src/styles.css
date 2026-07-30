@@ -9,23 +9,33 @@
  * the presets below are where Praximo chooses what it leaves open (#223).
  */
 @import "./typeset.css";
+
 /*
- * No webfont for the interface sans, and that absence is the decision (#255).
- * The preset ships Inter; this product ships nothing and asks the host for its
- * own UI face instead — `system-ui`, which is SF on iOS, Roboto on Android, and
- * the shell's own font on desktop. Not plain `sans-serif`: that is the
- * browser's default sans, which on iOS is Helvetica rather than the face the
- * system actually dresses its interfaces in. Mono still loads, because a mono
- * fallback is not a typeface choice, it is a coin flip.
+ * There is no font import here, and that absence is the decision (#255).
+ *
+ * The preset ships Inter. This package ships nothing and asks the host for its
+ * own faces instead, because its strictest consumers are Admin and Coach —
+ * Telegram Mini Apps, which sit one tap from the chat the reader just left and
+ * should look like the phone they are on. `system-ui` and `ui-monospace` are
+ * the keywords that name the platform's own interface and monospace faces.
+ *
+ * Not plain `sans-serif`/`monospace` first: those name the browser's *default*
+ * families, which in the iOS WebView means Helvetica rather than the face iOS
+ * actually dresses its interfaces in. They stay on the end as the fallback for
+ * anything that does not know the keywords.
+ *
+ * WWW and Client override both and load their own faces in their own
+ * `app.css` — a page a stranger lands on has no host to belong to. That is the
+ * only carve-out from "apps do not override shared base tokens", and
+ * `docs/agents/ui-development.md` §Interface faces is where it is written down.
  */
-@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", monospace;
+  --font-mono: ui-monospace, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
