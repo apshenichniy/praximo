@@ -1,6 +1,7 @@
 import { notFound } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
 import { Effect } from "effect"
+import { adminRefusal, notFoundWhenDenied } from "./admin-transport.ts"
 import { AdminSurface } from "./admin-surface.ts"
 import { type LaunchCredential, launchCredential } from "./launch-credential.ts"
 import { runAdmin } from "./runtime.server.ts"
@@ -62,18 +63,12 @@ export const createAdminCoachInvite = createServerFn({ method: "POST" })
         ),
       }
     } catch (error) {
-      if (typeof error !== "object" || error === null || !("_tag" in error)) {
-        return { ok: false, error: "server" }
-      }
-      switch (error._tag) {
-        case "AdminSurface.AccessDenied":
-          throw notFound()
-        case "AdminSurface.ValidationFailed":
-          return { ok: false, error: "validation" }
-        case "AdminSurface.IdempotencyConflict":
-          return { ok: false, error: "conflict" }
-        default:
-          return { ok: false, error: "server" }
+      return {
+        ok: false,
+        error: adminRefusal(error, {
+          "AdminSurface.ValidationFailed": "validation",
+          "AdminSurface.IdempotencyConflict": "conflict",
+        }),
       }
     }
   })
@@ -114,18 +109,12 @@ export const prepareAdminCoachInviteShare = createServerFn({ method: "POST" })
         ),
       }
     } catch (error) {
-      if (typeof error !== "object" || error === null || !("_tag" in error)) {
-        return { ok: false, error: "server" }
-      }
-      switch (error._tag) {
-        case "AdminSurface.AccessDenied":
-          throw notFound()
-        case "AdminSurface.ValidationFailed":
-          return { ok: false, error: "validation" }
-        case "AdminSurface.SharePreparationFailed":
-          return { ok: false, error: "retryable" }
-        default:
-          return { ok: false, error: "server" }
+      return {
+        ok: false,
+        error: adminRefusal(error, {
+          "AdminSurface.ValidationFailed": "validation",
+          "AdminSurface.SharePreparationFailed": "retryable",
+        }),
       }
     }
   })
@@ -150,14 +139,9 @@ export const recordAdminCoachInviteShare = createServerFn({ method: "POST" })
       )
       return { ok: true }
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "AdminSurface.AccessDenied"
-      ) {
-        throw notFound()
-      }
+      // The missing page still has to happen; which refusal it was does not. The
+      // invite has already gone out, and the screen cannot act on the difference.
+      notFoundWhenDenied(error)
       return { ok: false }
     }
   })
@@ -219,18 +203,12 @@ export const renameAdminWorkspace = createServerFn({ method: "POST" })
         ),
       }
     } catch (error) {
-      if (typeof error !== "object" || error === null || !("_tag" in error)) {
-        return { ok: false, error: "server" }
-      }
-      switch (error._tag) {
-        case "AdminSurface.AccessDenied":
-          throw notFound()
-        case "AdminSurface.ValidationFailed":
-          return { ok: false, error: "validation" }
-        case "AdminSurface.RenameConflict":
-          return { ok: false, error: "conflict" }
-        default:
-          return { ok: false, error: "server" }
+      return {
+        ok: false,
+        error: adminRefusal(error, {
+          "AdminSurface.ValidationFailed": "validation",
+          "AdminSurface.RenameConflict": "conflict",
+        }),
       }
     }
   })
@@ -279,14 +257,9 @@ export const reissueAdminWorkspaceInvite = createServerFn({ method: "POST" })
         ),
       }
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "_tag" in error &&
-        error._tag === "AdminSurface.AccessDenied"
-      ) {
-        throw notFound()
-      }
+      // Every refusal but the missing page reads the same here: a reissue that
+      // did not happen leaves the invitation on file exactly as it was.
+      notFoundWhenDenied(error)
       return { ok: false, error: "server" }
     }
   })
@@ -336,22 +309,14 @@ export const deleteAdminWorkspaceRequest = createServerFn({ method: "POST" })
         ),
       }
     } catch (error) {
-      if (typeof error !== "object" || error === null || !("_tag" in error)) {
-        return { ok: false, error: "server" }
-      }
-      switch (error._tag) {
-        case "AdminSurface.AccessDenied":
-          throw notFound()
-        case "AdminSurface.ValidationFailed":
-          return { ok: false, error: "validation" }
-        case "AdminSurface.DeletionConflict":
-          return { ok: false, error: "conflict" }
-        case "AdminSurface.DeletionRetryable":
-          return { ok: false, error: "retryable" }
-        case "AdminSurface.DeletionFailed":
-          return { ok: false, error: "blocked" }
-        default:
-          return { ok: false, error: "server" }
+      return {
+        ok: false,
+        error: adminRefusal(error, {
+          "AdminSurface.ValidationFailed": "validation",
+          "AdminSurface.DeletionConflict": "conflict",
+          "AdminSurface.DeletionRetryable": "retryable",
+          "AdminSurface.DeletionFailed": "blocked",
+        }),
       }
     }
   })
