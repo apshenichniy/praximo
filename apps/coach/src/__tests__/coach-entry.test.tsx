@@ -14,6 +14,7 @@ import { TERMS_VERSION } from "@praximo/i18n"
 import { MainMiniAppScreen } from "@/features/coach/components/main-mini-app-screen.tsx"
 import { TermsScreen } from "@/features/coach/components/terms-screen.tsx"
 import { coachCatalog, coachCopy } from "@/features/i18n/coach-copy.ts"
+import { MiniAppProvider } from "@/mini-app.tsx"
 import { acceptOnce, CoachScreen, mainMiniAppUrlFor } from "@/routes/index.tsx"
 import type { CoachEntryTransportResult } from "@/server/coach-surface.functions.ts"
 
@@ -26,7 +27,9 @@ const LEGAL_ORIGIN = "https://me.praximo.io"
  * state of the entry actually puts on the page.
  */
 const render = async (node: ReactNode): Promise<string> => {
-  const rootRoute = createRootRoute({ component: () => node })
+  const rootRoute = createRootRoute({
+    component: () => <MiniAppProvider>{node}</MiniAppProvider>,
+  })
   const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => rootRoute, path: "/legal/terms" }),
     createRoute({ getParentRoute: () => rootRoute, path: "/legal/privacy" }),

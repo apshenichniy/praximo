@@ -12,7 +12,7 @@ import {
 import { CoachSession } from "./coach-session.ts"
 import { CoachSurface } from "./coach-surface.ts"
 import type { CoachResult } from "./coach-transport.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 const CREDENTIAL: LaunchCredential = { initData: "signed", botId: "9100777" }
 const BLANK: LaunchCredential = { initData: "", botId: "" }

@@ -4,7 +4,7 @@ import { CoachLanguage } from "@praximo/domain"
 import { Clock, Config, Context, Effect, Layer, Schema } from "effect"
 import { TERMS_VERSION } from "@praximo/i18n"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 /**
  * The one screen a coach is sent to before anything else exists, and the one

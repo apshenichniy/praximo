@@ -60,7 +60,10 @@ describe("feedback invariants", () => {
 
   it("adapts shared control feedback to the presentation host", async () => {
     const root = await readFile(path.join(sourceDir, "routes", "__root.tsx"), "utf8")
-    const host = await readFile(path.join(sourceDir, "presentation-host", "index.ts"), "utf8")
+    const host = await readFile(
+      fileURLToPath(new URL("../../../../packages/mini-app/src/index.ts", import.meta.url)),
+      "utf8",
+    )
 
     expect(root).toContain("<FeedbackProvider adapter={presentationFeedback}>")
     expect(host).toContain("export const presentationFeedback")

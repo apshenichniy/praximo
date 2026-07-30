@@ -4,11 +4,11 @@ import { useCallback, useRef, useState } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
-import { HostFullscreen } from "@/presentation-host"
+import { HostFullscreen } from "@/mini-app.tsx"
 import { NewClientScreen } from "@/features/coach/components/new-client-screen.tsx"
 import { coachLaunch } from "@/features/entry/coach-loader.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { notifyHaptic } from "@/presentation-host"
+import { notifyHaptic } from "@/mini-app.tsx"
 import { acceptOnce } from "@/routes/index.tsx"
 import { createClient } from "@/server/coach-clients.functions.ts"
 

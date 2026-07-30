@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
-import { HostFullscreen } from "@/presentation-host"
+import { HostFullscreen } from "@/mini-app.tsx"
 import { SessionScreen } from "@/features/coach/components/session-screen.tsx"
 import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"

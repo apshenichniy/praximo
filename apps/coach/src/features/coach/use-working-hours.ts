@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useCallback, useRef, useState } from "react"
 
 import { dayScheduleKeys } from "@/features/coach/day-schedule-queries.ts"
-import { notifyHaptic } from "@/presentation-host"
+import { notifyHaptic } from "@/mini-app.tsx"
 import { saveWorkingHours } from "@/server/coach-clients.functions.ts"
 
 /**

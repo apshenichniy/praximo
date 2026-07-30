@@ -15,7 +15,7 @@ import { WeekChips, WindowRow } from "@/features/coach/components/window-control
 import { summariseWorkingHours } from "@/features/coach/working-hours-summary.ts"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
 import type { CommonCopy } from "@/features/i18n/coach-copy/common.ts"
-import { HostBackButton } from "@/presentation-host"
+import { HostBackButton } from "@/mini-app.tsx"
 import { Heading } from "@praximo/ui"
 
 /**

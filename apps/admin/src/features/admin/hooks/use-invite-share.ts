@@ -6,7 +6,7 @@ import {
   prepareCoachInviteShareMutation,
   recordCoachInviteShareMutation,
 } from "@/features/admin/workspace-queries.ts"
-import { sharePreparedMessage, type ShareInviteOutcome } from "@/presentation-host"
+import { sharePreparedMessage, type ShareInviteOutcome } from "@/mini-app.tsx"
 
 export interface InviteShareInput {
   readonly inviteId: string

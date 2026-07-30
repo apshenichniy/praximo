@@ -6,7 +6,7 @@ import { Effect, Layer } from "effect"
 import * as TestClock from "effect/testing/TestClock"
 import { launchFor, TEST_PUBLIC_KEY } from "@/__tests__/coach-launch.ts"
 import { CoachSession, READ_WINDOW_MILLIS } from "./coach-session.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 const BOT_ID = "9100777"
 const AUTH_DATE = Date.parse("2026-07-23T12:00:00.000Z")

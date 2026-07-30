@@ -11,7 +11,7 @@ import { useCallback } from "react"
 import { Text, cn } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card, CardContent } from "@praximo/ui/components/card"
-import { HostMainButton } from "@/presentation-host"
+import { HostMainButton } from "@/mini-app.tsx"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
 import {
   type CoachStep,
@@ -19,7 +19,7 @@ import {
   coachScreen,
   type EntryView,
 } from "@/features/entry/entry-view.ts"
-import { openTelegramLink } from "@/presentation-host"
+import { openTelegramLink } from "@/mini-app.tsx"
 import type { ViewerRole } from "@/server/viewer-role.ts"
 
 const markerClass = {

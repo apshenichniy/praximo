@@ -1,4 +1,4 @@
-import { sharePreparedMessage, type ShareInviteOutcome } from "@/presentation-host"
+import { sharePreparedMessage, type ShareInviteOutcome } from "@/mini-app.tsx"
 import { prepareInviteCard, recordInviteDelivery } from "@/server/coach-clients.functions.ts"
 
 /**

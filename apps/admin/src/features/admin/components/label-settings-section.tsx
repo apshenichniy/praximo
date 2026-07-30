@@ -8,7 +8,7 @@ import { Card, CardContent } from "@praximo/ui/components/card"
 import { Spinner } from "@praximo/ui/components/spinner"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
 import { Section, SectionTitle } from "@praximo/ui"
-import { notifyHaptic } from "@/presentation-host"
+import { notifyHaptic } from "@/mini-app.tsx"
 import { requiredName } from "@/features/admin/validation.ts"
 import {
   adminWorkspaceDetailQuery,

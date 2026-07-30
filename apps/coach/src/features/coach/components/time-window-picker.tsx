@@ -2,7 +2,7 @@ import { type DayWindow, SlotStepMinutes } from "@praximo/domain"
 import { ChoiceChip, cn } from "@praximo/ui"
 import { useState } from "react"
 
-import { selectionHaptic } from "@/presentation-host"
+import { selectionHaptic } from "@/mini-app.tsx"
 
 import { clock, pad } from "@/features/coach/clock.ts"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"

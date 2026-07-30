@@ -7,7 +7,7 @@ import {
   readTelegramInitData,
   watchTelegramColorScheme,
 } from "./bridge.ts"
-import { applyColorScheme, watchPreferredColorScheme, type ColorScheme } from "@/lib/theme.ts"
+import { applyColorScheme, watchPreferredColorScheme, type ColorScheme } from "../theme.ts"
 
 /**
  * Keeps the app in the scheme its host is in, for as long as it is open (#190).

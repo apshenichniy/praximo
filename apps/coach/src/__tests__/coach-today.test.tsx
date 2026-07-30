@@ -18,6 +18,7 @@ import { TodayScreen } from "@/features/coach/components/today-screen.tsx"
 import { coachCatalog, coachCopy } from "@/features/i18n/coach-copy.ts"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
+import { MiniAppProvider } from "@/mini-app.tsx"
 import { attentionFor, type CoachSessions, orderAttention } from "@/server/coach-sessions.ts"
 import { bookedDates } from "@/features/coach/session-days.ts"
 
@@ -26,7 +27,9 @@ import { bookedDates } from "@/features/coach/session-days.ts"
  * ticket's rules are about absence — what it does not.
  */
 const render = async (node: ReactNode): Promise<string> => {
-  const rootRoute = createRootRoute({ component: () => node })
+  const rootRoute = createRootRoute({
+    component: () => <MiniAppProvider>{node}</MiniAppProvider>,
+  })
   const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => rootRoute, path: "/clients" }),
     createRoute({ getParentRoute: () => rootRoute, path: "/clients/new" }),

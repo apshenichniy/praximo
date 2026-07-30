@@ -11,7 +11,7 @@ import {
 import { Spinner } from "@praximo/ui/components/spinner"
 import { Textarea } from "@praximo/ui/components/textarea"
 import { cn } from "@praximo/ui"
-import { useOpenHaptic } from "@/presentation-host"
+import { useOpenHaptic } from "@/mini-app.tsx"
 
 /**
  * Bottom drawer for the Copy channel: copy the full forwardable message. When

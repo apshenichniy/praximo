@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import { useRef, useState } from "react"
 
-import { HostBackButton } from "@/presentation-host"
+import { HostBackButton } from "@/mini-app.tsx"
 import { ConfirmSheet } from "@/features/mini-app/components/confirm-sheet.tsx"
 import { Alert, AlertDescription } from "@praximo/ui/components/alert"
 import {
@@ -21,7 +21,7 @@ import { WorkspaceDetailHeader } from "@/features/admin/components/workspace-det
 import { WorkspaceDetailSkeleton } from "@/features/admin/components/workspace-detail-skeleton.tsx"
 import { adminTimestampFormat } from "@/features/admin/formatting.ts"
 import { DangerZone } from "@/features/mini-app/components/danger-zone.tsx"
-import { impactHaptic, notifyHaptic } from "@/presentation-host"
+import { impactHaptic, notifyHaptic } from "@/mini-app.tsx"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
 import { useInviteShare } from "@/features/admin/hooks/use-invite-share.ts"
 import { useWorkspaceDeletion } from "@/features/admin/hooks/use-workspace-deletion.ts"
@@ -36,7 +36,7 @@ import {
   adminWorkspaceDetailQuery,
   reissueWorkspaceInviteMutation,
 } from "@/features/admin/workspace-queries.ts"
-import { openTelegramLink } from "@/presentation-host"
+import { openTelegramLink } from "@/mini-app.tsx"
 
 export const Route = createFileRoute("/admin/workspaces/$workspaceId")({
   // Loaded here rather than only by the component's suspense query, so the

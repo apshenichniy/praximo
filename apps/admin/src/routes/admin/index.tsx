@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo } from "react"
 
 import { AdminHero } from "@/components/admin-hero.tsx"
-import { HostMainButton } from "@/presentation-host"
+import { HostMainButton } from "@/mini-app.tsx"
 import { toast } from "@praximo/ui/components/toast"
 import { takeAdminNotice } from "@/features/admin/admin-notice.ts"
 import {

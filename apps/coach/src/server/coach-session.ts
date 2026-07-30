@@ -2,7 +2,7 @@ import { CoachInitData } from "@praximo/auth"
 import { MemberRepo } from "@praximo/db"
 import type { CoachLanguage, WorkspaceId } from "@praximo/domain"
 import { Clock, Context, Effect, Layer, Schema } from "effect"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 /** Reads accept the window Telegram's own credential lifetime implies. */
 export const READ_WINDOW_MILLIS = 24 * 60 * 60 * 1_000

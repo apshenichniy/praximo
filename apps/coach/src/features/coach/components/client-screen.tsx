@@ -9,7 +9,7 @@ import {
 import { localeTag } from "@praximo/i18n"
 import { useMemo, useState } from "react"
 
-import { HostBackButton, isIosHost } from "@/presentation-host"
+import { HostBackButton, isIosHost } from "@/mini-app.tsx"
 import { Heading, Section, SectionTitle, SegmentedChoice, Text } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Card } from "@praximo/ui/components/card"

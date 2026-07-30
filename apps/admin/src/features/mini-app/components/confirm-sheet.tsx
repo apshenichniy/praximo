@@ -8,7 +8,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@praximo/ui/components/drawer"
-import { useOpenHaptic } from "@/presentation-host"
+import { useOpenHaptic } from "@/mini-app.tsx"
 
 /** Matches the deletion sheet's, so two danger zones do not sit differently. */
 const sheetPadding = "px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))]"

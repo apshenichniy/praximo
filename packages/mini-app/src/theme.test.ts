@@ -4,9 +4,11 @@ import {
   APP_SURFACE_COLOR,
   applyColorScheme,
   COLOR_SCHEME_BOOTSTRAP,
+  configureMiniAppPalette,
+  DEFAULT_MINI_APP_PALETTE,
   readColorScheme,
   type ColorScheme,
-} from "@/lib/theme.ts"
+} from "./theme.ts"
 
 // The scheme is settled before the first paint by a string of plain ES5 in the
 // document head — there is no module to import and no browser to run it in, so
@@ -90,6 +92,7 @@ describe("applyColorScheme", () => {
   // Restores the Node global the fake stood in for.
   afterEach(() => {
     globalThis.document = originalDocument
+    configureMiniAppPalette(DEFAULT_MINI_APP_PALETTE)
   })
 
   const withDocument = (classes: Iterable<string>, meta: { content: string } | null) => {
@@ -120,5 +123,20 @@ describe("applyColorScheme", () => {
     applyColorScheme("dark")
 
     expect(document.classes.has("dark")).toBe(true)
+  })
+
+  it("keeps an application's configured host palette at the shared theme seam", () => {
+    configureMiniAppPalette({
+      ...DEFAULT_MINI_APP_PALETTE,
+      background: { dark: "#18181b", light: "#ffffff" },
+      surface: { dark: "#18181b", light: "#ffffff" },
+    })
+    const meta = { content: "" }
+    withDocument([], meta)
+
+    applyColorScheme("light")
+
+    expect(APP_SURFACE_COLOR.light).toBe("#ffffff")
+    expect(meta.content).toBe("#ffffff")
   })
 })

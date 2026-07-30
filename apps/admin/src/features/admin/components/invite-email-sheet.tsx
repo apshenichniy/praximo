@@ -9,7 +9,7 @@ import {
   DrawerTitle,
 } from "@praximo/ui/components/drawer"
 import { TextField } from "@/features/admin/components/form-fields.tsx"
-import { notifyHaptic, useOpenHaptic } from "@/presentation-host"
+import { notifyHaptic, useOpenHaptic } from "@/mini-app.tsx"
 import { inviteEmail } from "@/features/admin/validation.ts"
 
 /** RFC 5321's ceiling for a whole address — a stop, not a budget, so no counter. */

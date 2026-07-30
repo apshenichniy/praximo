@@ -5,7 +5,7 @@ import { clock } from "@/features/coach/clock.ts"
 import type { WindowField } from "@/features/coach/components/time-window-picker.tsx"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
 import { weekdayLabel } from "@/features/i18n/weekday-label.ts"
-import { selectionHaptic } from "@/presentation-host"
+import { selectionHaptic } from "@/mini-app.tsx"
 
 /**
  * The two controls the hours screen and the onboarding step share (#210): the

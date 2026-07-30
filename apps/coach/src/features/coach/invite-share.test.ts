@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import type { ShareInviteOptions } from "@/presentation-host/telegram/bridge.ts"
+import type { ShareInviteOptions } from "@/mini-app.tsx"
 
 const prepareInviteCard = vi.fn()
 const recordInviteDelivery = vi.fn()
@@ -11,8 +11,8 @@ vi.mock("@/server/coach-clients.functions.ts", () => ({
   recordInviteDelivery: (input: unknown) => recordInviteDelivery(input),
 }))
 
-vi.mock("@/presentation-host", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/presentation-host")>()),
+vi.mock("@/mini-app.tsx", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/mini-app.tsx")>()),
   sharePreparedMessage: (options: ShareInviteOptions) => sharePreparedMessage(options),
 }))
 

@@ -8,7 +8,7 @@ import {
   type CoachRefusal,
   type CoachRefusalWord,
 } from "./coach-transport.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 /**
  * The coach conveyor: what happens between a `createServerFn` handler and one of

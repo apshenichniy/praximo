@@ -14,7 +14,7 @@ import { Input } from "@praximo/ui/components/input"
 import { Label } from "@praximo/ui/components/label"
 import { Text } from "@praximo/ui"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
-import { notifyHaptic, useOpenHaptic } from "@/presentation-host"
+import { notifyHaptic, useOpenHaptic } from "@/mini-app.tsx"
 
 /**
  * The padding every sheet in this app carries — and load-bearing here in a way

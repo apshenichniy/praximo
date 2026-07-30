@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { backAction } from "@/lib/back-navigation.ts"
+import { backAction } from "./back-navigation.ts"
 
 /**
  * Back has been wrong in both directions on a real phone, so both are pinned.

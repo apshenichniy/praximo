@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start"
 import { Effect } from "effect"
 import { transportWord } from "./admin-transport.ts"
-import { launchCredential } from "./launch-credential.ts"
+import { launchCredential } from "@/launch-credential.ts"
 import { runAdmin } from "./runtime.server.ts"
 import { ViewerRole } from "./viewer-role.ts"
 

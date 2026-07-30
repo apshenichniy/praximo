@@ -3,7 +3,7 @@ import { createServerFn } from "@tanstack/react-start"
 import { Effect } from "effect"
 import { adminRefusal, notFoundWhenDenied } from "./admin-transport.ts"
 import { AdminSurface } from "./admin-surface.ts"
-import { type LaunchCredential, launchCredential } from "./launch-credential.ts"
+import { type LaunchCredential, launchCredential } from "@/launch-credential.ts"
 import { runAdmin } from "./runtime.server.ts"
 
 /**

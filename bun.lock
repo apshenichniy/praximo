@@ -37,6 +37,7 @@
         "@praximo/db": "workspace:*",
         "@praximo/domain": "workspace:*",
         "@praximo/i18n": "workspace:*",
+        "@praximo/mini-app": "workspace:*",
         "@praximo/telegram": "workspace:*",
         "@praximo/ui": "workspace:*",
         "@tanstack/react-query": "catalog:",
@@ -126,6 +127,7 @@
         "@praximo/domain": "workspace:*",
         "@praximo/email": "workspace:*",
         "@praximo/i18n": "workspace:*",
+        "@praximo/mini-app": "workspace:*",
         "@praximo/telegram": "workspace:*",
         "@praximo/ui": "workspace:*",
         "@tanstack/react-query": "catalog:",
@@ -290,6 +292,27 @@
       "devDependencies": {
         "@praximo/tooling": "workspace:*",
         "typescript": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
+    "packages/mini-app": {
+      "name": "@praximo/mini-app",
+      "version": "0.0.0",
+      "dependencies": {
+        "@hugeicons/core-free-icons": "catalog:",
+        "@hugeicons/react": "catalog:",
+        "@praximo/ui": "workspace:*",
+        "@tanstack/react-start": "catalog:",
+        "react": "catalog:",
+      },
+      "devDependencies": {
+        "@praximo/tooling": "workspace:*",
+        "@types/node": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "react-dom": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:",
         "vitest": "catalog:",
       },
     },
@@ -1020,6 +1043,8 @@
     "@praximo/email": ["@praximo/email@workspace:packages/email"],
 
     "@praximo/i18n": ["@praximo/i18n@workspace:packages/i18n"],
+
+    "@praximo/mini-app": ["@praximo/mini-app@workspace:packages/mini-app"],
 
     "@praximo/pipeline": ["@praximo/pipeline@workspace:apps/pipeline"],
 

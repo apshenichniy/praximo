@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-import { notifyHaptic } from "@/presentation-host"
+import { notifyHaptic } from "@/mini-app.tsx"
 
 export interface CopyLinkController {
   readonly copied: boolean

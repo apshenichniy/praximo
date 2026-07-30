@@ -9,7 +9,7 @@ Agents write all documents, commit titles, and commit messages in English by def
 bun workspaces + Turborepo. Six deployable applications in `apps/`: four
 Cloudflare Workers (`admin`, `coach`, `client`, `bot`), the `pipeline` Worker
 with its Workflows, and the Astro `www` application served through Cloudflare
-Assets. Nine private `@praximo/*` packages live in `packages/`, including the
+Assets. Ten private `@praximo/*` packages live in `packages/`, including the
 shared `@praximo/ui`. [ADR 0002](docs/adr/0002-monorepo-layout-and-module-boundaries.md)
 is the source of truth for the layout and the module boundaries.
 

@@ -1,7 +1,7 @@
 import type { CoachLanguage } from "@praximo/domain"
 import { useCallback, useState } from "react"
 
-import { HostBackButton } from "@/presentation-host"
+import { HostBackButton } from "@/mini-app.tsx"
 import { LanguageStep } from "@/features/coach/components/language-step.tsx"
 import { TermsScreen } from "@/features/coach/components/terms-screen.tsx"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"

@@ -22,6 +22,52 @@ export interface SchemeColor {
   readonly dark: string
 }
 
+export interface MiniAppPalette {
+  readonly surface: SchemeColor
+  readonly background: SchemeColor
+  readonly foreground: SchemeColor
+  readonly primary: SchemeColor
+  readonly onPrimary: SchemeColor
+}
+
+/**
+ * The Coach App palette and the package default.
+ *
+ * Admin configures its historical white light ground at its application seam.
+ * Keeping that divergence explicit preserves both deployed surfaces while the
+ * host and scheme logic below exists only once.
+ */
+export const DEFAULT_MINI_APP_PALETTE: MiniAppPalette = {
+  surface: { dark: "#18181b", light: "#fafafa" },
+  background: { dark: "#18181b", light: "#fafafa" },
+  foreground: { dark: "#fafafa", light: "#18181b" },
+  primary: { dark: "#8b5cf6", light: "#7c3aed" },
+  onPrimary: { dark: "#faf5ff", light: "#faf5ff" },
+}
+
+let activePalette: MiniAppPalette = DEFAULT_MINI_APP_PALETTE
+
+/**
+ * Select the application palette before the root document is evaluated.
+ *
+ * Admin and Coach are separate bundles and Workers, so each configures its one
+ * package instance once at its app boundary. Stable getter objects keep the
+ * existing bridge API unchanged while the two established light grounds remain
+ * distinct.
+ */
+export const configureMiniAppPalette = (palette: MiniAppPalette): void => {
+  activePalette = palette
+}
+
+const configuredColor = (key: keyof MiniAppPalette): SchemeColor => ({
+  get light() {
+    return activePalette[key].light
+  },
+  get dark() {
+    return activePalette[key].dark
+  },
+})
+
 /**
  * The color of the Telegram host chrome — header, webview background, bottom bar
  * — and of the `theme-color` meta a plain browser reads. Hexadecimal because all
@@ -40,7 +86,7 @@ export interface SchemeColor {
  * The native splash screen is configured in BotFather rather than here —
  * Telegram takes one colour there, not a pair, so it cannot follow the scheme.
  */
-export const APP_SURFACE_COLOR: SchemeColor = { dark: "#18181b", light: "#fafafa" }
+export const APP_SURFACE_COLOR: SchemeColor = configuredColor("surface")
 
 /**
  * The page's own ground, in hex, for the pre-oklch fallback in critical CSS.
@@ -49,10 +95,10 @@ export const APP_SURFACE_COLOR: SchemeColor = { dark: "#18181b", light: "#fafafa
  * `@praximo/ui`'s `styles.css`, where `--background` is
  * `oklch(0.985 0 0)` — zinc-50. `#fafafa` is that value in sRGB.
  */
-export const APP_BACKGROUND_COLOR: SchemeColor = { dark: "#18181b", light: "#fafafa" }
+export const APP_BACKGROUND_COLOR: SchemeColor = configuredColor("background")
 
 /** Running text on that ground, for the same fallback. */
-export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#fafafa", light: "#18181b" }
+export const APP_FOREGROUND_COLOR: SchemeColor = configuredColor("foreground")
 
 /**
  * The primary button pair, for the same hexadecimal-only boundaries — the host
@@ -61,8 +107,8 @@ export const APP_FOREGROUND_COLOR: SchemeColor = { dark: "#fafafa", light: "#181
  * in oklch and cannot be handed to Telegram as they are. The two schemes invert
  * each other: a near-white button on dark, a near-black one on light.
  */
-export const APP_PRIMARY_COLOR: SchemeColor = { dark: "#8b5cf6", light: "#7c3aed" }
-export const APP_ON_PRIMARY_COLOR: SchemeColor = { dark: "#faf5ff", light: "#faf5ff" }
+export const APP_PRIMARY_COLOR: SchemeColor = configuredColor("primary")
+export const APP_ON_PRIMARY_COLOR: SchemeColor = configuredColor("onPrimary")
 
 /**
  * The scheme, decided before the first paint.

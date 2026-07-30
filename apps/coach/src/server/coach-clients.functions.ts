@@ -4,7 +4,7 @@ import { Effect, Schema } from "effect"
 import { CoachClients } from "./coach-clients.ts"
 import { coachInput, TransportNumber, TransportString, TransportValue } from "./coach-operation.ts"
 import type { CoachResult } from "./coach-transport.ts"
-import { launchCredential } from "./launch-credential.ts"
+import { launchCredential } from "@/launch-credential.ts"
 import { coachAcknowledgement, coachOperation } from "./runtime.server.ts"
 
 /**

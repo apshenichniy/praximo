@@ -8,7 +8,7 @@ import { launchFor, TEST_PUBLIC_KEY } from "@/__tests__/coach-launch.ts"
 import { TERMS_VERSION } from "@praximo/i18n"
 import { CoachSession } from "./coach-session.ts"
 import { CoachSurface } from "./coach-surface.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 const BOT_ID = "9100777"
 const OTHER_BOT_ID = "9100778"

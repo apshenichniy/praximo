@@ -10,7 +10,7 @@ import {
 import { clock } from "@/features/coach/clock.ts"
 import type { DayGroupView, RevealGroupView } from "@/features/coach/day-view.ts"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
-import { impactHaptic, selectionHaptic } from "@/presentation-host"
+import { impactHaptic, selectionHaptic } from "@/mini-app.tsx"
 
 function SlotButton({
   slot,

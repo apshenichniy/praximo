@@ -4,7 +4,7 @@ import { useMemo } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
-import { HostFullscreen } from "@/presentation-host"
+import { HostFullscreen } from "@/mini-app.tsx"
 import { SessionsScreen } from "@/features/coach/components/sessions-screen.tsx"
 import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
