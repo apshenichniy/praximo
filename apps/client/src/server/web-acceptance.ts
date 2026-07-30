@@ -1,7 +1,12 @@
 import { ClientAcceptanceRepo } from "@praximo/db"
-import { type CoachLanguage, narrowCoachLanguage, readEmailAddress } from "@praximo/domain"
+import {
+  ClientName,
+  type CoachLanguage,
+  narrowCoachLanguage,
+  readEmailAddress,
+} from "@praximo/domain"
 import { clientConsentVersion } from "@praximo/i18n"
-import { Clock, Context, Effect, Layer } from "effect"
+import { Clock, Context, Effect, Layer, Option, Schema } from "effect"
 
 import type { SessionSummary } from "@/features/invite/session-summary.ts"
 import { type WebRefusal, webRefusal } from "@/features/invite/web-refusal.ts"
@@ -118,11 +123,8 @@ export class Service extends Context.Service<Service, Interface>()(
   "@praximo/client/WebAcceptance",
 ) {}
 
-/** Names are not validated beyond being present: people's names are not a schema. */
-const readName = (value: string): string | undefined => {
-  const trimmed = value.trim()
-  return trimmed.length === 0 || trimmed.length > 200 ? undefined : trimmed
-}
+const readName = (value: string): string | undefined =>
+  Option.getOrUndefined(Schema.decodeUnknownOption(ClientName)(value))
 
 const identifier = (prefix: string): string =>
   `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`
