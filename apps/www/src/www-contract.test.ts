@@ -10,6 +10,17 @@ describe("WWW staged shell", () => {
   it("is static, shared-foundation owned, and noindex", () => {
     expect(source("astro.config.mjs")).toContain('output: "static"')
     expect(source("src/styles/app.css")).toContain('@import "@praximo/ui/styles.css"')
+    /*
+     * The public site owns its interface faces rather than taking the host's
+     * (#255). The shared package ships no webfont at all, because its other
+     * consumers are Telegram Mini Apps — so if this file does not load them,
+     * the one surface whose job is to look like Praximo renders as the
+     * visitor's operating system instead.
+     */
+    expect(source("src/styles/app.css")).toContain('@import "@fontsource-variable/inter"')
+    expect(source("src/styles/app.css")).toContain('@import "@fontsource-variable/geist-mono"')
+    expect(source("src/styles/app.css")).toMatch(/--font-sans:\s*"Inter Variable"/)
+    expect(source("src/styles/app.css")).toMatch(/--font-mono:\s*"Geist Mono Variable"/)
     expect(source("src/layouts/PageLayout.astro")).toContain(
       '<meta name="robots" content="noindex,nofollow" />',
     )

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
 import { describe, expect, it } from "vitest"
@@ -221,11 +221,40 @@ describe("@praximo/ui public foundation", () => {
   })
 
   it("publishes the clean Maia fonts without the retired private type scale", () => {
-    expect(styles).toContain('@import "@fontsource-variable/inter"')
-    expect(styles).toContain('@import "@fontsource-variable/geist-mono"')
     expect(styles).not.toMatch(/--text-(caption|body|emphasis|heading|title|display):/)
     expect(styles).not.toContain("--brand")
     expect(styles).not.toContain("--pressed")
+  })
+
+  /*
+   * The recorded departure from the resolved preset (#255): the preset ships
+   * Inter and this package ships no webfont at all, because its strictest
+   * consumers are Telegram Mini Apps that render entirely in their host's own
+   * faces. WWW and Client override both families and load their own — see their
+   * suites — and `docs/agents/ui-development.md` names which two may.
+   *
+   * The half that lives here is written as an absence, which is the only way an
+   * absence stays: a webfont is exactly the kind of thing that arrives by
+   * accident, one `@import` at a time, and nothing else in this suite would
+   * notice it had.
+   */
+  it("defaults both interface families to the host and ships no face at all", () => {
+    expect(styles).toMatch(/--font-sans:\s*system-ui,\s*sans-serif\s*;/)
+    expect(styles).toMatch(/--font-mono:\s*ui-monospace,\s*monospace\s*;/)
+    expect(styles).not.toContain("Inter Variable")
+    expect(styles).not.toContain("Geist Mono Variable")
+    expect(existsSync(new URL("../fonts/", import.meta.url)), "vendored font directory").toBe(false)
+
+    const fontImports = [...styles.matchAll(/@import\s+"([^"]*)"/g)]
+      .map(([, specifier]) => specifier ?? "")
+      .filter((specifier) => /font|woff|\.otf|\.ttf/i.test(specifier))
+    expect(fontImports).toEqual([])
+    expect(styles).not.toMatch(/@font-face/)
+
+    const fontPackages = Object.keys(packageJson.dependencies ?? {}).filter((name) =>
+      name.startsWith("@fontsource"),
+    )
+    expect(fontPackages).toEqual([])
   })
 
   it("keeps product motion tokens additive without rewriting primitive motion", () => {
@@ -371,8 +400,9 @@ describe("@praximo/ui public foundation", () => {
         ]),
       )
 
-      // Inter Variable and Geist Mono by way of the shared theme, not the
-      // Geist the Typeset builder emits by default.
+      // Through the shared theme variables rather than the Geist the Typeset
+      // builder emits by default — so a web app that overrides a family carries
+      // its prose with it, and a Mini App's prose stays on the host's faces.
       expect(declarations["--typeset-font-body"]).toBe("var(--font-sans)")
       expect(declarations["--typeset-font-heading"]).toBe("var(--font-heading)")
       expect(declarations["--typeset-font-mono"]).toBe("var(--font-mono)")
@@ -382,12 +412,11 @@ describe("@praximo/ui public foundation", () => {
     }
 
     // The whole chain, not just its first link: a preset points at a theme
-    // variable, the variable names a face, and the face is actually loaded.
-    // Where it resolves is checked in the browser; that it can is checked here.
-    expect(styles).toMatch(/--font-sans:\s*"Inter Variable"/)
-    expect(styles).toMatch(/--font-mono:\s*"Geist Mono Variable"/)
+    // variable and the variable resolves to something. Here both ends are
+    // deliberately the host's own, so the chain terminates in a generic family
+    // and there is nothing for this package to load.
+    expect(styles).toMatch(/--font-sans:\s*system-ui,\s*sans-serif\s*;/)
+    expect(styles).toMatch(/--font-mono:\s*ui-monospace,\s*monospace\s*;/)
     expect(styles).toMatch(/--font-heading:\s*var\(--font-sans\)/)
-    expect(styles).toContain('@import "@fontsource-variable/inter"')
-    expect(styles).toContain('@import "@fontsource-variable/geist-mono"')
   })
 })

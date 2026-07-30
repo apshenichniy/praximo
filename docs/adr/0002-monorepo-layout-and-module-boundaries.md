@@ -62,7 +62,11 @@ actually used by consumers, `cn`, motion foundations, reduced-motion behavior,
 the host-neutral feedback contract, and UI Lab. It must not import Telegram
 SDKs, TanStack application code, routers, or business/domain features. Apps may
 add app-only CSS but may not override the shared base contract or copy shared
-primitives.
+primitives, with one named exception: **`--font-sans` and `--font-mono` are
+app-owned in the two web applications** (`apps/www`, `apps/client`), because the
+Mini Apps render entirely in their Telegram host's own faces and download no
+font at all, which a public page must not do. The rule and its test live in
+[ui-development.md](../agents/ui-development.md) §Interface faces.
 
 Workflow definitions live in `apps/pipeline`; steps stay thin and call package services.
 

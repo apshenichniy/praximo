@@ -9,7 +9,10 @@ components.
 
 1. `packages/ui/src/components/ui/**` contains the registry-owned shadcn
    primitives. The live registry and resolved preset `bcB3Gj2` — Maia, Base UI,
-   Zinc/Violet, Inter, and HugeIcons — are the baseline.
+   Zinc/Violet, Inter, and HugeIcons — are the baseline, with **one recorded
+   exception: the shared package ships no webfont at all** — the Mini Apps take
+   their host's faces and the web applications set their own (#255, and
+   Interface faces below).
 2. `packages/ui/src/components/**`, excluding `components/ui/**`, contains
    Praximo-owned wrappers and shared composites built above those primitives.
 3. Application feature directories contain product and domain composition that
@@ -52,8 +55,9 @@ Use this order:
 
 `className` on a primitive is for caller layout. It must not override the
 primitive's colors or typography. Applications may have additive app-only CSS,
-but may not override shared base tokens or copy shared primitives. A need
-repeated across applications moves into `@praximo/ui`.
+but may not override shared base tokens or copy shared primitives — except
+`--font-sans` and `--font-mono`, which the two web applications own (see
+Interface faces). A need repeated across applications moves into `@praximo/ui`.
 
 Status families (`success`, `warning`, `error`, and `info`), host-neutral
 feedback, and product motion tokens are Praximo extensions. Keep them outside
@@ -65,6 +69,61 @@ Semantic interface typography is intentionally deferred after the #215 reset.
 The current `Heading`, `Text`, and `typographyRecipe` exports are transitional
 compatibility scaffolding, not an accepted hierarchy. Do not inject them into
 shadcn primitives or treat their current roles and values as design decisions.
+
+## Interface faces
+
+**The Mini Apps take the host's faces; the web applications set their own.**
+That is the decision recorded in #255, and it splits the applications in two:
+
+| Tier | Applications | `--font-sans` | `--font-mono` | Owned by |
+| --- | --- | --- | --- | --- |
+| Mini App | `apps/admin`, `apps/coach` | `system-ui, sans-serif` | `ui-monospace, monospace` | `@praximo/ui` |
+| Web app | `apps/www`, `apps/client` | `"Inter Variable", sans-serif` | `"Geist Mono Variable", monospace` | the app's own `app.css` |
+
+The split is not a preference, it is what the two situations are. A Mini App
+lives inside Telegram on someone's phone, one tap from the chat they just left;
+it should look like it belongs to that phone, which means SF on iOS, Roboto on
+Android, the shell's own faces on desktop. A web page has no host to belong to —
+a visitor lands on it cold, so it has to look like itself.
+
+The line is the `@praximo/mini-app` dependency: an application that imports the
+Telegram host adapter is a Mini App and takes the host's faces.
+
+### What each tier may do
+
+- `@praximo/ui` ships **no webfont at all**, and its contract test is written as
+  an absence: no `@font-face`, no font `@import`, no vendored font directory, no
+  `@fontsource-*` dependency.
+- A **web app** loads its own faces and overrides `--font-sans` and
+  `--font-mono` in its own `app.css`. This is the single carve-out from "apps
+  may not override shared base tokens", and it is narrow: those two and nothing
+  else.
+- A **Mini App** may not. No `@import`, no `@font-face`, no `@fontsource-*`
+  dependency, no `<link>`. Its own suite fails if its `app.css` reaches for one.
+
+`system-ui` and `ui-monospace` rather than plain `sans-serif` and `monospace`,
+and the difference is not cosmetic: the generic families name the browser's
+*defaults*, which in the iOS WebView means Helvetica rather than the face iOS
+actually dresses its interfaces in. They stay on the end as the fallback for
+anything that does not know the keywords.
+
+### The critical CSS is a third copy
+
+Each app's `__root.tsx` paints before its stylesheet arrives, so it declares the
+family literally and cannot read `--font-sans`. It is not redundant — a document
+with no `font-family` at all opens in the browser's standard font, a serif — and
+it has to match its tier: the stack for a Mini App, the named face for a web
+app. Both suites hold their side.
+
+### Open
+
+Which faces the web applications use is open. Inter and Geist Mono are the
+incumbents, not chosen faces, and the question closes when the design round
+settles. The tier boundary is what this ticket decided; the faces on the web
+side of it are still a draft.
+
+The standing corollary: type now renders differently per host and per tier. Any
+size, weight, or leading decision has to be looked at on more than one of them.
 
 ## Prose
 

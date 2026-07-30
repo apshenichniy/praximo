@@ -19,6 +19,19 @@ describe("global application theme", () => {
     expect(appCss).not.toMatch(/:root\s*{/)
     expect(appCss).not.toMatch(/\.dark\s*{/)
     expect(root).toContain("background:${APP_BACKGROUND_COLOR.light}")
+    // This is a Telegram Mini App: it renders entirely in the host's own
+    // faces and loads no webfont at all, sans or mono (#255). The first paint
+    // declares the stack even though the stylesheet declares it too, because a
+    // document with no font-family at all opens in the browser's standard
+    // font, a serif.
+    expect(root).toContain("font-family:system-ui,sans-serif")
+    // A named family here would be a webfont sneaking back in ahead of the
+    // stylesheet, where nothing else in the suite would see it.
+    expect(root).not.toMatch(/font-family:[^}]*["']/)
+    // And the app stylesheet may not reach for one either: loading a face and
+    // overriding a family is a licence the two web applications have and this
+    // one does not.
+    expect(appCss).not.toMatch(/@font-face|fontsource|--font-sans|--font-mono/)
     expect(root).toContain("color:${APP_FOREGROUND_COLOR.dark}")
     expect(APP_BACKGROUND_COLOR.light).toMatch(/^#[0-9a-f]{6}$/)
     expect(APP_FOREGROUND_COLOR.dark).toMatch(/^#[0-9a-f]{6}$/)
