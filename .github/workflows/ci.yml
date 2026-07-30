@@ -9,6 +9,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The floor for every job: read the code and nothing else. One job widens it by a
+# single scope, below.
+permissions:
+  contents: read
+
 jobs:
   # Which of the two verification jobs below needs a database, decided once so
   # both can read it. A schema-only Neon branch is not a cheap copy-on-write
@@ -19,6 +24,15 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # On a pull request `paths-filter` asks the API for the PR's file list rather
+    # than diffing the checkout, and this repository's default token is
+    # `contents: read` — so without this scope every pull request failed here with
+    # "Resource not accessible by integration" while `push` runs, which diff
+    # locally, passed. That is why the job landed green on `main` and reddened the
+    # first PR after it.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       database: ${{ steps.filter.outputs.database }}
     steps:
