@@ -1,4 +1,4 @@
-import { HostBackButton } from "@/presentation-host"
+import { HostBackButton } from "@/mini-app.tsx"
 import { Heading, Text } from "@praximo/ui"
 import { ClientList } from "@/features/coach/components/client-list.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"

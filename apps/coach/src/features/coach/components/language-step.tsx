@@ -1,7 +1,7 @@
 import { type CoachLanguage, CoachLanguages } from "@praximo/domain"
 
 import { ChoiceChip, Heading, PraximoMark, Text } from "@praximo/ui"
-import { HostMainButton } from "@/presentation-host"
+import { HostMainButton } from "@/mini-app.tsx"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { OnboardingProgress } from "@/features/coach/components/onboarding-progress.tsx"
 import { type CoachCopy, languageNames } from "@/features/i18n/coach-copy.ts"

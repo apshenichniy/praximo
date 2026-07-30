@@ -2,7 +2,7 @@ import type { CoachLanguage } from "@praximo/domain"
 import { launchLocale } from "@/features/i18n/launch-locale.ts"
 import { type CoachEntryTransportResult, loadCoachEntry } from "@/server/coach-surface.functions.ts"
 import type { CoachRefusal } from "@/server/coach-transport.ts"
-import { resolveLaunchCredential } from "./launch-credential.ts"
+import { resolveLaunchCredential } from "@/launch-credential.ts"
 
 /**
  * A read the browser could not complete, in the words the server would have used.

@@ -4,13 +4,13 @@ import { useCallback } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
-import { HostFullscreen } from "@/presentation-host"
+import { HostFullscreen } from "@/mini-app.tsx"
 import { MainMiniAppScreen } from "@/features/coach/components/main-mini-app-screen.tsx"
 import { coachLaunch } from "@/features/entry/coach-loader.ts"
 import { EntryFrame } from "@/features/entry/components/entry-frame.tsx"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { mainMiniAppUrlFor } from "@/routes/index.tsx"
-import { impactHaptic } from "@/presentation-host"
+import { impactHaptic } from "@/mini-app.tsx"
 import { hideMainMiniAppHint } from "@/server/coach-clients.functions.ts"
 
 /**

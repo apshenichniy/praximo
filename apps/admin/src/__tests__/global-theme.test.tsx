@@ -3,7 +3,7 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
-import { APP_BACKGROUND_COLOR, APP_FOREGROUND_COLOR } from "@/lib/theme.ts"
+import { APP_BACKGROUND_COLOR, APP_FOREGROUND_COLOR, APP_SURFACE_COLOR } from "@/mini-app.tsx"
 
 const srcRoot = fileURLToPath(new URL("..", import.meta.url))
 
@@ -22,6 +22,8 @@ describe("global application theme", () => {
     expect(root).toContain("color:${APP_FOREGROUND_COLOR.dark}")
     expect(APP_BACKGROUND_COLOR.light).toMatch(/^#[0-9a-f]{6}$/)
     expect(APP_FOREGROUND_COLOR.dark).toMatch(/^#[0-9a-f]{6}$/)
+    expect(APP_BACKGROUND_COLOR.light).toBe("#ffffff")
+    expect(APP_SURFACE_COLOR.light).toBe("#ffffff")
   })
 
   it("lets the host settle the scheme before rendering", () => {

@@ -8,7 +8,7 @@ import { coachLaunch, orServerFailure } from "@/features/entry/coach-loader.ts"
 import { HoursUnavailable } from "@/features/entry/components/hours-unavailable.tsx"
 import { useWorkingHoursDraft } from "@/features/coach/use-working-hours.ts"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
-import { HostFullscreen } from "@/presentation-host"
+import { HostFullscreen } from "@/mini-app.tsx"
 import { getWorkingHours } from "@/server/coach-clients.functions.ts"
 
 /**

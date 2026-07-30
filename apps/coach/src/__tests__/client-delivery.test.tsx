@@ -14,6 +14,7 @@ import { ClientScreen } from "@/features/coach/components/client-screen.tsx"
 import { coachCopy } from "@/features/i18n/coach-copy.ts"
 import { coachTimestampFormat } from "@/features/mini-app/coach-timestamp-format.ts"
 import { TimestampFormatProvider } from "@/features/mini-app/timestamp-format.tsx"
+import { MiniAppProvider } from "@/mini-app.tsx"
 import type { CoachClients } from "@/server/coach-clients.ts"
 
 /**
@@ -26,7 +27,9 @@ import type { CoachClients } from "@/server/coach-clients.ts"
  */
 
 const render = async (node: ReactNode): Promise<string> => {
-  const rootRoute = createRootRoute({ component: () => node })
+  const rootRoute = createRootRoute({
+    component: () => <MiniAppProvider>{node}</MiniAppProvider>,
+  })
   const routeTree = rootRoute.addChildren([
     createRoute({ getParentRoute: () => rootRoute, path: "/clients" }),
     createRoute({ getParentRoute: () => rootRoute, path: "/clients/new" }),

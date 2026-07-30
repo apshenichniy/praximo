@@ -10,7 +10,7 @@ import * as TestClock from "effect/testing/TestClock"
 import { launchFor, TEST_PUBLIC_KEY } from "@/__tests__/coach-launch.ts"
 import { CoachClients } from "./coach-clients.ts"
 import { CoachSession } from "./coach-session.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 /**
  * The invitation card (#179): the coach's own bot authors the message, and

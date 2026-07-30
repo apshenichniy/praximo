@@ -15,7 +15,7 @@ import {
 } from "@/features/coach/components/time-window-picker.tsx"
 import { WeekChips, WindowRow } from "@/features/coach/components/window-controls.tsx"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
-import { HostMainButton } from "@/presentation-host"
+import { HostMainButton } from "@/mini-app.tsx"
 
 /**
  * First login, the optional third step (#210): the hours, offered once.

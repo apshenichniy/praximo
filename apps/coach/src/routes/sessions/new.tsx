@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { EntryLoading } from "@/components/entry-loading.tsx"
 import { MiniAppShell } from "@/components/mini-app-shell.tsx"
-import { HostFullscreen } from "@/presentation-host"
+import { HostFullscreen } from "@/mini-app.tsx"
 import { ClientPickerScreen } from "@/features/coach/components/client-picker-screen.tsx"
 import {
   daySchedule,
@@ -14,7 +14,7 @@ import {
   UnknownDaySchedule,
 } from "@/features/coach/day-schedule-queries.ts"
 import { bookedDates } from "@/features/coach/session-days.ts"
-import { notifyHaptic } from "@/presentation-host"
+import { notifyHaptic } from "@/mini-app.tsx"
 import {
   calendarDate,
   type SchedulingDraft,

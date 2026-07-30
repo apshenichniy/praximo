@@ -8,7 +8,7 @@ import {
   APP_PRIMARY_COLOR,
   APP_SURFACE_COLOR,
   type ColorScheme,
-} from "@/lib/theme.ts"
+} from "../theme.ts"
 
 export interface TelegramWebApp {
   /** Signed launch credential sent to the server for validation. */

@@ -1,12 +1,12 @@
 import type { CoachLanguage } from "@praximo/domain"
 
 import { Heading, Text, typographyRecipe } from "@praximo/ui"
-import { HostMainButton } from "@/presentation-host"
+import { HostMainButton } from "@/mini-app.tsx"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { OnboardingProgress } from "@/features/coach/components/onboarding-progress.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"
 import { legalUrl, type LegalDocumentName } from "@praximo/i18n"
-import { openExternalLink } from "@/presentation-host"
+import { openExternalLink } from "@/mini-app.tsx"
 
 /**
  * First login, step two: what every coach agrees to, in five lines they will

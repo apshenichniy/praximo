@@ -1,8 +1,8 @@
 import { type CoachLanguage, CoachLanguages, ClientNameMaxLength } from "@praximo/domain"
 import { useState } from "react"
 
-import { HostBackButton } from "@/presentation-host"
-import { HostMainButton } from "@/presentation-host"
+import { HostBackButton } from "@/mini-app.tsx"
+import { HostMainButton } from "@/mini-app.tsx"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { Input } from "@praximo/ui/components/input"
 import { Label } from "@praximo/ui/components/label"

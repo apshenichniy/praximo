@@ -11,7 +11,7 @@ import { schedulingCopy } from "@/__tests__/scheduling-copy.ts"
 import { dayView } from "@/features/coach/day-view.ts"
 import { CoachClients } from "./coach-clients.ts"
 import { CoachSession } from "./coach-session.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 const BOT_ID = "9100777"
 const WORKSPACE = WorkspaceId.make("ws_ada")

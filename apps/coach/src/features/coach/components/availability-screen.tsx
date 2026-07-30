@@ -8,7 +8,7 @@ import { Card } from "@praximo/ui/components/card"
 import { workingHoursLine } from "@/features/coach/working-hours-line.ts"
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
 import type { CommonCopy } from "@/features/i18n/coach-copy/common.ts"
-import { HostBackButton } from "@/presentation-host"
+import { HostBackButton } from "@/mini-app.tsx"
 
 /**
  * Availability (#210): where a coach says when they are reachable.

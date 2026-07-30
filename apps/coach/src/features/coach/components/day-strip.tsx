@@ -5,8 +5,8 @@ import { localeTag } from "@praximo/i18n"
 import { useCallback, useEffect, useMemo, useRef } from "react"
 
 import { sameDay } from "@/features/coach/day-strip.ts"
-import { selectionHaptic } from "@/presentation-host"
-import { prefersReducedMotion } from "@/lib/motion.ts"
+import { selectionHaptic } from "@/mini-app.tsx"
+import { prefersReducedMotion } from "@/mini-app.tsx"
 import { cn } from "@praximo/ui"
 
 /** How close to the end a thumb has to get before the next fortnight arrives. */

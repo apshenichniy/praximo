@@ -15,7 +15,7 @@ import { TimeWindowPicker } from "@/features/coach/components/time-window-picker
 import type { AvailabilityCopy } from "@/features/i18n/coach-copy/availability.ts"
 import type { CommonCopy } from "@/features/i18n/coach-copy/common.ts"
 import { weekdayLabel } from "@/features/i18n/weekday-label.ts"
-import { HostBackButton, selectionHaptic } from "@/presentation-host"
+import { HostBackButton, selectionHaptic } from "@/mini-app.tsx"
 
 /**
  * Hours per day (#210): the seven entries the domain stores, one row each.

@@ -2,7 +2,7 @@ import type { CoachLanguage } from "@praximo/domain"
 import { sessionMoment } from "@praximo/i18n"
 import { Link } from "@tanstack/react-router"
 
-import { HostBackButton } from "@/presentation-host"
+import { HostBackButton } from "@/mini-app.tsx"
 import { Heading, Text } from "@praximo/ui"
 import { SessionKindLine } from "@/features/coach/components/session-kind-line.tsx"
 import type { CoachCopy } from "@/features/i18n/coach-copy.ts"

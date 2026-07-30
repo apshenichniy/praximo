@@ -4,15 +4,17 @@ import { FeedbackProvider, Heading, Text } from "@praximo/ui"
 
 import faviconDark from "../../../../assets/branding/coach-bot/dark/favicon.ico?url"
 import faviconLight from "../../../../assets/branding/coach-bot/light/favicon.ico?url"
-import { HostTheme, presentationFeedback } from "@/presentation-host"
-import { TELEGRAM_WEBAPP_SRC } from "@/presentation-host"
 import {
   APP_BACKGROUND_COLOR,
   APP_FOREGROUND_COLOR,
   APP_SURFACE_COLOR,
   COLOR_SCHEME_BOOTSTRAP,
   DARK_SCHEME_CLASS,
-} from "@/lib/theme.ts"
+  HostTheme,
+  MiniAppProvider,
+  presentationFeedback,
+  TELEGRAM_WEBAPP_SRC,
+} from "@/mini-app.tsx"
 import appCss from "@/styles/app.css?url"
 
 const darkBackground = "oklch(0.141 0.005 285.823)"
@@ -91,8 +93,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <FeedbackProvider adapter={presentationFeedback}>
-          <HostTheme />
-          {children}
+          <MiniAppProvider>
+            <HostTheme />
+            {children}
+          </MiniAppProvider>
         </FeedbackProvider>
         <Scripts />
       </body>

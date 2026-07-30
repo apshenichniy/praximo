@@ -1,5 +1,5 @@
-import { HostBackButton } from "@/presentation-host"
-import { HostMainButton } from "@/presentation-host"
+import { HostBackButton } from "@/mini-app.tsx"
+import { HostMainButton } from "@/mini-app.tsx"
 import { Heading } from "@praximo/ui"
 import { FeedbackButton as Button } from "@praximo/ui/custom/feedback-button"
 import { ClientList } from "@/features/coach/components/client-list.tsx"

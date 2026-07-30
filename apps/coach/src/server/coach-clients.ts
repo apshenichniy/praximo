@@ -32,7 +32,7 @@ import { Clock, Config, Context, Effect, Layer, Schema } from "effect"
 import { CoachSession, READ_WINDOW_MILLIS, WRITE_WINDOW_MILLIS } from "./coach-session.ts"
 import { localParts, nextDate } from "@/lib/coach-calendar.ts"
 import { busyByDate, instantOf, weekdayOfDate, zoneOf } from "./coach-day.ts"
-import type { LaunchCredential } from "./launch-credential.ts"
+import type { LaunchCredential } from "@/launch-credential.ts"
 
 /**
  * The coach's clients: the list they land on, the one they create, the one they

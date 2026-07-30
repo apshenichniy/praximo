@@ -8,7 +8,7 @@ import { pad } from "@/features/coach/clock.ts"
 import { extendStrip, sameDay, StripDays, stripWindow } from "@/features/coach/day-strip.ts"
 import { calendarLocale } from "@/features/i18n/calendar-locale.ts"
 import type { ClientsCopy } from "@/features/i18n/coach-copy/clients.ts"
-import { impactHaptic, selectionHaptic } from "@/presentation-host"
+import { impactHaptic, selectionHaptic } from "@/mini-app.tsx"
 import { Field } from "./field.tsx"
 
 /** `YYYY-MM-DD` for a day the calendar hands back as a local `Date`. */

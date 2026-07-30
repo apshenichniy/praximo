@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect"
 import { coachInput, TransportString } from "./coach-operation.ts"
 import { CoachSurface } from "./coach-surface.ts"
 import type { CoachResult } from "./coach-transport.ts"
-import { launchCredential } from "./launch-credential.ts"
+import { launchCredential } from "@/launch-credential.ts"
 import { coachOperation } from "./runtime.server.ts"
 
 /**

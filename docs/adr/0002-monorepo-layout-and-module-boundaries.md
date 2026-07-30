@@ -1,7 +1,7 @@
 # ADR 0002: Monorepo layout and module boundaries
 
 - **Status**: accepted
-- **Date**: 2026-07-19; amended 2026-07-28 by #215
+- **Date**: 2026-07-19; amended 2026-07-28 by #215 and 2026-07-30 by #238
 - **Ticket**: [#12](https://github.com/apshenichniy/praximo/issues/12)
 
 ## Context
@@ -40,7 +40,7 @@ Six applications, independently represented in the root Alchemy graph:
 | App | Contents |
 | --- | --- |
 | `apps/admin` | TanStack Start: Platform Admin console and Manager Bot onboarding companion. `admin.praximo.io` |
-| `apps/coach` | TanStack Start: Coach practice workflows. Telegram is the only deployed MVP host, isolated behind a presentation-host adapter. `coach.praximo.io` |
+| `apps/coach` | TanStack Start: Coach practice workflows. Telegram is the only deployed MVP host, isolated in the shared `@praximo/mini-app` presentation-host adapter. `coach.praximo.io` |
 | `apps/client` | TanStack Start: minimal browser foundation and current technical/legal routes. Client product work starts with #57. `me.praximo.io` |
 | `apps/www` | Astro static output served from Cloudflare Assets. `stage.praximo.io` until #176 authorizes a public launch. |
 | `apps/bot` | grammY webhook Worker; serves all per-coach bots via per-bot webhook paths + secret tokens |
@@ -88,6 +88,7 @@ npm scope **`@praximo/*`**, all private:
 | `@praximo/auth` | Telegram Mini App credential verification — manager HMAC for Admin, Ed25519 `validate3rd` for Coach (ADR 0006) — plus the coach onboarding deep-link token. Pure crypto and config; each application owns its composition. |
 | `@praximo/i18n` | The i18n **mechanism** shared by Coach, Client, and Bot: gap filling, plural forms, locale-aware formatters, and content digests. Catalogues remain surface-owned except texts whose accepted version is recorded. |
 | `@praximo/ui` | Shared Maia theme, semantic interface typography, source-owned shadcn primitives, utilities, motion/reduced-motion foundation, host-neutral feedback contract, and UI Lab. No Telegram, router, TanStack application, or business/domain imports. |
+| `@praximo/mini-app` | Browser-side Telegram Mini App host adapter shared by Admin and Coach: viewport/fullscreen, theme, host controls, haptics, sharing, init data, host navigation contract, host-scoped motion/navigation utilities, and the single launch-credential request client. It may know the Telegram WebApp SDK surface and, only through its `./launch-credential` subpath, TanStack Start's request-middleware API. It must not import application code, routers, query clients, or business/domain features; the root browser export must not re-export the middleware subpath. |
 | `@praximo/tooling` | tsconfig and oxlint presets. |
 
 ### Effect conventions

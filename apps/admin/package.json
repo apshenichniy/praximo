@@ -17,6 +17,7 @@
     "@praximo/db": "workspace:*",
     "@praximo/domain": "workspace:*",
     "@praximo/i18n": "workspace:*",
+    "@praximo/mini-app": "workspace:*",
     "@praximo/telegram": "workspace:*",
     "@praximo/ui": "workspace:*",
     "@tanstack/react-query": "catalog:",

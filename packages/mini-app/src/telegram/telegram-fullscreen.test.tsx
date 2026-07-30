@@ -1,10 +1,7 @@
-import { readFileSync } from "node:fs"
-import { fileURLToPath } from "node:url"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
-import { MiniAppShell } from "@/components/mini-app-shell.tsx"
-import { HostFullscreen } from "@/presentation-host/telegram/telegram-fullscreen.tsx"
+import { APP_ON_PRIMARY_COLOR, APP_PRIMARY_COLOR, APP_SURFACE_COLOR } from "../theme.ts"
 import {
   attachBackButton,
   claimMainButton,
@@ -13,11 +10,11 @@ import {
   revealTelegramWebApp,
   shareInviteMessage,
   watchTelegramColorScheme,
-  type HostBackButton,
-  type HostMainButton,
+  type TelegramHostBackButton,
+  type TelegramHostMainButton,
   type TelegramWebApp,
-} from "@/presentation-host/telegram/bridge.ts"
-import { APP_ON_PRIMARY_COLOR, APP_PRIMARY_COLOR, APP_SURFACE_COLOR } from "@/lib/theme.ts"
+} from "../index.ts"
+import { HostFullscreen } from "./telegram-fullscreen.tsx"
 
 // The fullscreen requirement (mini-app.md: opens fullscreen via Bot API 8.0
 // `requestFullscreen`, with `fullscreenChanged` handling + safe-area insets)
@@ -25,8 +22,8 @@ import { APP_ON_PRIMARY_COLOR, APP_PRIMARY_COLOR, APP_SURFACE_COLOR } from "@/li
 // frame and the route wiring. The live `requestFullscreen` on a phone is what
 // the deploy verifies; these pin the version gate and the layout invariants.
 
-const fakeBackButton = (): HostBackButton => {
-  const backButton: HostBackButton = {
+const fakeBackButton = (): TelegramHostBackButton => {
+  const backButton: TelegramHostBackButton = {
     isVisible: false,
     show: vi.fn(() => backButton),
     hide: vi.fn(() => backButton),
@@ -42,7 +39,7 @@ const fakeBackButton = (): HostBackButton => {
  * becomes visible reports a second `show()` as if it were the first, which is
  * precisely the animation #198 removed.
  */
-const fakeMainButton = (): HostMainButton => {
+const fakeMainButton = (): TelegramHostMainButton => {
   const mainButton = {
     isVisible: false,
     setText: vi.fn(() => mainButton),
@@ -138,7 +135,7 @@ describe("Telegram admin adapters", () => {
 
   /**
    * The blink this whole handoff exists for (#198): every screen mounts its own
-   * `HostMainButton`, so a route change released one and claimed the next,
+   * `TelegramHostMainButton`, so a route change released one and claimed the next,
    * and the host animates a `hide()` and a `show()`. Button → button has to be a
    * `setText` and nothing more.
    */
@@ -359,26 +356,5 @@ describe("shareInviteMessage", () => {
 describe("HostFullscreen", () => {
   it("renders nothing (it is a mount-time effect)", () => {
     expect(renderToStaticMarkup(<HostFullscreen />)).toBe("")
-  })
-
-  it("is mounted inside the admin route frame", () => {
-    const adminRoute = readFileSync(
-      fileURLToPath(new URL("../routes/admin/route.tsx", import.meta.url)),
-      "utf8",
-    )
-    expect(adminRoute).toContain("<HostFullscreen />")
-  })
-})
-
-describe("MiniAppShell safe-area insets", () => {
-  it("pads the frame by the host's device + content safe-area insets", () => {
-    const html = renderToStaticMarkup(
-      <MiniAppShell>
-        <span>content</span>
-      </MiniAppShell>,
-    )
-
-    expect(html).toContain("--tg-safe-area-inset-top")
-    expect(html).toContain("--tg-content-safe-area-inset-top")
   })
 })
